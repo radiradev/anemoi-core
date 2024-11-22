@@ -788,6 +788,24 @@ class PlotLoss(BasePerBatchPlotCallback):
             legend_patches,
         )
 
+    def argsort_name_pressurelevel(self) -> list[int]:
+        """Custom sort key to process the strings.
+
+        Sort parameter names by alpha part, then by numeric part at second
+        position (presure level), then by the original string.
+        """
+        data = self.parameter_names
+
+        def custom_sort_key(index: int) -> tuple:
+            s = data[index]  # Access the element by index
+            parts = s.split("_")
+            alpha_part = parts[0]
+            numeric_part = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else float("inf")
+            return (alpha_part, numeric_part, s)
+
+        # Generate argsort indices
+        return sorted(range(len(data)), key=custom_sort_key)
+
     @rank_zero_only
     def _plot(
         self,
@@ -805,6 +823,11 @@ class PlotLoss(BasePerBatchPlotCallback):
         parameter_positions = list(pl_module.data_indices.internal_model.output.name_to_index.values())
         # reorder parameter_names by position
         self.parameter_names = [parameter_names[i] for i in np.argsort(parameter_positions)]
+
+        # Sort the list using the custom key
+        argsort_indices = self.argsort_name_pressurelevel()
+        self.parameter_names = [self.parameter_names[i] for i in argsort_indices]
+
         if not isinstance(pl_module.loss, BaseWeightedLoss):
             logging.warning(
                 "Loss function must be a subclass of BaseWeightedLoss, or provide `squash`.",
@@ -823,6 +846,7 @@ class PlotLoss(BasePerBatchPlotCallback):
             loss = pl_module.loss(y_hat, y_true, squash=False).cpu().numpy()
 
             sort_by_parameter_group, colors, xticks, legend_patches = self.sort_and_color_by_parameter_group
+            loss = loss[argsort_indices]
             fig = plot_loss(loss[sort_by_parameter_group], colors, xticks, legend_patches)
 
             self._output_figure(
