@@ -91,6 +91,8 @@ class BaseRemapperVariable(BasePreprocessor, ABC):
         name_to_index_training_output = self.data_indices.data.output.name_to_index
         name_to_index_inference_output = self.data_indices.model.output.name_to_index
 
+        self.additional_input = len(self.data_indices.internal_data.input.full) - len(self.data_indices.data.input.full)
+
         self.num_training_input_vars = len(name_to_index_training_input)
         self.num_inference_input_vars = len(name_to_index_inference_input)
         self.num_remapped_training_input_vars = len(name_to_index_training_remapped_input)
@@ -186,54 +188,41 @@ class BaseRemapperVariable(BasePreprocessor, ABC):
             in_place is not possible for this preprocessor.
         ```
         """
+        if not in_place:
+            x = x.clone()
+
         # Choose correct index based on number of variables
-        if x.shape[-1] == self.num_training_input_vars:
+        if x.shape[-1] - self.additional_input == self.num_training_input_vars:
             index = self.index_training_input
             indices_remapped = self.index_training_remapped_input
             indices_keep = self.indices_keep_training_input
-            target_number_columns = self.num_remapped_training_input_vars
 
-        elif x.shape[-1] == self.num_inference_input_vars:
+        elif x.shape[-1] - self.additional_input == self.num_inference_input_vars:
             index = self.index_inference_input
             indices_remapped = self.index_inference_remapped_input
             indices_keep = self.indices_keep_inference_input
-            target_number_columns = self.num_remapped_inference_input_vars
 
         else:
             raise ValueError(
-                f"Input tensor ({x.shape[-1]}) does not match the training "
+                f"Input tensor ({x.shape[-1]}) - ({self.additional_input})does not match the training "
                 f"({self.num_training_input_vars}) or inference shape ({self.num_inference_input_vars})",
             )
 
         # temporary storage for variables that are remapped before overwriting in case of in_place=True
-        x_remapped_tmp = x[..., index]
-
-        # create new tensor with target number of columns
-        # x = torch.nn.functional.pad(x, (0, target_number_columns - x.shape[-1]))
-        # x = torch.cat(
-        #     (x, torch.zeros(x.shape[:-1] + (target_number_columns - x.shape[-1],), dtype=x.dtype, device=x.device)), -1
-        # )
-        x_remapped = torch.zeros(x.shape[:-1] + (target_number_columns,), dtype=x.dtype, device=x.device)
-        if in_place and not self.printed_preprocessor_warning:
-            LOGGER.warning(
-                "Remapper (preprocessor) called with in_place=True. This preprocessor cannot be applied in_place as new columns are added to the tensors.",
-            )
-            self.printed_preprocessor_warning = True
+        x_remapped_tmp = x[..., index].clone()
 
         # copy variables that are not remapped
-        x_remapped[..., : len(indices_keep)] = x[..., indices_keep]
-        # del(x.detach())
-        del x
+        x[..., : len(indices_keep)] = x[..., indices_keep]
 
         # Remap variables
         remap_index = 0  # count variables because of None values
         for idx_dst, remapper, idx_src in zip(indices_remapped, self.remappers, index):
             if idx_src is not None:
                 for jj, ii in enumerate(idx_dst):
-                    x_remapped[..., ii] = remapper[jj](x_remapped_tmp[..., remap_index])
+                    x[..., ii] = remapper[jj](x_remapped_tmp[..., remap_index])
                 remap_index += 1
 
-        return x_remapped
+        return x
 
     def transform_loss_mask(self, mask: torch.Tensor) -> torch.Tensor:
         """Remap the loss mask.
@@ -275,18 +264,19 @@ class BaseRemapperVariable(BasePreprocessor, ABC):
             in_place is not possible for this postprocessor.
         ```
         """
+        if not in_place:
+            x = x.clone()
+
         # Choose correct index based on number of variables
         if x.shape[-1] == self.num_remapped_training_output_vars:
             index = self.index_training_output
-            indices_remapped = self.index_training_backmapped_output
+            indices_remapped = [ff for ff in self.index_training_backmapped_output if None not in ff]
             indices_keep = self.indices_keep_training_output
-            target_number_columns = self.num_training_output_vars
 
         elif x.shape[-1] == self.num_remapped_inference_output_vars:
             index = self.index_inference_output
-            indices_remapped = self.index_inference_backmapped_output
+            indices_remapped = [ff for ff in self.index_inference_backmapped_output if None not in ff]
             indices_keep = self.indices_keep_inference_output
-            target_number_columns = self.num_inference_output_vars
 
         else:
             raise ValueError(
@@ -294,23 +284,20 @@ class BaseRemapperVariable(BasePreprocessor, ABC):
                 f"({self.num_remapped_training_output_vars}) or inference shape ({self.num_remapped_inference_output_vars})",
             )
 
-        # create new tensor with target number of columns
-        x_remapped = torch.zeros(x.shape[:-1] + (target_number_columns,), dtype=x.dtype, device=x.device)
-        if in_place and not self.printed_postprocessor_warning:
-            LOGGER.warning(
-                "Remapper (preprocessor) called with in_place=True. This preprocessor cannot be applied in_place as new columns are added to the tensors.",
-            )
-            self.printed_postprocessor_warning = True
+        # temporary storage for variables that are remapped before overwriting in case of in_place=True
+        x_remapped_tmp = x[..., indices_remapped].clone()
 
         # copy variables that are not remapped
-        x_remapped[..., indices_keep] = x[..., : len(indices_keep)]
+        x[..., indices_keep] = x[..., : len(indices_keep)]
 
         # Backmap variables
-        for idx_dst, backmapper, idx_src in zip(index, self.backmappers, indices_remapped):
+        remap_index = 0  # count variables because of None values
+        for idx_dst, backmapper in zip(index, self.backmappers):
             if idx_dst is not None:
-                x_remapped[..., idx_dst] = backmapper(x[..., idx_src])
+                x[..., idx_dst] = backmapper(x_remapped_tmp[..., remap_index, :])
+                remap_index += 1
 
-        return x_remapped
+        return x
 
 
 class Remapper(BaseRemapperVariable):
