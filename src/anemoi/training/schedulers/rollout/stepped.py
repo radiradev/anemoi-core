@@ -134,7 +134,6 @@ class Stepped(RolloutScheduler, IncrementMixin):
             Minimum rollout value.
         maximum : int
             Maximum rollout value.
-            Can be -1 for no maximum.
         every_n : int
             Number of steps or epochs to step the rollout value.
             If `every_n` is 0, the rollout will stay at `minimum`.
@@ -187,9 +186,6 @@ class Stepped(RolloutScheduler, IncrementMixin):
         """
         super().__init__(every_n=every_n, step_type=step_type, increment=increment)
 
-        if maximum <= -1:
-            maximum = float("inf")
-
         self._minimum = minimum
         self._maximum = maximum
 
@@ -199,6 +195,8 @@ class Stepped(RolloutScheduler, IncrementMixin):
 
     @property
     def maximum_rollout(self) -> int:
+        if self._every_n == 0:
+            return self._minimum
         return self._maximum
 
     def description(self) -> str:

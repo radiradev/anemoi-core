@@ -37,8 +37,11 @@ class BaseRandom(RolloutScheduler):
         except AssertionError:
             seed = 42
 
-        rnd_seed = pl.seed_everything(seed, workers=True)
-        self.rng = np.random.default_rng(rnd_seed)
+        self._rnd_seed = pl.seed_everything(seed, workers=True)
+
+    @property
+    def rng(self):
+        return np.random.default_rng(hash((self._rnd_seed, self._epoch, self._step)))
 
     def broadcast(self, value: int) -> None:
         """
@@ -171,7 +174,7 @@ class IncreasingRandom(IncrementMixin, BaseRandom):
         minimum : int, optional
             Minimum rollout to choose from, by default 1
         maximum : int, optional
-            Maximum rollout to choose from, can be -1 for no maximum,
+            Maximum rollout to choose from,
             by default 1.
         range_step : int, optional
             Step size for the range, by default 1
@@ -198,9 +201,6 @@ class IncreasingRandom(IncrementMixin, BaseRandom):
         """
         super().__init__(every_n=every_n, increment=increment, step_type=step_type)
 
-        if maximum <= -1:
-            maximum = float("inf")
-
         self._minimum = minimum
         self._maximum = maximum
         self._range_step = range_step
@@ -216,6 +216,8 @@ class IncreasingRandom(IncrementMixin, BaseRandom):
 
     @property
     def maximum_rollout(self) -> int:
+        if self._every_n == 0:
+            return self._minimum
         return self._maximum
 
     @property
