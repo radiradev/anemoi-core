@@ -159,7 +159,7 @@ class RolloutScheduler(ABC):
         Returns
         -------
         int
-            Count of steps or epochs.
+            Count of steps or epochs, rounded down.
 
         Raises
         ------

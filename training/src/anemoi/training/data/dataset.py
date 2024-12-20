@@ -144,7 +144,7 @@ class NativeGridDataset(IterableDataset):
             return
 
         self.rollout = rollout
-        LOGGER.warning(f"Updating rollout of {self.label} dataset to {self.rollout}")
+        LOGGER.debug(f"Updating rollout of {self.label} dataset to {self.rollout}")
 
         if hasattr(self, "valid_date_indices"):
             del self.valid_date_indices
@@ -284,7 +284,7 @@ class NativeGridDataset(IterableDataset):
             self.model_comm_group_rank,
             shuffled_chunk_indices[:10],
         )
-        LOGGER.warning(f"Rollout in dataset: {self.label} is {self.rollout}")
+
         for i in shuffled_chunk_indices:
             start = i - (self.multi_step - 1) * self.timeincrement
             end = i + (self.rollout + 1) * self.timeincrement
