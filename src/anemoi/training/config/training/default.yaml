@@ -85,8 +85,10 @@ scale_validation_metrics:
 
 
 # length of the "rollout" window (see Keisler's paper)
+# Dataloader rollout counter can only be updated at the end of each epoch
+# So updates during an epoch will only be reflected at the end of said epoch.
 rollout:
-  _target_: anemoi.training.schedulers.stepped.EpochStepped
+  _target_: anemoi.training.schedulers.rollout.stepped.EpochStepped
   minimum: 1
   maximum: 12
   # increase rollout every n epochs

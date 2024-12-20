@@ -13,7 +13,7 @@ import logging
 import os
 import random
 from functools import cached_property
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 from typing import Callable
 
 import numpy as np
@@ -137,6 +137,17 @@ class NativeGridDataset(IterableDataset):
         (if time_increment is 1).
         """
         return get_usable_indices(self.data.missing, len(self.data), self.rollout, self.multi_step, self.timeincrement)
+
+    def update_rollout(self, rollout: int) -> None:
+        """Update the rollout window."""
+        if self.rollout == rollout:
+            return
+
+        self.rollout = rollout
+        LOGGER.warning(f"Updating rollout of {self.label} dataset to {self.rollout}")
+
+        if hasattr(self, "valid_date_indices"):
+            del self.valid_date_indices
 
     def set_comm_group_info(
         self,
@@ -273,7 +284,7 @@ class NativeGridDataset(IterableDataset):
             self.model_comm_group_rank,
             shuffled_chunk_indices[:10],
         )
-
+        LOGGER.warning(f"Rollout in dataset: {self.label} is {self.rollout}")
         for i in shuffled_chunk_indices:
             start = i - (self.multi_step - 1) * self.timeincrement
             end = i + (self.rollout + 1) * self.timeincrement

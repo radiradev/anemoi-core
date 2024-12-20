@@ -10,6 +10,8 @@
 from typing import Any
 from typing import Literal
 
+import warnings
+
 from anemoi.training.schedulers.rollout import RolloutScheduler
 
 
@@ -109,6 +111,7 @@ class StepPositionalIndexed(PositionalIndexed):
     """Step based PositionalIndexed."""
 
     def __init__(self, rollouts: list[int]):
+        warnings.warn(f"Pytorch Lightning datamodules can only be refreshed at the end of an epoch, adjusting the rollout during an epoch will likely fail.", UserWarning)
         super().__init__(rollouts, step_type="step")
 
 
@@ -175,4 +178,5 @@ class StepLookup(Lookup):
     """Step based Lookup."""
 
     def __init__(self, rollouts: dict[int, int]):
+        warnings.warn(f"Pytorch Lightning datamodules can only be refreshed at the end of an epoch, adjusting the rollout during an epoch will likely fail.", UserWarning)
         super().__init__(rollouts, step_type="step")

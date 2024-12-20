@@ -40,7 +40,7 @@ from anemoi.training.utils.masks import NoOutputMask
 LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from anemoi.training.training.schedulers.rollout import RolloutScheduler
+    from anemoi.training.schedulers.rollout import RolloutScheduler
 
 
 class GraphForecaster(pl.LightningModule):
@@ -484,6 +484,7 @@ class GraphForecaster(pl.LightningModule):
         metrics = {}
         y_preds = []
 
+        # print('Rollout', int(self.rollout))
         for loss_next, metrics_next, y_preds_next in self.rollout_step(
             batch,
             rollout=int(self.rollout),
@@ -495,7 +496,6 @@ class GraphForecaster(pl.LightningModule):
             y_preds.extend(y_preds_next)
 
         loss *= 1.0 / int(self.rollout)
-        self.rollout.step()
         return loss, metrics, y_preds
 
     def allgather_batch(self, batch: torch.Tensor) -> torch.Tensor:
@@ -607,6 +607,28 @@ class GraphForecaster(pl.LightningModule):
 
         return metrics
 
+    def on_train_start(self):
+        # Sync the rollout at the start of training
+        print("Rollout at start of training", int(self.rollout), self.rollout._epoch, self.rollout._step)
+        self.rollout.sync(step = self.global_step, epoch = self.current_epoch)
+
+    def on_load_checkpoint(self, checkpoint: dict):
+        # Sync the rollout at the start of training
+        print("Rollout at on_load_checkpoint", int(self.rollout), self.rollout._epoch, self.rollout._step)
+        self.rollout.sync(step = checkpoint["global_step"], epoch = checkpoint["epoch"])
+
+    def on_train_epoch_start(self):
+        self.rollout.sync(step = self.global_step, epoch = self.current_epoch)
+        LOGGER.warning(f"Rollout at start of training, {int(self.rollout)}, {self.rollout._epoch}, {self.rollout._step}")
+
+    def on_validation_epoch_start(self):
+        LOGGER.warning(f"Rollout at start of validation, {int(self.rollout)}, {self.rollout._epoch}, {self.rollout._step}")
+
+    def on_validation_epoch_end(self) -> None:
+        # if not self.trainer.sanity_checking:
+        #     self.rollout_epoch_step()
+        LOGGER.warning(f"Rollout at end of validation, {int(self.rollout)}, {self.rollout._epoch}, {self.rollout._step}")
+
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
         train_loss, _, _ = self._step(batch, batch_idx)
         self.log(
@@ -627,6 +649,7 @@ class GraphForecaster(pl.LightningModule):
             rank_zero_only=True,
             sync_dist=False,
         )
+        self.rollout.step()
         return train_loss
 
     def lr_scheduler_step(self, scheduler: CosineLRScheduler, metric: None = None) -> None:
@@ -643,8 +666,6 @@ class GraphForecaster(pl.LightningModule):
         del metric
         scheduler.step(epoch=self.trainer.global_step)
 
-    def on_train_epoch_end(self) -> None:
-        self.rollout.step_epoch()
 
     def validation_step(self, batch: torch.Tensor, batch_idx: int) -> None:
         """
@@ -661,6 +682,7 @@ class GraphForecaster(pl.LightningModule):
         -------
         None
         """
+
         with torch.no_grad():
             val_loss, metrics, y_preds = self._step(batch, batch_idx, validation_mode=True)
 
@@ -688,6 +710,8 @@ class GraphForecaster(pl.LightningModule):
             )
 
         return val_loss, y_preds
+
+
 
     def configure_optimizers(self) -> tuple[list[torch.optim.Optimizer], list[dict]]:
         if self.use_zero_optimizer:
