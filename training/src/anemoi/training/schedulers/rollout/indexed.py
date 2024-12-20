@@ -22,6 +22,8 @@ def get_closest_key(dictionary: dict[int, Any], key: int) -> int:
     Where the closest key is the one with the smallest absolute difference
     and the key is less than or equal to the given key.
 
+    If no lower key is found, returns -1.
+
     Parameters
     ----------
     dictionary : dict[int, Any]
@@ -34,7 +36,10 @@ def get_closest_key(dictionary: dict[int, Any], key: int) -> int:
     int
         Closest key in the dictionary.
     """
-    return min(dictionary.keys(), key=lambda x: abs(x - key) if x <= key else float("inf"))
+    lowest_key = min(dictionary.keys(), key=lambda x: abs(x - key) if x <= key else float("inf"))
+    if key < lowest_key:
+        return -1
+    return lowest_key
 
 
 class PositionalIndexed(RolloutScheduler):
@@ -99,6 +104,8 @@ class PositionalIndexed(RolloutScheduler):
     def maximum_rollout(self) -> int:
         return max(self._rollouts)
 
+    def description(self):
+        return f"PositionalIndexed with rollouts {self._rollouts} and num_times_per_{self._step_type} {self._num_times_per_element} ."
 
 class EpochPositionalIndexed(PositionalIndexed):
     """Epoch based PositionalIndexed."""
@@ -127,6 +134,8 @@ class Lookup(RolloutScheduler):
         `Lookup` retrieves the rollout value from a dictionary of rollouts based on the current epoch or step.
 
         It will return the closest key that is less than or equal to the current epoch or step.
+
+        If there is no key lower then the index, defaults to 1.
 
         Parameters
         ----------
@@ -165,6 +174,9 @@ class Lookup(RolloutScheduler):
     @property
     def maximum_rollout(self) -> int:
         return max(self._rollouts.values())
+    
+    def description(self):
+        return f"Lookup with rollouts {self._rollouts} based on {self._step_type}."
 
 
 class EpochLookup(Lookup):

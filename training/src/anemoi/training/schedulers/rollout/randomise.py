@@ -43,7 +43,7 @@ class BaseRandom(RolloutScheduler):
 
     @property
     def rng(self):
-        return np.random.default_rng(hash((self._rnd_seed, self._epoch, self._step)))
+        return np.random.default_rng(abs(hash((self._rnd_seed, self._epoch, self._step))))
 
     def broadcast(self, value: int) -> None:
         """
@@ -130,7 +130,7 @@ class RandomRange(RandomList):
         minimum : int, optional
             Minimum rollout to choose from, by default 1
         maximum : int, optional
-            Maximum rollout to choose from, by default 1
+            Maximum rollout to choose from, inclusive., by default 1
         step : int, optional
             Step size for the range, by default 1
 
@@ -146,7 +146,7 @@ class RandomRange(RandomList):
         # any value between 1 and 5
         ```
         """
-        super().__init__(list(range(minimum, maximum + 1, step)))
+        super().__init__(range(minimum, maximum + 1, step))
 
     def description(self) -> str:
         return (
@@ -217,7 +217,7 @@ class IncreasingRandom(IncrementMixin, BaseRandom):
         if self._every_n == 0:
             return self._minimum
 
-        rollouts = range(self._minimum, self.current_maximum, self._range_step)
+        rollouts = range(self._minimum, self.current_maximum + 1, self._range_step)
 
         return self._randomly_pick(rollouts)
 

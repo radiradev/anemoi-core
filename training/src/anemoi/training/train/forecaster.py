@@ -609,25 +609,18 @@ class GraphForecaster(pl.LightningModule):
 
     def on_train_start(self):
         # Sync the rollout at the start of training
-        print("Rollout at start of training", int(self.rollout), self.rollout._epoch, self.rollout._step)
         self.rollout.sync(step = self.global_step, epoch = self.current_epoch)
 
     def on_load_checkpoint(self, checkpoint: dict):
-        # Sync the rollout at the start of training
-        print("Rollout at on_load_checkpoint", int(self.rollout), self.rollout._epoch, self.rollout._step)
+        # Sync the rollout on the load of a checkpoint
         self.rollout.sync(step = checkpoint["global_step"], epoch = checkpoint["epoch"])
 
     def on_train_epoch_start(self):
+        # Sync the rollout at the start of each epoch
+        # Cannot use stepping due to inconsistent behaviour with Pytorch Lightning
         self.rollout.sync(step = self.global_step, epoch = self.current_epoch)
-        LOGGER.warning(f"Rollout at start of training, {int(self.rollout)}, {self.rollout._epoch}, {self.rollout._step}")
+        LOGGER.debug(f"Rollout at start of training epoch {self.current_epoch}: {int(self.rollout)}.")
 
-    def on_validation_epoch_start(self):
-        LOGGER.warning(f"Rollout at start of validation, {int(self.rollout)}, {self.rollout._epoch}, {self.rollout._step}")
-
-    def on_validation_epoch_end(self) -> None:
-        # if not self.trainer.sanity_checking:
-        #     self.rollout_epoch_step()
-        LOGGER.warning(f"Rollout at end of validation, {int(self.rollout)}, {self.rollout._epoch}, {self.rollout._step}")
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
         train_loss, _, _ = self._step(batch, batch_idx)
@@ -665,7 +658,6 @@ class GraphForecaster(pl.LightningModule):
         """
         del metric
         scheduler.step(epoch=self.trainer.global_step)
-
 
     def validation_step(self, batch: torch.Tensor, batch_idx: int) -> None:
         """
@@ -710,8 +702,6 @@ class GraphForecaster(pl.LightningModule):
             )
 
         return val_loss, y_preds
-
-
 
     def configure_optimizers(self) -> tuple[list[torch.optim.Optimizer], list[dict]]:
         if self.use_zero_optimizer:
