@@ -21,6 +21,9 @@ Keep it human-readable, your future self will thank you!
 
 ### Changed
 
+### Changed
+
+- docs: Documentation structure (#84)
 - fix: faster edge builder for tri icosahedron. (#92)
 
 ### Added
@@ -37,7 +40,7 @@ Keep it human-readable, your future self will thank you!
 - feat: Define node sets and edges based on an ICON icosahedral mesh (#53)
 - feat: Support for multiple edge builders between two sets of nodes (#70)
 
-# Changed
+### Changed
 
 - fix: bug when computing area weights with scipy.Voronoi. (#79)
 
