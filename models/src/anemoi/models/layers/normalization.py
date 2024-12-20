@@ -9,6 +9,10 @@
 
 from __future__ import annotations
 
+from typing import List
+from typing import Union
+
+from torch import Size
 from torch import Tensor
 from torch import nn
 
@@ -26,3 +30,48 @@ class AutocastLayerNorm(nn.LayerNorm):
         precision.
         """
         return super().forward(x).type_as(x)
+
+
+class ConditionalLayerNorm(nn.Module):
+    """Conditional Layer Normalization.
+
+    x_norm = a(u) * (x - mean) / sqrt(var + eps) + b(u)
+
+    """
+
+    def __init__(
+        self,
+        normalized_shape: Union[int, list, Size],
+        condition_shape: int = 16,
+        w_one_bias_zero_init: bool = True,
+        autocast: bool = True,
+    ):
+        super().__init__()
+        self.norm = nn.LayerNorm(normalized_shape, elementwise_affine=False)  # no learnable parameters
+        self.scale = nn.Linear(condition_shape, normalized_shape)  # , bias=False)
+        self.bias = nn.Linear(condition_shape, normalized_shape)  # , bias=False)
+        self.autocast = autocast
+
+        if w_one_bias_zero_init:
+            nn.init.ones_(self.scale.weight)
+            nn.init.zeros_(self.scale.bias)
+            nn.init.zeros_(self.bias.weight)
+            nn.init.zeros_(self.bias.bias)
+
+    def forward(self, input: List[Tensor, Tensor]) -> Tensor:
+        """Conditional Layer Normalization.
+
+        Args:
+            input (List[Tensor, Tensor]): A list of two tensors (x, cond),
+                the first is the input tensor and
+                the second is the condition tensor.
+
+        Returns:
+            Tensor: The output tensor.
+        """
+        x, cond = input
+        scale = self.scale(cond)
+        bias = self.bias(cond)
+        out = self.norm(x)
+        out = out * (scale + 1.0) + bias
+        return out.type_as(x) if self.autocast else out
