@@ -9,6 +9,7 @@ Please add your functional changes to the appropriate section in the PR.
 Keep it human-readable, your future self will thank you!
 
 ## [Unreleased](https://github.com/ecmwf/anemoi-models/compare/0.4.0...HEAD)
+## [Unreleased](https://github.com/ecmwf/anemoi-models/compare/0.3.0...HEAD)
 
 ### Added
 
@@ -34,6 +35,8 @@ Keep it human-readable, your future self will thank you!
 - GraphTransformerMapperBlock chunking to reduce memory usage during inference [#46](https://github.com/ecmwf/anemoi-models/pull/46)
 - New `NamedNodesAttributes` class to handle node attributes in a more flexible way [#64](https://github.com/ecmwf/anemoi-models/pull/64)
 - Contributors file [#69](https://github.com/ecmwf/anemoi-models/pull/69)
+- Add synchronisation workflow
+- Refactor base functionality of `AnemoiEncProcDecModel` into abstract class. [#79](https://github.com/ecmwf/anemoi-models/pull/79/)
 
 ### Changed
 - Bugfixes for CI
