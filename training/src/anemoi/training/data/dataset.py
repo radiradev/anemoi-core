@@ -13,7 +13,7 @@ import logging
 import os
 import random
 from functools import cached_property
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
 from typing import Callable
 
 import numpy as np
@@ -144,7 +144,7 @@ class NativeGridDataset(IterableDataset):
             return
 
         self.rollout = rollout
-        LOGGER.debug(f"Updating rollout of {self.label} dataset to {self.rollout}")
+        LOGGER.debug("Updating rollout of %s dataset to %d", self.label, self.rollout)
 
         if hasattr(self, "valid_date_indices"):
             del self.valid_date_indices
@@ -239,10 +239,7 @@ class NativeGridDataset(IterableDataset):
         sanity_rnd = self.rng.random(1)
 
         LOGGER.debug(
-            (
-                "Worker %d (%s, pid %d, glob. rank %d, model comm group %d, "
-                "group_rank %d, base_seed %d), sanity rnd %f"
-            ),
+            ("Worker %d (%s, pid %d, glob. rank %d, model comm group %d, group_rank %d, base_seed %d), sanity rnd %f"),
             worker_id,
             self.label,
             os.getpid(),

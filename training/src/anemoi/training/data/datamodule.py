@@ -166,7 +166,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         ----------
         rollout : int
             Rollout value
-        """        
+        """
         for ds in [self.ds_train, self.ds_test]:
             ds.update_rollout(rollout)
 

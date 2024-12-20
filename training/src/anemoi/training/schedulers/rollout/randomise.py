@@ -42,7 +42,8 @@ class BaseRandom(RolloutScheduler):
         self._rnd_seed = pl.seed_everything(seed, workers=True)
 
     @property
-    def rng(self):
+    def rng(self) -> np.random.Generator:
+        """Get `np.rng` object, seeded off epoch and step."""
         return np.random.default_rng(abs(hash((self._rnd_seed, self._epoch, self._step))))
 
     def broadcast(self, value: int) -> None:
@@ -358,6 +359,10 @@ class StepIncreasingRandom(IncreasingRandom):
         # any value between 1 and 2, and then increments of 1
         ```
         """
-        warnings.warn(f"Pytorch Lightning datamodules can only be refreshed at the end of an epoch, adjusting the rollout during an epoch will likely fail.", UserWarning)
+        warnings.warn(
+            "Pytorch Lightning datamodules can only be refreshed at the end of an epoch, "
+            "adjusting the rollout during an epoch will likely fail.",
+            UserWarning,
+        )
 
         super().__init__(minimum, maximum, range_step, every_n_steps, increment, step_type="step")

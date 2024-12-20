@@ -57,21 +57,21 @@ class RolloutScheduler(ABC):
     @property
     def current_maximum(self) -> int:
         """Get the current maximum rollout value.
-        
+
         Allows for dataloader to only get the data neccessary.
         Most cases this is just the current rollout.
         """
         return self.rollout
 
     def __int__(self) -> int:
-        """Get rollout value as int"""
+        """Get rollout value as int."""
         return int(self.rollout)
-        
+
     def __index__(self) -> int:
-        """Get rollout value as index"""
+        """Get rollout value as index."""
         return int(self.rollout)
-    
-    def at(self, step: int | None = None, epoch: int | None = None) -> FrozenStateRecord:
+
+    def at(self, step: int | None = None, epoch: int | None = None) -> FrozenStateRecord:  # noqa: F821
         """
         Temporarily hold the scheduler at a specific step and epoch.
 
@@ -103,7 +103,7 @@ class RolloutScheduler(ABC):
         self._step = step if step is not None else prior_step
         self._epoch = epoch if epoch is not None else prior_epoch
         return FrozenStateRecord()
-    
+
     def rollout_at(self, step: int | None = None, epoch: int | None = None) -> int:
         """
         Get the rollout at a specific step and epoch.
@@ -131,9 +131,9 @@ class RolloutScheduler(ABC):
         """Step the scheduler by a count of epochs."""
         self._epoch += count
 
-    def sync(self, step: int = None, epoch: int = None):
+    def sync(self, step: int | None = None, epoch: int | None = None) -> None:
         """
-        Sync state of the Rollout Scheduler
+        Sync state of the Rollout Scheduler.
 
         Parameters
         ----------
@@ -151,10 +151,10 @@ class RolloutScheduler(ABC):
 
         Parameters
         ----------
-        n_epochs : int | None, optional
-            Number of epochs to count, by default None
         n_steps : int | None, optional
             Number of steps to count, by default None
+        n_epochs : int | None, optional
+            Number of epochs to count, by default None
 
         Returns
         -------
@@ -179,18 +179,23 @@ class RolloutScheduler(ABC):
         """Description of the rollout scheduler."""
         error_msg = "`description` method not implemented by parent class."
         raise NotImplementedError(error_msg)
-    
-    # Mathematical operations
+
+    # Mathematical operations
     def __add__(self, other: int) -> int:
         return self.rollout + other
+
     def __radd__(self, other: int) -> int:
         return other + self.rollout
+
     def __sub__(self, other: int) -> int:
         return self.rollout - other
+
     def __rsub__(self, other: int) -> int:
         return other - self.rollout
+
     def __mul__(self, other: int) -> int:
         return self.rollout * other
+
     def __rmul__(self, other: int) -> int:
         return other * self.rollout
 

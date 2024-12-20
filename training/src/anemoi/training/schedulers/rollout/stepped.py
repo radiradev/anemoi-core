@@ -8,8 +8,8 @@
 # nor does it submit to any jurisdiction.
 from __future__ import annotations
 
-from typing import Literal
 import warnings
+from typing import Literal
 
 from anemoi.training.schedulers.rollout import RolloutScheduler
 from anemoi.training.schedulers.rollout.indexed import get_closest_key
@@ -66,8 +66,7 @@ class IncrementMixin:
         ValueError
             If cannot parse the `increment` value given at init.
         """
-
-        count = (step // self._every_n if self._step_type == "step" else epoch // self._every_n)
+        count = step // self._every_n if self._step_type == "step" else epoch // self._every_n
 
         if isinstance(self._increment, int):
             return self._increment * count
@@ -87,7 +86,10 @@ class IncrementMixin:
 
             if increment_step_type == self._step_type:
                 return sum(
-                    (increment_dict.get(get_closest_key(increment_dict, i * self._every_n), 0) for i in range(count + 1)),
+                    (
+                        increment_dict.get(get_closest_key(increment_dict, i * self._every_n), 0)
+                        for i in range(count + 1)
+                    ),
                 )
 
             if epoch == 0 or step == 0:
@@ -261,5 +263,9 @@ class StepStepped(Stepped):
             i.e. {0: 1, 10: 2} will increment by 1 until 10, then by 2.
             by default 1.
         """
-        warnings.warn(f"Pytorch Lightning datamodules can only be refreshed at the end of an epoch, adjusting the rollout during an epoch will likely fail.", UserWarning)
+        warnings.warn(
+            "Pytorch Lightning datamodules can only be refreshed at the end of an epoch, "
+            "adjusting the rollout during an epoch will likely fail.",
+            UserWarning,
+        )
         super().__init__(minimum, maximum, every_n_steps, increment, step_type="step")

@@ -8,24 +8,27 @@
 # nor does it submit to any jurisdiction.
 
 from typing import Any
-
-import pytest
 from unittest.mock import patch
 
-from anemoi.training.schedulers.rollout.randomise import RandomList, RandomRange, IncreasingRandom, BaseRandom
+import pytest
+
+from anemoi.training.schedulers.rollout.randomise import IncreasingRandom
+from anemoi.training.schedulers.rollout.randomise import RandomList
+from anemoi.training.schedulers.rollout.randomise import RandomRange
 
 
-def test_determism():
+def test_determism() -> None:
     sched = RandomList([1, 2, 3])
     sched_1 = RandomList([1, 2, 3])
 
-    sched.rollout # Force a retrieval to try and break the determinism
+    sched.rollout  # Force a retrieval to try and break the determinism
 
     for i in range(100):
-        sched.sync(epoch = i)
-        sched_1.sync(epoch = i)
+        sched.sync(epoch=i)
+        sched_1.sync(epoch=i)
 
         assert sched.rollout == sched_1.rollout
+
 
 @pytest.mark.parametrize(
     "rollouts",
@@ -34,26 +37,27 @@ def test_determism():
         [1, 2, 3, 4],
         [1, 2, 3, 4, 5],
         [16, 2, 3, 4, 5],
-    ]
+    ],
 )
-@patch("anemoi.training.schedulers.rollout.randomise.BaseRandom._randomly_pick", wraps = RandomList([0])._randomly_pick)
-def test_random_list(pick_mock: Any, rollouts: list[int]):
+@patch("anemoi.training.schedulers.rollout.randomise.BaseRandom._randomly_pick", wraps=RandomList([0])._randomly_pick)
+def test_random_list(pick_mock: Any, rollouts: list[int]) -> None:
     sched = RandomList(rollouts)
     assert sched.rollout in rollouts
     assert sched.maximum_rollout == max(rollouts)
 
     pick_mock.assert_called_once_with(rollouts)
 
+
 @pytest.mark.parametrize(
-    "minimum, maximum, step",
+    ("minimum", "maximum", "step"),
     [
         (1, 10, 1),
         (1, 10, 2),
         (1, 10, 3),
-    ]
+    ],
 )
-@patch("anemoi.training.schedulers.rollout.randomise.BaseRandom._randomly_pick", wraps = RandomList([0])._randomly_pick)
-def test_random_range(pick_mock: Any, minimum: int, maximum: int, step: int):
+@patch("anemoi.training.schedulers.rollout.randomise.BaseRandom._randomly_pick", wraps=RandomList([0])._randomly_pick)
+def test_random_range(pick_mock: Any, minimum: int, maximum: int, step: int) -> None:
     sched = RandomRange(minimum, maximum, step)
     assert sched.rollout in range(minimum, maximum + 1, step)
     assert sched.maximum_rollout == max(range(minimum, maximum + 1, step))
@@ -62,7 +66,7 @@ def test_random_range(pick_mock: Any, minimum: int, maximum: int, step: int):
 
 
 @pytest.mark.parametrize(
-    "minimum, maximum, step, every_n, epoch_test, expected_max",
+    ("minimum", "maximum", "step", "every_n", "epoch_test", "expected_max"),
     [
         (1, 10, 1, 1, 0, 1),
         (1, 10, 1, 1, 1, 2),
@@ -72,67 +76,79 @@ def test_random_range(pick_mock: Any, minimum: int, maximum: int, step: int):
         (1, 10, 1, 2, 2, 2),
         (1, 10, 1, 2, 4, 3),
         (1, 10, 2, 2, 4, 3),
-
-    ]
+    ],
 )
-@patch("anemoi.training.schedulers.rollout.randomise.BaseRandom._randomly_pick", wraps = RandomList([0])._randomly_pick)
-def test_increasing_random_increment(pick_mock: Any, minimum: int, maximum: int, step: int, every_n: int, epoch_test: int, expected_max: int):
+@patch("anemoi.training.schedulers.rollout.randomise.BaseRandom._randomly_pick", wraps=RandomList([0])._randomly_pick)
+def test_increasing_random_increment(
+    pick_mock: Any,
+    minimum: int,
+    maximum: int,
+    step: int,
+    every_n: int,
+    epoch_test: int,
+    expected_max: int,
+) -> None:
     sched = IncreasingRandom(minimum, maximum, step, every_n, 1)
 
-    sched.sync(epoch = epoch_test)
+    sched.sync(epoch=epoch_test)
 
     assert sched.current_maximum == expected_max
     assert sched.rollout in list(range(minimum, expected_max + 1, step))
     assert sched.maximum_rollout == maximum
-    
+
     pick_mock.assert_called_once_with(range(minimum, expected_max + 1, step))
 
 
+INCREMENT_DICT = {
+    0: 0,
+    2: 1,
+    4: 2,
+}
+INCREMENT_DICT_1 = {
+    0: 0,
+    2: 1,
+    3: 0,
+    4: 2,
+}
+
+COMPLEX_INCREMENT_TESTS_EVERY_N_1 = [
+    (1, INCREMENT_DICT, 0, 1),
+    (1, INCREMENT_DICT, 1, 1),
+    (1, INCREMENT_DICT, 2, 2),
+    (1, INCREMENT_DICT, 3, 3),
+    (1, INCREMENT_DICT, 4, 5),
+    (1, INCREMENT_DICT, 5, 7),
+    (1, INCREMENT_DICT_1, 4, 4),
+    (1, INCREMENT_DICT_1, 5, 6),
+    (1, INCREMENT_DICT_1, 1000, 10),
+]
+
+COMPLEX_INCREMENT_TESTS_EVERY_N_2 = [
+    (2, INCREMENT_DICT, 0, 1),
+    (2, INCREMENT_DICT, 1, 1),
+    (2, INCREMENT_DICT, 2, 2),
+    (2, INCREMENT_DICT, 3, 2),
+    (2, INCREMENT_DICT, 4, 4),
+    (2, INCREMENT_DICT, 5, 4),
+    (2, INCREMENT_DICT, 6, 6),
+]
+
+
 @pytest.mark.parametrize(
-    "minimum, maximum, step, every_n, increment, epoch_test, expected_max",
-    [
-        (1, 10, 1, 1, {0:0, 2:1, 4:2,}, 0, 1),
-        (1, 10, 1, 1, {0:0, 2:1, 4:2,}, 1, 1),
-        (1, 10, 1, 1, {0:0, 2:1, 4:2,}, 2, 2),
-        (1, 10, 1, 1, {0:0, 2:1, 4:2,}, 3, 3),
-        (1, 10, 1, 1, {0:0, 2:1, 4:2,}, 4, 5),
-        (1, 10, 1, 1, {0:0, 2:1, 4:2,}, 5, 7),
-        (1, 10, 1, 1, {0:0, 2:1, 3:0, 4:2,}, 4, 4),
-        (1, 10, 1, 1, {0:0, 2:1, 3:0, 4:2,}, 5, 6),
-        (1, 10, 1, 1, {0:0, 2:1, 3:0, 4:2,}, 1000, 10),
-        (1, 10, 2, 1, {0:0, 2:1, 3:0, 4:2,}, 1000, 10),
-    ]
+    ("every_n", "increment", "epoch_test", "expected_max"),
+    [*COMPLEX_INCREMENT_TESTS_EVERY_N_1, *COMPLEX_INCREMENT_TESTS_EVERY_N_2],
 )
-@patch("anemoi.training.schedulers.rollout.randomise.BaseRandom._randomly_pick", wraps = RandomList([0])._randomly_pick)
-def test_increasing_random_complex_increment(pick_mock: Any, minimum: int, maximum: int, step: int, every_n: int, increment: dict[int, int], epoch_test: int, expected_max: int):
+@patch("anemoi.training.schedulers.rollout.randomise.BaseRandom._randomly_pick", wraps=RandomList([0])._randomly_pick)
+def test_increasing_random_complex_increment(
+    pick_mock: Any,
+    every_n: int,
+    increment: dict[int, int],
+    epoch_test: int,
+    expected_max: int,
+) -> None:
+    sched = IncreasingRandom(1, 10, 1, every_n, increment=increment)
 
-    sched = IncreasingRandom(minimum, maximum, step, every_n, increment=increment)
-
-    sched.sync(epoch = epoch_test)
-    assert sched.rollout in list(range(minimum, expected_max + 1, step))
+    sched.sync(epoch=epoch_test)
+    assert sched.rollout in list(range(1, expected_max + 1, 1))
     assert sched.current_maximum == expected_max
-    pick_mock.assert_called_with(range(minimum, expected_max + 1, step))
-
-
-@pytest.mark.parametrize(
-    "minimum, maximum, step, every_n, increment, epoch_test, expected_max",
-    [
-        (1, 10, 1, 2, {0:0, 2:1, 4:2,}, 0, 1),
-        (1, 10, 1, 2, {0:0, 2:1, 4:2,}, 1, 1),
-        (1, 10, 1, 2, {0:0, 2:1, 4:2,}, 2, 2),
-        (1, 10, 1, 2, {0:0, 2:1, 4:2,}, 3, 2),
-        (1, 10, 1, 2, {0:0, 2:1, 4:2,}, 4, 4),
-        (1, 10, 1, 2, {0:0, 2:1, 4:2,}, 5, 4),
-        (1, 10, 1, 2, {0:0, 2:1, 4:2,}, 6, 6),
-    ]
-)
-@patch("anemoi.training.schedulers.rollout.randomise.BaseRandom._randomly_pick", wraps = RandomList([0])._randomly_pick)
-def test_increasing_random_complex_increment_every_not_1(pick_mock: Any, minimum: int, maximum: int, step: int, every_n: int, increment: dict[int, int], epoch_test: int, expected_max: int):
-
-    sched = IncreasingRandom(minimum, maximum, step, every_n, increment=increment)
-
-    sched.sync(epoch = epoch_test)
-    assert sched.rollout in list(range(minimum, expected_max + 1, step))
-    assert sched.current_maximum == expected_max
-    pick_mock.assert_called_with(range(minimum, expected_max + 1, step))
-
+    pick_mock.assert_called_with(range(1, expected_max + 1, 1))

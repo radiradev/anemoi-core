@@ -7,52 +7,55 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
-from anemoi.training.schedulers.rollout import RolloutScheduler, Static
+from anemoi.training.schedulers.rollout import RolloutScheduler
+from anemoi.training.schedulers.rollout import Static
+
 
 class DebugScheduler(RolloutScheduler):
     @property
-    def rollout(self):
+    def rollout(self) -> None:
         return self._epoch
-    
+
     @property
-    def maximum_rollout(self):
+    def maximum_rollout(self) -> None:
         return self._epoch
-    
-    def description(self):
+
+    def description(self) -> None:
         return "DebugScheduler"
 
-def test_static():
+
+def test_static() -> None:
     sched = Static(1)
     assert sched.rollout == 1
     assert sched.maximum_rollout == 1
     assert sched.current_maximum == 1
 
 
-def test_at():
+def test_at() -> None:
     sched = DebugScheduler()
 
-    with sched.at(epoch = 1):
+    with sched.at(epoch=1):
         assert sched.rollout == 1
         assert sched.maximum_rollout == 1
         assert sched.current_maximum == 1
-    
+
     assert sched.rollout == 0
 
-def test_sync():
+
+def test_sync() -> None:
     sched = DebugScheduler()
-    sched.sync(epoch = 10)
+    sched.sync(epoch=10)
     assert sched.rollout == 10
 
 
-def test_count():
+def test_count() -> None:
     sched = DebugScheduler()
-    sched.sync(epoch = 10)
+    sched.sync(epoch=10)
     assert sched.count(n_epochs=5) == 2
     assert sched.count(n_epochs=3) == 3
 
-def test_int_conversion():
+
+def test_int_conversion() -> None:
     sched = DebugScheduler()
-    sched.sync(epoch = 10)
+    sched.sync(epoch=10)
     assert int(sched) == 10
-
-

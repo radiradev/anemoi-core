@@ -12,29 +12,33 @@ from typing import Any
 import pytest
 
 from anemoi.training.diagnostics.callbacks.rollout import UpdateRollout
-from anemoi.training.train.train import AnemoiTrainer
-from anemoi.training.train.forecaster import GraphForecaster
-
 from anemoi.training.schedulers.rollout import RolloutScheduler
+from anemoi.training.train.forecaster import GraphForecaster
+from anemoi.training.train.train import AnemoiTrainer
+
 
 class DebugScheduler(RolloutScheduler):
     @property
-    def rollout(self):
+    def rollout(self) -> int:
         return self._epoch
-    
+
     @property
-    def maximum_rollout(self):
+    def maximum_rollout(self) -> int:
         return self._epoch
-    
-    def description(self):
+
+    def description(self) -> str:
         return "DebugScheduler"
+
 
 @pytest.fixture
 def fake_trainer(mocker: Any) -> AnemoiTrainer:
     trainer = mocker.Mock(spec=AnemoiTrainer)
 
-    trainer.datamodule.update_rollout = mocker.patch('anemoi.training.data.datamodule.AnemoiDatasetsDataModule.update_rollout')
+    trainer.datamodule.update_rollout = mocker.patch(
+        "anemoi.training.data.datamodule.AnemoiDatasetsDataModule.update_rollout",
+    )
     return trainer
+
 
 @pytest.fixture
 def fake_forecaster(mocker: Any) -> GraphForecaster:
@@ -43,9 +47,10 @@ def fake_forecaster(mocker: Any) -> GraphForecaster:
     model.rollout = DebugScheduler()
     return model
 
+
 @pytest.fixture
-def checkpoint(mocker: Any) -> dict[str, int]:
-    return {"epoch": 10, "global_step":100}
+def checkpoint() -> dict[str, int]:
+    return {"epoch": 10, "global_step": 100}
 
 
 @pytest.fixture
@@ -66,23 +71,32 @@ def test_on_load_checkpoint(
 ) -> None:
     callback.on_load_checkpoint(fake_trainer, fake_forecaster, checkpoint)
     spy = fake_trainer.datamodule.update_rollout
-    
-    spy.assert_called_once_with(rollout = checkpoint["epoch"])
+
+    spy.assert_called_once_with(rollout=checkpoint["epoch"])
 
 
-def test_on_validation_epoch_sanity(fake_trainer: AnemoiTrainer, fake_forecaster: GraphForecaster, callback: UpdateRollout) -> None:
+def test_on_validation_epoch_sanity(
+    fake_trainer: AnemoiTrainer,
+    fake_forecaster: GraphForecaster,
+    callback: UpdateRollout,
+) -> None:
     fake_trainer.current_epoch = 10
     fake_trainer.sanity_checking = True
     spy = fake_trainer.datamodule.update_rollout
-    
+
     callback.on_validation_epoch_end(fake_trainer, fake_forecaster, None)
     spy.assert_not_called()
 
-def test_on_validation_epoch(fake_trainer: AnemoiTrainer, fake_forecaster: GraphForecaster, callback: UpdateRollout) -> None:
+
+def test_on_validation_epoch(
+    fake_trainer: AnemoiTrainer,
+    fake_forecaster: GraphForecaster,
+    callback: UpdateRollout,
+) -> None:
     fake_trainer.current_epoch = 10
     spy = fake_trainer.datamodule.update_rollout
     fake_trainer.sanity_checking = False
 
     callback.on_validation_epoch_end(fake_trainer, fake_forecaster, None)
 
-    spy.assert_called_once_with(rollout = 11) #Offset 1
+    spy.assert_called_once_with(rollout=11)  # Offset 1

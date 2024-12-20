@@ -263,7 +263,6 @@ class GraphForecaster(pl.LightningModule):
 
     @staticmethod
     def get_val_metric_ranges(config: DictConfig, data_indices: IndexCollection) -> tuple[dict, dict]:
-
         metric_ranges = defaultdict(list)
         metric_ranges_validation = defaultdict(list)
 
@@ -484,7 +483,6 @@ class GraphForecaster(pl.LightningModule):
         metrics = {}
         y_preds = []
 
-        # print('Rollout', int(self.rollout))
         for loss_next, metrics_next, y_preds_next in self.rollout_step(
             batch,
             rollout=int(self.rollout),
@@ -607,20 +605,19 @@ class GraphForecaster(pl.LightningModule):
 
         return metrics
 
-    def on_train_start(self):
+    def on_train_start(self) -> None:
         # Sync the rollout at the start of training
-        self.rollout.sync(step = self.global_step, epoch = self.current_epoch)
+        self.rollout.sync(step=self.global_step, epoch=self.current_epoch)
 
-    def on_load_checkpoint(self, checkpoint: dict):
+    def on_load_checkpoint(self, checkpoint: dict) -> None:
         # Sync the rollout on the load of a checkpoint
-        self.rollout.sync(step = checkpoint["global_step"], epoch = checkpoint["epoch"])
+        self.rollout.sync(step=checkpoint["global_step"], epoch=checkpoint["epoch"])
 
-    def on_train_epoch_start(self):
+    def on_train_epoch_start(self) -> None:
         # Sync the rollout at the start of each epoch
-        # Cannot use stepping due to inconsistent behaviour with Pytorch Lightning
-        self.rollout.sync(step = self.global_step, epoch = self.current_epoch)
-        LOGGER.debug(f"Rollout at start of training epoch {self.current_epoch}: {int(self.rollout)}.")
-
+        # Cannot use stepping due to inconsistent behaviour with Pytorch Lightning
+        self.rollout.sync(step=self.global_step, epoch=self.current_epoch)
+        LOGGER.debug("Rollout at start of training epoch %d: %d.", self.current_epoch, int(self.rollout))
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
         train_loss, _, _ = self._step(batch, batch_idx)
@@ -674,7 +671,6 @@ class GraphForecaster(pl.LightningModule):
         -------
         None
         """
-
         with torch.no_grad():
             val_loss, metrics, y_preds = self._step(batch, batch_idx, validation_mode=True)
 

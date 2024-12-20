@@ -7,10 +7,9 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
+import warnings
 from typing import Any
 from typing import Literal
-
-import warnings
 
 from anemoi.training.schedulers.rollout import RolloutScheduler
 
@@ -104,8 +103,12 @@ class PositionalIndexed(RolloutScheduler):
     def maximum_rollout(self) -> int:
         return max(self._rollouts)
 
-    def description(self):
-        return f"PositionalIndexed with rollouts {self._rollouts} and num_times_per_{self._step_type} {self._num_times_per_element} ."
+    def description(self) -> str:
+        return (
+            f"PositionalIndexed with rollouts {self._rollouts} and num_times_per_{self._step_type} "
+            f"{self._num_times_per_element}."
+        )
+
 
 class EpochPositionalIndexed(PositionalIndexed):
     """Epoch based PositionalIndexed."""
@@ -118,7 +121,11 @@ class StepPositionalIndexed(PositionalIndexed):
     """Step based PositionalIndexed."""
 
     def __init__(self, rollouts: list[int]):
-        warnings.warn(f"Pytorch Lightning datamodules can only be refreshed at the end of an epoch, adjusting the rollout during an epoch will likely fail.", UserWarning)
+        warnings.warn(
+            "Pytorch Lightning datamodules can only be refreshed at the end of an epoch, "
+            "adjusting the rollout during an epoch will likely fail.",
+            UserWarning,
+        )
         super().__init__(rollouts, step_type="step")
 
 
@@ -174,8 +181,8 @@ class Lookup(RolloutScheduler):
     @property
     def maximum_rollout(self) -> int:
         return max(self._rollouts.values())
-    
-    def description(self):
+
+    def description(self) -> str:
         return f"Lookup with rollouts {self._rollouts} based on {self._step_type}."
 
 
@@ -190,5 +197,9 @@ class StepLookup(Lookup):
     """Step based Lookup."""
 
     def __init__(self, rollouts: dict[int, int]):
-        warnings.warn(f"Pytorch Lightning datamodules can only be refreshed at the end of an epoch, adjusting the rollout during an epoch will likely fail.", UserWarning)
+        warnings.warn(
+            "Pytorch Lightning datamodules can only be refreshed at the end of an epoch, "
+            "adjusting the rollout during an epoch will likely fail.",
+            UserWarning,
+        )
         super().__init__(rollouts, step_type="step")
