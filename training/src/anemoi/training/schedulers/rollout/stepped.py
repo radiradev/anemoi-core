@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from typing import Literal
+import warnings
 
 from anemoi.training.schedulers.rollout import RolloutScheduler
 from anemoi.training.schedulers.rollout.indexed import get_closest_key
@@ -65,14 +66,15 @@ class IncrementMixin:
         ValueError
             If cannot parse the `increment` value given at init.
         """
-        if isinstance(self._increment, int):
-            return self._increment
 
-        count = (step // self._every_n if self._step_type == "step" else epoch // self._every_n) + 1
+        count = (step // self._every_n if self._step_type == "step" else epoch // self._every_n)
+
+        if isinstance(self._increment, int):
+            return self._increment * count
 
         if isinstance(next(iter(self._increment.keys())), int):
             return sum(
-                (self._increment.get(get_closest_key(self._increment, i * self._every_n), 0) for i in range(count)),
+                (self._increment.get(get_closest_key(self._increment, i * self._every_n), 0) for i in range(count + 1)),
             )
 
         if isinstance(next(iter(self._increment.keys())), str):
@@ -85,7 +87,7 @@ class IncrementMixin:
 
             if increment_step_type == self._step_type:
                 return sum(
-                    (increment_dict.get(get_closest_key(increment_dict, i * self._every_n), 0) for i in range(count)),
+                    (increment_dict.get(get_closest_key(increment_dict, i * self._every_n), 0) for i in range(count + 1)),
                 )
 
             if epoch == 0 or step == 0:
@@ -106,7 +108,7 @@ class IncrementMixin:
                         get_closest_key(increment_dict, (i * self._every_n) // num_steps_per_epoch),
                         0,
                     )
-                    for i in range(count)
+                    for i in range(count + 1)
                 )
 
         error_msg = "Increment dictionary keys must be either int or a single str."
@@ -134,6 +136,7 @@ class Stepped(RolloutScheduler, IncrementMixin):
             Minimum rollout value.
         maximum : int
             Maximum rollout value.
+            Can be -1 to indicate no maximum.
         every_n : int
             Number of steps or epochs to step the rollout value.
             If `every_n` is 0, the rollout will stay at `minimum`.
@@ -185,6 +188,9 @@ class Stepped(RolloutScheduler, IncrementMixin):
         ```
         """
         super().__init__(every_n=every_n, step_type=step_type, increment=increment)
+
+        if maximum == -1:
+            maximum = float("inf")
 
         self._minimum = minimum
         self._maximum = maximum
@@ -255,4 +261,5 @@ class StepStepped(Stepped):
             i.e. {0: 1, 10: 2} will increment by 1 until 10, then by 2.
             by default 1.
         """
+        warnings.warn(f"Pytorch Lightning datamodules can only be refreshed at the end of an epoch, adjusting the rollout during an epoch will likely fail.", UserWarning)
         super().__init__(minimum, maximum, every_n_steps, increment, step_type="step")

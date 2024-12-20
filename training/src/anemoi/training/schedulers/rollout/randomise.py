@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pytorch_lightning as pl
 
@@ -175,6 +177,7 @@ class IncreasingRandom(IncrementMixin, BaseRandom):
             Minimum rollout to choose from, by default 1
         maximum : int, optional
             Maximum rollout to choose from,
+            Can be -1 for no maximum,
             by default 1.
         range_step : int, optional
             Step size for the range, by default 1
@@ -202,6 +205,10 @@ class IncreasingRandom(IncrementMixin, BaseRandom):
         super().__init__(every_n=every_n, increment=increment, step_type=step_type)
 
         self._minimum = minimum
+
+        if maximum == -1:
+            maximum = float("inf")
+
         self._maximum = maximum
         self._range_step = range_step
 
@@ -210,7 +217,7 @@ class IncreasingRandom(IncrementMixin, BaseRandom):
         if self._every_n == 0:
             return self._minimum
 
-        rollouts = range(self._minimum, self._minimum + self.increment(self._step, self._epoch), self._range_step)
+        rollouts = range(self._minimum, self.current_maximum, self._range_step)
 
         return self._randomly_pick(rollouts)
 
@@ -222,7 +229,7 @@ class IncreasingRandom(IncrementMixin, BaseRandom):
 
     @property
     def current_maximum(self) -> int:
-        return self._minimum + ((self._epoch // self._every_n_epochs) * self._step)
+        return min(self._maximum, self._minimum + self.increment(self._step, self._epoch))
 
     def description(self) -> str:
         return (
@@ -351,4 +358,6 @@ class StepIncreasingRandom(IncreasingRandom):
         # any value between 1 and 2, and then increments of 1
         ```
         """
+        warnings.warn(f"Pytorch Lightning datamodules can only be refreshed at the end of an epoch, adjusting the rollout during an epoch will likely fail.", UserWarning)
+
         super().__init__(minimum, maximum, range_step, every_n_steps, increment, step_type="step")

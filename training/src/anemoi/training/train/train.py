@@ -376,6 +376,25 @@ class AnemoiTrainer:
             self.config.dataloader.get("read_group_size", self.config.hardware.num_gpus_per_model),
             static_graph=not self.config.training.accum_grad_batches > 1,
         )
+    
+    @cached_property
+    def _need_to_reload_dataloaders(self) -> bool:
+        """Determines if the dataloaders need to be reloaded.
+
+        If the model's rollout scheduler is already at it's maximum, 
+        the dataloaders do not need to be reloaded.
+
+        Returns
+        -------
+        bool
+            True if the dataloaders need to be reloaded, False otherwise.
+        """
+        rollsched = self.model.rollout
+        
+        if rollsched.current_maximum == rollsched.maximum_rollout:
+            return False
+        LOGGER.info("Dataloaders will be reloaded every epoch to support dynamic rollout.")
+        return True
 
     def train(self) -> None:
         """Training entry point."""
@@ -405,6 +424,7 @@ class AnemoiTrainer:
             use_distributed_sampler=False,
             profiler=self.profiler,
             enable_progress_bar=self.config.diagnostics.enable_progress_bar,
+            reload_dataloaders_every_n_epochs=self._need_to_reload_dataloaders,
         )
 
         LOGGER.debug("Starting training..")
