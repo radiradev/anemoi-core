@@ -10,6 +10,10 @@ Keep it human-readable, your future self will thank you!
 
 ## [Unreleased](https://github.com/ecmwf/anemoi-graphs/compare/0.4.2...HEAD)
 
+### Added
+
+- feat: Support for multi-dimensional node attributes in plots (#48)
+
 ## [0.4.2 - Optimisations and lat-lon](https://github.com/ecmwf/anemoi-graphs/compare/0.4.1...0.4.2) - 2024-12-19
 
 ### Added
@@ -22,10 +26,6 @@ Keep it human-readable, your future self will thank you!
 ### Changed
 
 - fix: faster edge builder for tri icosahedron. (#92)
-
-### Added
-
-- feat: Support for multi-dimensional node attributes in plots (#86)
 
 ## [0.4.1 - ICON graphs, multiple edge builders and post processors](https://github.com/ecmwf/anemoi-graphs/compare/0.4.0...0.4.1) - 2024-11-26
 
