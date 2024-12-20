@@ -297,6 +297,9 @@ class BaseRemapperVariable(BasePreprocessor, ABC):
                 x[..., idx_dst] = backmapper(x_remapped_tmp[..., remap_index, :])
                 remap_index += 1
 
+        # fill additional columns with zeros
+        x[..., -self.additional_input :] = 0.0
+
         return x
 
 
@@ -320,8 +323,6 @@ class Remapper(BaseRemapperVariable):
         statistics: Optional[dict] = None,
     ) -> None:
         super().__init__(config, data_indices, statistics)
-
-        self.printed_preprocessor_warning, self.printed_postprocessor_warning = False, False
 
         self._create_remapping_indices(statistics)
 

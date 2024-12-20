@@ -163,11 +163,17 @@ class InputNormalizer(BasePreprocessor):
         if data_index is not None:
             x[..., :] = x[...,] * self._norm_mul[data_index] + self._norm_add[data_index]
         elif x.shape[-1] - self.additional_input == len(self._input_idx):
-            x[..., : -self.additional_input] = (
-                x[..., : -self.additional_input] * self._norm_mul[self._input_idx] + self._norm_add[self._input_idx]
-            )
+            if self.additional_input:
+                x[..., : -self.additional_input] = (
+                    x[..., : -self.additional_input] * self._norm_mul[self._input_idx] + self._norm_add[self._input_idx]
+                )
+            else:
+                x[..., :] = x[..., :] * self._norm_mul[self._input_idx] + self._norm_add[self._input_idx]
         else:
-            x[..., : -self.additional_input] = x[..., : -self.additional_input] * self._norm_mul + self._norm_add
+            if self.additional_input:
+                x[..., : -self.additional_input] = x[..., : -self.additional_input] * self._norm_mul + self._norm_add
+            else:
+                x[..., :] = x[..., :] * self._norm_mul + self._norm_add
         return x
 
     def inverse_transform(
@@ -203,9 +209,17 @@ class InputNormalizer(BasePreprocessor):
         if data_index is not None:
             x[..., :] = (x[..., :] - self._norm_add[data_index]) / self._norm_mul[data_index]
         elif x.shape[-1] - self.additional_output == len(self._output_idx):
-            x[..., : -self.additional_output] = (
-                x[..., : -self.additional_output] - self._norm_add[self._output_idx]
-            ) / self._norm_mul[self._output_idx]
+            if self.additional_output:
+                x[..., : -self.additional_output] = (
+                    x[..., : -self.additional_output] - self._norm_add[self._output_idx]
+                ) / self._norm_mul[self._output_idx]
+            else:
+                x[..., :] = (x[..., :] - self._norm_add[self._output_idx]) / self._norm_mul[self._output_idx]
         else:
-            x[..., : -self.additional_output] = (x[..., : -self.additional_output] - self._norm_add) / self._norm_mul
+            if self.additional_output:
+                x[..., : -self.additional_output] = (
+                    x[..., : -self.additional_output] - self._norm_add
+                ) / self._norm_mul
+            else:
+                x[..., :] = (x[..., :] - self._norm_add) / self._norm_mul
         return x
