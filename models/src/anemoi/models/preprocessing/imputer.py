@@ -67,10 +67,10 @@ class BaseImputer(BasePreprocessor, ABC):
         name_to_index_training_output = self.data_indices.data.output.name_to_index
         name_to_index_inference_output = self.data_indices.model.output.name_to_index
 
-        self.num_training_input_vars = len(name_to_index_training_input)
-        self.num_inference_input_vars = len(name_to_index_inference_input)
-        self.num_training_output_vars = len(name_to_index_training_output)
-        self.num_inference_output_vars = len(name_to_index_inference_output)
+        self.num_training_input_vars = len(self.data_indices.internal_data.input.name_to_index)
+        self.num_inference_input_vars = len(self.data_indices.internal_model.input.name_to_index)
+        self.num_training_output_vars = len(self.data_indices.internal_data.output.name_to_index)
+        self.num_inference_output_vars = len(self.data_indices.internal_model.output.name_to_index)
 
         (
             self.index_training_input,

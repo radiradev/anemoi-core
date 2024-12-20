@@ -62,6 +62,9 @@ class InputNormalizer(BasePreprocessor):
 
         self._validate_normalization_inputs(name_to_index_training_input, minimum, maximum, mean, stdev)
 
+        self.additional_input = len(data_indices.internal_data.input.full) - len(data_indices.data.input.full)
+        self.additional_output = len(data_indices.internal_data.output.full) - len(data_indices.data.output.full)
+
         _norm_add = np.zeros((minimum.size,), dtype=np.float32)
         _norm_mul = np.ones((minimum.size,), dtype=np.float32)
 
@@ -157,13 +160,20 @@ class InputNormalizer(BasePreprocessor):
         """
         if not in_place:
             x = x.clone()
-
         if data_index is not None:
-            x[..., :] = x[..., :] * self._norm_mul[data_index] + self._norm_add[data_index]
-        elif x.shape[-1] == len(self._input_idx):
-            x[..., :] = x[..., :] * self._norm_mul[self._input_idx] + self._norm_add[self._input_idx]
+            x[..., :] = x[...,] * self._norm_mul[data_index] + self._norm_add[data_index]
+        elif x.shape[-1] - self.additional_input == len(self._input_idx):
+            if self.additional_input:
+                x[..., : -self.additional_input] = (
+                    x[..., : -self.additional_input] * self._norm_mul[self._input_idx] + self._norm_add[self._input_idx]
+                )
+            else:
+                x[..., :] = x[..., :] * self._norm_mul[self._input_idx] + self._norm_add[self._input_idx]
         else:
-            x[..., :] = x[..., :] * self._norm_mul + self._norm_add
+            if self.additional_input:
+                x[..., : -self.additional_input] = x[..., : -self.additional_input] * self._norm_mul + self._norm_add
+            else:
+                x[..., :] = x[..., :] * self._norm_mul + self._norm_add
         return x
 
     def inverse_transform(
@@ -198,8 +208,18 @@ class InputNormalizer(BasePreprocessor):
         # hence, we mask out the forcing indices
         if data_index is not None:
             x[..., :] = (x[..., :] - self._norm_add[data_index]) / self._norm_mul[data_index]
-        elif x.shape[-1] == len(self._output_idx):
-            x[..., :] = (x[..., :] - self._norm_add[self._output_idx]) / self._norm_mul[self._output_idx]
+        elif x.shape[-1] - self.additional_output == len(self._output_idx):
+            if self.additional_output:
+                x[..., : -self.additional_output] = (
+                    x[..., : -self.additional_output] - self._norm_add[self._output_idx]
+                ) / self._norm_mul[self._output_idx]
+            else:
+                x[..., :] = (x[..., :] - self._norm_add[self._output_idx]) / self._norm_mul[self._output_idx]
         else:
-            x[..., :] = (x[..., :] - self._norm_add) / self._norm_mul
+            if self.additional_output:
+                x[..., : -self.additional_output] = (
+                    x[..., : -self.additional_output] - self._norm_add
+                ) / self._norm_mul
+            else:
+                x[..., :] = (x[..., :] - self._norm_add) / self._norm_mul
         return x
