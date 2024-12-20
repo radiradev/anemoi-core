@@ -69,6 +69,8 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         if not self.config.dataloader.get("pin_memory", True):
             LOGGER.info("Data loader memory pinning disabled.")
 
+        self.additional_var_columns = self.config.dataloader.get("additional_var_columns", 0)
+
     @cached_property
     def statistics(self) -> dict:
         return self.ds_train.statistics
@@ -187,6 +189,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             grid_indices=self.grid_indices,
             label=label,
             effective_bs=effective_bs,
+            additional_var_columns=self.additional_var_columns,
         )
 
     def _get_dataloader(self, ds: NativeGridDataset, stage: str) -> DataLoader:

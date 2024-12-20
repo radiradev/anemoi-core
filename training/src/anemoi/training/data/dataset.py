@@ -44,6 +44,7 @@ class NativeGridDataset(IterableDataset):
         shuffle: bool = True,
         label: str = "generic",
         effective_bs: int = 1,
+        additional_var_columns: int = 0,
     ) -> None:
         """Initialize (part of) the dataset state.
 
@@ -65,6 +66,9 @@ class NativeGridDataset(IterableDataset):
             label for the dataset, by default "generic"
         effective_bs : int, default 1
             effective batch size useful to compute the lenght of the dataset
+        additional_var_columns : int, optional
+            number of additional variables to add to the data, by default 0
+            these additional columns are needed for the remapper
         """
         self.label = label
         self.effective_bs = effective_bs
@@ -74,6 +78,8 @@ class NativeGridDataset(IterableDataset):
         self.rollout = rollout
         self.timeincrement = timeincrement
         self.grid_indices = grid_indices
+
+        self.additional_var_columns = additional_var_columns
 
         # lazy init
         self.n_samples_per_epoch_total: int = 0
