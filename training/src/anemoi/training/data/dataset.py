@@ -289,6 +289,9 @@ class NativeGridDataset(IterableDataset):
             x = x[..., grid_shard_indices]  # select the grid shard
             x = rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
             self.ensemble_dim = 1
+            # add additional columns for remapping
+            new_col = np.zeros((x.shape[:-1] + (self.additional_var_columns,)), dtype=x.dtype)
+            x = np.concatenate((x, new_col), axis=-1)
 
             yield torch.from_numpy(x)
 

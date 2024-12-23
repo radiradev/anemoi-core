@@ -208,7 +208,7 @@ class Multimapper(BasePreprocessor, ABC):
 
         else:
             raise ValueError(
-                f"Input tensor ({x.shape[-1]}) - ({self.additional_input})does not match the training "
+                f"Input tensor ({x.shape[-1]} - {self.additional_input}) does not match the training "
                 f"({self.num_training_input_vars}) or inference shape ({self.num_inference_input_vars})",
             )
 
