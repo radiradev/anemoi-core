@@ -11,11 +11,10 @@
 import numpy as np
 import pytest
 import torch
-from omegaconf import DictConfig
-
 from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.models.preprocessing.imputer import InputImputer
 from anemoi.models.preprocessing.remapper import Remapper
+from omegaconf import DictConfig
 
 
 @pytest.fixture()
@@ -92,7 +91,7 @@ def input_imputer():
     return InputImputer(config=config.data.imputer, data_indices=data_indices, statistics=statistics)
 
 
-def test_remap_not_inplace(input_remapper) -> None:
+def test_remap_transform_not_inplace(input_remapper) -> None:
     x = torch.Tensor([[1.0, 2.0, 3.0, 4.0, 150.0, 5.0], [6.0, 7.0, 8.0, 9.0, 201.0, 10.0]])
     input_remapper(x, in_place=False)
     assert torch.allclose(
@@ -101,7 +100,7 @@ def test_remap_not_inplace(input_remapper) -> None:
     )
 
 
-def test_remap(input_remapper) -> None:
+def test_remap_transform(input_remapper) -> None:
     x = torch.Tensor([[1.0, 2.0, 3.0, 4.0, 150.0, 5.0], [6.0, 7.0, 8.0, 9.0, 201.0, 10.0]])
     expected_output = torch.Tensor(
         [
@@ -110,9 +109,16 @@ def test_remap(input_remapper) -> None:
         ]
     )
     assert torch.allclose(input_remapper.transform(x), expected_output)
+    # inference mode (without prognostic variables)
+    assert torch.allclose(
+        input_remapper.transform(
+            x[..., input_remapper.data_indices.data.todict()["input"]["full"]],
+        ),
+        expected_output[..., input_remapper.data_indices.internal_data.todict()["input"]["full"]],
+    )
 
 
-def test_inverse_transform(input_remapper) -> None:
+def test_remap_inverse_transform(input_remapper) -> None:
     x = torch.Tensor(
         [
             [1.0, 2.0, 3.0, 4.0, 5.0, -0.8660254, 0.5],
@@ -121,9 +127,16 @@ def test_inverse_transform(input_remapper) -> None:
     )
     expected_output = torch.Tensor([[1.0, 2.0, 3.0, 4.0, 150.0, 5.0], [6.0, 7.0, 8.0, 9.0, 201.0, 10.0]])
     assert torch.allclose(input_remapper.inverse_transform(x), expected_output)
+    # inference mode (without forcing variables)
+    assert torch.allclose(
+        input_remapper.inverse_transform(
+            x[..., input_remapper.data_indices.internal_data.todict()["output"]["full"]],
+        ),
+        expected_output[..., input_remapper.data_indices.data.todict()["output"]["full"]],
+    )
 
 
-def test_remap_inverse_transform(input_remapper) -> None:
+def test_remap_inverse_transform_not_inplace(input_remapper) -> None:
     x = torch.Tensor([[1.0, 2.0, 3.0, 4.0, 150.0, 5.0], [6.0, 7.0, 8.0, 9.0, 201.0, 10.0]])
     assert torch.allclose(
         input_remapper.inverse_transform(input_remapper.transform(x, in_place=False), in_place=False),
@@ -170,7 +183,7 @@ def test_monomap_inverse_transform(input_remapper_1d) -> None:
         ]
     )
     assert torch.allclose(input_remapper_1d.inverse_transform(y, in_place=False), expected_output)
-    # inference mode (without prognostic variables)
+    # inference mode (without forcing variables)
     assert torch.allclose(
         input_remapper_1d.inverse_transform(
             y[..., input_remapper_1d.data_indices.data.todict()["output"]["full"]], in_place=False
