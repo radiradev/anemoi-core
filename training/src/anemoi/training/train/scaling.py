@@ -82,10 +82,17 @@ class GeneralVariableLossScaler(BaseVariableLossScaler):
         for variable_name, idx in self.data_indices.internal_model.output.name_to_index.items():
             _, variable_ref, _ = self.get_variable_group(variable_name)
             # Apply variable scaling
-            variable_loss_scaling[idx] = self.scaling_config.get(variable_name, 1.0) * self.scaling_config.get(
+            variable_loss_scaling[idx] = self.scaling_config.get(
                 variable_ref,
                 1.0,
             )
+            # TODO(all): do we want to allow scaling by variable ref and variable name?,
+            # i.e. scale q_50 by value for q_50 AND q
+            if variable_ref != variable_name:
+                variable_loss_scaling[idx] *= self.scaling_config.get(
+                    variable_name,
+                    1.0,
+                )
 
         return variable_loss_scaling
 
