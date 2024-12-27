@@ -15,7 +15,6 @@ from collections.abc import Mapping
 from typing import Optional
 from typing import Union
 
-import numpy as np
 import pytorch_lightning as pl
 import torch
 from hydra.utils import instantiate
@@ -31,6 +30,7 @@ from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.models.interface import AnemoiModelInterface
 from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
+from anemoi.training.train.scaling import GeneralVariableLossScaler
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.masks import Boolean1DMask
 from anemoi.training.utils.masks import NoOutputMask
@@ -98,7 +98,18 @@ class GraphForecaster(pl.LightningModule):
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
-        variable_scaling = self.get_variable_scaling(config, data_indices)
+        variable_scaling = GeneralVariableLossScaler(
+            config.training.variable_loss_scaling,
+            data_indices,
+        ).get_variable_scaling()
+
+        # Instantiate the pressure level scaling class with the training configuration
+        pressurelevelscaler = instantiate(
+            config.training.pressure_level_scaler,
+            scaling_config=config.training.variable_loss_scaling,
+            data_indices=data_indices,
+        )
+        pressure_level_scaling = pressurelevelscaler.get_variable_scaling()
 
         self.internal_metric_ranges, self.val_metric_ranges = self.get_val_metric_ranges(config, data_indices)
 
@@ -117,6 +128,7 @@ class GraphForecaster(pl.LightningModule):
         # Filled after first application of preprocessor. dimension=[-2, -1] (latlon, n_outputs).
         self.scalars = {
             "variable": (-1, variable_scaling),
+            "variable_pressure_level": (-1, pressure_level_scaling),
             "loss_weights_mask": ((-2, -1), torch.ones((1, 1))),
             "limited_area_mask": (2, limited_area_mask),
         }
@@ -298,45 +310,6 @@ class GraphForecaster(pl.LightningModule):
         metric_ranges_validation["all"] = data_indices.model.output.full.tolist()
 
         return metric_ranges, metric_ranges_validation
-
-    @staticmethod
-    def get_variable_scaling(
-        config: DictConfig,
-        data_indices: IndexCollection,
-    ) -> torch.Tensor:
-        variable_loss_scaling = (
-            np.ones((len(data_indices.internal_data.output.full),), dtype=np.float32)
-            * config.training.variable_loss_scaling.default
-        )
-        pressure_level = instantiate(config.training.pressure_level_scaler)
-
-        LOGGER.info(
-            "Pressure level scaling: use scaler %s with slope %.4f and minimum %.2f",
-            type(pressure_level).__name__,
-            pressure_level.slope,
-            pressure_level.minimum,
-        )
-
-        for key, idx in data_indices.internal_model.output.name_to_index.items():
-            split = key.split("_")
-            if len(split) > 1 and split[-1].isdigit():
-                # Apply pressure level scaling
-                if split[0] in config.training.variable_loss_scaling.pl:
-                    variable_loss_scaling[idx] = config.training.variable_loss_scaling.pl[
-                        split[0]
-                    ] * pressure_level.scaler(
-                        int(split[-1]),
-                    )
-                else:
-                    LOGGER.debug("Parameter %s was not scaled.", key)
-            else:
-                # Apply surface variable scaling
-                if key in config.training.variable_loss_scaling.sfc:
-                    variable_loss_scaling[idx] = config.training.variable_loss_scaling.sfc[key]
-                else:
-                    LOGGER.debug("Parameter %s was not scaled.", key)
-
-        return torch.from_numpy(variable_loss_scaling)
 
     @staticmethod
     def get_node_weights(config: DictConfig, graph_data: HeteroData) -> torch.Tensor:
