@@ -739,7 +739,11 @@ class PlotLoss(BasePerBatchPlotCallback):
         def automatically_determine_group(name: str) -> str:
             # first prefix of parameter name is group name
             parts = name.split("_")
-            return parts[0]
+            if len(parts) == 1:
+                # if no underscore is present, return full name
+                return parts[0]
+            # else remove last part of name
+            return name[: -len(parts[-1]) - 1]
 
         # group parameters by their determined group name for > 15 parameters
         if len(self.parameter_names) <= 15:
@@ -824,19 +828,19 @@ class PlotLoss(BasePerBatchPlotCallback):
             legend_patches,
         )
 
-    def argsort_name_pressurelevel(self) -> list[int]:
+    def argsort_name_variablelevel(self) -> list[int]:
         """Custom sort key to process the strings.
 
-        Sort parameter names by alpha part, then by numeric part at second
-        position (presure level), then by the original string.
+        Sort parameter names by alpha part, then by numeric part at last
+        position (variable level), then by the original string.
         """
         data = self.parameter_names
 
         def custom_sort_key(index: int) -> tuple:
             s = data[index]  # Access the element by index
             parts = s.split("_")
-            alpha_part = parts[0]
-            numeric_part = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else float("inf")
+            alpha_part = s if len(parts) == 1 else s[: -len(parts[-1]) - 1]
+            numeric_part = int(parts[-1]) if len(parts) > 1 and parts[-1].isdigit() else float("inf")
             return (alpha_part, numeric_part, s)
 
         # Generate argsort indices
@@ -861,7 +865,7 @@ class PlotLoss(BasePerBatchPlotCallback):
         self.parameter_names = [parameter_names[i] for i in np.argsort(parameter_positions)]
 
         # Sort the list using the custom key
-        argsort_indices = self.argsort_name_pressurelevel()
+        argsort_indices = self.argsort_name_variablelevel()
         self.parameter_names = [self.parameter_names[i] for i in argsort_indices]
 
         if not isinstance(pl_module.loss, BaseWeightedLoss):

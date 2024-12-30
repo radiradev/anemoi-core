@@ -116,6 +116,7 @@ def plot_loss(
     """
     # create plot
     # more space for legend
+    # TODO(who?): make figsize more flexible depending on the number of bars
     figsize = (8, 3) if legend_patches else (4, 3)
     fig, ax = plt.subplots(1, 1, figsize=figsize, layout=LAYOUT)
     # histogram plot
