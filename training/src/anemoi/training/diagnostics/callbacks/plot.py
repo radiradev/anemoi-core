@@ -33,7 +33,7 @@ from pytorch_lightning.callbacks import Callback
 from pytorch_lightning.utilities import rank_zero_only
 
 from anemoi.models.layers.mapper import GraphEdgeMixin
-from anemoi.training.diagnostics.plots import argsort_name_variablelevel
+from anemoi.training.diagnostics.plots import argsort_variablename_variablelevel
 from anemoi.training.diagnostics.plots import get_scatter_frame
 from anemoi.training.diagnostics.plots import init_plot_settings
 from anemoi.training.diagnostics.plots import plot_graph_edge_features
@@ -848,7 +848,7 @@ class PlotLoss(BasePerBatchPlotCallback):
         self.parameter_names = [parameter_names[i] for i in np.argsort(parameter_positions)]
 
         # Sort the list using the custom key
-        argsort_indices = argsort_name_variablelevel(self.parameter_names)
+        argsort_indices = argsort_variablename_variablelevel(self.parameter_names)
         self.parameter_names = [self.parameter_names[i] for i in argsort_indices]
 
         if not isinstance(pl_module.loss, BaseWeightedLoss):

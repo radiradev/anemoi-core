@@ -58,7 +58,7 @@ def equirectangular_projection(latlons: np.array) -> np.array:
     return pc_lat, pc_lon
 
 
-def argsort_name_variablelevel(data: list[str]) -> list[int]:
+def argsort_variablename_variablelevel(data: list[str]) -> list[int]:
     """Custom sort key to process the strings.
 
     Sort parameter names by alpha part, then by numeric part at last
