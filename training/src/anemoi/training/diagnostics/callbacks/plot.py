@@ -33,6 +33,7 @@ from pytorch_lightning.callbacks import Callback
 from pytorch_lightning.utilities import rank_zero_only
 
 from anemoi.models.layers.mapper import GraphEdgeMixin
+from anemoi.training.diagnostics.plots import argsort_name_variablelevel
 from anemoi.training.diagnostics.plots import get_scatter_frame
 from anemoi.training.diagnostics.plots import init_plot_settings
 from anemoi.training.diagnostics.plots import plot_graph_edge_features
@@ -828,24 +829,6 @@ class PlotLoss(BasePerBatchPlotCallback):
             legend_patches,
         )
 
-    def argsort_name_variablelevel(self) -> list[int]:
-        """Custom sort key to process the strings.
-
-        Sort parameter names by alpha part, then by numeric part at last
-        position (variable level), then by the original string.
-        """
-        data = self.parameter_names
-
-        def custom_sort_key(index: int) -> tuple:
-            s = data[index]  # Access the element by index
-            parts = s.split("_")
-            alpha_part = s if len(parts) == 1 else s[: -len(parts[-1]) - 1]
-            numeric_part = int(parts[-1]) if len(parts) > 1 and parts[-1].isdigit() else float("inf")
-            return (alpha_part, numeric_part, s)
-
-        # Generate argsort indices
-        return sorted(range(len(data)), key=custom_sort_key)
-
     @rank_zero_only
     def _plot(
         self,
@@ -865,7 +848,7 @@ class PlotLoss(BasePerBatchPlotCallback):
         self.parameter_names = [parameter_names[i] for i in np.argsort(parameter_positions)]
 
         # Sort the list using the custom key
-        argsort_indices = self.argsort_name_variablelevel()
+        argsort_indices = argsort_name_variablelevel(self.parameter_names)
         self.parameter_names = [self.parameter_names[i] for i in argsort_indices]
 
         if not isinstance(pl_module.loss, BaseWeightedLoss):
