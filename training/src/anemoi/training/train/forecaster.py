@@ -48,6 +48,7 @@ class GraphForecaster(pl.LightningModule):
         config: DictConfig,
         graph_data: HeteroData,
         statistics: dict,
+        statistics_tendencies: dict,        
         data_indices: IndexCollection,
         metadata: dict,
         supporting_arrays: dict,
@@ -95,6 +96,7 @@ class GraphForecaster(pl.LightningModule):
         self.latlons_data = graph_data[config.graph.data].x
         self.node_weights = self.get_node_weights(config, graph_data)
         self.node_weights = self.output_mask.apply(self.node_weights, dim=0, fill_value=0.0)
+        self.statistics_tendencies = statistics_tendencies
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
