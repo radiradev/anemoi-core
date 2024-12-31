@@ -104,12 +104,15 @@ class GraphForecaster(pl.LightningModule):
         ).get_variable_scaling()
 
         # Instantiate the pressure level scaling class with the training configuration
-        pressurelevelscaler = instantiate(
-            config.training.pressure_level_scaler,
-            scaling_config=config.training.variable_loss_scaling,
-            data_indices=data_indices,
-        )
-        pressure_level_scaling = pressurelevelscaler.get_variable_scaling()
+        config_container = OmegaConf.to_container(config.training.additional_scalars, resolve=False)
+        if isinstance(config_container, list):
+            scalar = [instantiate(
+                        scalar_config,
+                        scaling_config=config.training.variable_loss_scaling,
+                        data_indices=data_indices,
+                    )
+                    for scalar_config in config_container
+                ]
 
         self.internal_metric_ranges, self.val_metric_ranges = self.get_val_metric_ranges(config, data_indices)
 
@@ -128,10 +131,12 @@ class GraphForecaster(pl.LightningModule):
         # Filled after first application of preprocessor. dimension=[-2, -1] (latlon, n_outputs).
         self.scalars = {
             "variable": (-1, variable_scaling),
-            "variable_pressure_level": (-1, pressure_level_scaling),
             "loss_weights_mask": ((-2, -1), torch.ones((1, 1))),
-            "limited_area_mask": (2, limited_area_mask),
+            "limited_area_mask": (2, limited_area_mask)
         }
+        # add addtional user-defined scalars
+        [self.scalars.update({scale.name: (scale.scale_dim, scale.get_variable_scaling())}) for scale in scalar]
+
         self.updated_loss_mask = False
 
         self.loss = self.get_loss_function(config.training.training_loss, scalars=self.scalars, **loss_kwargs)

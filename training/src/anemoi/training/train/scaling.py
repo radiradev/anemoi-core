@@ -107,6 +107,8 @@ class BaseVariableLevelScaler(BaseVariableLossScaler):
         group: str,
         y_intercept: float,
         slope: float,
+        name: str,
+        scale_dim: int,
     ) -> None:
         """Initialise variable level scaler.
 
@@ -127,6 +129,8 @@ class BaseVariableLevelScaler(BaseVariableLossScaler):
         self.scaling_group = group
         self.y_intercept = y_intercept
         self.slope = slope
+        self.name = name
+        self.scale_dim = scale_dim
 
     @abstractmethod
     def get_level_scaling(self, variable_level: int) -> float: ...
@@ -143,7 +147,6 @@ class BaseVariableLevelScaler(BaseVariableLossScaler):
             variable_level_scaling[idx] = self.get_level_scaling(float(variable_level))
 
         return variable_level_scaling
-
 
 class LinearVariableLevelScaler(BaseVariableLevelScaler):
     """Linear with slope self.slope, yaxis shift by self.y_intercept."""
@@ -188,3 +191,17 @@ class NoVariableLevelScaler(BaseVariableLevelScaler):
         del variable_level  # unused
         # no scaling, always return 1.0
         return 1.0
+
+
+class BaseTendencyScaler(ABC):
+    """Configurable method to scale prognostic variables based on data statistics and statistics_tendencies."""
+
+    @abstractmethod
+    def scaler(self, variable_stdev: float, variable_tendency_stdev: float) -> float: ...
+
+
+class NormTendencyScaler(BaseTendencyScaler):
+    """Scale loses by stdev of tendency statistics."""
+    @staticmethod
+    def scaler(variable_stdev: float, variable_tendency_stdev: float) -> float:
+        return variable_stdev / variable_tendency_stdev
