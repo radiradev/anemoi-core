@@ -58,7 +58,11 @@ class BaseVariableLossScaler(ABC):
         Returns
         -------
         str
-            Group of the variable.
+            Group of the variable given in the training-config file.
+        str
+            Variable reference which corresponds to the variable name without the variable level
+        str
+            Variable level, i.e. pressure level or model level
 
         """
         split = variable_name.split("_")
@@ -81,12 +85,12 @@ class GeneralVariableLossScaler(BaseVariableLossScaler):
 
         for variable_name, idx in self.data_indices.internal_model.output.name_to_index.items():
             _, variable_ref, _ = self.get_variable_group(variable_name)
-            # Apply variable scaling
+            # Apply variable scaling by base variable name (variable_ref: variable name without variable level)
             variable_loss_scaling[idx] = self.scaling_config.get(
                 variable_ref,
                 1.0,
             )
-            # TODO(all): do we want to allow scaling by variable ref and variable name?,
+            # TODO(all): do we want to allow scaling by variable_ref and variable_name?
             # i.e. scale q_50 by value for q_50 AND q
             if variable_ref != variable_name:
                 variable_loss_scaling[idx] *= self.scaling_config.get(
