@@ -126,11 +126,11 @@ variable_loss_scaling:
   tp: 0.025
   cp: 0.0025
   # 'variable_pressure_level' must be included in `scalars` in the losses for this to be applied.
-  pressure_level_scaler:
-    _target_: anemoi.training.train.scaling.ReluVariableLevelScaler
-    group: pl
-    y_intercept: 0.2
-    slope: 0.001
+pressure_level_scaler:
+  _target_: anemoi.training.train.scaling.ReluVariableLevelScaler
+  group: pl
+  y_intercept: 0.2
+  slope: 0.001
 
 metrics:
 - z_500
