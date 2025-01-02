@@ -142,6 +142,14 @@ class BaseVariableLevelScaler(BaseVariableLossScaler):
     def get_variable_scaling(self) -> np.ndarray:
         variable_level_scaling = np.ones((len(self.data_indices.internal_data.output.full),), dtype=np.float32)
 
+        LOGGER.info(
+            "Variable Level Scaling: Applying %s scaling to %s variables (%s)",
+            self.name,
+            self.scaling_group,
+            self.variable_groups[self.scaling_group],
+        )
+        LOGGER.info("with slope = %s and y-intercept/minimum = %s.", self.slope, self.y_intercept)
+
         for variable_name, idx in self.data_indices.internal_model.output.name_to_index.items():
             variable_group, _, variable_level = self.get_variable_group(variable_name)
             if variable_group != self.scaling_group:
@@ -151,6 +159,7 @@ class BaseVariableLevelScaler(BaseVariableLossScaler):
             variable_level_scaling[idx] = self.get_level_scaling(float(variable_level))
 
         return variable_level_scaling
+
 
 class LinearVariableLevelScaler(BaseVariableLevelScaler):
     """Linear with slope self.slope, yaxis shift by self.y_intercept."""
@@ -206,6 +215,7 @@ class BaseTendencyScaler(ABC):
 
 class NormTendencyScaler(BaseTendencyScaler):
     """Scale loses by stdev of tendency statistics."""
+
     @staticmethod
     def scaler(variable_stdev: float, variable_tendency_stdev: float) -> float:
         return variable_stdev / variable_tendency_stdev
