@@ -168,8 +168,8 @@ class GraphForecaster(pl.LightningModule):
         self.reader_group_id = 0
         self.reader_group_rank = 0
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.model(x, self.model_comm_group)
+    def forward(self, x: torch.Tensor, t_idx: int = 0) -> torch.Tensor:
+        return self.model(x, self.model_comm_group, use_opt_mapper=self.use_opt_mapper, t_idx=t_idx)
 
     # Future import breaks other type hints TODO Harrison Cook
     @staticmethod
@@ -453,7 +453,7 @@ class GraphForecaster(pl.LightningModule):
 
         for rollout_step in range(rollout or self.rollout):
             # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
-            y_pred = self(x)
+            y_pred = self(x, t_idx=rollout_step)
 
             y = batch[:, self.multi_step + rollout_step, ..., self.data_indices.internal_data.output.full]
             # y includes the auxiliary variables, so we must leave those out when computing the loss
