@@ -85,7 +85,7 @@ class TransformerProcessorBlock(BaseBlock):
         if self.positional_encoding_hidden is not None:
             self.pos_embedder = nn.Linear(
                 self.positional_encoding_hidden.shape[-1], num_channels
-            )  # assuming that we have 3 position features, lat and cos / sin of lon
+            )  # hidden_dim is num_channels
 
         self.attention = MultiHeadSelfAttention(
             num_heads=num_heads,
