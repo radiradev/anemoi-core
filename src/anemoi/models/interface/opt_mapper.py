@@ -161,6 +161,7 @@ class OptMapperInterface(AnemoiModelInterface):
     
     def forward(self, x: torch.Tensor, 
                 model_comm_group: Optional[ProcessGroup] = None,
+                t_idx: Optional[int] = 0,
                 use_opt_mapper: bool = True) -> torch.Tensor:
         """Forward pass for the model.
 
@@ -175,12 +176,13 @@ class OptMapperInterface(AnemoiModelInterface):
             Output data.
         """
         if use_opt_mapper:
-            y_pred = self.opt_mapper(x, model_comm_group=model_comm_group)
-            y_pred = y_pred.unsqueeze(1)
-            x[..., self.data_indices.internal_model.input.prognostic] = y_pred[
-                ...,
-                self.data_indices.internal_model.output.prognostic,
-            ]
+            if t_idx == 0:
+                y_pred = self.opt_mapper(x, model_comm_group=model_comm_group)
+                y_pred = y_pred.unsqueeze(1)
+                x[..., self.data_indices.internal_model.input.prognostic] = y_pred[
+                    ...,
+                    self.data_indices.internal_model.output.prognostic,
+                ]
         
         return self.model(x, model_comm_group=model_comm_group)
     
