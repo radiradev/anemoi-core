@@ -28,7 +28,7 @@ from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 
 from anemoi.models.data_indices.collection import IndexCollection
-from anemoi.models.interface import AnemoiModelInterface
+from anemoi.models.interface.opt_mapper import OptMapperInterface
 from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
 from anemoi.training.utils.jsonify import map_config_to_primitives
@@ -78,8 +78,8 @@ class GraphForecaster(pl.LightningModule):
             self.output_mask = Boolean1DMask(graph_data[config.graph.data][config.model.output_mask])
         else:
             self.output_mask = NoOutputMask()
-
-        self.model = AnemoiModelInterface(
+        
+        self.model = OptMapperInterface(
             statistics=statistics,
             data_indices=data_indices,
             metadata=metadata,
@@ -87,6 +87,16 @@ class GraphForecaster(pl.LightningModule):
             graph_data=graph_data,
             config=DotDict(map_config_to_primitives(OmegaConf.to_container(config, resolve=True))),
         )
+
+        # Freeze the model weights if using the opt_mapper
+        self.use_opt_mapper = config.training.use_opt_mapper
+        if self.use_opt_mapper:
+            for param in self.model.model.parameters():
+                param.requires_grad = False
+        else:
+            for param in self.model.opt_mapper.parameters():
+                param.requires_grad = False
+
         self.config = config
         self.data_indices = data_indices
 

@@ -51,7 +51,7 @@ class OptMapperModel(AnemoiModelEncProcDec):
             graph_data=graph_data
         )
 
-        input_dim = self.multi_step * self.num_input_channels + self.latlons_data.shape[1] + self.trainable_data_size
+        input_dim = self.multi_step * self.num_input_channels + self.node_attributes.attr_ndims[self._graph_name_data]
 
         # Encoder data -> hidden
         self.encoder = mapper.GraphTransformerForwardMapper(
@@ -62,11 +62,11 @@ class OptMapperModel(AnemoiModelEncProcDec):
             mlp_hidden_ratio=4, 
             num_heads=16,
             in_channels_src=input_dim,
-            in_channels_dst=self.latlons_hidden.shape[1] + self.trainable_hidden_size,
+            in_channels_dst=self.node_attributes.attr_ndims[self._graph_name_hidden],
             hidden_dim=self.num_channels,
             sub_graph=self._graph_data[(self._graph_name_data, "to", self._graph_name_hidden)],
-            src_grid_size=self._data_grid_size,
-            dst_grid_size=self._hidden_grid_size,
+            src_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
+            dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
         )
 
         # Processor hidden -> hidden
@@ -80,8 +80,8 @@ class OptMapperModel(AnemoiModelEncProcDec):
             dropout_p=0.0,
             num_channels=self.num_channels,
             sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_hidden)],
-            src_grid_size=self._hidden_grid_size,
-            dst_grid_size=self._hidden_grid_size,
+            src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
+            dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
         )
 
         # Decoder hidden -> data
@@ -97,17 +97,10 @@ class OptMapperModel(AnemoiModelEncProcDec):
             hidden_dim=self.num_channels,
             out_channels_dst=self.num_output_channels,
             sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_data)],
-            src_grid_size=self._hidden_grid_size,
-            dst_grid_size=self._data_grid_size,
+            src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
+            dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
         )
-
-        # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
-        self.boundings = nn.ModuleList(
-            [
-                instantiate(cfg, name_to_index=self.data_indices.internal_model.output.name_to_index)
-                for cfg in getattr(model_config.model, "bounding", [])
-            ]
-        )
+        
 
 
 class OptMapperInterface(AnemoiModelInterface):
@@ -141,11 +134,17 @@ class OptMapperInterface(AnemoiModelInterface):
     """
 
     def __init__(
-        self, *, config: DotDict, graph_data: HeteroData, statistics: dict, data_indices: dict, metadata: dict
+        self, *, 
+        config: DotDict, 
+        graph_data: HeteroData, 
+        statistics: dict, 
+        data_indices: dict, 
+        metadata: dict,
+        supporting_arrays: dict = None
     ) -> None:
         super().__init__(
             config=config, graph_data=graph_data, statistics=statistics,
-            data_indices=data_indices, metadata=metadata
+            data_indices=data_indices, metadata=metadata, supporting_arrays=supporting_arrays
         )
         self._build_opt_mapper()
 
