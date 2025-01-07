@@ -21,6 +21,7 @@ from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 
 from anemoi.models.distributed.shapes import get_shape_shards
+from anemoi.models.layers.fourier import levels_expansion
 from anemoi.models.layers.graph import NamedNodesAttributes
 from anemoi.utils.config import DotDict
 
@@ -169,6 +170,18 @@ class AnemoiModelEncProcDec(nn.Module):
         batch_size = x.shape[0]
         ensemble_size = x.shape[2]
 
+        data_indices = self.data_indices.internal_model.input.name_to_index.items()
+        level_list = []
+        for var_str in data_indices:
+            parts = var_str[0].split("_")
+            # extract pressure level. If not pressure level, assume surface and assign 1000
+            # TODO: make this dependent on new variable groups
+            numeric_part = int(parts[-1]) if len(parts) > 1 and parts[-1].isdigit() else 1000
+            level_list.append(numeric_part)
+        level_tensor = torch.tensor(level_list)
+        #! ADDED Fourier transform
+        encoded_levels = levels_expansion(level_tensor, self.num_channels)
+
         # add data positional info (lat/lon)
         x_data_latent = torch.cat(
             (
@@ -185,6 +198,10 @@ class AnemoiModelEncProcDec(nn.Module):
         shard_shapes_hidden = get_shape_shards(x_hidden_latent, 0, model_comm_group)
 
         # Run encoder
+
+        # ! TODO the encoded levels would need to be passed to the encoder
+        self.encoder.encoded_levels = encoded_levels
+
         x_data_latent, x_latent = self._run_mapper(
             self.encoder,
             (x_data_latent, x_hidden_latent),

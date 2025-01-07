@@ -242,6 +242,10 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
 
         self.emb_nodes_dst = nn.Linear(self.in_channels_dst, self.hidden_dim)
 
+        # TODO Review this
+        self.encoded_levels = None
+        self.atmos_levels_embed = nn.Linear(self.hidden_dim, self.hidden_dim)
+
     def forward(
         self,
         x: PairTensor,
