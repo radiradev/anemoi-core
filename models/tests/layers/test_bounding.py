@@ -28,6 +28,9 @@ def config():
 def name_to_index():
     return {"var1": 0, "var2": 1, "total_var": 2}
 
+@pytest.fixture
+def name_to_index_stats():
+    return {"var1": 0, "var2": 1, "total_var": 2}
 
 @pytest.fixture
 def input_tensor():
@@ -39,8 +42,8 @@ def statistics():
     statistics = {
         "mean": np.array([1.0, 2.0, 3.0]),
         "stdev": np.array([0.5, 0.5, 0.5]),
-        "minimum": np.array([1.0, 1.0, 1.0]),
-        "maximum": np.array([11.0, 10.0, 10.0]),
+        "min": np.array([1.0, 1.0, 1.0]),
+        "max": np.array([11.0, 10.0, 10.0]),
     }
     return statistics
 
@@ -52,18 +55,19 @@ def test_relu_bounding(config, name_to_index, input_tensor):
     assert torch.equal(output, expected_output)
 
 
-def test_normalized_relu_bounding(config, name_to_index, input_tensor, statistics):
+def test_normalized_relu_bounding(config, name_to_index, name_to_index_stats, input_tensor, statistics):
     bounding = NormalizedReluBounding(
         variables=config.variables,
         name_to_index=name_to_index,
         min_val=[2.0, 2.0],
         normalizer=["mean-std", "min-max"],
         statistics=statistics,
+        name_to_index_stats=name_to_index_stats,
     )
     output = bounding(input_tensor.clone())
-    breakpoint()
-    expected_output = torch.tensor([[2.0, 2.0, 3.0], [4.0, 0.0, 6.0], [0.5, 0.5, 0.5]])
-    assert torch.equal(output, expected_output)
+    #breakpoint()
+    expected_output = torch.tensor([[2.0, 2.0, 3.0], [4.0, 0.1111, 6.0], [2.0, 0.5, 0.5]])
+    assert torch.allclose(output, expected_output, atol=1e-4)
 
 
 def test_hardtanh_bounding(config, name_to_index, input_tensor):
