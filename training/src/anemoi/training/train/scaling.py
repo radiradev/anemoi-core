@@ -205,7 +205,7 @@ class NoVariableLevelScaler(BaseVariableLevelScaler):
         del variable_level  # unused
         # no scaling, always return 1.0
         return 1.0
-    
+
 
 class BaseTendencyScaler(BaseVariableLossScaler):
     """Configurable method to scale prognostic variables based on data statistics and statistics_tendencies."""
@@ -252,7 +252,6 @@ class BaseTendencyScaler(BaseVariableLossScaler):
         for key, idx in self.data_indices.internal_model.output.name_to_index.items():
             if idx in self.data_indices.internal_model.output.prognostic:
                 prog_idx = self.data_indices.data.output.name_to_index[key]
-                # variable_stdev = 1 / self.model.pre_processors.processors.normalizer._norm_mul[prog_idx]
                 variable_stdev = self.statistics["stdev"][prog_idx] if self.statistics_tendencies else 1
                 variable_tendency_stdev = (
                     self.statistics_tendencies["stdev"][prog_idx] if self.statistics_tendencies else 1
@@ -266,8 +265,9 @@ class BaseTendencyScaler(BaseVariableLossScaler):
 
 class NoTendencyScaler(BaseTendencyScaler):
     """No scaling by tendency statistics."""
-    
+
     def get_level_scaling(self, variable_stdev: float, variable_tendency_stdev: float) -> float:
+        del variable_stdev, variable_tendency_stdev
         return 1.0
 
 
@@ -276,7 +276,7 @@ class StdevTendencyScaler(BaseTendencyScaler):
 
     def get_level_scaling(self, variable_stdev: float, variable_tendency_stdev: float) -> float:
         return variable_stdev / variable_tendency_stdev
-    
+
 
 class VarTendencyScaler(BaseTendencyScaler):
     """Scale loses by variance of tendency statistics."""
