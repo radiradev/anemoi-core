@@ -6,7 +6,7 @@ model:
 
 layer_kernels:
     LayerNorm:
-      _target_: anemoi.models.layers.normalization.AutocastLayerNorm #the default PyTorch implementation
+      _target_: anemoi.models.layers.normalization.AutocastLayerNorm
       _partial_: True
       #Any arguments to your chosen function go here e.g.
     Linear:
