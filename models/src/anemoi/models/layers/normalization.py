@@ -61,13 +61,17 @@ class ConditionalLayerNorm(nn.Module):
     def forward(self, input: List[Tensor, Tensor]) -> Tensor:
         """Conditional Layer Normalization.
 
-        Args:
-            input (List[Tensor, Tensor]): A list of two tensors (x, cond),
-                the first is the input tensor and
-                the second is the condition tensor.
+        Parameters
+        ----------
+        input : List[Tensor, Tensor]
+            A list of two tensors (x, cond),
+            the first is the input tensor and
+            the second is the condition tensor.
 
-        Returns:
-            Tensor: The output tensor.
+        Returns
+        -------
+        Tensor
+            The output tensor.
         """
         x, cond = input
         scale = self.scale(cond)
