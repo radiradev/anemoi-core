@@ -111,11 +111,10 @@ class NativeGridDataset(IterableDataset):
     @cached_property
     def statistics_tendencies(self) -> dict:
         """Return dataset tendency statistics."""
-        # The statistics_tendencies are lazily loaded
-        self.data.statistics_tendencies = (
-            self.data.statistics_tendencies(self.timestep) if callable(self.data.statistics_tendencies) else None
-        )
-        return self.data.statistics_tendencies
+        try:
+            return self.data.statistics_tendencies(self.timestep)
+        except (KeyError, AttributeError):
+            return None
 
     @cached_property
     def metadata(self) -> dict:

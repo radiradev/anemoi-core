@@ -9,6 +9,7 @@
 
 
 import logging
+import warnings
 from abc import ABC
 from abc import abstractmethod
 
@@ -204,18 +205,81 @@ class NoVariableLevelScaler(BaseVariableLevelScaler):
         del variable_level  # unused
         # no scaling, always return 1.0
         return 1.0
+    
 
-
-class BaseTendencyScaler(ABC):
+class BaseTendencyScaler(BaseVariableLossScaler):
     """Configurable method to scale prognostic variables based on data statistics and statistics_tendencies."""
 
+    def __init__(
+        self,
+        scaling_config: DictConfig,
+        data_indices: IndexCollection,
+        statistics: dict,
+        statistics_tendencies: dict,
+        name: str,
+        scale_dim: int,
+    ) -> None:
+        """Initialise variable level scaler.
+
+        Parameters
+        ----------
+        scaling_config : DictConfig
+            Configuration for variable loss scaling.
+        data_indices : IndexCollection
+            Collection of data indices.
+        statistics : dict
+            Data statistics dictionary
+        statistics_tendencies : dict
+            Data statistics dictionary for tendencies
+        """
+        super().__init__(scaling_config, data_indices)
+        self.statistics = statistics
+        self.statistics_tendencies = statistics_tendencies
+        self.name = name
+        self.scale_dim = scale_dim
+
+        if not self.statistics_tendencies:
+            warnings.warn("Dataset has no tendency statistics! Are you sure you want to use a tendency scaler?")
+
     @abstractmethod
-    def scaler(self, variable_stdev: float, variable_tendency_stdev: float) -> float: ...
+    def get_level_scaling(self, variable_level: int) -> float: ...
+
+    def get_variable_scaling(self) -> np.ndarray:
+        variable_level_scaling = np.ones((len(self.data_indices.internal_data.output.full),), dtype=np.float32)
+
+        LOGGER.info("Variable Level Scaling: Applying %s scaling to prognostic variables", self.name)
+
+        for key, idx in self.data_indices.internal_model.output.name_to_index.items():
+            if idx in self.data_indices.internal_model.output.prognostic:
+                prog_idx = self.data_indices.data.output.name_to_index[key]
+                # variable_stdev = 1 / self.model.pre_processors.processors.normalizer._norm_mul[prog_idx]
+                variable_stdev = self.statistics["stdev"][prog_idx] if self.statistics_tendencies else 1
+                variable_tendency_stdev = (
+                    self.statistics_tendencies["stdev"][prog_idx] if self.statistics_tendencies else 1
+                )
+                scaling = self.get_level_scaling(variable_stdev, variable_tendency_stdev)
+                LOGGER.info("Parameter %s is being scaled by statistic_tendencies by %.2f", key, scaling)
+                variable_level_scaling[idx] *= scaling
+
+        return variable_level_scaling
 
 
-class NormTendencyScaler(BaseTendencyScaler):
-    """Scale loses by stdev of tendency statistics."""
+class NoTendencyScaler(BaseTendencyScaler):
+    """No scaling by tendency statistics."""
+    
+    def get_level_scaling(self, variable_stdev: float, variable_tendency_stdev: float) -> float:
+        return 1.0
 
-    @staticmethod
-    def scaler(variable_stdev: float, variable_tendency_stdev: float) -> float:
+
+class StdevTendencyScaler(BaseTendencyScaler):
+    """Scale loses by standard deviation of tendency statistics."""
+
+    def get_level_scaling(self, variable_stdev: float, variable_tendency_stdev: float) -> float:
         return variable_stdev / variable_tendency_stdev
+    
+
+class VarTendencyScaler(BaseTendencyScaler):
+    """Scale loses by variance of tendency statistics."""
+
+    def get_level_scaling(self, variable_stdev: float, variable_tendency_stdev: float) -> float:
+        return variable_stdev / variable_tendency_stdev**2

@@ -133,8 +133,13 @@ additional_scalars:
     slope: 0.001
     scale_dim: -1 # dimension on which scaling applied
     name: "variable_pressure_level"
-  # norm tendency scalar (scaling loss function by the normalised tendency values)
-  #- _target_: anemoi.training.data.scaling.NormTendencyScaler
+  # stdev tendency scalar 
+  # scale the prognostic losses by the stdev of the variable tendencies (e.g. the 6-hourly differences of the data)
+  # useful if including slow vs fast evolving variables in the training (e.g. Land/Ocean vs Atmosphere)
+  # if using this option 'variable_loss_scalings' should all be set close to 1.0 for prognostic variables
+  # - _target_: anemoi.training.data.scaling.StdevTendencyScaler
+  #   scale_dim: -1 # dimension on which scaling applied
+  #   name: "tendency"
 
 metrics:
 - z_500

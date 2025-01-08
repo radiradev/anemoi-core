@@ -112,6 +112,14 @@ class GraphForecaster(pl.LightningModule):
                         scalar_config,
                         scaling_config=config.training.variable_loss_scaling,
                         data_indices=data_indices,
+                        statistics=statistics,
+                        statistics_tendencies=statistics_tendencies,
+                    )
+                if scalar_config["name"] == "tendency" else
+                instantiate(
+                        scalar_config,
+                        scaling_config=config.training.variable_loss_scaling,
+                        data_indices=data_indices,
                     )
                     for scalar_config in config_container
                 ]
