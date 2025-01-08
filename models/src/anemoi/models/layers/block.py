@@ -357,7 +357,6 @@ class GraphTransformerBaseBlock(BaseBlock, ABC):
 
         self.conv = GraphTransformerConv(out_channels=self.out_channels_conv)
 
-        # Why does the GraphTransformer not have a layer_norm_mlp like the Transformer?
         self.projection = linear(out_channels, out_channels)
 
         try:
@@ -500,7 +499,8 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
             **kwargs,
         )
 
-        self.layer_norm_attention_2 = layer_kernels["LayerNorm"](normalized_shape=in_channels)
+        self.layer_norm_attention_src = self.layer_norm_attention
+        self.layer_norm_attention_dest = layer_kernels["LayerNorm"](normalized_shape=in_channels)
 
     def forward(
         self,
@@ -515,9 +515,9 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
         x_skip = x
 
         x = (
-            self.layer_norm_attention(x[0]),
-            self.layer_norm_attention_2(x[1]),
-        )  # Why does this use layer_norm_attention_2? And only is a mapper thing?
+            self.layer_norm_attention_src(x[0]),
+            self.layer_norm_attention_dest(x[1]),
+        )
 
         x_r = self.lin_self(x[1])
         query = self.lin_query(x[1])

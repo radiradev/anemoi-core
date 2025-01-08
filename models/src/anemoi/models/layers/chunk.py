@@ -38,7 +38,6 @@ class BaseProcessorChunk(nn.Module, ABC):
         num_layers: int,
         *args,
         activation: str = "GELU",
-        layer_norm: Optional[dict] = None,
         **kwargs,
     ) -> None:
         """Initialize BaseProcessorChunk."""

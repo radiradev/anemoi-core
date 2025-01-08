@@ -10,7 +10,6 @@ layer_kernels:
       _partial_: True
       #Any arguments to your chosen function go here e.g.
     Linear:
-      #_target_: "transformer_engine.pytorch.Linear"
       _target_: torch.nn.Linear
       _partial_: True
       #Any arguments to your chosen function go here e.g.
