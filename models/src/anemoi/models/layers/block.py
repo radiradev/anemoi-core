@@ -512,7 +512,8 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
             edge_attr_list, edge_index_list = sort_edges_1hop_chunks(
                 num_nodes=size, edge_attr=edges, edge_index=edge_index, num_chunks=num_chunks
             )
-            out = torch.zeros((x[1].shape[0], self.num_heads, self.out_channels_conv), device=x[1].device)
+            # shape: (num_nodes, num_heads, out_channels_conv), use query for potentially sharded num_heads
+            out = torch.zeros((*query.shape[:2], self.out_channels_conv), device=x[1].device)
             for i in range(num_chunks):
                 out += self.conv(
                     query=query,
@@ -607,7 +608,6 @@ class GraphTransformerProcessorBlock(GraphTransformerBaseBlock):
         shapes: tuple,
         batch_size: int,
         model_comm_group: Optional[ProcessGroup] = None,
-        size: Optional[Size] = None,
     ):
         x_skip = x
 
@@ -630,10 +630,11 @@ class GraphTransformerProcessorBlock(GraphTransformerBaseBlock):
 
         if num_chunks > 1:
             # split 1-hop edges into chunks, compute self.conv chunk-wise and aggregate
+            num_nodes, num_heads = query.shape[:2]
             edge_attr_list, edge_index_list = sort_edges_1hop_chunks(
-                num_nodes=size, edge_attr=edges, edge_index=edge_index, num_chunks=num_chunks
+                num_nodes=num_nodes, edge_attr=edges, edge_index=edge_index, num_chunks=num_chunks
             )
-            out = torch.zeros((x[1].shape[0], self.num_heads, self.out_channels_conv), device=x[1].device)
+            out = torch.zeros((num_nodes, num_heads, self.out_channels_conv), device=x[1].device)
             for i in range(num_chunks):
                 out += self.conv(
                     query=query,
@@ -641,10 +642,9 @@ class GraphTransformerProcessorBlock(GraphTransformerBaseBlock):
                     value=value,
                     edge_attr=edge_attr_list[i],
                     edge_index=edge_index_list[i],
-                    size=size,
                 )
         else:
-            out = self.conv(query=query, key=key, value=value, edge_attr=edges, edge_index=edge_index, size=size)
+            out = self.conv(query=query, key=key, value=value, edge_attr=edges, edge_index=edge_index)
 
         out = self.shard_output_seq(out, shapes, batch_size, model_comm_group)
 
