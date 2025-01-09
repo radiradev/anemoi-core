@@ -64,7 +64,14 @@ class AnemoiModelEncProcDec(nn.Module):
 
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
 
-        input_dim = self.multi_step * self.num_input_channels + self.node_attributes.attr_ndims[self._graph_name_data]
+        #! FOURIER AND ENCODED DIMENSIONS FOR PRESSURE LEVELS
+        self.fourier_dim = 8  # small otherwise CUDA OOM
+        self.encoded_dim = 12  # small otherwise CUDA OOM
+
+        input_dim = (
+            self.multi_step * (self.num_input_channels + self.num_input_channels * self.encoded_dim)
+            + self.node_attributes.attr_ndims[self._graph_name_data]
+        )
 
         # Encoder data -> hidden
         self.encoder = instantiate(
@@ -180,19 +187,29 @@ class AnemoiModelEncProcDec(nn.Module):
             level_list.append(numeric_part)
         level_tensor = torch.tensor(level_list)
         #! ADDED Fourier transform
-        encoded_levels = levels_expansion(level_tensor, self.num_channels)
+        vertical_encodings = levels_expansion(level_tensor, self.fourier_dim)
+
+        num_grid_points = x.shape[-2]
+        n_times = x.shape[1]
+        linear_layer = nn.Linear(self.fourier_dim, self.encoded_dim)
+        mapped_vertical_features = linear_layer(vertical_encodings).ravel().to("cuda")  # ([4, 2, 1, 40320, 99, 128])
+        mapped_vertical_features = mapped_vertical_features.view(1, 1, 1, 1, mapped_vertical_features.shape[0]).expand(
+            batch_size, n_times, 1, num_grid_points, -1
+        )
+        x_data_vertical_latent = torch.cat((x, mapped_vertical_features), dim=-1)
 
         # add data positional info (lat/lon)
         x_data_latent = torch.cat(
             (
-                einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
+                einops.rearrange(
+                    x_data_vertical_latent, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"
+                ),
                 self.node_attributes(self._graph_name_data, batch_size=batch_size),
             ),
             dim=-1,  # feature dimension
         )
 
         x_hidden_latent = self.node_attributes(self._graph_name_hidden, batch_size=batch_size)
-
         # get shard shapes
         shard_shapes_data = get_shape_shards(x_data_latent, 0, model_comm_group)
         shard_shapes_hidden = get_shape_shards(x_hidden_latent, 0, model_comm_group)
@@ -200,7 +217,7 @@ class AnemoiModelEncProcDec(nn.Module):
         # Run encoder
 
         # ! TODO the encoded levels would need to be passed to the encoder
-        self.encoder.encoded_levels = encoded_levels
+        # self.encoder.encoded_levels = encoded_levels
 
         x_data_latent, x_latent = self._run_mapper(
             self.encoder,
