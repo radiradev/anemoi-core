@@ -22,9 +22,9 @@ from anemoi.datasets.data import open_dataset
 from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.training.data.dataset import NativeGridDataset
 from anemoi.training.data.dataset import worker_init_func
-from anemoi.utils.dates import frequency_to_seconds
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.schemas.base_schema import convert_to_omegaconf
+from anemoi.utils.dates import frequency_to_seconds
 
 LOGGER = logging.getLogger(__name__)
 
@@ -89,7 +89,10 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
     def grid_indices(self) -> type[BaseGridIndices]:
         reader_group_size = self.config.dataloader.read_group_size
 
-        grid_indices = instantiate(self.config.dataloader.grid_indices.model_dump(by_alias=True), reader_group_size=reader_group_size)
+        grid_indices = instantiate(
+            self.config.dataloader.grid_indices.model_dump(by_alias=True),
+            reader_group_size=reader_group_size,
+        )
         grid_indices.setup(self.graph_data)
         return grid_indices
 

@@ -41,9 +41,10 @@ if TYPE_CHECKING:
     from collections.abc import Generator
     from collections.abc import Mapping
 
-    from anemoi.models.data_indices.collection import IndexCollection
     from torch.distributed.distributed_c10d import ProcessGroup
     from torch_geometric.data import HeteroData
+
+    from anemoi.models.data_indices.collection import IndexCollection
 
 
 LOGGER = logging.getLogger(__name__)
@@ -108,7 +109,11 @@ class GraphForecaster(pl.LightningModule):
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
-        variable_scaling = self.get_variable_scaling(config.training.variable_loss_scaling, config.training.pressure_level_scaler,data_indices)
+        variable_scaling = self.get_variable_scaling(
+            config.training.variable_loss_scaling,
+            config.training.pressure_level_scaler,
+            data_indices,
+        )
 
         self.internal_metric_ranges, self.val_metric_ranges = self.get_val_metric_ranges(config.training, data_indices)
 
@@ -184,7 +189,7 @@ class GraphForecaster(pl.LightningModule):
         config: MetricLossSchema | list[MetricLossSchema],
         scalars: dict[str, tuple[int | tuple[int, ...] | torch.Tensor]] | None = None,
         **kwargs,
-    ) -> Union[BaseWeightedLoss, torch.nn.ModuleList]:  # noqa: FA100
+    ) -> BaseWeightedLoss | torch.nn.ModuleList:
         """Get loss functions from config.
 
         Can be ModuleList if multiple losses are specified.
