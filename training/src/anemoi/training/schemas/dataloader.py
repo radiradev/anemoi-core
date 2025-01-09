@@ -91,6 +91,11 @@ class LoaderSet(BaseModel):
     "Value for test dataset"
 
 
+class GridIndicesSchema(BaseModel):
+    target_: str = Field(default="anemoi.training.data.grid_indices.FullGrid", alias="_target_")
+    nodes_name: str
+
+
 class DataLoaderSchema(BaseModel):
     prefetch_factor: int = Field(default=2, ge=0)
     "Number of batches loaded in advance by each worker."
@@ -102,14 +107,15 @@ class DataLoaderSchema(BaseModel):
     "Per-GPU batch size."
     limit_batches: LoaderSet = Field(default=None)
     "Limit number of batches to run. Default value null, will run on all the batches."
-    training: DatasetSchema = Field(None)
+    training: DatasetSchema 
     "Training DatasetSchema."
-    validation: DatasetSchema = Field(None)
+    validation: DatasetSchema 
     "Validation DatasetSchema."
-    test: DatasetSchema = Field(None)
+    test: DatasetSchema 
     "Test DatasetSchema."
     validation_rollout: PositiveInt = Field(default=1)
     "Number of rollouts to use for validation, must be equal or greater than rollout expected by callbacks."
     # TODO(Helen): Ccheck that this equal or greater than the number of rollouts expected by callbacks ???
     read_group_size: PositiveInt = Field(default=None)
     "Number of GPUs per reader group. Defaults to number of GPUs (see BaseSchema validators)."
+    grid_indices: GridIndicesSchema
