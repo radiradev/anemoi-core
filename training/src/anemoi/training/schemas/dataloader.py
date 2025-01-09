@@ -96,6 +96,11 @@ class GridIndicesSchema(BaseModel):
     nodes_name: str
 
 
+class MaskedGridIndicesSchema(GridIndicesSchema):
+    target_: str = Field(default="anemoi.training.data.grid_indices.MaskedGrid", alias="_target_")
+    node_attribute_name: str
+
+
 class DataLoaderSchema(BaseModel):
     prefetch_factor: int = Field(default=2, ge=0)
     "Number of batches loaded in advance by each worker."
@@ -118,4 +123,4 @@ class DataLoaderSchema(BaseModel):
     # TODO(Helen): Ccheck that this equal or greater than the number of rollouts expected by callbacks ???
     read_group_size: PositiveInt = Field(default=None)
     "Number of GPUs per reader group. Defaults to number of GPUs (see BaseSchema validators)."
-    grid_indices: GridIndicesSchema
+    grid_indices: GridIndicesSchema | MaskedGridIndicesSchema 

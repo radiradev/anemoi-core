@@ -84,7 +84,7 @@ class GraphForecaster(pl.LightningModule):
 
         graph_data = graph_data.to(self.device)
 
-        if config.model.get("output_mask", None) is not None:
+        if config.model.output_mask is not None:
             self.output_mask = Boolean1DMask(graph_data[config.graph.data][config.model.output_mask])
         else:
             self.output_mask = NoOutputMask()
@@ -108,9 +108,9 @@ class GraphForecaster(pl.LightningModule):
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
-        variable_scaling = self.get_variable_scaling(config, data_indices)
+        variable_scaling = self.get_variable_scaling(config.training.variable_loss_scaling, config.training.pressure_level_scaler,data_indices)
 
-        self.internal_metric_ranges, self.val_metric_ranges = self.get_val_metric_ranges(config, data_indices)
+        self.internal_metric_ranges, self.val_metric_ranges = self.get_val_metric_ranges(config.training, data_indices)
 
         # Check if the model is a stretched grid
         if graph_data["hidden"].node_type == "StretchedTriNodes":
