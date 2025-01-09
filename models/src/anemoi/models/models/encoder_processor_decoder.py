@@ -216,9 +216,6 @@ class AnemoiModelEncProcDec(nn.Module):
 
         # Run encoder
 
-        # ! TODO the encoded levels would need to be passed to the encoder
-        # self.encoder.encoded_levels = encoded_levels
-
         x_data_latent, x_latent = self._run_mapper(
             self.encoder,
             (x_data_latent, x_hidden_latent),
