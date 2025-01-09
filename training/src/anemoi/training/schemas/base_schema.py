@@ -13,7 +13,8 @@ from __future__ import annotations
 from omegaconf import OmegaConf
 from pydantic import BaseModel
 from pydantic import Field
-from pydantic import model_validator
+from pydantic import model_validator, field_validator
+from typing import Any
 
 # to make these available at runtime for pydantic, bug should be resolved in
 # future versions (see https://github.com/astral-sh/ruff/issues/7866)
@@ -25,8 +26,10 @@ from .hardware import HardwareSchema  # noqa: TC001
 from .models.models import GNNConfig  # noqa: TC001
 from .models.models import GraphTransformerConfig  # noqa: TC001
 from .models.models import TransformerConfig  # noqa: TC001
+from .models.models import BaseModelConfig  # noqa: TC001
 from .training import TrainingSchema  # noqa: TC001
 
+LOGGER = logging.getLogger(__name__)
 
 class BaseSchema(BaseModel):
     data: DataSchema
@@ -34,13 +37,21 @@ class BaseSchema(BaseModel):
     diagnostics: DiagnosticsSchema
     hardware: HardwareSchema
     graph: BaseGraphSchema
-    model: GNNConfig | TransformerConfig | GraphTransformerConfig = Field(..., descriminator="target_")
+    model: GNNConfig | TransformerConfig | GraphTransformerConfig | Any
     training: TrainingSchema
 
     class Config:
         """Pydantic configuration."""
 
         arbitrary_types_allowed = True
+
+    @field_validator("model")
+    @classmethod
+    def validate_model_config_defined(cls, model_schema: BaseModelConfig | Any) -> BaseModelConfig | Any:
+        if not isinstance(model_schema, BaseModelConfig):
+            LOGGER.warning("%s model sche,a is not defined in anemoi.", model_schema)
+            return model_schema
+
 
     @model_validator(mode="after")
     def set_read_group_size_if_not_provided(self) -> BaseSchema:

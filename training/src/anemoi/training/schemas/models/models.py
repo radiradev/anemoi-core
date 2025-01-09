@@ -30,15 +30,22 @@ from .processor import TransformerProcessor
 LOGGER = logging.getLogger(__name__)
 
 
-class AllowedModels(str, Enum):
+class DefinedModels(str, Enum):
     ANEMOI_MODEL_ENC_PROC_DEC = "anemoi.models.models.encoder_processor_decoder.AnemoiModelEncProcDec"
 
 
 class Model(BaseModel):
-    target_: AllowedModels = Field(..., alias="_target_")
+    target_: DefinedModels = Field(..., alias="_target_")
     "Model object defined in anemoi.models.model."
     convert_: str = Field("all", alias="_convert_")
-    "Target's parameters to convert to primitive containers. Other parameters will use OmegaConf. Default to all."
+    "The target's parameters to convert to primitive containers. Other parameters will use OmegaConf. Default to all."
+
+    @field_validator("target_")
+    @classmethod
+    def validate_model_is_defined(cls, target_: str) -> str:
+        if target_ not in DefinedModels:
+            LOGGER.warning("%s model is not defined in anemoi.", target_)
+        return target_
 
 
 class TrainableParameters(BaseModel):
@@ -101,7 +108,7 @@ class BaseModelConfig(BaseModel):
 
     @field_validator("bounding")
     @classmethod
-    def validate_bounding_schema_exist(cls, boundings: list) -> list:
+    def validate_bounding_is_defined(cls, boundings: list) -> list:
         for bounding in boundings:
             if bounding["_target_"] not in defined_boundings:
                 LOGGER.warning("%s bounding schema is not defined in anemoi.", bounding["_target_"])
