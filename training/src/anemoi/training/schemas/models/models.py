@@ -96,6 +96,8 @@ class BaseModelConfig(BaseModel):
     "Learnable node and edge parameters."
     bounding: list[ReluBoundingSchema | HardtanhBoundingSchema | FractionBoundingSchema | Any]
     "List of bounding configuration applied in order to the specified variables."
+    output_mask: str | None = Field(default=None)
+    "Output mas, it must be a node attribute of the output nodes"
 
     @field_validator("bounding")
     @classmethod
