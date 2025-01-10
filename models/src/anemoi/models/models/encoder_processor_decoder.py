@@ -66,7 +66,8 @@ class AnemoiModelEncProcDec(nn.Module):
 
         #! FOURIER AND ENCODED DIMENSIONS FOR PRESSURE LEVELS
         self.fourier_dim = 8  # small otherwise CUDA OOM
-        self.encoded_dim = 12  # small otherwise CUDA OOM
+        #self.encoded_dim = 12  # small otherwise CUDA OOM
+        self.encoded_dim = 0
 
         input_dim = (
             self.multi_step * (self.num_input_channels + self.num_input_channels * self.encoded_dim)
@@ -183,21 +184,29 @@ class AnemoiModelEncProcDec(nn.Module):
             parts = var_str[0].split("_")
             # extract pressure level. If not pressure level, assume surface and assign 1000
             # TODO: make this dependent on new variable groups
-            numeric_part = int(parts[-1]) if len(parts) > 1 and parts[-1].isdigit() else 1000
+            numeric_part = float(parts[-1]) if len(parts) > 1 and parts[-1].isdigit() else 1000
             level_list.append(numeric_part)
         level_tensor = torch.tensor(level_list)
+        norm_level_tensor = (level_tensor - level_tensor.mean())/level_tensor.std()
+        """
         #! ADDED Fourier transform
         vertical_encodings = levels_expansion(level_tensor, self.fourier_dim)
 
         num_grid_points = x.shape[-2]
         n_times = x.shape[1]
         linear_layer = nn.Linear(self.fourier_dim, self.encoded_dim)
-        mapped_vertical_features = linear_layer(vertical_encodings).ravel().to("cuda")  # ([4, 2, 1, 40320, 99, 128])
+        mapped_vertical_features = linear_layer(vertical_encodings).ravel().to("cuda")  
         mapped_vertical_features = mapped_vertical_features.view(1, 1, 1, 1, mapped_vertical_features.shape[0]).expand(
             batch_size, n_times, 1, num_grid_points, -1
-        )
+        ) # ([4, 2, 1, 40320, 99, 99*self.encoded_dim])
         x_data_vertical_latent = torch.cat((x, mapped_vertical_features), dim=-1)
-
+        """
+        num_grid_points = x.shape[-2]
+        n_times = x.shape[1]
+        mapped_level_tensor = norm_level_tensor.view(1, 1, 1, 1, norm_level_tensor.shape[0]).expand(
+            batch_size, n_times, 1, num_grid_points, -1
+        ).to("cuda")  
+        x_data_vertical_latent = x + mapped_level_tensor
         # add data positional info (lat/lon)
         x_data_latent = torch.cat(
             (
