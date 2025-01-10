@@ -225,6 +225,7 @@ def test_GraphTransformerProcessorBlock_chunking(init, block, monkeypatch):
     assert out.shape == out_chunked.shape, f"out.shape ({out.shape}) != out_chunked.shape ({out_chunked.shape})"
     assert torch.allclose(out, out_chunked, atol=1e-4), "out != out_chunked"
 
+
 @pytest.fixture
 def mapper_block(init):
     (
