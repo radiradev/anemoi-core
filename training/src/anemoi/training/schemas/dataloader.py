@@ -1,4 +1,4 @@
-# (C) Copyright 2024 Anemoi contributors.
+# (C) Copyright 2024-2025 Anemoi contributors.
 #
 # This software is licensed under the terms of the Apache Licence Version 2.0
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
@@ -13,6 +13,7 @@ from __future__ import annotations
 import datetime  # noqa: TC003
 from pathlib import Path  # noqa: TC003
 from typing import Any
+from typing import Literal
 
 from pydantic import BaseModel
 from pydantic import Field
@@ -92,14 +93,22 @@ class LoaderSet(BaseModel):
     "Value for test dataset"
 
 
-class GridIndicesSchema(BaseModel):
-    target_: str = Field(default="anemoi.training.data.grid_indices.FullGrid", alias="_target_")
-    nodes_name: str
+class FullGridIndicesSchema(BaseModel):
+    target_: Literal["anemoi.training.data.grid_indices.FullGrid"] = \
+             Field("anemoi.training.data.grid_indices.FullGrid", alias="_target_")
+    "Grid indices for full grid class implementation from anemoi.training.data.grid_indices."
+    nodes_name: str = Field(examples=["data"])
+    "Name of the grid nodes."
 
 
-class MaskedGridIndicesSchema(GridIndicesSchema):
-    target_: str = Field(default="anemoi.training.data.grid_indices.MaskedGrid", alias="_target_")
-    node_attribute_name: str
+class MaskedGridIndicesSchema(BaseModel):
+    target_: Literal["anemoi.training.data.grid_indices.MaskedGrid"] = \
+             Field("anemoi.training.data.grid_indices.MaskedGrid", alias="_target_")
+    "Grid indices for masked grid class implementation from anemoi.training.data.grid_indices."
+    nodes_name: str = Field(examples=["data"])
+    "Name of the grid nodes."
+    node_attribute_name: str = Field(examples=["indices_connected_nodes"])
+    "Name of the nodes graph attribute used for masking."
 
 
 class DataLoaderSchema(BaseModel):
@@ -124,4 +133,5 @@ class DataLoaderSchema(BaseModel):
     # TODO(Helen): Ccheck that this equal or greater than the number of rollouts expected by callbacks ???
     read_group_size: PositiveInt = Field(default=None)
     "Number of GPUs per reader group. Defaults to number of GPUs (see BaseSchema validators)."
-    grid_indices: GridIndicesSchema | MaskedGridIndicesSchema
+    grid_indices: FullGridIndicesSchema | MaskedGridIndicesSchema
+    "Grid indice schema."
