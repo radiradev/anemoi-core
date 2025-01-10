@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 from enum import Enum
 from typing import Any
+from typing import AnyStr
 from typing import Literal
 
 from pydantic import BaseModel
@@ -35,7 +36,7 @@ class DefinedModels(str, Enum):
 
 
 class Model(BaseModel):
-    target_: DefinedModels = Field(..., alias="_target_")
+    target_: DefinedModels | AnyStr = Field(..., alias="_target_")
     "Model object defined in anemoi.models.model."
     convert_: str = Field("all", alias="_convert_")
     "The target's parameters to convert to primitive containers. Other parameters will use OmegaConf. Default to all."
