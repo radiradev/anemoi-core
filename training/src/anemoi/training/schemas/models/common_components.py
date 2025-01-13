@@ -7,13 +7,41 @@
 # nor does it submit to any jurisdiction.
 #
 
+from enum import Enum
+
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import NonNegativeInt
 
 
+class ActivationFunctons(str, Enum):
+    GELU = "GELU"
+    SiLU = "SiLU"
+    ELU = "ELU"
+    ReLU = "ReLU"
+    Tanh = "Tanh"
+    Sigmoid = "Sigmoid"
+    Hardshrink = "Hardshrink"
+    Hardsigmoid = "Hardsigmoid"
+    Hardtanh = "Hardtanh"
+    Hardswish = "Hardswish"
+    LeakyReLU = "LeakyReLU"
+    LogSigmoid = "LogSigmoid"
+    PReLU = "PReLU"
+    ReLU6 = "ReLU6"
+    SELU = "SELU"
+    CELU = "CELU"
+    Mish = "Mish"
+    Softplus = "Softplus"
+    Softshrink = "Softshrink"
+    Softsign = "Softsign"
+    Tanhshrink = "Tanhshrink"
+    Threshold = "Threshold"
+    GLU = "GLU"
+
+
 class TransformerModelComponent(BaseModel):
-    activation: str = Field(default="GELU")
+    activation: ActivationFunctons = Field(default="GELU")
     "Activation function to use for the transformer model component. Default to GELU."
     convert_: str = Field("all", alias="_convert_")
     "Target's parameters to convert to primitive containers. Other parameters will use OmegaConf. Default to all."
