@@ -189,7 +189,9 @@ def get_callbacks(config: BaseSchema) -> list[Callback]:
     trainer_callbacks.extend(instantiate(callback, config) for callback in config.diagnostics.callbacks)
 
     # Plotting callbacks
-    trainer_callbacks.extend(instantiate(callback, config) for callback in config.diagnostics.plot.callbacks)
+    trainer_callbacks.extend(
+        instantiate(callback.model_dump(by_alias=True), config) for callback in config.diagnostics.plot.callbacks
+    )
 
     # Extend with config enabled callbacks
     trainer_callbacks.extend(_get_config_enabled_callbacks(config))

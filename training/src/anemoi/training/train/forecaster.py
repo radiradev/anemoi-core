@@ -155,7 +155,7 @@ class GraphForecaster(pl.LightningModule):
         self.multi_step = config.training.multistep_input
         self.lr = config.training.lr.rate
 
-        self.warmup_t = config.training.lr.warmup_time
+        self.warmup_t = config.training.lr.warmup_t
         self.lr_iterations = config.training.lr.iterations
         self.lr_min = config.training.lr.min
         self.rollout = config.training.rollout.start
