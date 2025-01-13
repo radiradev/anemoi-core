@@ -12,6 +12,7 @@ import hypothesis.strategies as st
 import pytest
 import torch
 import torch.nn as nn
+import math
 from hypothesis import given
 from hypothesis import settings
 
@@ -132,3 +133,24 @@ def test_multi_head_self_attention_backward_flex(batch_size, num_heads, embed_di
 
     assert x.grad is not None
     assert x.grad.shape == x.shape
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="No GPU available")
+@pytest.mark.gpu
+@given(
+    num_heads=st.integers(min_value=1, max_value=1),
+    embed_dim=st.one_of(
+        st.integers(max_value=15),  # Invalid: less than 16
+        st.integers(min_value=16).filter(lambda x: not math.log2(x).is_integer())  # Invalid: not a power of 2
+    ),
+    window_size=st.integers(min_value=2, max_value=16),
+)
+@settings(deadline=None)
+def test_invalid_embed_dim_raises_assertion_flex(num_heads, embed_dim, window_size):
+    with pytest.raises(AssertionError, match="Embedding dimension must be"):
+        MultiHeadSelfAttention(
+            num_heads=num_heads,
+            embed_dim=embed_dim,
+            window_size=window_size,
+            dropout_p=0.0,
+            attention_implementation="flex_attention",
+        ).cuda()

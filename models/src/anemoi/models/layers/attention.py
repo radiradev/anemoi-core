@@ -87,7 +87,6 @@ class MultiHeadSelfAttention(nn.Module):
 
         self.attention_implementation = attention_implementation
         self.use_alibi_slopes = use_alibi_slopes
-        self.set_attention_function()
 
         self.num_heads = num_heads
         self.embed_dim = embed_dim
@@ -96,6 +95,8 @@ class MultiHeadSelfAttention(nn.Module):
         self.dropout_p = dropout_p
         self.is_causal = is_causal
         self.softcap = softcap
+
+        self.set_attention_function()
 
         if self.use_alibi_slopes:
             self.alibi_slopes = get_alibi_slopes(num_heads)
@@ -121,6 +122,11 @@ class MultiHeadSelfAttention(nn.Module):
 
         # initalise the attn func here
         self.attention = attn_funcs[self.attention_implementation]()
+
+        if self.attention_implementation == "flex_attention":
+            assert (self.embed_dim >= 16), f"Embedding dimension must be >= 16. {self.embed_dim} is not valid."
+            assert (math.log2(self.embed_dim).is_integer()), f"Embedding dimension must be a power of 2. {self.embed_dim} is not valid."
+
 
     def forward(
         self, x: Tensor, shapes: list, batch_size: int, model_comm_group: Optional[ProcessGroup] = None
