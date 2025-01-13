@@ -87,13 +87,6 @@ class HardtanhBoundingSchema(BaseModel):
     "The maximum value for the HardTanh activation."
 
 
-defined_boundings = [
-    "anemoi.models.layers.bounding.HardtanhBounding",
-    "anemoi.models.layers.bounding.FractionBounding",
-    "anemoi.models.layers.bounding.ReluBounding",
-]
-
-
 class BaseModelConfig(BaseModel):
     num_channels: NonNegativeInt = Field(default=512)
     "Feature tensor size in the hidden space."
@@ -105,14 +98,6 @@ class BaseModelConfig(BaseModel):
     "List of bounding configuration applied in order to the specified variables."
     output_mask: str | None = Field(default=None)
     "Output mas, it must be a node attribute of the output nodes"
-
-    @field_validator("bounding")
-    @classmethod
-    def validate_bounding_is_defined(cls, boundings: list) -> list:
-        for bounding in boundings:
-            if bounding["_target_"] not in defined_boundings:
-                LOGGER.warning("%s bounding schema is not defined in anemoi.", bounding["_target_"])
-        return boundings
 
 
 class GNNConfig(BaseModelConfig):

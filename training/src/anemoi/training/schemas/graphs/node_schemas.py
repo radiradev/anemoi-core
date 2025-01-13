@@ -11,12 +11,9 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from pathlib import Path  # noqa: TC003
 from typing import Literal
 from typing import Union
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 import numpy as np
 from pydantic import BaseModel
@@ -29,17 +26,14 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ZarrNodeSchema(BaseModel):
-    target_: Literal["anemoi.graphs.nodes.ZarrDatasetNodes"] = Field(
-        "anemoi.graphs.nodes.ZarrDatasetNodes",
-        alias="_target_",
-    )
+    target_: Literal["anemoi.graphs.nodes.ZarrDatasetNodes"] = Field(..., alias="_target_")
     "Nodes from Zarr dataset class implementation from anemoi.graphs.nodes."
     dataset: str | dict  # TODO(Helen): Discuss schema with Baudouin
     "The dataset containing the nodes."
 
 
 class NPZnodeSchema(BaseModel):
-    target_: Literal["anemoi.graphs.nodes.NPZFileNodes"] = Field("anemoi.graphs.nodes.NPZFileNodes", alias="_target_")
+    target_: Literal["anemoi.graphs.nodes.NPZFileNodes"] = Field(..., alias="_target_")
     "Nodes from NPZ grids class implementation from anemoi.graphs.nodes."
     grid_definition_path: str
     "Path to the folder containing the grid definition files."
@@ -48,7 +42,7 @@ class NPZnodeSchema(BaseModel):
 
 
 class TextNodeSchema(BaseModel):
-    target_: Literal["anemoi.graphs.nodes.TextNodes"] = Field("anemoi.graphs.nodes.TextNodes", alias="_target_")
+    target_: Literal["anemoi.graphs.nodes.TextNodes"] = Field(..., alias="_target_")
     "Nodes from text file class implementation from anemoi.graphs.nodes."
     dataset: str | Path
     "The path to text file containing the coordinates of the nodes."
@@ -59,7 +53,7 @@ class TextNodeSchema(BaseModel):
 
 
 class ICONNodeSchema(BaseModel):
-    target_: Literal["anemoi.graphs.nodes.ICONNodes"] = Field("anemoi.graphs.nodes.ICONNodes", alias="_target_")
+    target_: Literal["anemoi.graphs.nodes.ICONNodes"] = Field(..., alias="_target_")
     "ICON grid object from anemoi.graphs.nodes."
     grid_filename: str
     "Name of NetCDF ICON grid file."
@@ -71,7 +65,7 @@ class ICONNodeSchema(BaseModel):
 
 class ICONMeshNodeSchema(BaseModel):
     target_: Literal["anemoi.graphs.nodes.ICONMultimeshNodes", "anemoi.graphs.nodes.ICONCellGridNodes"] = Field(
-        "anemoi.graphs.nodes.ICONMultimeshNodes",
+        ...,
         alias="_target_",
     )
     "Mesh based on ICON grid class implementation from anemoi.graphs.nodes."
@@ -80,18 +74,15 @@ class ICONMeshNodeSchema(BaseModel):
 
 
 class LimitedAreaNPZFileNodesSchema(BaseModel):
-    target_: Literal["anemoi.graphs.nodes.LimitedAreaNPZFileNodes"] = Field(
-        "anemoi.graphs.nodes.LimitedAreaNPZFileNodes",
-        alias="_target_",
-    )
+    target_: Literal["anemoi.graphs.nodes.LimitedAreaNPZFileNodes"] = Field(..., alias="_target_")
     "Class implementation for nodes from NPZ grids using an area of interest from anemoi.graphs.nodes."
     grid_definition_path: str
     "Path to the folder containing the grid definition files."
-    resolution: str = Field(examples=["o48", "o96", "n320"])
+    resolution: str = Field(examples=["o48", "o96", "n320"])  # TODO(Helen): Discuss with Mario about the refactor
     "The grid resolution."
-    reference_node_name: str  # TODO(Helen): Discuss check that reference nodes exists in the config
+    reference_node_name: str  # TODO(Helen): Check that reference nodes exists in the config
     "Name of the reference nodes in the graph to consider for the Area Mask."
-    mask_attr_name: str  # TODO(Helen): Discuss check that mask_attr_name exists in the dataset config
+    mask_attr_name: str  # TODO(Helen): Check that mask_attr_name exists in the dataset config
     "Name of a node to attribute to mask the reference nodes, if desired. Defaults to consider all reference nodes."
     margin_radius_km: PositiveFloat = Field(default=100.0)
     "Maximum distance to the reference nodes to consider a node as valid, in kilometers. Defaults to 100 km."
@@ -102,7 +93,7 @@ class IcosahedralandHealPixNodeSchema(BaseModel):
         "anemoi.graphs.nodes.TriNodes",
         "anemoi.graphs.nodes.HexNodes",
         "anemoi.graphs.nodes.HEALPixNodes",
-    ] = Field("anemoi.graphs.nodes.TriNodes", alias="_target_")
+    ] = Field(..., alias="_target_")
     "Icohedral and HEAL Pix nodes class implementations from anemoi.graphs.nodes."
     resolution: PositiveInt
     "Refinement level of the mesh."
@@ -113,7 +104,7 @@ class LimitedAreaIcosahedralandHealPixNodeSchema(BaseModel):
         "anemoi.graphs.nodes.LimitedAreaTriNodes",
         "anemoi.graphs.nodes.LimitedAreaHexNodes",
         "anemoi.graphs.nodes.LimitedAreaHEALPixNodes",
-    ] = Field("anemoi.graphs.nodes.LimitedAreaTriNodes", alias="_target_")
+    ] = Field(..., alias="_target_")
     "Class implementations for Icosahedral and HEAL Pix nodes using an area of interest from anemoi.graphs.nodes."
     resolution: PositiveInt
     "Refinement level of the mesh."
@@ -126,10 +117,7 @@ class LimitedAreaIcosahedralandHealPixNodeSchema(BaseModel):
 
 
 class StretchedIcosahdralNodeSchema(BaseModel):
-    target_: Literal["anemoi.graphs.nodes.StretchedTriNodes"] = Field(
-        "anemoi.graphs.nodes.StretchedTriNodes",
-        alias="_target_",
-    )
+    target_: Literal["anemoi.graphs.nodes.StretchedTriNodes"] = Field(..., alias="_target_")
     "Class implementation for nodes based on iterative refinements of an icosahedron with 2 different resolutions."
     global_resolution: PositiveInt
     "Refinement level of the mesh on the global area."
@@ -147,17 +135,14 @@ class PlanarAreaWeightSchema(BaseModel):
     target_: Literal[
         "anemoi.graphs.nodes.attributes.AreaWeights",
         "anemoi.graphs.nodes.attributes.PlanarAreaWeights",
-    ] = Field("anemoi.graphs.nodes.attributes.PlanarAreaWeights", alias="_target_")
+    ] = Field(..., alias="_target_")
     "Implementation of the area of the nodes as the weights from anemoi.graph.nodes.attributes."
     norm: Literal["unit-max", "l1", "l2", "unit-sum", "unit-std"] = Field(default="unit-max")
     "Normalisation of the weights."
 
 
 class SphericalAreaWeightSchema(BaseModel):
-    target_: Literal["anemoi.graphs.nodes.attributes.SphericalAreaWeights"] = Field(
-        "anemoi.graphs.nodes.attributes.SphericalAreaWeights",
-        alias="_target_",
-    )
+    target_: Literal["anemoi.graphs.nodes.attributes.SphericalAreaWeights"] = Field(..., alias="_target_")
     "Implementation of the 3D area of the nodes as the weights from anemoi.graph.nades.attributes."
     norm: Literal["unit-max", "l1", "l2", "unit-sum", "unit-std"] = Field(default="unit-max")
     "Normalisation of the weights."
