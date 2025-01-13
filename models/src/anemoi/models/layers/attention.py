@@ -124,9 +124,10 @@ class MultiHeadSelfAttention(nn.Module):
         self.attention = attn_funcs[self.attention_implementation]()
 
         if self.attention_implementation == "flex_attention":
-            assert (self.embed_dim >= 16), f"Embedding dimension must be >= 16. {self.embed_dim} is not valid."
-            assert (math.log2(self.embed_dim).is_integer()), f"Embedding dimension must be a power of 2. {self.embed_dim} is not valid."
-
+            assert self.embed_dim >= 16, f"Embedding dimension must be >= 16. {self.embed_dim} is not valid."
+            assert math.log2(
+                self.embed_dim
+            ).is_integer(), f"Embedding dimension must be a power of 2. {self.embed_dim} is not valid."
 
     def forward(
         self, x: Tensor, shapes: list, batch_size: int, model_comm_group: Optional[ProcessGroup] = None
