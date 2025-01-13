@@ -1,4 +1,4 @@
-# (C) Copyright 2024 ECMWF.
+# (C) Copyright 2024-2025 ECMWF.
 #
 # This software is licensed under the terms of the Apache Licence Version 2.0
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
@@ -70,13 +70,17 @@ class LR(BaseModel):
     "Number of iterations."
     min: NonNegativeFloat = Field(default=3e-7)
     "Minimum learning rate."
-    warmup_time: NonNegativeInt = Field(default=1000)
+    warmup_t: NonNegativeInt = Field(default=1000)
+    "Number of warm up iteration. Default to 1000."
 
 
 class LossScalingSchema(BaseModel):
     default: int = 1
+    "Default scaling value applied to the variables loss. Default to 1."
     pl: dict[str, NonNegativeFloat]
+    "Scaling value associated to each pressure level variable loss."
     sfc: dict[str, NonNegativeFloat]
+    "Scaling value associated to each surface variable loss."
 
 
 class PressureLevelScalerTargets(str, Enum):
@@ -100,6 +104,7 @@ class PressureLevelScalerSchema(BaseModel):
 
 class MetricLossSchema(BaseModel):
     target_: str = Field("anemoi.training.losses.mse.WeightedMSELoss", alias="_target_")
+    "Loss function object from anemoi.training.losses."
     scalars: list[str] = Field(default=["variable"])
     "Scalars to include in loss calculation"
     ignore_nans: bool = False
@@ -113,8 +118,11 @@ class NodeLossWeightsTargets(str, Enum):
 
 class NodeLossWeightsSchema(BaseModel):
     target_: NodeLossWeightsTargets = Field(..., alias="_target_")
-    target_nodes: str
-    node_attribute: str
+    "Node loss weights object from anemoi.training.losses."
+    target_nodes: str = Field(examples=["data"])
+    "name of target nodes, key in HeteroData graph object."
+    node_attribute: str = Field(examples=["area_weight"])
+    "name of node weight attribute, key in HeteroData graph object."
 
 
 class TrainingSchema(BaseModel):
@@ -141,9 +149,9 @@ class TrainingSchema(BaseModel):
     gradient_clip: GradientClip = Field(default_factory=GradientClip)
     "Config for gradient clipping."
     swa: SWA = Field(default_factory=SWA)
-    "Config for stochastic weight averaging"
+    "Config for stochastic weight averaging."
     zero_optimizer: bool = Field(default=False)
-    "use ZeroRedundancyOptimizer, saves memory for larger models"
+    "use ZeroRedundancyOptimizer, saves memory for larger models."
     training_loss: MetricLossSchema
     "Training loss configuration."
     loss_gradient_scaling: bool = False
@@ -159,9 +167,9 @@ class TrainingSchema(BaseModel):
     lr: LR = Field(default_factory=LR)
     "Learning rate configuration."
     variable_loss_scaling: LossScalingSchema = Field(default_factory=LossScalingSchema)
-    "Variable loss scaling configuration."
+    "Configuration of the variable scaling used in the loss computation."
     pressure_level_scaler: PressureLevelScalerSchema = Field(default_factory=PressureLevelScalerSchema)
-    "Pressure level scaler configuration."
+    "Configuration of the pressure level scaler apllied in the loss computation."
     metrics: list[str]
     "List of metrics"
     node_loss_weights: NodeLossWeightsSchema
