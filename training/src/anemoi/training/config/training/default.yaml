@@ -139,11 +139,11 @@ additional_scalars:
   # useful if including slow vs fast evolving variables in the training (e.g. Land/Ocean vs Atmosphere)
   # if using this option 'variable_loss_scalings' should all be set close to 1.0 for prognostic variables
   # stdev tendency scaler
-  # - _target_: anemoi.training.data.scaling.StdevTendencyScaler
+  # - _target_: anemoi.training.train.scaling.StdevTendencyScaler
   #   scale_dim: -1 # dimension on which scaling applied
   #   name: "tendency"
   # var tendency scaler (this should be default!?)
-  # - _target_: anemoi.training.data.scaling.VarTendencyScaler
+  # - _target_: anemoi.training.train.scaling.VarTendencyScaler
   #   scale_dim: -1 # dimension on which scaling applied
   #   name: "tendency"
 
