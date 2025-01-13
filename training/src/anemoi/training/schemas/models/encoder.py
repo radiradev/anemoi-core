@@ -15,12 +15,12 @@ from .common_components import GNNModelComponent
 from .common_components import TransformerModelComponent
 
 
-class GNNEncoder(GNNModelComponent):
+class GNNEncoderSchema(GNNModelComponent):
     target_: Literal["anemoi.models.layers.mapper.GNNForwardMapper"] = Field(..., alias="_target_")
     "GNN encoder object from anemoi.models.layers.mapper."
 
 
-class GraphTransformerEncoder(TransformerModelComponent):
+class GraphTransformerEncoderSchema(TransformerModelComponent):
     target_: Literal["anemoi.models.layers.mapper.GraphTransformerForwardMapper"] = Field(..., alias="_target_")
     "Graph Transfromer Encoder object from anemoi.models.layers.mapper."
     sub_graph_edge_attributes: list[str] = Field(default=["edge_length", "edge_dirs"])

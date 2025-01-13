@@ -34,7 +34,7 @@ class Checkpoint(BaseModel):
     "File name pattern for checkpoint files saved by time frequency (minutes)."
 
 
-class FilesConfig(BaseModel):
+class FilesSchema(BaseModel):
     dataset: Path  # TODO(Helen): Change to FilePath, only posisble after refactor
     "Path to the dataset file."
     graph: Path | None = Field(default=None)
@@ -54,7 +54,7 @@ class Logs(BaseModel):
     "Path to output tensorboard logs."
 
 
-class PathsConfig(BaseModel):
+class PathsSchema(BaseModel):
     data: DirectoryPath
     "Path to the data directory."
     grids: DirectoryPath
@@ -85,9 +85,9 @@ class HardwareSchema(BaseModel):
     "Number of nodes."
     num_gpus_per_model: NonNegativeInt = 1
     "Number of GPUs per model."
-    files: FilesConfig
+    files: FilesSchema
     "Files schema."
-    paths: PathsConfig
+    paths: PathsSchema
     "Paths schema."
 
     @field_validator("num_gpus_per_node")

@@ -12,6 +12,7 @@ from __future__ import annotations
 from enum import Enum
 from functools import partial
 from typing import Annotated
+from typing import Any
 
 from pydantic import AfterValidator
 from pydantic import BaseModel
@@ -23,7 +24,7 @@ from pydantic import PositiveInt
 from anemoi.training.schemas.utils import allowed_values
 
 
-class GradientClip(BaseModel):
+class GradientClipSchema(BaseModel):
     """Gradient clipping configuration."""
 
     val: float = 32.0
@@ -34,7 +35,7 @@ class GradientClip(BaseModel):
     "The gradient clipping algorithm to use"
 
 
-class SWA(BaseModel):
+class SWASchema(BaseModel):
     """Stochastic weight averaging configuration.
 
     See https://pytorch.org/blog/stochastic-weight-averaging-in-pytorch/
@@ -46,7 +47,7 @@ class SWA(BaseModel):
     "Learning rate for SWA."
 
 
-class Rollout(BaseModel):
+class RolloutSchema(BaseModel):
     """Rollout configuration."""
 
     start: PositiveInt = Field(default=1)
@@ -57,7 +58,7 @@ class Rollout(BaseModel):
     "Maximum number of rollouts."
 
 
-class LR(BaseModel):
+class LRSchema(BaseModel):
     """Learning rate configuration.
 
     Changes in per-gpu batch_size should come with a rescaling of the local_lr,
@@ -105,13 +106,36 @@ class PressureLevelScalerSchema(BaseModel):
 PossibleScalars = Annotated[str, AfterValidator(partial(allowed_values, values=["variable", "loss_weights_mask"]))]
 
 
+class ImplementedLossesUsingBaseLossSchema(str, Enum):
+    rmse = "anemoi.training.losses.rmse.WeightedRMSELoss"
+    mse = "anemoi.training.losses.mse.WeightedMSELoss"
+    mae = "anemoi.training.losses.mae.WeightedMAELoss"
+    logcosh = "anemoi.training.losses.logcosh.WeightedLogCoshLoss"
+
+
 class BaseLossSchema(BaseModel):
-    target_: str = Field("anemoi.training.losses.mse.WeightedMSELoss", alias="_target_")
+    target_: ImplementedLossesUsingBaseLossSchema = Field(..., alias="_target_")
     "Loss function object from anemoi.training.losses."
     scalars: list[PossibleScalars] = Field(default=["variable"])
     "Scalars to include in loss calculation"
     ignore_nans: bool = False
     "Allow nans in the loss and apply methods ignoring nans for measuring the loss."
+
+
+class HuberLossschema(BaseLossSchema):
+    delta: float = 1.0
+    "Threshold for Huber loss."
+
+
+class WeightedMSELossLimitedAreaSchema(BaseLossSchema):
+    inside_lam: bool = True
+    wmse_contribution: bool = False
+
+
+class CombinedLossSchema(BaseLossSchema):
+    extra_losses: Any
+    losses: Any
+    loss_weights: Any
 
 
 class NodeLossWeightsTargets(str, Enum):
@@ -149,9 +173,9 @@ class TrainingSchema(BaseModel):
     K >= 1 (if K == 1 then no accumulation). The effective bacthsize becomes num-device * k."""
     num_sanity_val_steps: PositiveInt = Field(default=6)
     "Sanity check runs n batches of val before starting the training routine."
-    gradient_clip: GradientClip = Field(default_factory=GradientClip)
+    gradient_clip: GradientClipSchema = Field(default_factory=GradientClipSchema)
     "Config for gradient clipping."
-    swa: SWA = Field(default_factory=SWA)
+    swa: SWASchema = Field(default_factory=SWASchema)
     "Config for stochastic weight averaging."
     zero_optimizer: bool = Field(default=False)
     "use ZeroRedundancyOptimizer, saves memory for larger models."
@@ -161,13 +185,13 @@ class TrainingSchema(BaseModel):
     "Dynamic rescaling of the loss gradient. Not yet tested."
     validation_metrics: list[BaseLossSchema] = Field(default_factory=BaseLossSchema)
     "List of validation metrics configurations."
-    rollout: Rollout = Field(default_factory=Rollout)
+    rollout: RolloutSchema = Field(default_factory=RolloutSchema)
     "Rollout configuration."
     max_epochs: PositiveInt | None = None
     "Maximum number of epochs, stops earlier if max_steps is reached first."
     max_steps: PositiveInt = 150000
     "Maximum number of steps, stops earlier if max_epochs is reached first."
-    lr: LR = Field(default_factory=LR)
+    lr: LRSchema = Field(default_factory=LRSchema)
     "Learning rate configuration."
     variable_loss_scaling: LossScalingSchema = Field(default_factory=LossScalingSchema)
     "Configuration of the variable scaling used in the loss computation."

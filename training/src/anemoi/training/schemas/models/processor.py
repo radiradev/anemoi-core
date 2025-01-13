@@ -17,7 +17,7 @@ from .common_components import GNNModelComponent
 from .common_components import TransformerModelComponent
 
 
-class GNNProcessor(GNNModelComponent):
+class GNNProcessorSchema(GNNModelComponent):
     target_: Literal["anemoi.models.layers.processor.GNNProcessor"] = Field(..., alias="_target_")
     "GNN Processor object from anemoi.models.layers.processor."
     num_layers: NonNegativeInt = Field(default=16)
@@ -26,7 +26,7 @@ class GNNProcessor(GNNModelComponent):
     "Number of chunks to divide the layer into. Default to 2."
 
 
-class GraphTransformerProcessor(TransformerModelComponent):
+class GraphTransformerProcessorSchema(TransformerModelComponent):
     target_: Literal["anemoi.models.layers.processor.GraphTransformerProcessor"] = Field(..., alias="_target_")
     "Graph transformer processor object from anemoi.models.layers.processor."
     sub_graph_edge_attributes: list[str] = Field(default=["edge_length", "edge_dir"])
@@ -39,7 +39,7 @@ class GraphTransformerProcessor(TransformerModelComponent):
     "Dropout probability used for multi-head self attention, default 0.0"
 
 
-class TransformerProcessor(TransformerModelComponent):
+class TransformerProcessorSchema(TransformerModelComponent):
     target_: Literal["anemoi.models.layers.processor.TransformerProcessor"] = Field(..., alias="_target_")
     "Transformer processor object from anemoi.models.layers.processor."
     num_layers: NonNegativeInt = Field(default=16)

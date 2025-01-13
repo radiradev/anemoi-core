@@ -19,13 +19,13 @@ from pydantic import Field
 from pydantic import NonNegativeInt
 from pydantic import field_validator
 
-from .decoder import GNNDecoder
-from .decoder import GraphTransformerDecoder
-from .encoder import GNNEncoder
-from .encoder import GraphTransformerEncoder
-from .processor import GNNProcessor
-from .processor import GraphTransformerProcessor
-from .processor import TransformerProcessor
+from .decoder import GNNDecoderSchema
+from .decoder import GraphTransformerDecoderSchema
+from .encoder import GNNEncoderSchema
+from .encoder import GraphTransformerEncoderSchema
+from .processor import GNNProcessorSchema
+from .processor import GraphTransformerProcessorSchema
+from .processor import TransformerProcessorSchema
 
 LOGGER = logging.getLogger(__name__)
 
@@ -101,27 +101,27 @@ class BaseModelConfig(BaseModel):
 
 
 class GNNConfig(BaseModelConfig):
-    processor: GNNProcessor = Field(default_factory=GNNProcessor)
+    processor: GNNProcessorSchema = Field(default_factory=GNNProcessorSchema)
     "GNN processor schema."
-    encoder: GNNEncoder = Field(default_factory=GNNEncoder)
+    encoder: GNNEncoderSchema = Field(default_factory=GNNEncoderSchema)
     "GNN encoder schema."
-    decoder: GNNDecoder = Field(default_factory=GNNDecoder)
+    decoder: GNNDecoderSchema = Field(default_factory=GNNDecoderSchema)
     "GNN decoder schema."
 
 
 class GraphTransformerConfig(BaseModelConfig):
-    processor: GraphTransformerProcessor = Field(default_factory=GraphTransformerProcessor)
+    processor: GraphTransformerProcessorSchema = Field(default_factory=GraphTransformerProcessorSchema)
     "Graph transformer processor schema."
-    encoder: GraphTransformerEncoder = Field(default_factory=GraphTransformerEncoder)
+    encoder: GraphTransformerEncoderSchema = Field(default_factory=GraphTransformerEncoderSchema)
     "Graph transformer encoder schema."
-    decoder: GraphTransformerDecoder = Field(default_factory=GraphTransformerDecoder)
+    decoder: GraphTransformerDecoderSchema = Field(default_factory=GraphTransformerDecoderSchema)
     "Graph transformer decoder schema."
 
 
 class TransformerConfig(BaseModelConfig):
-    processor: TransformerProcessor = Field(default_factory=TransformerProcessor)
+    processor: TransformerProcessorSchema = Field(default_factory=TransformerProcessorSchema)
     "Transformer processor schema."
-    encoder: GraphTransformerEncoder = Field(default_factory=GraphTransformerEncoder)
+    encoder: GraphTransformerEncoderSchema = Field(default_factory=GraphTransformerEncoderSchema)
     "Graph transformer encoder schema."
-    decoder: GraphTransformerDecoder = Field(default_factory=GraphTransformerDecoder)
+    decoder: GraphTransformerDecoderSchema = Field(default_factory=GraphTransformerDecoderSchema)
     "Graph transformer decoder schema."

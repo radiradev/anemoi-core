@@ -52,14 +52,14 @@ target_to_schema = {
 }
 
 
-class Preprocessor(BaseModel):
+class PreprocessorSchema(BaseModel):
     target_: PreprocessorTarget = Field(..., alias="_target_")
     "Processor object from anemoi.models.preprocessing.[normalizer|imputer|remapper]."
     config: NormalizerSchema | ImputerSchema | RemapperSchema
     "Target schema containing processor methods."
 
     @model_validator(mode="after")
-    def schema_consistent_with_target(self) -> Preprocessor:
+    def schema_consistent_with_target(self) -> PreprocessorSchema:
         if self.target_ not in target_to_schema or target_to_schema[self.target_] != self.config.__class__:
             error_msg = f"Schema {self.config.__class__} does not match target {self.target_}"
             raise ValidationError(error_msg)
@@ -97,7 +97,7 @@ class DataSchema(BaseModel):
     "Time frequency requested from the dataset."
     timestep: str = Field(default=None)
     "Time step of model (must be multiple of frequency)."
-    processors: dict[str, Preprocessor]
+    processors: dict[str, PreprocessorSchema]
     "Layers of model performing computation on latent space. \
             Processors including imputers and normalizers are applied in order of definition."
     forcing: list[str] = Field(default_factory=list)

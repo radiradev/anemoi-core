@@ -22,7 +22,7 @@ from pydantic import PositiveInt
 LOGGER = logging.getLogger(__name__)
 
 
-class LongRolloutPlots(BaseModel):
+class LongRolloutPlotsSchema(BaseModel):
     target_: Literal["anemoi.training.diagnostics.callbacks.plot.LongRolloutPlots"] = Field(alias="_target_")
     "LongRolloutPlots object from anemoi training diagnostics callbacks."
     rollout: list[int]
@@ -45,14 +45,14 @@ class LongRolloutPlots(BaseModel):
     "Delay between frames in the animation in milliseconds, by default 400."
 
 
-class GraphTrainableFeaturesPlot(BaseModel):
+class GraphTrainableFeaturesPlotSchema(BaseModel):
     target_: Literal["anemoi.training.diagnostics.callbacks.plot.GraphTrainableFeaturesPlot"] = Field(alias="_target_")
     "GraphTrainableFeaturesPlot object from anemoi training diagnostics callbacks."
     every_n_epochs: int | None
     "Epoch frequency to plot at."
 
 
-class PlotLoss(BaseModel):
+class PlotLossSchema(BaseModel):
     target_: Literal["anemoi.training.diagnostics.callbacks.plot.PlotLoss"] = Field(alias="_target_")
     "PlotLoss object from anemoi training diagnostics callbacks."
     parameter_groups: dict[str, list[str]]
@@ -61,7 +61,7 @@ class PlotLoss(BaseModel):
     "Batch frequency to plot at."
 
 
-class PlotSample(BaseModel):
+class PlotSampleSchema(BaseModel):
     target_: Literal["anemoi.training.diagnostics.callbacks.plot.PlotSample"] = Field(alias="_target_")
     "PlotSample object from anemoi training diagnostics callbacks."
     sample_idx: int
@@ -80,7 +80,7 @@ class PlotSample(BaseModel):
     "Batch frequency to plot at, by default None."
 
 
-class PlotSpectrum(BaseModel):
+class PlotSpectrumSchema(BaseModel):
     target_: Literal["anemoi.training.diagnostics.callbacks.plot.PlotSpectrum"] = Field(alias="_target_")
     "PlotSpectrum object from anemoi training diagnostics callbacks."
     sample_idx: int
@@ -91,7 +91,7 @@ class PlotSpectrum(BaseModel):
     "Batch frequency to plot at, by default None."
 
 
-class PlotHistogram(BaseModel):
+class PlotHistogramSchema(BaseModel):
     target_: Literal["anemoi.training.diagnostics.callbacks.plot.PlotHistogram"] = Field(alias="_target_")
     "PlotHistogram object from anemoi training diagnostics callbacks."
     sample_idx: int
@@ -105,11 +105,16 @@ class PlotHistogram(BaseModel):
 
 
 PlotCallbacks = Union[
-    LongRolloutPlots | GraphTrainableFeaturesPlot | PlotLoss | PlotSample | PlotSpectrum | PlotHistogram
+    LongRolloutPlotsSchema
+    | GraphTrainableFeaturesPlotSchema
+    | PlotLossSchema
+    | PlotSampleSchema
+    | PlotSpectrumSchema
+    | PlotHistogramSchema
 ]
 
 
-class Plot(BaseModel):
+class PlotSchema(BaseModel):
     asynchronous: bool
     "Handle plotting tasks without blocking the model training."
     datashader: bool
@@ -138,7 +143,7 @@ class Debug(BaseModel):
     "Activate anomaly detection. This will detect and trace back NaNs/Infs, but slow down training."
 
 
-class Checkpoint(BaseModel):
+class CheckpointSchema(BaseModel):
     save_frequency: int | None
     "Frequency at which to save the checkpoints."
     num_models_saved: int
@@ -146,7 +151,7 @@ class Checkpoint(BaseModel):
             If set to -1, all checkpoints are kept"
 
 
-class Wandb(BaseModel):
+class WandbSchema(BaseModel):
     enabled: bool
     "Use Weights & Biases logger."
     offline: bool
@@ -164,7 +169,7 @@ class Wandb(BaseModel):
     "Username or team name where to send runs. This entity must exist before you can send runs there."
 
 
-class Mlflow(BaseModel):
+class MlflowSchema(BaseModel):
     enabled: bool
     "Use MLflow logger."
     offline: bool
@@ -194,23 +199,23 @@ class Mlflow(BaseModel):
     "Specifies the maximum number of retries for MLflow HTTP requests, default 35."
 
 
-class Tensorboard(BaseModel):
+class TensorboardSchema(BaseModel):
     enabled: bool
     "Use TensorBoard logger."
 
 
-class Logging(BaseModel):
-    wandb: Wandb
+class LoggingSchema(BaseModel):
+    wandb: WandbSchema
     "W&B logging schema."
-    tensorboard: Tensorboard
+    tensorboard: TensorboardSchema
     "TensorBorad logging schema."
-    mlflow: Mlflow
+    mlflow: MlflowSchema
     "MLflow logging schema."
     interval: PositiveInt
     "Logging frequency in batches."
 
 
-class Memory(BaseModel):
+class MemorySchema(BaseModel):
     enabled: bool = Field(default=False)
     "Enable memory report. Default to false."
     steps: PositiveInt = Field(default=5)
@@ -240,7 +245,7 @@ class Profiling(BaseModel):
 
 
 class BenchmarkProfilerSchema(BaseModel):
-    memory: Memory = Field(default_factory=lambda: Memory())
+    memory: MemorySchema = Field(default_factory=lambda: MemorySchema())
     "Schema for memory report containing metrics associated with CPU and GPU memory allocation."
     time: Profiling = Field(default_factory=lambda: Profiling(True))
     "Report with metrics of execution time for certain steps across the code."
@@ -255,7 +260,7 @@ class BenchmarkProfilerSchema(BaseModel):
 
 
 class DiagnosticsSchema(BaseModel):
-    plot: Plot | None = None
+    plot: PlotSchema | None = None
     "Plot schema."
     callbacks: Any = Field(default=[])
     "Callbacks schema."
@@ -265,7 +270,7 @@ class DiagnosticsSchema(BaseModel):
     "Debug schema."
     profiler: bool
     "Activate the pytorch profiler and tensorboard logger."
-    log: Logging
+    log: LoggingSchema
     "Log schema."
     enable_progress_bar: bool
     "Activate progress bar."
@@ -273,5 +278,5 @@ class DiagnosticsSchema(BaseModel):
     "Print the memory summary."
     enable_checkpointing: bool
     "Allow model to save checkpoints."
-    checkpoint: dict[str, Checkpoint] = Field(default_factory=dict)
+    checkpoint: dict[str, CheckpointSchema] = Field(default_factory=dict)
     "Checkpoint schema for defined frequency (every_n_minutes, every_n_epochs, ...)."
