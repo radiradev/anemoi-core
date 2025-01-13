@@ -274,8 +274,9 @@ class FlexAttentionWrapper(nn.Module):
 
             from torch.nn.attention.flex_attention import create_block_mask  # should this be after the version check?
             from torch.nn.attention.flex_attention import flex_attention
-            
+
             if window_size is not None:
+
                 def sliding_window_mask(b, h, q_idx, kv_idx):
                     return abs(q_idx - kv_idx) <= window_size
 
