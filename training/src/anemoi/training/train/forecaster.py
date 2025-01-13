@@ -29,8 +29,8 @@ from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.schemas.base_schema import convert_to_omegaconf
+from anemoi.training.schemas.training import BaseLossSchema  # noqa: TC001
 from anemoi.training.schemas.training import LossScalingSchema  # noqa: TC001
-from anemoi.training.schemas.training import MetricLossSchema  # noqa: TC001
 from anemoi.training.schemas.training import PressureLevelScalerSchema  # noqa: TC001
 from anemoi.training.schemas.training import TrainingSchema  # noqa: TC001
 from anemoi.training.utils.masks import Boolean1DMask
@@ -186,7 +186,7 @@ class GraphForecaster(pl.LightningModule):
     # Future import breaks other type hints TODO Harrison Cook
     @staticmethod
     def get_loss_function(
-        config: MetricLossSchema | list[MetricLossSchema],
+        config: BaseLossSchema | list[BaseLossSchema],
         scalars: dict[str, tuple[int | tuple[int, ...] | torch.Tensor]] | None = None,
         **kwargs,
     ) -> BaseWeightedLoss | torch.nn.ModuleList:

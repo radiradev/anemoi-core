@@ -102,10 +102,13 @@ class PressureLevelScalerSchema(BaseModel):
     "Slope of the scaling function."
 
 
-class MetricLossSchema(BaseModel):
+PossibleScalars = Annotated[str, AfterValidator(partial(allowed_values, values=["variable", "loss_weights_mask"]))]
+
+
+class BaseLossSchema(BaseModel):
     target_: str = Field("anemoi.training.losses.mse.WeightedMSELoss", alias="_target_")
     "Loss function object from anemoi.training.losses."
-    scalars: list[str] = Field(default=["variable"])
+    scalars: list[PossibleScalars] = Field(default=["variable"])
     "Scalars to include in loss calculation"
     ignore_nans: bool = False
     "Allow nans in the loss and apply methods ignoring nans for measuring the loss."
@@ -152,11 +155,11 @@ class TrainingSchema(BaseModel):
     "Config for stochastic weight averaging."
     zero_optimizer: bool = Field(default=False)
     "use ZeroRedundancyOptimizer, saves memory for larger models."
-    training_loss: MetricLossSchema
+    training_loss: BaseLossSchema
     "Training loss configuration."
     loss_gradient_scaling: bool = False
     "Dynamic rescaling of the loss gradient. Not yet tested."
-    validation_metrics: list[MetricLossSchema] = Field(default_factory=MetricLossSchema)
+    validation_metrics: list[BaseLossSchema] = Field(default_factory=BaseLossSchema)
     "List of validation metrics configurations."
     rollout: Rollout = Field(default_factory=Rollout)
     "Rollout configuration."

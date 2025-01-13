@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import logging
 from enum import Enum
-from typing import Any
 from typing import AnyStr
 from typing import Literal
 
@@ -102,7 +101,7 @@ class BaseModelConfig(BaseModel):
     "Model schema."
     trainable_parameters: TrainableParameters = Field(default_factory=TrainableParameters)
     "Learnable node and edge parameters."
-    bounding: list[ReluBoundingSchema | HardtanhBoundingSchema | FractionBoundingSchema | Any]
+    bounding: list[ReluBoundingSchema | HardtanhBoundingSchema | FractionBoundingSchema]
     "List of bounding configuration applied in order to the specified variables."
     output_mask: str | None = Field(default=None)
     "Output mas, it must be a node attribute of the output nodes"

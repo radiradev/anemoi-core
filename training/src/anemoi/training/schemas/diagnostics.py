@@ -18,7 +18,6 @@ from pydantic import BaseModel
 from pydantic import Field
 from pydantic import NonNegativeInt
 from pydantic import PositiveInt
-from pydantic import field_validator
 
 LOGGER = logging.getLogger(__name__)
 
@@ -108,14 +107,6 @@ class PlotHistogram(BaseModel):
 PlotCallbacks = Union[
     LongRolloutPlots | GraphTrainableFeaturesPlot | PlotLoss | PlotSample | PlotSpectrum | PlotHistogram
 ]
-defined_plot_callbacks = [
-    "anemoi.training.diagnostics.callbacks.plot.PlotHistogram",
-    "anemoi.training.diagnostics.callbacks.plot.PlotSpectrum",
-    "anemoi.training.diagnostics.callbacks.plot.PlotSample",
-    "anemoi.training.diagnostics.callbacks.plot.PlotLoss",
-    "anemoi.training.diagnostics.callbacks.plot.GraphTrainableFeaturesPlot",
-    "anemoi.training.diagnostics.callbacks.plot.LongRolloutPlots",
-]
 
 
 class Plot(BaseModel):
@@ -131,16 +122,8 @@ class Plot(BaseModel):
     "List of parameters to plot."
     precip_and_related_fields: list[str]
     "List of precipitation related fields from the parameters list."
-    callbacks: list[PlotCallbacks | Any] = Field(default=[])
+    callbacks: list[PlotCallbacks] = Field(default=[])
     "List of plotting functions to call."
-
-    @field_validator("callbacks")
-    @classmethod
-    def validate_callbacks_exist(cls, plot_callbacks: list) -> list:
-        for callback in plot_callbacks:
-            if callback["_target_"] not in defined_plot_callbacks:
-                LOGGER.warning("%s plot callback schema is not defined in anemoi.", callback["_target_"])
-        return plot_callbacks
 
 
 class PlottingFrequency(BaseModel):

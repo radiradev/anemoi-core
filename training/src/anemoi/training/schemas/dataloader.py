@@ -33,36 +33,21 @@ class Frequency(RootModel):
 
     @computed_field
     def as_string(self) -> str:
+        delta = self.as_timedelta
 
-        total_seconds = self.as_seconds
-        assert int(total_seconds) == total_seconds, total_seconds
-        total_seconds = int(total_seconds)
+        if delta.days > 0 and delta.seconds == 0:
+            return f"{delta.days}d"
 
-        seconds = total_seconds
+        if delta.days == 0 and delta.seconds >= 3600 and delta.seconds % 3600 == 0:
+            return f"{delta.seconds // 3600}h"
 
-        days = seconds // (24 * 3600)
-        seconds %= 24 * 3600
-        hours = seconds // 3600
-        seconds %= 3600
-        minutes = seconds // 60
-        seconds %= 60
+        if delta.days == 0 and delta.seconds >= 60 and delta.seconds % 60 == 0:
+            return f"{delta.seconds // 60}m"
 
-        if days > 0 and hours == 0 and minutes == 0 and seconds == 0:
-            return f"{days}d"
+        if delta.days == 0 and delta.seconds < 60:
+            return f"{delta.seconds}s"
 
-        if days == 0 and hours > 0 and minutes == 0 and seconds == 0:
-            return f"{hours}h"
-
-        if days == 0 and hours == 0 and minutes > 0 and seconds == 0:
-            return f"{minutes}m"
-
-        if days == 0 and hours == 0 and minutes == 0 and seconds > 0:
-            return f"{seconds}s"
-
-        if days > 0:
-            return f"{total_seconds}s"
-
-        return str(self.as_timedelta)
+        return str(delta)
 
     @computed_field
     def as_seconds(self) -> int:
@@ -94,16 +79,20 @@ class LoaderSet(BaseModel):
 
 
 class FullGridIndicesSchema(BaseModel):
-    target_: Literal["anemoi.training.data.grid_indices.FullGrid"] = \
-             Field("anemoi.training.data.grid_indices.FullGrid", alias="_target_")
+    target_: Literal["anemoi.training.data.grid_indices.FullGrid"] = Field(
+        "anemoi.training.data.grid_indices.FullGrid",
+        alias="_target_",
+    )
     "Grid indices for full grid class implementation from anemoi.training.data.grid_indices."
     nodes_name: str = Field(examples=["data"])
     "Name of the grid nodes."
 
 
 class MaskedGridIndicesSchema(BaseModel):
-    target_: Literal["anemoi.training.data.grid_indices.MaskedGrid"] = \
-             Field("anemoi.training.data.grid_indices.MaskedGrid", alias="_target_")
+    target_: Literal["anemoi.training.data.grid_indices.MaskedGrid"] = Field(
+        "anemoi.training.data.grid_indices.MaskedGrid",
+        alias="_target_",
+    )
     "Grid indices for masked grid class implementation from anemoi.training.data.grid_indices."
     nodes_name: str = Field(examples=["data"])
     "Name of the grid nodes."
