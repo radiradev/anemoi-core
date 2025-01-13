@@ -24,7 +24,7 @@ from pydantic import PositiveInt
 from anemoi.training.schemas.utils import allowed_values
 
 
-class GradientClipSchema(BaseModel):
+class GradientClip(BaseModel):
     """Gradient clipping configuration."""
 
     val: float = 32.0
@@ -35,7 +35,7 @@ class GradientClipSchema(BaseModel):
     "The gradient clipping algorithm to use"
 
 
-class SWASchema(BaseModel):
+class SWA(BaseModel):
     """Stochastic weight averaging configuration.
 
     See https://pytorch.org/blog/stochastic-weight-averaging-in-pytorch/
@@ -47,7 +47,7 @@ class SWASchema(BaseModel):
     "Learning rate for SWA."
 
 
-class RolloutSchema(BaseModel):
+class Rollout(BaseModel):
     """Rollout configuration."""
 
     start: PositiveInt = Field(default=1)
@@ -58,7 +58,7 @@ class RolloutSchema(BaseModel):
     "Maximum number of rollouts."
 
 
-class LRSchema(BaseModel):
+class LR(BaseModel):
     """Learning rate configuration.
 
     Changes in per-gpu batch_size should come with a rescaling of the local_lr,
@@ -173,9 +173,9 @@ class TrainingSchema(BaseModel):
     K >= 1 (if K == 1 then no accumulation). The effective bacthsize becomes num-device * k."""
     num_sanity_val_steps: PositiveInt = Field(default=6)
     "Sanity check runs n batches of val before starting the training routine."
-    gradient_clip: GradientClipSchema = Field(default_factory=GradientClipSchema)
+    gradient_clip: GradientClip = Field(default_factory=GradientClip)
     "Config for gradient clipping."
-    swa: SWASchema = Field(default_factory=SWASchema)
+    swa: SWA = Field(default_factory=SWA)
     "Config for stochastic weight averaging."
     zero_optimizer: bool = Field(default=False)
     "use ZeroRedundancyOptimizer, saves memory for larger models."
@@ -185,13 +185,13 @@ class TrainingSchema(BaseModel):
     "Dynamic rescaling of the loss gradient. Not yet tested."
     validation_metrics: list[BaseLossSchema] = Field(default_factory=BaseLossSchema)
     "List of validation metrics configurations."
-    rollout: RolloutSchema = Field(default_factory=RolloutSchema)
+    rollout: Rollout = Field(default_factory=Rollout)
     "Rollout configuration."
     max_epochs: PositiveInt | None = None
     "Maximum number of epochs, stops earlier if max_steps is reached first."
     max_steps: PositiveInt = 150000
     "Maximum number of steps, stops earlier if max_epochs is reached first."
-    lr: LRSchema = Field(default_factory=LRSchema)
+    lr: LR = Field(default_factory=LR)
     "Learning rate configuration."
     variable_loss_scaling: LossScalingSchema = Field(default_factory=LossScalingSchema)
     "Configuration of the variable scaling used in the loss computation."
