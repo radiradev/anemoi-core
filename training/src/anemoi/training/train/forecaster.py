@@ -48,7 +48,7 @@ class GraphForecaster(pl.LightningModule):
         config: DictConfig,
         graph_data: HeteroData,
         statistics: dict,
-        statistics_tendencies: dict,        
+        statistics_tendencies: dict,
         data_indices: IndexCollection,
         metadata: dict,
         supporting_arrays: dict,
@@ -108,21 +108,24 @@ class GraphForecaster(pl.LightningModule):
         # Instantiate the pressure level scaling class with the training configuration
         config_container = OmegaConf.to_container(config.training.additional_scalars, resolve=False)
         if isinstance(config_container, list):
-            scalar = [instantiate(
+            scalar = [
+                (
+                    instantiate(
                         scalar_config,
                         scaling_config=config.training.variable_loss_scaling,
                         data_indices=data_indices,
                         statistics=statistics,
                         statistics_tendencies=statistics_tendencies,
                     )
-                if scalar_config["name"] == "tendency" else
-                instantiate(
+                    if scalar_config["name"] == "tendency"
+                    else instantiate(
                         scalar_config,
                         scaling_config=config.training.variable_loss_scaling,
                         data_indices=data_indices,
                     )
-                    for scalar_config in config_container
-                ]
+                )
+                for scalar_config in config_container
+            ]
 
         self.internal_metric_ranges, self.val_metric_ranges = self.get_val_metric_ranges(config, data_indices)
 
@@ -142,7 +145,7 @@ class GraphForecaster(pl.LightningModule):
         self.scalars = {
             "variable": (-1, variable_scaling),
             "loss_weights_mask": ((-2, -1), torch.ones((1, 1))),
-            "limited_area_mask": (2, limited_area_mask)
+            "limited_area_mask": (2, limited_area_mask),
         }
         # add addtional user-defined scalars
         [self.scalars.update({scale.name: (scale.scale_dim, scale.get_variable_scaling())}) for scale in scalar]

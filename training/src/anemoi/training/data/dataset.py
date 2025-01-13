@@ -59,7 +59,7 @@ class NativeGridDataset(IterableDataset):
         timeincrement : int, optional
             time increment between samples, by default 1
         timestep : int, optional
-            the time frequency of the samples, by default '6h'            
+            the time frequency of the samples, by default '6h'
         multistep : int, optional
             collate (t-1, ... t - multistep) into the input state vector, by default 1
         shuffle : bool, optional
