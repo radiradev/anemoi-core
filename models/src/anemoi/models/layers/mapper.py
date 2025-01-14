@@ -18,6 +18,7 @@ from torch import Tensor
 from torch import nn
 from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import offload_wrapper
 from torch.distributed.distributed_c10d import ProcessGroup
+from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 from torch_geometric.typing import Adj
 from torch_geometric.typing import PairTensor
@@ -26,7 +27,6 @@ from anemoi.models.distributed.graph import gather_tensor
 from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.khop_edges import sort_edges_1hop_sharding
 from anemoi.models.distributed.shapes import change_channels_in_shape
-from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.layers.block import GraphConvMapperBlock
 from anemoi.models.layers.block import GraphTransformerMapperBlock
 from anemoi.models.layers.graph import TrainableTensor
@@ -228,19 +228,48 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
 
         self.trainable = TrainableTensor(trainable_size=trainable_size, tensor_size=self.edge_attr.shape[0])
 
-        self.proc = GraphTransformerMapperBlock(
-            hidden_dim,
-            mlp_hidden_ratio * hidden_dim,
-            hidden_dim,
-            num_heads=num_heads,
-            edge_dim=self.edge_dim,
-            activation=activation,
-            num_chunks=num_chunks,
+        assert (
+            num_heads % num_chunks == 0
+        ), f"Number of heads {num_heads} must be divisible by number of chunks {num_chunks} in {self.__class__.__name__}"
+        assert (
+            hidden_dim % num_chunks == 0
+        ), f"Hidden dimension {hidden_dim} must be divisible by number of chunks {num_chunks} in {self.__class__.__name__}"
+
+        self.num_chunks = num_chunks
+
+        self.hidden_dim_per_chunk = hidden_dim // num_chunks
+        self.num_heads_per_chunk = num_heads // num_chunks
+
+        self.proc = nn.ModuleList(
+            [
+                GraphTransformerMapperBlock(
+                    in_channels=hidden_dim,
+                    hidden_dim=mlp_hidden_ratio * self.hidden_dim_per_chunk,
+                    out_channels=self.hidden_dim_per_chunk,
+                    num_heads=self.num_heads_per_chunk,
+                    edge_dim=self.edge_dim,
+                    activation=activation,
+                    num_chunks=1,  # no "inner" chunking
+                )
+                for _ in range(num_chunks)
+            ]
         )
 
         self.offload_layers(cpu_offload)
 
         self.emb_nodes_dst = nn.Linear(self.in_channels_dst, self.hidden_dim)
+
+    def prepare_edges(self, size, batch_size, model_comm_group=None):
+        edge_attr = self.trainable(self.edge_attr, batch_size)
+        edge_index = self._expand_edges(self.edge_index_base, self.edge_inc, batch_size)
+        edge_attr, edge_index, shapes_edge_attr, shapes_edge_idx = sort_edges_1hop_sharding(
+            size, edge_attr, edge_index, model_comm_group
+        )
+
+        edge_index = shard_tensor(edge_index, 1, shapes_edge_idx, model_comm_group)
+        edge_attr = shard_tensor(edge_attr, 0, shapes_edge_attr, model_comm_group)
+
+        return edge_attr, edge_index
 
     def forward(
         self,
@@ -250,22 +279,25 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
         model_comm_group: Optional[ProcessGroup] = None,
     ) -> PairTensor:
         size = (sum(x[0] for x in shard_shapes[0]), sum(x[0] for x in shard_shapes[1]))
-        edge_attr = self.trainable(self.edge_attr, batch_size)
-        edge_index = self._expand_edges(self.edge_index_base, self.edge_inc, batch_size)
-        shapes_edge_attr = get_shape_shards(edge_attr, 0, model_comm_group)
-        edge_attr = shard_tensor(edge_attr, 0, shapes_edge_attr, model_comm_group)
-
+        edge_attr, edge_index = self.prepare_edges(size, batch_size, model_comm_group)
         x_src, x_dst, shapes_src, shapes_dst = self.pre_process(x, shard_shapes, model_comm_group)
 
-        (x_src, x_dst), edge_attr = self.proc(
-            (x_src, x_dst),
-            edge_attr,
-            edge_index,
-            (shapes_src, shapes_dst, shapes_edge_attr),
-            batch_size,
-            model_comm_group,
-            size=size,
-        )
+        outputs = []
+        for i in range(self.num_chunks):
+            (_, x_dst_chunk), _ = checkpoint(
+                self.proc[i],
+                (x_src, x_dst),
+                edge_attr,
+                edge_index,
+                (shapes_src, shapes_dst),
+                batch_size,
+                model_comm_group,
+                size,
+                use_reentrant=False,
+            )
+            outputs.append(x_dst_chunk)
+
+        x_dst = torch.cat(outputs, dim=-1)
 
         x_dst = self.post_process(x_dst, shapes_dst, model_comm_group)
 

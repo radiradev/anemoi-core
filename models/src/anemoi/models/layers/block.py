@@ -474,6 +474,9 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
             **kwargs,
         )
 
+        self.lin_x0_skip = nn.Linear(in_channels, out_channels)  # to match x_skip.shape[1] shape with out shape
+        self.lin_x1_skip = nn.Linear(in_channels, out_channels)  # to match x_skip.shape[1] shape with out shape
+
         self.layer_norm2 = nn.LayerNorm(in_channels)
 
     def forward(
@@ -486,24 +489,37 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
         model_comm_group: Optional[ProcessGroup] = None,
         size: Optional[Size] = None,
     ):
-        x_skip = x
+        x_skip = (
+            self.lin_x0_skip(x[0]),
+            self.lin_x1_skip(x[1]),
+        )
 
         x = (
             self.layer_norm1(x[0]),
             self.layer_norm2(x[1]),
-        )  # Why does this use layer_norm2? And only is a mapper thing?
+        )
+
         x_r = self.lin_self(x[1])
         query = self.lin_query(x[1])
         key = self.lin_key(x[0])
         value = self.lin_value(x[0])
         edges = self.lin_edge(edge_attr)
 
+        # sync node sharded q k v
+        query = sync_tensor(query, 0, shapes[1], model_comm_group)
+        key = sync_tensor(key, 0, shapes[0], model_comm_group)
+        value = sync_tensor(value, 0, shapes[0], model_comm_group)
+
+        # expand head dimension
+        query = query.view(-1, self.num_heads, self.out_channels_conv)
+        key = key.view(-1, self.num_heads, self.out_channels_conv)
+        value = value.view(-1, self.num_heads, self.out_channels_conv)
+        edges = edges.view(-1, self.num_heads, self.out_channels_conv)
+
         if model_comm_group is not None:
             assert (
                 model_comm_group.size() == 1 or batch_size == 1
             ), "Only batch size of 1 is supported when model is sharded across GPUs"
-
-        query, key, value, edges = self.shard_qkve_heads(query, key, value, edges, shapes, batch_size, model_comm_group)
 
         num_chunks = self.num_chunks if self.training else NUM_CHUNKS_INFERENCE
 
@@ -512,7 +528,7 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
             edge_attr_list, edge_index_list = sort_edges_1hop_chunks(
                 num_nodes=size, edge_attr=edges, edge_index=edge_index, num_chunks=num_chunks
             )
-            out = torch.zeros((x[1].shape[0], self.num_heads, self.out_channels_conv), device=x[1].device)
+            out = torch.zeros((query.shape[0], self.num_heads, self.out_channels_conv), device=query.device)
             for i in range(num_chunks):
                 out += self.conv(
                     query=query,
@@ -525,7 +541,9 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
         else:
             out = self.conv(query=query, key=key, value=value, edge_attr=edges, edge_index=edge_index, size=size)
 
-        out = self.shard_output_seq(out, shapes, batch_size, model_comm_group)
+        # go back to original shape and shard nodes again
+        out = out.view(-1, self.num_heads * self.out_channels_conv)
+        out = shard_tensor(out, 0, shapes[1], model_comm_group)
 
         # compute out = self.projection(out + x_r) in chunks:
         out = torch.cat([self.projection(chunk) for chunk in torch.tensor_split(out + x_r, num_chunks, dim=0)], dim=0)

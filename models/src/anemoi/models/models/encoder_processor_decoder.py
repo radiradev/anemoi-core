@@ -17,7 +17,6 @@ from hydra.utils import instantiate
 from torch import Tensor
 from torch import nn
 from torch.distributed.distributed_c10d import ProcessGroup
-from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 
 from anemoi.models.distributed.shapes import get_shape_shards
@@ -156,13 +155,11 @@ class AnemoiModelEncProcDec(nn.Module):
         Tensor
             Mapped data
         """
-        return checkpoint(
-            mapper,
+        return mapper(  # no checkpoint here, mapper has checkpointing inside
             data,
             batch_size=batch_size,
             shard_shapes=shard_shapes,
             model_comm_group=model_comm_group,
-            use_reentrant=use_reentrant,
         )
 
     def forward(self, x: Tensor, model_comm_group: Optional[ProcessGroup] = None) -> Tensor:
