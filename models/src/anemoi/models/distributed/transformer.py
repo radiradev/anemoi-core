@@ -85,7 +85,7 @@ def _seqalltoall(input_: Tensor, shapes: list, group: Optional[ProcessGroup] = N
     return torch.cat(output_list, dim=-3).contiguous(memory_format=input_format)
 
 
-def _halo_exchange(input_: Tensor, halo_size: int, mgroup: ProcessGroup, bwd: bool = False) -> Tensor:
+def _halo_comm(input_: Tensor, halo_size: int, mgroup: ProcessGroup, bwd: bool = False) -> Tensor:
     """Exchange halo regions between neighboring ranks.
 
     Expected format is (batch_size, halo_size + sequence_length + halo_size, channels).
@@ -199,7 +199,22 @@ def shard_sequence(input_: Tensor, shapes: list, mgroup: ProcessGroup) -> Tensor
     return _SplitSequenceParallelSection.apply(input_, shapes, mgroup)
 
 
-def halo_exchange(x: Tensor, halo_size: int, mgroup: ProcessGroup) -> Tensor:
+def add_halos(x: Tensor, halo_size: int, mgroup: ProcessGroup) -> Tensor:
+    halo_size_left = halo_size if dist.get_rank(mgroup) != 0 else 0
+    halo_size_right = halo_size if dist.get_rank(mgroup) != dist.get_world_size(mgroup) - 1 else 0
+
+    return (
+        torch.nn.functional.pad(x, pad=(0, 0, halo_size_left, halo_size_right), mode="constant", value=0),
+        halo_size_left,
+        halo_size_right,
+    )
+
+
+def remove_halos(x: Tensor, halo_size_left: int, halo_size_right: int) -> Tensor:
+    return x[:, :, halo_size_left : x.shape[-2] - halo_size_right, :]
+
+
+def halo_exchange(x: Tensor, halo_size: int, mgroup: Optional[ProcessGroup] = None) -> Tensor:
     """Exchange halo regions between ranks,
 
     Parameters
@@ -220,11 +235,9 @@ def halo_exchange(x: Tensor, halo_size: int, mgroup: ProcessGroup) -> Tensor:
         return x, 0, 0
 
     # pad tensor with halo regions
-    halo_size_left = halo_size if dist.get_rank(mgroup) != 0 else 0
-    halo_size_right = halo_size if dist.get_rank(mgroup) != dist.get_world_size(mgroup) - 1 else 0
-    x_pad = torch.nn.functional.pad(x, pad=(0, 0, halo_size_left, halo_size_right), mode="constant", value=0)
+    out, halo_size_left, halo_size_right = add_halos(x, halo_size, mgroup)
 
-    out = _HaloExchange.apply(x_pad, halo_size, mgroup)
+    out = _HaloExchangeParallelSection.apply(out, halo_size, mgroup)
 
     return out, halo_size_left, halo_size_right
 
@@ -273,7 +286,7 @@ class _SplitSequenceParallelSection(torch.autograd.Function):
         return grad_output, None, None
 
 
-class _HaloExchange(torch.autograd.Function):
+class _HaloExchangeParallelSection(torch.autograd.Function):
     """Exchange halo regions between ranks."""
 
     @staticmethod
@@ -282,14 +295,14 @@ class _HaloExchange(torch.autograd.Function):
         ctx.mgroup = mgroup_
 
         if mgroup_:
-            return _halo_exchange(input_, halo_size_, mgroup_)
+            return _halo_comm(input_, halo_size_, mgroup_)
         return input_
 
     @staticmethod
     def backward(ctx, grad_output):
         if ctx.mgroup:
             return (
-                _halo_exchange(grad_output, ctx.halo_size, ctx.mgroup, bwd=True),
+                _halo_comm(grad_output, ctx.halo_size, ctx.mgroup, bwd=True),
                 None,
                 None,
             )

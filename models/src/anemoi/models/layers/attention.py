@@ -74,6 +74,27 @@ class MultiHeadSelfAttention(nn.Module):
 
         self.projection = nn.Linear(embed_dim, embed_dim, bias=True)
 
+    def shard_sequence(
+        self, x: Tensor, shapes: list, batch_size: int, model_comm_group: Optional[ProcessGroup] = None
+    ) -> Tensor:
+        assert (
+            shapes[-1][0] // 2 >= self.window_size[0]
+        ), f"Sharded sequence length ({shapes[-1][0]}) must be at least twice the window size (2*{self.window_size[0]})"
+
+        # unpack grid dimension first to allow for halo exchange
+        x_bgc = einops.rearrange(
+            x,
+            "(batch grid) channels -> batch grid channels",
+            batch=batch_size,
+        )
+
+        # communicate halos (adds halos to x)
+        x_plus_halos, halo_size_left, halo_size_right = halo_exchange(
+            x_bgc, halo_size=self.window_size[0], mgroup=model_comm_group
+        )
+
+        return x_plus_halos, halo_size_left, halo_size_right
+
     def forward(
         self, x: Tensor, shapes: list, batch_size: int, model_comm_group: Optional[ProcessGroup] = None
     ) -> Tensor:
@@ -83,25 +104,14 @@ class MultiHeadSelfAttention(nn.Module):
             ), "Only batch size of 1 is supported when model is sharded accross GPUs"
 
         if self.shard_strategy == "shard_sequence":
-            assert (
-                shapes[-1][0] // 2 >= self.window_size[0]
-            ), "Sharded sequence length must be at least twice the window size"
-
-            # unpack grid dimension first to allow for halo exchange
-            x_bgc = einops.rearrange(
-                x,
-                "(batch grid) channels -> batch grid channels",
-                batch=batch_size,
+            x, halo_size_left, halo_size_right = self.shard_sequence(
+                x, shapes=shapes, batch_size=batch_size, model_comm_group=model_comm_group
             )
 
-            # communicate halos (adds halos to x)
-            x_plus_halos, halo_size_left, halo_size_right = halo_exchange(
-                x_bgc, halo_size=self.window_size[0], mgroup=model_comm_group
-            )
+        # compute q, k, v (on local sequence shards with halos)
+        query, key, value = self.lin_qkv(x).chunk(3, -1)
 
-            # compute q, k, v (on local sequence shards with halos)
-            query, key, value = self.lin_qkv(x_plus_halos).chunk(3, -1)
-
+        if self.shard_strategy == "shard_sequence":
             query, key, value = (
                 einops.rearrange(
                     t,
@@ -110,9 +120,7 @@ class MultiHeadSelfAttention(nn.Module):
                 )
                 for t in (query, key, value)
             )
-        else:  # shard_heads
-            query, key, value = self.lin_qkv(x).chunk(3, -1)
-
+        if self.shard_strategy == "shard_heads":
             query, key, value = (
                 einops.rearrange(
                     t,
@@ -146,7 +154,7 @@ class MultiHeadSelfAttention(nn.Module):
 
         if self.shard_strategy == "shard_sequence":
             out = out[:, :, halo_size_left : out.shape[-2] - halo_size_right, :]  # remove halos
-        else:  # shard_heads
+        if self.shard_strategy == "shard_heads":
             out = shard_sequence(out, shapes=shapes, mgroup=model_comm_group)
 
         out = einops.rearrange(out, "batch heads grid vars -> (batch grid) (heads vars)")

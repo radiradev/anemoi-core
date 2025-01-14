@@ -93,6 +93,8 @@ class TransformerProcessorChunk(BaseProcessorChunk):
             Activation function, by default "GELU"
         dropout_p: float
             Dropout probability used for multi-head self attention, default 0.0
+        shard_strategy: str
+            Strategy for sharding either "shard_sequence" or "shard_heads", by default "shard_sequence"
         """
         super().__init__(num_channels=num_channels, num_layers=num_layers)
 
