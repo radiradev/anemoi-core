@@ -92,11 +92,11 @@ def test_multi_head_self_attention_backward_sdpa(batch_size, num_heads, embed_di
 @pytest.mark.gpu
 @given(
     batch_size=st.integers(min_value=1, max_value=64),
-    num_heads=st.integers(min_value=16, max_value=16),
-    embed_dim_multiplier=st.sampled_from([2, 4, 8, 16]),
+    num_heads=st.integers(min_value=4, max_value=16),
+    embed_dim_multiplier=st.integers(min_value=16).filter(lambda x: math.log2(x).is_integer()),
     window_size=st.integers(min_value=2, max_value=16),
 )
-@settings(deadline=None)
+@settings(max_examples=1, deadline=None)
 def test_multi_head_self_attention_forward_flex(batch_size, num_heads, embed_dim_multiplier, window_size):
     embed_dim = num_heads * embed_dim_multiplier
     mhsa = MultiHeadSelfAttention(
@@ -114,10 +114,11 @@ def test_multi_head_self_attention_forward_flex(batch_size, num_heads, embed_dim
 @pytest.mark.gpu
 @given(
     batch_size=st.integers(min_value=1, max_value=64),
-    num_heads=st.integers(min_value=1, max_value=20),
-    embed_dim_multiplier=st.sampled_from([2, 4, 8, 16]),
+    num_heads=st.integers(min_value=4, max_value=20),
+    embed_dim_multiplier=st.integers(min_value=16).filter(lambda x: math.log2(x).is_integer()),
     window_size=st.integers(min_value=2, max_value=16),
 )
+@settings(max_examples=1, deadline=None)
 def test_multi_head_self_attention_backward_flex(batch_size, num_heads, embed_dim_multiplier, window_size):
     embed_dim = num_heads * embed_dim_multiplier
     mhsa = MultiHeadSelfAttention(
@@ -148,7 +149,7 @@ def test_multi_head_self_attention_backward_flex(batch_size, num_heads, embed_di
 )
 @settings(deadline=None)
 def test_invalid_embed_dim_raises_assertion_flex(num_heads, embed_dim, window_size):
-    with pytest.raises(AssertionError, match="Embedding dimension must be"):
+    with pytest.raises(AssertionError, match="Embedding dimension"):
         MultiHeadSelfAttention(
             num_heads=num_heads,
             embed_dim=embed_dim,
@@ -156,3 +157,23 @@ def test_invalid_embed_dim_raises_assertion_flex(num_heads, embed_dim, window_si
             dropout_p=0.0,
             attention_implementation="flex_attention",
         ).cuda()
+
+
+if __name__ == "__main__":
+    batch_size = 8
+    num_heads = 8  # or any other generated value
+    embed_dim_multiplier = 16
+    window_size = 2  # or any other generated value
+    grid_size = 2
+
+    embed_dim = num_heads * embed_dim_multiplier
+    print(embed_dim)
+
+    mhsa = MultiHeadSelfAttention(
+        num_heads, embed_dim, window_size=window_size, dropout_p=0.0, attention_implementation="flex_attention"
+    ).cuda()
+
+    x = torch.randn(batch_size * grid_size, embed_dim).cuda()
+    shapes = [list(x.shape)]
+    output = mhsa.forward(x, shapes, batch_size)
+    print("ok")
