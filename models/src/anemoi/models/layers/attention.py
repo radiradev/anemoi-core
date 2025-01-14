@@ -27,6 +27,7 @@ else:
 
 
 from anemoi.models.distributed.transformer import halo_exchange
+from anemoi.models.distributed.transformer import remove_halos
 from anemoi.models.distributed.transformer import shard_heads
 from anemoi.models.distributed.transformer import shard_sequence
 
@@ -74,7 +75,7 @@ class MultiHeadSelfAttention(nn.Module):
 
         self.projection = nn.Linear(embed_dim, embed_dim, bias=True)
 
-    def shard_sequence(
+    def get_qkv_shard_sequence(
         self, x: Tensor, shapes: list, batch_size: int, model_comm_group: Optional[ProcessGroup] = None
     ) -> Tensor:
         assert (
@@ -82,7 +83,7 @@ class MultiHeadSelfAttention(nn.Module):
         ), f"Sharded sequence length ({shapes[-1][0]}) must be at least twice the window size (2*{self.window_size[0]})"
 
         # unpack grid dimension first to allow for halo exchange
-        x_bgc = einops.rearrange(
+        x = einops.rearrange(
             x,
             "(batch grid) channels -> batch grid channels",
             batch=batch_size,
@@ -90,10 +91,42 @@ class MultiHeadSelfAttention(nn.Module):
 
         # communicate halos (adds halos to x)
         x_plus_halos, halo_size_left, halo_size_right = halo_exchange(
-            x_bgc, halo_size=self.window_size[0], mgroup=model_comm_group
+            x, halo_size=self.window_size[0], mgroup=model_comm_group
         )
 
-        return x_plus_halos, halo_size_left, halo_size_right
+        query, key, value = self.lin_qkv(x_plus_halos).chunk(3, -1)
+
+        query, key, value = (
+            einops.rearrange(
+                t,
+                "batch grid (heads vars) -> batch heads grid vars",
+                heads=self.num_heads,
+            )
+            for t in (query, key, value)
+        )
+
+        return query, key, value, halo_size_left, halo_size_right
+
+    def get_qkv_shard_heads(
+        self, x: Tensor, shapes: list, batch_size: int, model_comm_group: Optional[ProcessGroup] = None
+    ) -> Tensor:
+        query, key, value = self.lin_qkv(x).chunk(3, -1)
+
+        query, key, value = (
+            einops.rearrange(
+                t,
+                "(batch grid) (heads vars) -> batch heads grid vars",
+                batch=batch_size,
+                heads=self.num_heads,
+            )
+            for t in (query, key, value)
+        )
+
+        query = shard_heads(query, shapes=shapes, mgroup=model_comm_group)
+        key = shard_heads(key, shapes=shapes, mgroup=model_comm_group)
+        value = shard_heads(value, shapes=shapes, mgroup=model_comm_group)
+
+        return query, key, value
 
     def forward(
         self, x: Tensor, shapes: list, batch_size: int, model_comm_group: Optional[ProcessGroup] = None
@@ -104,36 +137,11 @@ class MultiHeadSelfAttention(nn.Module):
             ), "Only batch size of 1 is supported when model is sharded accross GPUs"
 
         if self.shard_strategy == "shard_sequence":
-            x, halo_size_left, halo_size_right = self.shard_sequence(
-                x, shapes=shapes, batch_size=batch_size, model_comm_group=model_comm_group
-            )
-
-        # compute q, k, v (on local sequence shards with halos)
-        query, key, value = self.lin_qkv(x).chunk(3, -1)
-
-        if self.shard_strategy == "shard_sequence":
-            query, key, value = (
-                einops.rearrange(
-                    t,
-                    "batch grid (heads vars) -> batch heads grid vars",
-                    heads=self.num_heads,
-                )
-                for t in (query, key, value)
+            query, key, value, halo_size_left, halo_size_right = self.get_qkv_shard_sequence(
+                x, shapes, batch_size, model_comm_group
             )
         if self.shard_strategy == "shard_heads":
-            query, key, value = (
-                einops.rearrange(
-                    t,
-                    "(batch grid) (heads vars) -> batch heads grid vars",
-                    batch=batch_size,
-                    heads=self.num_heads,
-                )
-                for t in (query, key, value)
-            )
-
-            query = shard_heads(query, shapes=shapes, mgroup=model_comm_group)
-            key = shard_heads(key, shapes=shapes, mgroup=model_comm_group)
-            value = shard_heads(value, shapes=shapes, mgroup=model_comm_group)
+            query, key, value = self.get_qkv_shard_heads(x, shapes, batch_size, model_comm_group)
 
         dropout_p = self.dropout_p if self.training else 0.0
 
@@ -153,7 +161,7 @@ class MultiHeadSelfAttention(nn.Module):
             )  # expects (batch heads grid variable) format
 
         if self.shard_strategy == "shard_sequence":
-            out = out[:, :, halo_size_left : out.shape[-2] - halo_size_right, :]  # remove halos
+            out = remove_halos(out, halo_size_left, halo_size_right)
         if self.shard_strategy == "shard_heads":
             out = shard_sequence(out, shapes=shapes, mgroup=model_comm_group)
 
