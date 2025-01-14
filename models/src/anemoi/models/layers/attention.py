@@ -124,7 +124,9 @@ class MultiHeadSelfAttention(nn.Module):
         self.attention = attn_funcs[self.attention_implementation]()
 
         if self.attention_implementation == "flex_attention":
-            assert self.embed_dim >= 16, f"Embedding dimension must be >= 16. {self.embed_dim} is not valid."
+            assert (
+                self.embed_dim / self.num_heads >= 16
+            ), f"Embedding dimension ({self.embed_dim}) devided by number of heads ({self.num_heads}) must be >= 16."
             assert math.log2(
                 self.embed_dim
             ).is_integer(), f"Embedding dimension must be a power of 2. {self.embed_dim} is not valid."
