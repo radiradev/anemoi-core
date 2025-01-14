@@ -10,14 +10,12 @@
 from __future__ import annotations
 
 import logging
-from enum import Enum
-from typing import AnyStr
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import NonNegativeInt
-from pydantic import field_validator
 
 from .decoder import GNNDecoderSchema
 from .decoder import GraphTransformerDecoderSchema
@@ -30,22 +28,15 @@ from .processor import TransformerProcessorSchema
 LOGGER = logging.getLogger(__name__)
 
 
-class DefinedModels(str, Enum):
+class DefinedModels(StrEnum):
     ANEMOI_MODEL_ENC_PROC_DEC = "anemoi.models.models.encoder_processor_decoder.AnemoiModelEncProcDec"
 
 
 class Model(BaseModel):
-    target_: DefinedModels | AnyStr = Field(..., alias="_target_")
+    target_: DefinedModels = Field(..., alias="_target_")
     "Model object defined in anemoi.models.model."
     convert_: str = Field("all", alias="_convert_")
     "The target's parameters to convert to primitive containers. Other parameters will use OmegaConf. Default to all."
-
-    @field_validator("target_")
-    @classmethod
-    def validate_model_is_defined(cls, target_: str) -> str:
-        if target_ not in DefinedModels:
-            LOGGER.warning("%s model is not defined in anemoi.", target_)
-        return target_
 
 
 class TrainableParameters(BaseModel):
