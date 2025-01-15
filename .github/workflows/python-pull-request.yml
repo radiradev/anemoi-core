@@ -19,7 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11"]
+        fail-fast: false
+        platform: ["ubuntu-latest", "macos-latest"]
+        python-version: ["3.9", "3.10", "3.11"]
 
     steps:
     - uses: actions/checkout@v3
@@ -46,59 +48,56 @@ jobs:
       run: |
         if [[ ${{ steps.changed-packages.outputs.training_changed }} == 'true' ]]; then
           echo "Installing training from local source"
-          pip install -e ./training[tests]
+          pip install -e ./training[all,tests]
         else
           echo "Installing training from PyPI"
-          pip install anemoi-training[tests]
+          pip install anemoi-training[all,tests]
         fi
 
     - name: Install graphs package
       run: |
         if [[ ${{ steps.changed-packages.outputs.graphs_changed }} == 'true' ]]; then
           echo "Installing graphs from local source"
-          pip install -e ./graphs[tests]
+          pip install -e ./graphs[all,tests]
         else
           echo "Installing graphs from PyPI"
-          pip install anemoi-graphs[tests]
+          pip install anemoi-graphs[all,tests]
         fi
 
     - name: Install models package
       run: |
         if [[ ${{ steps.changed-packages.outputs.models_changed }} == 'true' ]]; then
           echo "Installing models from local source"
-          pip install -e ./models[tests]
+          pip install -e ./models[all,tests]
         else
           echo "Installing models from PyPI"
-          pip install anemoi-models[tests]
+          pip install anemoi-models[all,tests]
         fi
 
     - name: Run pytest for changed training package
       if: steps.changed-packages.outputs.training_changed == 'true'
-      uses: ecmwf-actions/reusable-workflows/.github/workflows/qa-pytest-pyproject.yml@v2
+      uses: pavelzw/pytest-action@v2
       with:
-        python-version: ${{ matrix.python-version }}
-        install-dependencies: false
-        custom-pytest: pytest training/tests
+        report-title:  "Test report Anemoi Training (python ${{ matrix.python-version }} on ${{ matrix.platform }})"
+        custom-pytest: cd ./training && ${{ inputs.custom-pytest }}
 
     - name: Run pytest for changed graphs package
       if: steps.changed-packages.outputs.graphs_changed == 'true'
-      uses: ecmwf-actions/reusable-workflows/.github/workflows/qa-pytest-pyproject.yml@v2
+      uses: pavelzw/pytest-action@v2
       with:
-        python-version: ${{ matrix.python-version }}
-        install-dependencies: false
-        custom-pytest: pytest graphs/tests
+        report-title:  "Test report Anemoi Graphs (python ${{ matrix.python-version }} on ${{ matrix.platform }})"
+        custom-pytest: cd ./graphs && ${{ inputs.custom-pytest }}
 
     - name: Run pytest for changed models package
       if: steps.changed-packages.outputs.models_changed == 'true'
-      uses: ecmwf-actions/reusable-workflows/.github/workflows/qa-pytest-pyproject.yml@v2
+      uses: pavelzw/pytest-action@v2
       with:
-        python-version: ${{ matrix.python-version }}
-        install-dependencies: false
-        custom-pytest: pytest models/tests
+        report-title:  "Test report Anemoi Models (python ${{ matrix.python-version }} on ${{ matrix.platform }})"
+        custom-pytest: cd ./models && ${{ inputs.custom-pytest }}
 
     - name: Run integration tests
       if: success()
-      uses: ecmwf-actions/reusable-workflows/.github/workflows/qa-pytest-pyproject.yml@v2
+      uses: pavelzw/pytest-action@v2
       with:
-        python-version: ${{ matrix.python-version }}
-        install-dependencies: false
+        report-title:  "Test report Anemoi Core Integration (python ${{ inputs.python-version }} on ${{ matrix.platform }})"
+        custom-pytest: pytest tests/
