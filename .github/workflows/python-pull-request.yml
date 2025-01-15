@@ -27,7 +27,7 @@ jobs:
       matrix:
         platform: ["ubuntu-latest", "macos-latest"]
         python-version: ["3.9", "3.10", "3.11"]
-        install-mode: ${{ github.event_name == 'schedule' && '["all"]' || '["local-changes", "all"]' }}
+        install-mode: ${{ github.event_name == 'schedule' && ["all"] || ["local-changes", "all"] }}
 
     steps:
     - uses: actions/checkout@v3
