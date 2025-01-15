@@ -43,7 +43,8 @@ jobs:
       run: |
         if [ "${{ github.event_name }}" == "pull_request" ]; then
           # For pull requests, compare with the PR base
-          CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }})
+          MERGE_BASE=$(git merge-base origin/${{ github.event.pull_request.base.ref }} ${{ github.event.pull_request.head.sha }})
+          CHANGED_FILES=$(git diff --name-only $MERGE_BASE...${{ github.event.pull_request.head.sha }})
         elif [ "${{ github.event_name }}" == "push" ]; then
           # For pushes, compare with the previous commit
           git fetch --depth=2 origin ${{ github.ref }}
