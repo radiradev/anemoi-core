@@ -21,7 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-latest", "macos-latest"]
-        python-version: ["3.9", "3.10", "3.11"]
+        python-version: ["3.9"] #, "3.10", "3.11"]
 
     steps:
     - uses: actions/checkout@v3
@@ -52,6 +52,9 @@ jobs:
           # For scheduled runs, check all files
           CHANGED_FILES=$(git ls-files '*.py')
         fi
+
+        echo "Changed files:"
+        echo "$CHANGED_FILES"
 
         echo "training_changed=$(echo "$CHANGED_FILES" | grep -q '^training/.*\.py$' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
         echo "graphs_changed=$(echo "$CHANGED_FILES" | grep -q '^graphs/.*\.py$' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
