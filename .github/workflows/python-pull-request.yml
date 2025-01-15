@@ -57,60 +57,58 @@ jobs:
         echo "graphs_changed=$(echo "$CHANGED_FILES" | grep -q '^graphs/.*\.py$' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
         echo "models_changed=$(echo "$CHANGED_FILES" | grep -q '^models/.*\.py$' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
 
-    - name: Install training package
+    - name: Install packages
       run: |
         if [[ ${{ steps.changed-packages.outputs.training_changed }} == 'true' ]]; then
           echo "Installing training from local source"
-          pip install -e ./training[all,tests]
+          TRAINING_SOURCE="-e ./training[all,tests]"
         else
           echo "Installing training from PyPI"
-          pip install anemoi-training[all,tests]
+          TRAINING_SOURCE="anemoi-training[all,tests]"
         fi
 
-    - name: Install graphs package
-      run: |
         if [[ ${{ steps.changed-packages.outputs.graphs_changed }} == 'true' ]]; then
           echo "Installing graphs from local source"
-          pip install -e ./graphs[all,tests]
+          GRAPHS_SOURCE="-e ./graphs[all,tests]""
         else
           echo "Installing graphs from PyPI"
-          pip install anemoi-graphs[all,tests]
+          GRAPHS_SOURCE="anemoi-graphs[all,tests]"
         fi
 
-    - name: Install models package
-      run: |
         if [[ ${{ steps.changed-packages.outputs.models_changed }} == 'true' ]]; then
           echo "Installing models from local source"
-          pip install -e ./models[all,tests]
+          MODELS_SOURCE="-e ./models[all,tests]"
         else
           echo "Installing models from PyPI"
-          pip install anemoi-models[all,tests]
+          MODELS_SOURCE="anemoi-models[all,tests]"
         fi
+
+        pip install $TRAINING_SOURCE $GRAPHS_SOURCE $MODELS_SOURCE
 
     - name: Run pytest for changed training package
       if: steps.changed-packages.outputs.training_changed == 'true'
       uses: pavelzw/pytest-action@v2
       with:
         report-title:  "Test report Anemoi Training (python ${{ matrix.python-version }} on ${{ matrix.platform }})"
-        custom-pytest: cd ./training && ${{ inputs.custom-pytest }}
+        custom-pytest: pytest ./training
 
     - name: Run pytest for changed graphs package
       if: steps.changed-packages.outputs.graphs_changed == 'true'
       uses: pavelzw/pytest-action@v2
       with:
         report-title:  "Test report Anemoi Graphs (python ${{ matrix.python-version }} on ${{ matrix.platform }})"
-        custom-pytest: cd ./graphs && ${{ inputs.custom-pytest }}
+        custom-pytest: pytest ./graphs
 
     - name: Run pytest for changed models package
       if: steps.changed-packages.outputs.models_changed == 'true'
       uses: pavelzw/pytest-action@v2
       with:
         report-title:  "Test report Anemoi Models (python ${{ matrix.python-version }} on ${{ matrix.platform }})"
-        custom-pytest: cd ./models && ${{ inputs.custom-pytest }}
+        custom-pytest: pytest ./models
 
     - name: Run integration tests
       if: success()
       uses: pavelzw/pytest-action@v2
       with:
-        report-title:  "Test report Anemoi Core Integration (python ${{ inputs.python-version }} on ${{ matrix.platform }})"
+        report-title:  "Test report Anemoi Core Integration (python ${{ matrix.python-version }} on ${{ matrix.platform }})"
         custom-pytest: pytest tests/
