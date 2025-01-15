@@ -101,21 +101,21 @@ jobs:
       uses: pavelzw/pytest-action@v2
       with:
         report-title: "Test report Anemoi Training (python ${{ matrix.python-version }} on ${{ matrix.platform }}, ${{ matrix.install-mode }} mode)"
-        custom-pytest: pytest ./training
+        custom-pytest: uv run --frozen pytest ./training
 
     - name: Run pytest for graphs package
       if: matrix.install-mode == 'all' || steps.changed-packages.outputs.graphs_changed == 'true'
       uses: pavelzw/pytest-action@v2
       with:
         report-title: "Test report Anemoi Graphs (python ${{ matrix.python-version }} on ${{ matrix.platform }}, ${{ matrix.install-mode }} mode)"
-        custom-pytest: pytest ./graphs
+        custom-pytest: uv run --frozen pytest ./graphs
 
     - name: Run pytest for models package
       if: matrix.install-mode == 'all' || steps.changed-packages.outputs.models_changed == 'true'
       uses: pavelzw/pytest-action@v2
       with:
         report-title: "Test report Anemoi Models (python ${{ matrix.python-version }} on ${{ matrix.platform }}, ${{ matrix.install-mode }} mode)"
-        custom-pytest: pytest ./models
+        custom-pytest: uv run --frozen pytest ./models
 
     - name: Run integration tests
       if: success() && (matrix.install-mode == 'all' || steps.changed-packages.outputs.training_changed == 'true' || steps.changed-packages.outputs.graphs_changed == 'true' || steps.changed-packages.outputs.models_changed == 'true')
@@ -123,4 +123,4 @@ jobs:
       timeout-minutes: 30
       with:
         report-title: "Test report Anemoi Core Integration (python ${{ matrix.python-version }} on ${{ matrix.platform }}, ${{ matrix.install-mode }} mode)"
-        custom-pytest: pytest tests/
+        custom-pytest: uv run --frozen pytest tests/
