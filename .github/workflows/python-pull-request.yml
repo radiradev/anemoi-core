@@ -69,7 +69,7 @@ jobs:
 
         if [[ ${{ steps.changed-packages.outputs.graphs_changed }} == 'true' ]]; then
           echo "Installing graphs from local source"
-          GRAPHS_SOURCE="-e ./graphs[all,tests]""
+          GRAPHS_SOURCE="-e ./graphs[all,tests]"
         else
           echo "Installing graphs from PyPI"
           GRAPHS_SOURCE="anemoi-graphs[all,tests]"
