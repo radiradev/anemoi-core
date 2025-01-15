@@ -13,6 +13,7 @@ env:
   UV_SYSTEM_PYTHON: 1
 
 jobs:
+  timeout-minutes: 60
   quality:
     uses: ecmwf-actions/reusable-workflows/.github/workflows/qa-precommit-run.yml@v2
     with:
@@ -20,18 +21,12 @@ jobs:
 
   checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    defaults:
-      run:
-        timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         platform: ["ubuntu-latest", "macos-latest"]
         python-version: ["3.9", "3.10", "3.11"]
         install-mode: ${{ github.event_name == 'schedule' && '["all"]' || '["local-changes", "all"]' }}
-      allow-failure:
-        - install-mode: "local-changes" # Allow failure for changed packages with breaking changes against release
 
     steps:
     - uses: actions/checkout@v3
