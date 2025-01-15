@@ -20,16 +20,23 @@ jobs:
       skip-hooks: "no-commit-to-branch"
 
   checks:
-    runs-on: ubuntu-latest
+    if: |
+      !(
+        (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') &&
+        matrix.install-mode == 'local-changes'
+      ) # Skip scheduled runs with only local-changes
+
+    runs-on: ${{ matrix.platform }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         platform: ["ubuntu-latest", "macos-latest"]
         python-version: ["3.9", "3.10", "3.11"]
-        install-mode: ${{ github.event_name == 'schedule' && ["all"] || ["local-changes", "all"] }}
+        install-mode: ["all", "local-changes"]
 
     steps:
+
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
