@@ -18,8 +18,8 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        fail-fast: false
         platform: ["ubuntu-latest", "macos-latest"]
         python-version: ["3.9", "3.10", "3.11"]
 
