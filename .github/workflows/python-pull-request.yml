@@ -17,6 +17,10 @@ jobs:
 
   checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -47,7 +51,6 @@ jobs:
           CHANGED_FILES=$(git diff --name-only $MERGE_BASE...${{ github.event.pull_request.head.sha }})
         elif [ "${{ github.event_name }}" == "push" ]; then
           # For pushes, compare with the previous commit
-          git fetch --depth=2 origin ${{ github.ref }}
           CHANGED_FILES=$(git diff --name-only HEAD^ HEAD)
         else
           # For scheduled runs, check all files
@@ -57,37 +60,34 @@ jobs:
         echo "Changed files:"
         echo "$CHANGED_FILES"
 
-        echo "training_changed=$(echo "$CHANGED_FILES" | grep -q '^training/.*\.py$' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-        echo "graphs_changed=$(echo "$CHANGED_FILES" | grep -q '^graphs/.*\.py$' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-        echo "models_changed=$(echo "$CHANGED_FILES" | grep -q '^models/.*\.py$' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+        echo "training_changed=$(echo "$CHANGED_FILES" | grep -q '^training/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+        echo "graphs_changed=$(echo "$CHANGED_FILES" | grep -q '^graphs/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+        echo "models_changed=$(echo "$CHANGED_FILES" | grep -q '^models/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
 
     - name: Install packages
+      if: steps.changed-packages.outputs.training_changed == 'true' || steps.changed-packages.outputs.graphs_changed == 'true' || steps.changed-packages.outputs.models_changed == 'true'
       run: |
+        PACKAGES=""
+
         if [[ ${{ steps.changed-packages.outputs.training_changed }} == 'true' ]]; then
-          echo "Installing training from local source"
-          TRAINING_SOURCE="-e ./training[all,tests]"
+          PACKAGES="$PACKAGES -e ./training[all,tests]"
         else
-          echo "Installing training from PyPI"
-          TRAINING_SOURCE="anemoi-training[all,tests]"
+          PACKAGES="$PACKAGES anemoi-training[all,tests]"
         fi
 
         if [[ ${{ steps.changed-packages.outputs.graphs_changed }} == 'true' ]]; then
-          echo "Installing graphs from local source"
-          GRAPHS_SOURCE="-e ./graphs[all,tests]"
+          PACKAGES="$PACKAGES -e ./graphs[all,tests]"
         else
-          echo "Installing graphs from PyPI"
-          GRAPHS_SOURCE="anemoi-graphs[all,tests]"
+          PACKAGES="$PACKAGES anemoi-graphs[all,tests]"
         fi
 
         if [[ ${{ steps.changed-packages.outputs.models_changed }} == 'true' ]]; then
-          echo "Installing models from local source"
-          MODELS_SOURCE="-e ./models[all,tests]"
+          PACKAGES="$PACKAGES -e ./models[all,tests]"
         else
-          echo "Installing models from PyPI"
-          MODELS_SOURCE="anemoi-models[all,tests]"
+          PACKAGES="$PACKAGES anemoi-models[all,tests]"
         fi
 
-        pip install $TRAINING_SOURCE $GRAPHS_SOURCE $MODELS_SOURCE
+        pip install $PACKAGES
 
     - name: Run pytest for changed training package
       if: steps.changed-packages.outputs.training_changed == 'true'
@@ -111,8 +111,9 @@ jobs:
         custom-pytest: pytest ./models
 
     - name: Run integration tests
-      if: success()
+      if: success() && (steps.changed-packages.outputs.training_changed == 'true' || steps.changed-packages.outputs.graphs_changed == 'true' || steps.changed-packages.outputs.models_changed == 'true')
       uses: pavelzw/pytest-action@v2
+      timeout-minutes: 30
       with:
         report-title:  "Test report Anemoi Core Integration (python ${{ matrix.python-version }} on ${{ matrix.platform }})"
         custom-pytest: pytest tests/
