@@ -96,7 +96,9 @@ class AnemoiModelInterface(torch.nn.Module):
         # Use the forward method of the model directly
         self.forward = self.model.forward
 
-    def predict_step(self, batch: torch.Tensor, model_comm_group: Optional[ProcessGroup] = None) -> torch.Tensor:
+    def predict_step(
+        self, batch: torch.Tensor, model_comm_group: Optional[ProcessGroup] = None, **kwargs
+    ) -> torch.Tensor:
         """Prediction step for the model.
 
         Parameters
