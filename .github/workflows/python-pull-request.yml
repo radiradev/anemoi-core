@@ -9,6 +9,9 @@ on:
   schedule:
     - cron: "9 2 * * 0" # at 9:02 on sunday
 
+env:
+  UV_SYSTEM_PYTHON: 1
+
 jobs:
   quality:
     uses: ecmwf-actions/reusable-workflows/.github/workflows/qa-precommit-run.yml@v2
@@ -26,6 +29,7 @@ jobs:
       matrix:
         platform: ["ubuntu-latest", "macos-latest"]
         python-version: ["3.9", "3.10", "3.11"]
+        install-mode: ["local-changes", "all"]
 
     steps:
     - uses: actions/checkout@v3
@@ -33,14 +37,14 @@ jobs:
         fetch-depth: 0
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: astral-sh/setup-uv@v5
       with:
         python-version: ${{ matrix.python-version }}
+        enable-cache: true
 
-    - name: Install basic dependencies
+    - name: Install test dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install pytest pytest-md pytest-emoji
+        uv pip install pytest pytest-md pytest-emoji
 
     - name: Detect changed packages
       id: changed-packages
@@ -65,55 +69,60 @@ jobs:
         echo "models_changed=$(echo "$CHANGED_FILES" | grep -q '^models/' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
 
     - name: Install packages
-      if: steps.changed-packages.outputs.training_changed == 'true' || steps.changed-packages.outputs.graphs_changed == 'true' || steps.changed-packages.outputs.models_changed == 'true'
       run: |
         PACKAGES=""
 
-        if [[ ${{ steps.changed-packages.outputs.training_changed }} == 'true' ]]; then
-          PACKAGES="$PACKAGES -e ./training[all,tests]"
+        if [[ ${{ matrix.install-mode }} == 'local-changes' ]]; then
+          # Install from local if changed, otherwise from PyPI
+          if [[ ${{ steps.changed-packages.outputs.training_changed }} == 'true' ]]; then
+            PACKAGES="$PACKAGES -e ./training[all,tests]"
+          else
+            PACKAGES="$PACKAGES anemoi-training[all,tests]"
+          fi
+
+          if [[ ${{ steps.changed-packages.outputs.graphs_changed }} == 'true' ]]; then
+            PACKAGES="$PACKAGES -e ./graphs[all,tests]"
+          else
+            PACKAGES="$PACKAGES anemoi-graphs[all,tests]"
+          fi
+
+          if [[ ${{ steps.changed-packages.outputs.models_changed }} == 'true' ]]; then
+            PACKAGES="$PACKAGES -e ./models[all,tests]"
+          else
+            PACKAGES="$PACKAGES anemoi-models[all,tests]"
+          fi
         else
-          PACKAGES="$PACKAGES anemoi-training[all,tests]"
+          # Install all packages from local
+          PACKAGES="-e ./training[all,tests] -e ./graphs[all,tests] -e ./models[all,tests]"
         fi
 
-        if [[ ${{ steps.changed-packages.outputs.graphs_changed }} == 'true' ]]; then
-          PACKAGES="$PACKAGES -e ./graphs[all,tests]"
-        else
-          PACKAGES="$PACKAGES anemoi-graphs[all,tests]"
-        fi
+        uv pip install $PACKAGES
 
-        if [[ ${{ steps.changed-packages.outputs.models_changed }} == 'true' ]]; then
-          PACKAGES="$PACKAGES -e ./models[all,tests]"
-        else
-          PACKAGES="$PACKAGES anemoi-models[all,tests]"
-        fi
-
-        pip install $PACKAGES
-
-    - name: Run pytest for changed training package
-      if: steps.changed-packages.outputs.training_changed == 'true'
+    - name: Run pytest for training package
+      if: matrix.install-mode == 'all' || steps.changed-packages.outputs.training_changed == 'true'
       uses: pavelzw/pytest-action@v2
       with:
-        report-title:  "Test report Anemoi Training (python ${{ matrix.python-version }} on ${{ matrix.platform }})"
+        report-title: "Test report Anemoi Training (python ${{ matrix.python-version }} on ${{ matrix.platform }}, ${{ matrix.install-mode }} mode)"
         custom-pytest: pytest ./training
 
-    - name: Run pytest for changed graphs package
-      if: steps.changed-packages.outputs.graphs_changed == 'true'
+    - name: Run pytest for graphs package
+      if: matrix.install-mode == 'all' || steps.changed-packages.outputs.graphs_changed == 'true'
       uses: pavelzw/pytest-action@v2
       with:
-        report-title:  "Test report Anemoi Graphs (python ${{ matrix.python-version }} on ${{ matrix.platform }})"
+        report-title: "Test report Anemoi Graphs (python ${{ matrix.python-version }} on ${{ matrix.platform }}, ${{ matrix.install-mode }} mode)"
         custom-pytest: pytest ./graphs
 
-    - name: Run pytest for changed models package
-      if: steps.changed-packages.outputs.models_changed == 'true'
+    - name: Run pytest for models package
+      if: matrix.install-mode == 'all' || steps.changed-packages.outputs.models_changed == 'true'
       uses: pavelzw/pytest-action@v2
       with:
-        report-title:  "Test report Anemoi Models (python ${{ matrix.python-version }} on ${{ matrix.platform }})"
+        report-title: "Test report Anemoi Models (python ${{ matrix.python-version }} on ${{ matrix.platform }}, ${{ matrix.install-mode }} mode)"
         custom-pytest: pytest ./models
 
     - name: Run integration tests
-      if: success() && (steps.changed-packages.outputs.training_changed == 'true' || steps.changed-packages.outputs.graphs_changed == 'true' || steps.changed-packages.outputs.models_changed == 'true')
+      if: success() && (matrix.install-mode == 'all' || steps.changed-packages.outputs.training_changed == 'true' || steps.changed-packages.outputs.graphs_changed == 'true' || steps.changed-packages.outputs.models_changed == 'true')
       uses: pavelzw/pytest-action@v2
       timeout-minutes: 30
       with:
-        report-title:  "Test report Anemoi Core Integration (python ${{ matrix.python-version }} on ${{ matrix.platform }})"
+        report-title: "Test report Anemoi Core Integration (python ${{ matrix.python-version }} on ${{ matrix.platform }}, ${{ matrix.install-mode }} mode)"
         custom-pytest: pytest tests/
