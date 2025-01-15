@@ -8,6 +8,7 @@ on:
       - develop
   schedule:
     - cron: "9 2 * * 0" # at 9:02 on sunday
+  workflow_dispatch:
 
 env:
   UV_SYSTEM_PYTHON: 1
