@@ -234,7 +234,7 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
             num_heads=num_heads,
             edge_dim=self.edge_dim,
             activation=activation,
-            num_chunks=num_chunks,
+            num_chunks=1,  # disable "inner chunking" for now
         )
 
         self.offload_layers(cpu_offload)
@@ -339,10 +339,6 @@ class GraphTransformerForwardMapper(ForwardMapperPreProcessMixin, GraphTransform
             dst_grid_size=dst_grid_size,
         )
 
-        print(
-            f"GraphTransformerForwardMapper: in_channels_src: {in_channels_src}, in_channels_dst: {in_channels_dst}, hidden_dim: {hidden_dim}"
-        )
-
         self.emb_nodes_src = nn.Linear(self.in_channels_src, self.hidden_dim)
 
     def forward(
@@ -356,7 +352,7 @@ class GraphTransformerForwardMapper(ForwardMapperPreProcessMixin, GraphTransform
         return x[0], x_dst
 
 
-class GraphTransformerBackwardMapper(BackwardMapperPostProcessMixin, GraphTransformerBaseMapper):
+class GraphTransformerBackwardMapper(GraphTransformerBaseMapper):  # moved PostProcessMixin up to enc_proc_dec
     """Graph Transformer Mapper from hidden -> data."""
 
     def __init__(
@@ -414,10 +410,6 @@ class GraphTransformerBackwardMapper(BackwardMapperPostProcessMixin, GraphTransf
             sub_graph_edge_attributes=sub_graph_edge_attributes,
             src_grid_size=src_grid_size,
             dst_grid_size=dst_grid_size,
-        )
-
-        print(
-            f"GraphTransformerBackwardMapper: in_channels_src: {in_channels_src}, in_channels_dst: {in_channels_dst}, hidden_dim: {hidden_dim}"
         )
 
         self.node_data_extractor = nn.Sequential(
@@ -496,7 +488,6 @@ class GNNBaseMapper(GraphEdgeMixin, BaseMapper):
         )
 
         self.trainable = TrainableTensor(trainable_size=trainable_size, tensor_size=self.edge_attr.shape[0])
-        print(f"trainable_size: {trainable_size}")
 
     def prepare_edges(self, size, batch_size, model_comm_group=None):
         edge_attr = self.trainable(self.edge_attr, batch_size)

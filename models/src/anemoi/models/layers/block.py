@@ -472,10 +472,6 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
             **kwargs,
         )
 
-        print(
-            f"GraphTransformerMapperBlock: in_channels={in_channels}, hidden_dim={hidden_dim}, out_channels={out_channels}, edge_dim={edge_dim}, num_heads={num_heads}"
-        )
-
         self.lin_x0_skip = nn.Linear(in_channels, out_channels)  # to match x_skip.shape[1] shape with out shape
         self.lin_x1_skip = nn.Linear(in_channels, out_channels)  # to match x_skip.shape[1] shape with out shape
 
