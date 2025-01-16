@@ -406,8 +406,8 @@ class GraphTransformerBaseBlock(BaseBlock, ABC):
         """Shards Tensor sequence dimension."""
         shape_dst_nodes = shapes[1]
 
-        out = shard_tensor(out, dim=0, shapes=shape_dst_nodes, mgroup=model_comm_group)
         out = einops.rearrange(out, "(batch grid) heads vars -> (batch grid) (heads vars)", batch=batch_size)
+        out = shard_tensor(out, dim=0, shapes=shape_dst_nodes, mgroup=model_comm_group)
 
         return out
 
