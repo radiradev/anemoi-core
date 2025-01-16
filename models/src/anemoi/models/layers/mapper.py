@@ -18,7 +18,6 @@ from torch import Tensor
 from torch import nn
 from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import offload_wrapper
 from torch.distributed.distributed_c10d import ProcessGroup
-from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 from torch_geometric.typing import Adj
 from torch_geometric.typing import PairTensor
@@ -228,31 +227,14 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
 
         self.trainable = TrainableTensor(trainable_size=trainable_size, tensor_size=self.edge_attr.shape[0])
 
-        assert (
-            num_heads % num_chunks == 0
-        ), f"Number of heads {num_heads} must be divisible by number of chunks {num_chunks} in {self.__class__.__name__}"
-        assert (
-            hidden_dim % num_chunks == 0
-        ), f"Hidden dimension {hidden_dim} must be divisible by number of chunks {num_chunks} in {self.__class__.__name__}"
-
-        self.num_chunks = num_chunks
-
-        self.hidden_dim_per_chunk = hidden_dim // num_chunks
-        self.num_heads_per_chunk = num_heads // num_chunks
-
-        self.proc = nn.ModuleList(
-            [
-                GraphTransformerMapperBlock(
-                    in_channels=hidden_dim,
-                    hidden_dim=mlp_hidden_ratio * self.hidden_dim_per_chunk,
-                    out_channels=self.hidden_dim_per_chunk,
-                    num_heads=self.num_heads_per_chunk,
-                    edge_dim=self.edge_dim,
-                    activation=activation,
-                    num_chunks=1,  # no "inner" chunking
-                )
-                for _ in range(num_chunks)
-            ]
+        self.proc = GraphTransformerMapperBlock(
+            hidden_dim,
+            mlp_hidden_ratio * hidden_dim,
+            hidden_dim,
+            num_heads=num_heads,
+            edge_dim=self.edge_dim,
+            activation=activation,
+            num_chunks=num_chunks,
         )
 
         self.offload_layers(cpu_offload)
@@ -282,22 +264,15 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
         edge_attr, edge_index = self.prepare_edges(size, batch_size, model_comm_group)
         x_src, x_dst, shapes_src, shapes_dst = self.pre_process(x, shard_shapes, model_comm_group)
 
-        outputs = []
-        for i in range(self.num_chunks):
-            (_, x_dst_chunk), _ = checkpoint(
-                self.proc[i],
-                (x_src, x_dst),
-                edge_attr,
-                edge_index,
-                (shapes_src, shapes_dst),
-                batch_size,
-                model_comm_group,
-                size,
-                use_reentrant=False,
-            )
-            outputs.append(x_dst_chunk)
-
-        x_dst = torch.cat(outputs, dim=-1)
+        (x_src, x_dst), edge_attr = self.proc(
+            (x_src, x_dst),
+            edge_attr,
+            edge_index,
+            (shapes_src, shapes_dst),
+            batch_size,
+            model_comm_group,
+            size=size,
+        )
 
         x_dst = self.post_process(x_dst, shapes_dst, model_comm_group)
 
@@ -362,6 +337,10 @@ class GraphTransformerForwardMapper(ForwardMapperPreProcessMixin, GraphTransform
             sub_graph_edge_attributes=sub_graph_edge_attributes,
             src_grid_size=src_grid_size,
             dst_grid_size=dst_grid_size,
+        )
+
+        print(
+            f"GraphTransformerForwardMapper: in_channels_src: {in_channels_src}, in_channels_dst: {in_channels_dst}, hidden_dim: {hidden_dim}"
         )
 
         self.emb_nodes_src = nn.Linear(self.in_channels_src, self.hidden_dim)
@@ -435,6 +414,10 @@ class GraphTransformerBackwardMapper(BackwardMapperPostProcessMixin, GraphTransf
             sub_graph_edge_attributes=sub_graph_edge_attributes,
             src_grid_size=src_grid_size,
             dst_grid_size=dst_grid_size,
+        )
+
+        print(
+            f"GraphTransformerBackwardMapper: in_channels_src: {in_channels_src}, in_channels_dst: {in_channels_dst}, hidden_dim: {hidden_dim}"
         )
 
         self.node_data_extractor = nn.Sequential(
@@ -513,6 +496,7 @@ class GNNBaseMapper(GraphEdgeMixin, BaseMapper):
         )
 
         self.trainable = TrainableTensor(trainable_size=trainable_size, tensor_size=self.edge_attr.shape[0])
+        print(f"trainable_size: {trainable_size}")
 
     def prepare_edges(self, size, batch_size, model_comm_group=None):
         edge_attr = self.trainable(self.edge_attr, batch_size)

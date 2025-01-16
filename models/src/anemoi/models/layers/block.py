@@ -27,7 +27,6 @@ from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.graph import sync_tensor
 from anemoi.models.distributed.khop_edges import sort_edges_1hop_chunks
 from anemoi.models.distributed.transformer import shard_heads
-from anemoi.models.distributed.transformer import shard_sequence
 from anemoi.models.layers.attention import MultiHeadSelfAttention
 from anemoi.models.layers.conv import GraphConv
 from anemoi.models.layers.conv import GraphTransformerConv
@@ -407,9 +406,8 @@ class GraphTransformerBaseBlock(BaseBlock, ABC):
         """Shards Tensor sequence dimension."""
         shape_dst_nodes = shapes[1]
 
-        out = einops.rearrange(out, "(batch grid) heads vars -> batch heads grid vars", batch=batch_size)
-        out = shard_sequence(out, shapes=shape_dst_nodes, mgroup=model_comm_group)
-        out = einops.rearrange(out, "batch heads grid vars -> (batch grid) (heads vars)")
+        out = shard_tensor(out, dim=0, shapes=shape_dst_nodes, mgroup=model_comm_group)
+        out = einops.rearrange(out, "(batch grid) heads vars -> (batch grid) (heads vars)", batch=batch_size)
 
         return out
 
@@ -474,6 +472,10 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
             **kwargs,
         )
 
+        print(
+            f"GraphTransformerMapperBlock: in_channels={in_channels}, hidden_dim={hidden_dim}, out_channels={out_channels}, edge_dim={edge_dim}, num_heads={num_heads}"
+        )
+
         self.lin_x0_skip = nn.Linear(in_channels, out_channels)  # to match x_skip.shape[1] shape with out shape
         self.lin_x1_skip = nn.Linear(in_channels, out_channels)  # to match x_skip.shape[1] shape with out shape
 
@@ -489,10 +491,7 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
         model_comm_group: Optional[ProcessGroup] = None,
         size: Optional[Size] = None,
     ):
-        x_skip = (
-            self.lin_x0_skip(x[0]),
-            self.lin_x1_skip(x[1]),
-        )
+        x_skip = x  # todo: check if this is correct
 
         x = (
             self.layer_norm1(x[0]),
@@ -542,8 +541,7 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
             out = self.conv(query=query, key=key, value=value, edge_attr=edges, edge_index=edge_index, size=size)
 
         # go back to original shape and shard nodes again
-        out = out.view(-1, self.num_heads * self.out_channels_conv)
-        out = shard_tensor(out, 0, shapes[1], model_comm_group)
+        out = self.shard_output_seq(out, shapes, batch_size, model_comm_group)
 
         # compute out = self.projection(out + x_r) in chunks:
         out = torch.cat([self.projection(chunk) for chunk in torch.tensor_split(out + x_r, num_chunks, dim=0)], dim=0)
