@@ -50,6 +50,7 @@ training_loss:
   # Available scalars include:
   # - 'variable': See `variable_loss_scaling` for more information
   # - 'loss_weights_mask': Giving imputed NaNs a zero weight in the loss function
+  # - 'tendency': See `additional_scalars` for more information
   scalars: ['variable', 'variable_pressure_level', 'loss_weights_mask']
 
   ignore_nans: False
@@ -133,8 +134,18 @@ additional_scalars:
     slope: 0.001
     scale_dim: -1 # dimension on which scaling applied
     name: "variable_pressure_level"
-  # norm tendency scalar (scaling loss function by the normalised tendency values)
-  #- _target_: anemoi.training.data.scaling.NormTendencyScaler
+  # tendency scalers
+  # scale the prognostic losses by the stdev of the variable tendencies (e.g. the 6-hourly differences of the data)
+  # useful if including slow vs fast evolving variables in the training (e.g. Land/Ocean vs Atmosphere)
+  # if using this option 'variable_loss_scalings' should all be set close to 1.0 for prognostic variables
+  # stdev tendency scaler
+  # - _target_: anemoi.training.train.scaling.StdevTendencyScaler
+  #   scale_dim: -1 # dimension on which scaling applied
+  #   name: "tendency"
+  # var tendency scaler (this should be default!?)
+  # - _target_: anemoi.training.train.scaling.VarTendencyScaler
+  #   scale_dim: -1 # dimension on which scaling applied
+  #   name: "tendency"
 
 metrics:
 - z_500

@@ -7,15 +7,19 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
+from __future__ import annotations
 
 import logging
+import warnings
 from abc import ABC
 from abc import abstractmethod
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from omegaconf import DictConfig
+    from anemoi.models.data_indices.collection import IndexCollection
 
 import numpy as np
-from omegaconf import DictConfig
-
-from anemoi.models.data_indices.collection import IndexCollection
 
 LOGGER = logging.getLogger(__name__)
 
@@ -23,14 +27,22 @@ LOGGER = logging.getLogger(__name__)
 class BaseVariableLossScaler(ABC):
     """Configurable method converting variable to loss scaling."""
 
-    def __init__(self, scaling_config: DictConfig, data_indices: IndexCollection, metadata_dataset: dict) -> None:
+    def __init__(
+        self,
+        scaling_config: DictConfig,
+        data_indices: IndexCollection,
+        metadata_variables: dict | None = None,
+    ) -> None:
         """Initialise Scaler.
 
         Parameters
         ----------
-        scaling_config :
-        data_indices :
-        metadata_dataset :
+        scaling_config : DictConfig
+            Configuration for variable loss scaling.
+        data_indices : IndexCollection
+            Collection of data indices.
+        metadata_variables : dict, optional
+            Metadata of the variables in the dataset if available.
 
         """
         self.scaling_config = scaling_config
@@ -44,7 +56,7 @@ class BaseVariableLossScaler(ABC):
             for variable in variables:
                 self.group_variables[variable] = group
         self.default_group = self.scaling_config.variable_groups.default
-        self.metadata_dataset = metadata_dataset
+        self.metadata_variables = metadata_variables
 
     @abstractmethod
     def get_variable_scaling(self) -> np.ndarray: ...
@@ -69,15 +81,15 @@ class BaseVariableLossScaler(ABC):
         """
         variable_level = None
         if (
-            self.metadata_dataset
-            and variable_name in self.metadata_dataset
-            and self.metadata_dataset[variable_name].get("mars")
+            self.metadata_variables
+            and variable_name in self.metadata_variables
+            and self.metadata_variables[variable_name].get("mars")
         ):
             # if metadata is available: get variable name and level from metadata
-            variable_level = self.metadata_dataset[variable_name]["mars"].get("levelist")
-            variable_name = self.metadata_dataset[variable_name]["mars"]["param"]
+            variable_level = self.metadata_variables[variable_name]["mars"].get("levelist")
+            variable_name = self.metadata_variables[variable_name]["mars"]["param"]
         else:
-            # if metadata is not available: split variable name into variable name and level
+            # if metadata not available: split variable name into variable name and level
             split = variable_name.split("_")
             if len(split) > 1 and split[-1].isdigit():
                 variable_level = int(split[-1])
@@ -120,7 +132,7 @@ class BaseVariableLevelScaler(BaseVariableLossScaler):
         self,
         scaling_config: DictConfig,
         data_indices: IndexCollection,
-        metadata_dataset: dict,
+        metadata_variables: dict,
         group: str,
         y_intercept: float,
         slope: float,
@@ -135,7 +147,7 @@ class BaseVariableLevelScaler(BaseVariableLossScaler):
             Configuration for variable loss scaling.
         data_indices : IndexCollection
             Collection of data indices.
-        metadata_dataset : dict
+        metadata_variables : dict
             Metadata of the dataset.
         group : str
             Group of variables to scale.
@@ -144,7 +156,7 @@ class BaseVariableLevelScaler(BaseVariableLossScaler):
         slope : float
             Slope of scaling function.
         """
-        super().__init__(scaling_config, data_indices, metadata_dataset)
+        super().__init__(scaling_config, data_indices, metadata_variables)
         self.scaling_group = group
         self.y_intercept = y_intercept
         self.slope = slope
@@ -204,7 +216,7 @@ class NoVariableLevelScaler(BaseVariableLevelScaler):
         self,
         scaling_config: DictConfig,
         data_indices: IndexCollection,
-        metadata_dataset: dict,
+        metadata_variables: dict,
         group: str,
         slope: float = 0.0,
         y_intercept: float = 1.0,
@@ -213,7 +225,7 @@ class NoVariableLevelScaler(BaseVariableLevelScaler):
         assert (
             y_intercept == 1.0 and slope == 0
         ), "self.y_intercept must be 1.0 and self.slope 0.0 for no scaling to fit with definition of linear function."
-        super().__init__(scaling_config, data_indices, metadata_dataset, group, slope=0.0, y_intercept=1.0)
+        super().__init__(scaling_config, data_indices, metadata_variables, group, slope=0.0, y_intercept=1.0)
 
     @staticmethod
     def get_level_scaling(variable_level: float) -> np.ndarray:
@@ -222,16 +234,79 @@ class NoVariableLevelScaler(BaseVariableLevelScaler):
         return 1.0
 
 
-class BaseTendencyScaler(ABC):
+class BaseTendencyScaler(BaseVariableLossScaler):
     """Configurable method to scale prognostic variables based on data statistics and statistics_tendencies."""
 
+    def __init__(
+        self,
+        scaling_config: DictConfig,
+        data_indices: IndexCollection,
+        statistics: dict,
+        statistics_tendencies: dict,
+        name: str,
+        scale_dim: int,
+    ) -> None:
+        """Initialise variable level scaler.
+
+        Parameters
+        ----------
+        scaling_config : DictConfig
+            Configuration for variable loss scaling.
+        data_indices : IndexCollection
+            Collection of data indices.
+        statistics : dict
+            Data statistics dictionary
+        statistics_tendencies : dict
+            Data statistics dictionary for tendencies
+        """
+        super().__init__(scaling_config, data_indices)
+        self.statistics = statistics
+        self.statistics_tendencies = statistics_tendencies
+        self.name = name
+        self.scale_dim = scale_dim
+
+        if not self.statistics_tendencies:
+            warnings.warn("Dataset has no tendency statistics! Are you sure you want to use a tendency scaler?")
+
     @abstractmethod
-    def scaler(self, variable_stdev: float, variable_tendency_stdev: float) -> float: ...
+    def get_level_scaling(self, variable_level: int) -> float: ...
+
+    def get_variable_scaling(self) -> np.ndarray:
+        variable_level_scaling = np.ones((len(self.data_indices.internal_data.output.full),), dtype=np.float32)
+
+        LOGGER.info("Variable Level Scaling: Applying %s scaling to prognostic variables", self.name)
+
+        for key, idx in self.data_indices.internal_model.output.name_to_index.items():
+            if idx in self.data_indices.internal_model.output.prognostic:
+                prog_idx = self.data_indices.data.output.name_to_index[key]
+                variable_stdev = self.statistics["stdev"][prog_idx] if self.statistics_tendencies else 1
+                variable_tendency_stdev = (
+                    self.statistics_tendencies["stdev"][prog_idx] if self.statistics_tendencies else 1
+                )
+                scaling = self.get_level_scaling(variable_stdev, variable_tendency_stdev)
+                LOGGER.info("Parameter %s is being scaled by statistic_tendencies by %.2f", key, scaling)
+                variable_level_scaling[idx] *= scaling
+
+        return variable_level_scaling
 
 
-class NormTendencyScaler(BaseTendencyScaler):
-    """Scale loses by stdev of tendency statistics."""
+class NoTendencyScaler(BaseTendencyScaler):
+    """No scaling by tendency statistics."""
 
-    @staticmethod
-    def scaler(variable_stdev: float, variable_tendency_stdev: float) -> float:
+    def get_level_scaling(self, variable_stdev: float, variable_tendency_stdev: float) -> float:
+        del variable_stdev, variable_tendency_stdev
+        return 1.0
+
+
+class StdevTendencyScaler(BaseTendencyScaler):
+    """Scale loses by standard deviation of tendency statistics."""
+
+    def get_level_scaling(self, variable_stdev: float, variable_tendency_stdev: float) -> float:
         return variable_stdev / variable_tendency_stdev
+
+
+class VarTendencyScaler(BaseTendencyScaler):
+    """Scale loses by variance of tendency statistics."""
+
+    def get_level_scaling(self, variable_stdev: float, variable_tendency_stdev: float) -> float:
+        return variable_stdev**2 / variable_tendency_stdev**2

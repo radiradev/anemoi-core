@@ -67,6 +67,18 @@ polynomial_scaler = {
     "minimum": 0.2,
     "slope": 0.001,
 }
+std_dev_scaler = {
+    "- _target_": "anemoi.training.train.scaling.StdevTendencyScaler",
+    "scale_dim": -1,
+    "name": "tendency",
+}
+var_scaler = {"- _target_": "anemoi.training.train.scaling.VarTendencyScaler", "scale_dim": -1, "name": "tendency"}
+
+no_tend_scaler = {
+    "- _target_": "anemoi.training.train.scaling.NoTendencyScaler",
+    "scale_dim": -1,
+    "name": "no_tendency",
+}
 
 expected_linear_scaling = torch.Tensor(
     [
@@ -133,7 +145,7 @@ def test_variable_loss_scaling_vals(
     expected_scaling: torch.Tensor,
 ) -> None:
     config, data_indices = fake_data
-
+    breakpoint()
     variable_loss_scaling = GraphForecaster.get_variable_scaling(config, data_indices)
 
     assert torch.allclose(variable_loss_scaling, expected_scaling)
@@ -169,3 +181,45 @@ def test_metric_range(fake_data: tuple[DictConfig, IndexCollection]) -> None:
 
     assert metric_ranges_validation == expected_metric_range_validation
     assert metric_range == expected_metric_range
+
+
+def test_no_tendency_scaling(self):
+    scaler = NoTendencyScaler()
+    result = scaler.get_level_scaling(10.0, 5.0)
+    assert result == 1.0, "NoTendencyScaler should always return 1.0"
+
+
+def test_stddev_tendency_scaling(self):
+    scaler = StdevTendencyScaler()
+    result = scaler.get_level_scaling(10.0, 5.0)
+    expected = 10.0 / 5.0
+    assert (
+        pytest.approx(result, rel=1e-5) == expected
+    ), "StdevTendencyScaler should return variable_stdev / variable_tendency_stdev"
+
+    # Test with edge case
+    result = scaler.get_level_scaling(0.0, 1.0)
+    assert result == 0.0, "StdevTendencyScaler should return 0.0 when variable_stdev is 0"
+
+    # Test division by a very small number
+    result = scaler.get_level_scaling(1.0, 1e-6)
+    expected = 1.0 / 1e-6
+    assert pytest.approx(result, rel=1e-5) == expected, "StdevTendencyScaler should handle small divisor values"
+
+
+def test_get_level_scaling(self):
+    scaler = VarTendencyScaler()
+    result = scaler.get_level_scaling(10.0, 5.0)
+    expected = (10.0**2) / (5.0**2)
+    assert (
+        pytest.approx(result, rel=1e-5) == expected
+    ), "VarTendencyScaler should return (variable_stdev^2) / (variable_tendency_stdev^2)"
+
+    # Test with edge case
+    result = scaler.get_level_scaling(0.0, 1.0)
+    assert result == 0.0, "VarTendencyScaler should return 0.0 when variable_stdev is 0"
+
+    # Test division by a very small number
+    result = scaler.get_level_scaling(1.0, 1e-3)
+    expected = (1.0**2) / (1e-3**2)
+    assert pytest.approx(result, rel=1e-5) == expected, "VarTendencyScaler should handle small divisor values"

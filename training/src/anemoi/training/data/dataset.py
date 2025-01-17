@@ -59,7 +59,7 @@ class NativeGridDataset(IterableDataset):
         timeincrement : int, optional
             time increment between samples, by default 1
         timestep : int, optional
-            the time frequency of the samples, by default '6h'            
+            the time frequency of the samples, by default '6h'
         multistep : int, optional
             collate (t-1, ... t - multistep) into the input state vector, by default 1
         shuffle : bool, optional
@@ -111,11 +111,10 @@ class NativeGridDataset(IterableDataset):
     @cached_property
     def statistics_tendencies(self) -> dict:
         """Return dataset tendency statistics."""
-        # The statistics_tendencies are lazily loaded
-        self.data.statistics_tendencies = (
-            self.data.statistics_tendencies(self.timestep) if callable(self.data.statistics_tendencies) else None
-        )
-        return self.data.statistics_tendencies
+        try:
+            return self.data.statistics_tendencies(self.timestep)
+        except (KeyError, AttributeError):
+            return None
 
     @cached_property
     def metadata(self) -> dict:

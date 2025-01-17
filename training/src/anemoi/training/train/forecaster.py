@@ -110,11 +110,21 @@ class GraphForecaster(pl.LightningModule):
         config_container = OmegaConf.to_container(config.training.additional_scalars, resolve=False)
         if isinstance(config_container, list):
             scalar = [
-                instantiate(
-                    scalar_config,
-                    scaling_config=config.training.variable_loss_scaling,
-                    data_indices=data_indices,
-                    metadata_dataset=metadata["dataset"].get("variables_metadata"),
+                (
+                    instantiate(
+                        scalar_config,
+                        scaling_config=config.training.variable_loss_scaling,
+                        data_indices=data_indices,
+                        statistics=statistics,
+                        statistics_tendencies=statistics_tendencies,
+                    )
+                    if scalar_config["name"] == "tendency"
+                    else instantiate(
+                        scalar_config,
+                        scaling_config=config.training.variable_loss_scaling,
+                        data_indices=data_indices,
+                        metadata_variables=metadata["dataset"].get("variables_metadata"),
+                    )
                 )
                 for scalar_config in config_container
             ]
