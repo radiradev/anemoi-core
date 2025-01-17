@@ -40,7 +40,10 @@ def get_variable_group_and_level(
 
     """
     variable_level = None
-    if metadata_variables and variable_name in metadata_variables and metadata_variables[variable_name].get("mars"):
+    mars_metadata_available = (
+        metadata_variables and variable_name in metadata_variables and metadata_variables[variable_name].get("mars")
+    )
+    if mars_metadata_available and metadata_variables[variable_name]["mars"].get("param"):
         # if metadata is available: get variable name and level from metadata
         variable_level = metadata_variables[variable_name]["mars"].get("levelist")
         variable_name = metadata_variables[variable_name]["mars"]["param"]
