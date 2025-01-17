@@ -40,7 +40,7 @@ def fake_data(request: SubRequest) -> tuple[DictConfig, IndexCollection]:
                 "metrics": ["other", "y_850"],
                 "pressure_level_scaler": request.param,
             },
-	},
+        },
     )
     name_to_index = {"x": 0, "y_50": 1, "y_500": 2, "y_850": 3, "z": 5, "q": 4, "other": 6, "d": 7}
     data_indices = IndexCollection(config=config, name_to_index=name_to_index)
@@ -70,23 +70,19 @@ polynomial_scaler = {
 std_dev_scaler = {
     "- _target_": "anemoi.training.train.scaling.StdevTendencyScaler",
     "scale_dim": -1,
-    "name": "tendency"
+    "name": "tendency",
 }
-var_scaler = {
-    "- _target_": "anemoi.training.train.scaling.VarTendencyScaler",
-    "scale_dim": -1,
-    "name": "tendency"
-}
+var_scaler = {"- _target_": "anemoi.training.train.scaling.VarTendencyScaler", "scale_dim": -1, "name": "tendency"}
 
 no_tend_scaler = {
     "- _target_": "anemoi.training.train.scaling.NoTendencyScaler",
     "scale_dim": -1,
-    "name": "no_tendency"
+    "name": "no_tendency",
 }
 
 expected_linear_scaling = torch.Tensor(
     [
-     	50 / 1000 * 0.5,  # y_50
+        50 / 1000 * 0.5,  # y_50
         500 / 1000 * 0.5,  # y_500
         850 / 1000 * 0.5,  # y_850
         1,  # q
@@ -98,7 +94,7 @@ expected_linear_scaling = torch.Tensor(
 )
 expected_relu_scaling = torch.Tensor(
     [
-     	0.2 * 0.5,  # y_50
+        0.2 * 0.5,  # y_50
         500 / 1000 * 0.5,  # y_500
         850 / 1000 * 0.5,  # y_850
         1,  # q
@@ -110,7 +106,7 @@ expected_relu_scaling = torch.Tensor(
 )
 expected_constant_scaling = torch.Tensor(
     [
-     	1 * 0.5,  # y_50
+        1 * 0.5,  # y_50
         1 * 0.5,  # y_500
         1 * 0.5,  # y_850
         1,  # q
@@ -122,7 +118,7 @@ expected_constant_scaling = torch.Tensor(
 )
 expected_polynomial_scaling = torch.Tensor(
     [
-     	((50 / 1000) ** 2 + 0.2) * 0.5,  # y_50
+        ((50 / 1000) ** 2 + 0.2) * 0.5,  # y_50
         ((500 / 1000) ** 2 + 0.2) * 0.5,  # y_500
         ((850 / 1000) ** 2 + 0.2) * 0.5,  # y_850
         1,  # q
@@ -137,7 +133,7 @@ expected_polynomial_scaling = torch.Tensor(
 @pytest.mark.parametrize(
     ("fake_data", "expected_scaling"),
     [
-     	(linear_scaler, expected_linear_scaling),
+        (linear_scaler, expected_linear_scaling),
         (relu_scaler, expected_relu_scaling),
         (constant_scaler, expected_constant_scaling),
         (polynomial_scaler, expected_polynomial_scaling),
@@ -170,7 +166,7 @@ def test_metric_range(fake_data: tuple[DictConfig, IndexCollection]) -> None:
             data_indices.model.output.name_to_index["y_500"],
             data_indices.model.output.name_to_index["y_850"],
         ],
-	"sfc_other": [data_indices.model.output.name_to_index["other"]],
+        "sfc_other": [data_indices.model.output.name_to_index["other"]],
         "sfc_q": [data_indices.model.output.name_to_index["q"]],
         "sfc_z": [data_indices.model.output.name_to_index["z"]],
         "other": [data_indices.model.output.name_to_index["other"]],
@@ -192,11 +188,14 @@ def test_no_tendency_scaling(self):
     result = scaler.get_level_scaling(10.0, 5.0)
     assert result == 1.0, "NoTendencyScaler should always return 1.0"
 
+
 def test_stddev_tendency_scaling(self):
     scaler = StdevTendencyScaler()
     result = scaler.get_level_scaling(10.0, 5.0)
     expected = 10.0 / 5.0
-    assert pytest.approx(result, rel=1e-5) == expected, "StdevTendencyScaler should return variable_stdev / variable_tendency_stdev"
+    assert (
+        pytest.approx(result, rel=1e-5) == expected
+    ), "StdevTendencyScaler should return variable_stdev / variable_tendency_stdev"
 
     # Test with edge case
     result = scaler.get_level_scaling(0.0, 1.0)
@@ -212,15 +211,15 @@ def test_get_level_scaling(self):
     scaler = VarTendencyScaler()
     result = scaler.get_level_scaling(10.0, 5.0)
     expected = (10.0**2) / (5.0**2)
-    assert pytest.approx(result, rel=1e-5) == expected, "VarTendencyScaler should return (variable_stdev^2) / (variable_tendency_stdev^2)"
+    assert (
+        pytest.approx(result, rel=1e-5) == expected
+    ), "VarTendencyScaler should return (variable_stdev^2) / (variable_tendency_stdev^2)"
 
     # Test with edge case
     result = scaler.get_level_scaling(0.0, 1.0)
     assert result == 0.0, "VarTendencyScaler should return 0.0 when variable_stdev is 0"
 
-   # Test division by a very small number
+    # Test division by a very small number
     result = scaler.get_level_scaling(1.0, 1e-3)
     expected = (1.0**2) / (1e-3**2)
     assert pytest.approx(result, rel=1e-5) == expected, "VarTendencyScaler should handle small divisor values"
-
-
