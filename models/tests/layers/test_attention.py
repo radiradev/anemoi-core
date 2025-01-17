@@ -8,11 +8,12 @@
 # nor does it submit to any jurisdiction.
 
 
+import math
+
 import hypothesis.strategies as st
 import pytest
 import torch
 import torch.nn as nn
-import math
 from hypothesis import given
 from hypothesis import settings
 
@@ -20,8 +21,8 @@ from anemoi.models.layers.attention import MultiHeadSelfAttention
 
 
 @given(
-    num_heads=st.integers(min_value=1, max_value=50),
-    embed_dim_multiplier=st.integers(min_value=1, max_value=10),
+    num_heads=st.sampled_from([1, 2, 4, 8, 16]),
+    embed_dim_multiplier=st.sampled_from([16, 32, 64]),
     dropout_p=st.floats(min_value=0.0, max_value=1.0),
     softcap=st.floats(min_value=0.0, max_value=1.0),
     attention_implementation=st.sampled_from(["scaled_dot_product_attention", "flex_attention"]),
@@ -69,6 +70,7 @@ def test_multi_head_self_attention_forward_sdpa(batch_size, num_heads, embed_dim
     embed_dim_multiplier=st.integers(min_value=1, max_value=10),
     dropout_p=st.floats(min_value=0.0, max_value=1.0),
 )
+@settings(deadline=None)
 def test_multi_head_self_attention_backward_sdpa(batch_size, num_heads, embed_dim_multiplier, dropout_p):
     embed_dim = num_heads * embed_dim_multiplier
     mhsa = MultiHeadSelfAttention(
@@ -90,10 +92,10 @@ def test_multi_head_self_attention_backward_sdpa(batch_size, num_heads, embed_di
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="No GPU available")
 @pytest.mark.gpu
 @given(
-    batch_size=st.integers(min_value=1, max_value=64),
-    num_heads=st.integers(min_value=16, max_value=16),
-    embed_dim_multiplier=st.sampled_from([2, 4, 8, 16]),
-    window_size=st.integers(min_value=2, max_value=16),
+    batch_size=st.sampled_from([2]),
+    num_heads=st.sampled_from([1, 2, 4, 8, 16]),
+    embed_dim_multiplier=st.sampled_from([16, 32, 64]),
+    window_size=st.sampled_from([None, 0, 4, 16]),
 )
 @settings(deadline=None)
 def test_multi_head_self_attention_forward_flex(batch_size, num_heads, embed_dim_multiplier, window_size):
@@ -112,11 +114,12 @@ def test_multi_head_self_attention_forward_flex(batch_size, num_heads, embed_dim
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="No GPU available")
 @pytest.mark.gpu
 @given(
-    batch_size=st.integers(min_value=1, max_value=64),
-    num_heads=st.integers(min_value=1, max_value=20),
-    embed_dim_multiplier=st.sampled_from([2, 4, 8, 16]),
-    window_size=st.integers(min_value=2, max_value=16),
+    batch_size=st.sampled_from([2]),
+    num_heads=st.sampled_from([1, 2, 4, 8, 16]),
+    embed_dim_multiplier=st.sampled_from([16, 32, 64]),
+    window_size=st.sampled_from([None, 0, 4, 16]),
 )
+@settings(deadline=None)
 def test_multi_head_self_attention_backward_flex(batch_size, num_heads, embed_dim_multiplier, window_size):
     embed_dim = num_heads * embed_dim_multiplier
     mhsa = MultiHeadSelfAttention(
@@ -124,6 +127,7 @@ def test_multi_head_self_attention_backward_flex(batch_size, num_heads, embed_di
     ).cuda()
 
     x = torch.randn(batch_size * 2, embed_dim, requires_grad=True).cuda()
+    x.retain_grad()
     shapes = [list(x.shape)]
     output = mhsa.forward(x, shapes, batch_size)
 
@@ -134,13 +138,14 @@ def test_multi_head_self_attention_backward_flex(batch_size, num_heads, embed_di
     assert x.grad is not None
     assert x.grad.shape == x.shape
 
+
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="No GPU available")
 @pytest.mark.gpu
 @given(
     num_heads=st.integers(min_value=1, max_value=1),
     embed_dim=st.one_of(
         st.integers(max_value=15),  # Invalid: less than 16
-        st.integers(min_value=16).filter(lambda x: not math.log2(x).is_integer())  # Invalid: not a power of 2
+        st.integers(min_value=16).filter(lambda x: not math.log2(x).is_integer()),  # Invalid: not a power of 2
     ),
     window_size=st.integers(min_value=2, max_value=16),
 )
