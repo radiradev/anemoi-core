@@ -22,7 +22,6 @@ def get_variable_group_and_level(
     ----------
     variable_name : str
         Name of the variable.
-
     group_variables : dict
         Dictionary with variable names as keys and groups as values.
     metadata_variables : dict, optional
