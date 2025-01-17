@@ -11,10 +11,15 @@
 import pytest
 import torch
 from _pytest.fixtures import SubRequest
+from hydra.utils import instantiate
 from omegaconf import DictConfig
 
 from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.training.train.forecaster import GraphForecaster
+from anemoi.training.train.scaling import GeneralVariableLossScaler
+from anemoi.training.train.scaling import NoTendencyScaler
+from anemoi.training.train.scaling import StdevTendencyScaler
+from anemoi.training.train.scaling import VarTendencyScaler
 
 
 @pytest.fixture
@@ -30,15 +35,17 @@ def fake_data(request: SubRequest) -> tuple[DictConfig, IndexCollection]:
             },
             "training": {
                 "variable_loss_scaling": {
-                    "default": 1,
-                    "sfc": {
-                        "z": 0.1,
-                        "other": 100,
+                    "variable_groups": {
+                        "default": "sfc",
+                        "pl": ["y"],
                     },
-                    "pl": {"y": 0.5},
+                    "default": 1,
+                    "z": 0.1,
+                    "other": 100,
+                    "y": 0.5,
                 },
                 "metrics": ["other", "y_850"],
-                "pressure_level_scaler": request.param,
+                "additional_scalars": request.param,
             },
         },
     )
@@ -47,26 +54,47 @@ def fake_data(request: SubRequest) -> tuple[DictConfig, IndexCollection]:
     return config, data_indices
 
 
-linear_scaler = {
-    "_target_": "anemoi.training.data.scaling.LinearPressureLevelScaler",
-    "minimum": 0.0,
-    "slope": 0.001,
-}
-relu_scaler = {
-    "_target_": "anemoi.training.data.scaling.ReluPressureLevelScaler",
-    "minimum": 0.2,
-    "slope": 0.001,
-}
-constant_scaler = {
-    "_target_": "anemoi.training.data.scaling.NoPressureLevelScaler",
-    "minimum": 1.0,
-    "slope": 0.0,
-}
-polynomial_scaler = {
-    "_target_": "anemoi.training.data.scaling.PolynomialPressureLevelScaler",
-    "minimum": 0.2,
-    "slope": 0.001,
-}
+linear_scaler = [
+    {
+        "_target_": "anemoi.training.train.scaling.LinearVariableLevelScaler",
+        "group": "pl",
+        "y_intercept": 0.0,
+        "slope": 0.001,
+        "scale_dim": -1,
+        "name": "variable_pressure_level",
+    },
+]
+relu_scaler = [
+    {
+        "_target_": "anemoi.training.train.scaling.ReluVariableLevelScaler",
+        "group": "pl",
+        "y_intercept": 0.2,
+        "slope": 0.001,
+        "scale_dim": -1,
+        "name": "variable_pressure_level",
+    },
+]
+constant_scaler = [
+    {
+        "_target_": "anemoi.training.train.scaling.NoVariableLevelScaler",
+        "group": "pl",
+        "y_intercept": 1.0,
+        "slope": 0.0,
+        "scale_dim": -1,
+        "name": "variable_pressure_level",
+    },
+]
+polynomial_scaler = [
+    {
+        "_target_": "anemoi.training.train.scaling.PolynomialVariableLevelScaler",
+        "group": "pl",
+        "y_intercept": 0.2,
+        "slope": 0.001,
+        "scale_dim": -1,
+        "name": "variable_pressure_level",
+    },
+]
+
 std_dev_scaler = {
     "- _target_": "anemoi.training.train.scaling.StdevTendencyScaler",
     "scale_dim": -1,
@@ -145,10 +173,40 @@ def test_variable_loss_scaling_vals(
     expected_scaling: torch.Tensor,
 ) -> None:
     config, data_indices = fake_data
-    breakpoint()
-    variable_loss_scaling = GraphForecaster.get_variable_scaling(config, data_indices)
+    variable_scaling = GeneralVariableLossScaler(
+        config.training.variable_loss_scaling,
+        data_indices,
+    ).get_variable_scaling()
 
-    assert torch.allclose(variable_loss_scaling, expected_scaling)
+    scalar = [
+        (
+            instantiate(
+                scalar_config,
+                scaling_config=config.training.variable_loss_scaling,
+                data_indices=data_indices,
+                statistics=None,
+                statistics_tendencies=None,
+            )
+            if scalar_config["name"] == "tendency"
+            else instantiate(
+                scalar_config,
+                scaling_config=config.training.variable_loss_scaling,
+                data_indices=data_indices,
+                metadata_variables=None,
+            )
+        )
+        for scalar_config in config.training.additional_scalars
+    ]
+
+    scalars = {
+        "variable": (-1, variable_scaling),
+    }
+    # add addtional user-defined scalars
+    [scalars.update({scale.name: (scale.scale_dim, scale.get_variable_scaling())}) for scale in scalar]
+    keys_list = list(scalars.keys())
+    scalars[keys_list[0]][1] * scalars[keys_list[1]][1]
+
+    assert torch.allclose(torch.tensor(scalars[keys_list[0]][1] * scalars[keys_list[1]][1]), expected_scaling)
 
 
 @pytest.mark.parametrize("fake_data", [linear_scaler], indirect=["fake_data"])
@@ -183,13 +241,14 @@ def test_metric_range(fake_data: tuple[DictConfig, IndexCollection]) -> None:
     assert metric_range == expected_metric_range
 
 
-def test_no_tendency_scaling(self):
+# TODO(Mariana): Add tests for the following classes
+def test_no_tendency_scaling() -> None:
     scaler = NoTendencyScaler()
     result = scaler.get_level_scaling(10.0, 5.0)
     assert result == 1.0, "NoTendencyScaler should always return 1.0"
 
 
-def test_stddev_tendency_scaling(self):
+def test_stddev_tendency_scaling() -> None:
     scaler = StdevTendencyScaler()
     result = scaler.get_level_scaling(10.0, 5.0)
     expected = 10.0 / 5.0
@@ -207,7 +266,7 @@ def test_stddev_tendency_scaling(self):
     assert pytest.approx(result, rel=1e-5) == expected, "StdevTendencyScaler should handle small divisor values"
 
 
-def test_get_level_scaling(self):
+def test_get_level_scaling() -> None:
     scaler = VarTendencyScaler()
     result = scaler.get_level_scaling(10.0, 5.0)
     expected = (10.0**2) / (5.0**2)

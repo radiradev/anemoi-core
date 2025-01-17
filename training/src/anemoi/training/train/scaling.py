@@ -208,14 +208,25 @@ class NoVariableLevelScaler(BaseVariableLevelScaler):
         data_indices: IndexCollection,
         metadata_variables: dict,
         group: str,
-        slope: float = 0.0,
         y_intercept: float = 1.0,
+        slope: float = 0.0,
+        name: str | None = None,
+        scale_dim: int | None = None,
     ) -> None:
         """Initialise Scaler with constant scaling of 1."""
         assert (
             y_intercept == 1.0 and slope == 0
         ), "self.y_intercept must be 1.0 and self.slope 0.0 for no scaling to fit with definition of linear function."
-        super().__init__(scaling_config, data_indices, metadata_variables, group, slope=0.0, y_intercept=1.0)
+        super().__init__(
+            scaling_config,
+            data_indices,
+            metadata_variables,
+            group,
+            y_intercept=1.0,
+            slope=0.0,
+            name=name,
+            scale_dim=scale_dim,
+        )
 
     @staticmethod
     def get_level_scaling(variable_level: float) -> np.ndarray:
