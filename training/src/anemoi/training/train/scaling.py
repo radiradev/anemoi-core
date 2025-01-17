@@ -23,13 +23,14 @@ LOGGER = logging.getLogger(__name__)
 class BaseVariableLossScaler(ABC):
     """Configurable method converting variable to loss scaling."""
 
-    def __init__(self, scaling_config: DictConfig, data_indices: IndexCollection) -> None:
+    def __init__(self, scaling_config: DictConfig, data_indices: IndexCollection, metadata_dataset: dict) -> None:
         """Initialise Scaler.
 
         Parameters
         ----------
         scaling_config :
         data_indices :
+        metadata_dataset :
 
         """
         self.scaling_config = scaling_config
@@ -43,6 +44,7 @@ class BaseVariableLossScaler(ABC):
             for variable in variables:
                 self.group_variables[variable] = group
         self.default_group = self.scaling_config.variable_groups.default
+        self.metadata_dataset = metadata_dataset
 
     @abstractmethod
     def get_variable_scaling(self) -> np.ndarray: ...
@@ -65,11 +67,21 @@ class BaseVariableLossScaler(ABC):
             Variable level, i.e. pressure level or model level
 
         """
-        split = variable_name.split("_")
         variable_level = None
-        if len(split) > 1 and split[-1].isdigit():
-            variable_level = int(split[-1])
-            variable_name = variable_name[: -len(split[-1]) - 1]
+        if (
+            self.metadata_dataset
+            and variable_name in self.metadata_dataset
+            and self.metadata_dataset[variable_name].get("mars")
+        ):
+            # if metadata is available: get variable name and level from metadata
+            variable_level = self.metadata_dataset[variable_name]["mars"].get("levelist")
+            variable_name = self.metadata_dataset[variable_name]["mars"]["param"]
+        else:
+            # if metadata is not available: split variable name into variable name and level
+            split = variable_name.split("_")
+            if len(split) > 1 and split[-1].isdigit():
+                variable_level = int(split[-1])
+                variable_name = variable_name[: -len(split[-1]) - 1]
         if variable_name in self.group_variables:
             return self.group_variables[variable_name], variable_name, variable_level
         return self.default_group, variable_name, variable_level
@@ -108,6 +120,7 @@ class BaseVariableLevelScaler(BaseVariableLossScaler):
         self,
         scaling_config: DictConfig,
         data_indices: IndexCollection,
+        metadata_dataset: dict,
         group: str,
         y_intercept: float,
         slope: float,
@@ -122,6 +135,8 @@ class BaseVariableLevelScaler(BaseVariableLossScaler):
             Configuration for variable loss scaling.
         data_indices : IndexCollection
             Collection of data indices.
+        metadata_dataset : dict
+            Metadata of the dataset.
         group : str
             Group of variables to scale.
         y_intercept : float
@@ -129,7 +144,7 @@ class BaseVariableLevelScaler(BaseVariableLossScaler):
         slope : float
             Slope of scaling function.
         """
-        super().__init__(scaling_config, data_indices)
+        super().__init__(scaling_config, data_indices, metadata_dataset)
         self.scaling_group = group
         self.y_intercept = y_intercept
         self.slope = slope
@@ -189,6 +204,7 @@ class NoVariableLevelScaler(BaseVariableLevelScaler):
         self,
         scaling_config: DictConfig,
         data_indices: IndexCollection,
+        metadata_dataset: dict,
         group: str,
         slope: float = 0.0,
         y_intercept: float = 1.0,
@@ -197,7 +213,7 @@ class NoVariableLevelScaler(BaseVariableLevelScaler):
         assert (
             y_intercept == 1.0 and slope == 0
         ), "self.y_intercept must be 1.0 and self.slope 0.0 for no scaling to fit with definition of linear function."
-        super().__init__(scaling_config, data_indices, group, slope=0.0, y_intercept=1.0)
+        super().__init__(scaling_config, data_indices, metadata_dataset, group, slope=0.0, y_intercept=1.0)
 
     @staticmethod
     def get_level_scaling(variable_level: float) -> np.ndarray:
