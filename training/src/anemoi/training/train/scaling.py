@@ -21,6 +21,8 @@ if TYPE_CHECKING:
 
 import numpy as np
 
+from anemoi.training.utils.variables_metadata import get_variable_group_and_level
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -42,7 +44,7 @@ class BaseVariableLossScaler(ABC):
         data_indices : IndexCollection
             Collection of data indices.
         metadata_variables : dict, optional
-            Metadata of the variables in the dataset if available.
+            Dictionary with variable names as keys and metadata as values, by default None
 
         """
         self.scaling_config = scaling_config
@@ -79,24 +81,12 @@ class BaseVariableLossScaler(ABC):
             Variable level, i.e. pressure level or model level
 
         """
-        variable_level = None
-        if (
-            self.metadata_variables
-            and variable_name in self.metadata_variables
-            and self.metadata_variables[variable_name].get("mars")
-        ):
-            # if metadata is available: get variable name and level from metadata
-            variable_level = self.metadata_variables[variable_name]["mars"].get("levelist")
-            variable_name = self.metadata_variables[variable_name]["mars"]["param"]
-        else:
-            # if metadata not available: split variable name into variable name and level
-            split = variable_name.split("_")
-            if len(split) > 1 and split[-1].isdigit():
-                variable_level = int(split[-1])
-                variable_name = variable_name[: -len(split[-1]) - 1]
-        if variable_name in self.group_variables:
-            return self.group_variables[variable_name], variable_name, variable_level
-        return self.default_group, variable_name, variable_level
+        return get_variable_group_and_level(
+            variable_name,
+            self.group_variables,
+            self.metadata_variables,
+            self.default_group,
+        )
 
 
 class GeneralVariableLossScaler(BaseVariableLossScaler):
