@@ -162,6 +162,71 @@ class TransformerProcessor(BaseProcessor):
         return x
 
 
+class VisionTransformerProcessor(BaseProcessor):
+    """Vistion Transformer Processor."""
+
+    def __init__(
+        self,
+        num_layers: int,
+        *args,
+        window_size: Optional[int] = None,
+        kernel_size: int | tuple[int, int],
+        num_channels: int = 128,
+        num_chunks: int = 2,
+        activation: str = "GELU",
+        cpu_offload: bool = False,
+        num_heads: int = 16,
+        sub_graph: Optional[HeteroData] = None,
+        grid_index_node_attr: Optional[str] = None,
+        **kwargs,
+    ) -> None:
+        """Initialize VisionTransformerProcessor.
+
+        Parameters
+        ----------
+        num_layers : int
+            Number of num_layers
+        window_size: int,
+            1/2 size of shifted window for attention computation
+        num_channels : int
+            number of channels
+        heads: int
+            Number of heads to use, default 16
+        mlp_hidden_ratio: int
+            ratio of mlp hidden dimension to embedding dimension, default 4
+        activation : str, optional
+            Activation function, by default "GELU"
+        dropout_p: float, optional
+            Dropout probability used for multi-head self attention, default 0.0
+        """
+        super().__init__(
+            num_channels=num_channels,
+            num_layers=num_layers,
+            window_size=window_size,
+            num_chunks=num_chunks,
+            activation=activation,
+            cpu_offload=cpu_offload,
+            num_heads=num_heads,
+        )
+
+        self.build_layers(
+            nn.Conv2d, # TODO: Update with ViT
+            in_channels=num_channels,
+            out_channels=num_channels,
+            kernel_size=kernel_size,
+            padding="same",
+        )
+
+        self.offload_layers(cpu_offload)
+
+    def forward(self, x: Tensor, *args, **kwargs) -> Tensor:
+        # x has shape (batch X ensemble_dim, n_ch, y, x)
+
+        (x,) = self.run_layers((x,))
+
+        return x
+
+
 class GNNProcessor(GraphEdgeMixin, BaseProcessor):
     """GNN Processor."""
 

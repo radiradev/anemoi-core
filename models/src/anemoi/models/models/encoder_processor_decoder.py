@@ -193,11 +193,23 @@ class AnemoiModelEncProcDec(nn.Module):
             model_comm_group=model_comm_group,
         )
 
+        # TODO: Move inside ?processor?
+        len_y, len_x = self._graph_data["hidden"]["index_grid2d"].max(0).values + 1
+        x_2d = einops.rearrange(
+            x_latent, 
+            "(bsens y x) vars -> bsens vars y x", 
+            bsens=batch_size*ensemble_size, y=int(len_y), x=int(len_x)
+        )
         x_latent_proc = self.processor(
-            x_latent,
+            x_2d,
             batch_size=batch_size,
             shard_shapes=shard_shapes_hidden,
             model_comm_group=model_comm_group,
+        )
+        x_latent_proc = einops.rearrange(
+            x_latent_proc,
+            "bsens vars y x -> (bsens y x) vars",
+            bsens=batch_size*ensemble_size, y=int(len_y), x=int(len_x)
         )
 
         # add skip connection (hidden -> hidden)
