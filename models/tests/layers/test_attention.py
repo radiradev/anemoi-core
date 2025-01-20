@@ -159,23 +159,3 @@ def test_invalid_embed_dim_raises_assertion_flex(num_heads, embed_dim, window_si
             dropout_p=0.0,
             attention_implementation="flex_attention",
         ).cuda()
-
-
-if __name__ == "__main__":
-    batch_size = 8
-    num_heads = 8  # or any other generated value
-    embed_dim_multiplier = 16
-    window_size = 2  # or any other generated value
-    grid_size = 2
-
-    embed_dim = num_heads * embed_dim_multiplier
-    print(embed_dim)
-
-    mhsa = MultiHeadSelfAttention(
-        num_heads, embed_dim, window_size=window_size, dropout_p=0.0, attention_implementation="flex_attention"
-    ).cuda()
-
-    x = torch.randn(batch_size * grid_size, embed_dim).cuda()
-    shapes = [list(x.shape)]
-    output = mhsa.forward(x, shapes, batch_size)
-    print("ok")
