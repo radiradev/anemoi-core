@@ -15,6 +15,7 @@ from typing import Any
 
 from omegaconf import OmegaConf
 from pydantic import BaseModel
+from pydantic import ValidationError
 from pydantic import model_validator
 
 # to make these available at runtime for pydantic, bug should be resolved in
@@ -65,6 +66,18 @@ class BaseSchema(BaseModel):
             / self.hardware.num_gpus_per_model
         )
         return self
+
+    @model_validator(mode="after")
+    def check_log_paths_available_for_loggers(self) -> BaseSchema:
+        if self.diagnostics.log.wandb and not self.hardware.paths.logs.wandb:
+            msg = "Wandb logging path not provided."
+            raise ValidationError(msg)
+        if self.diagnostics.log.mlflow and not self.hardware.paths.logs.mlflow:
+            msg = "MLFlow logging path not provided."
+            raise ValidationError(msg)
+        if self.diagnostics.log.tensorboard and not self.hardware.paths.logs.tensorboard:
+            msg = "Tensorboard logging path not provided."
+            raise ValidationError(msg)
 
 
 class UnvalidatedBaseSchema(BaseModel):
