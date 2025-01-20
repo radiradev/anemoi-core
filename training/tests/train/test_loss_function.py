@@ -13,7 +13,6 @@ import torch
 from omegaconf import DictConfig
 from torch_geometric.data import HeteroData
 
-
 from anemoi.training.losses.combined import CombinedLoss
 from anemoi.training.losses.mae import WeightedMAELoss
 from anemoi.training.losses.mse import WeightedMSELoss
@@ -55,7 +54,7 @@ def test_manual_init() -> None:
     assert loss.node_weights == torch.ones(1)
 
 
-def test_dynamic_init_include(scalars, graph_data, output_mask) -> None:
+def test_dynamic_init_include(scalars: dict[str, tuple], graph_data: HeteroData, output_mask: torch.Tensor) -> None:
     loss = GraphForecaster.get_loss_function(
         DictConfig({"_target_": "anemoi.training.losses.mse.WeightedMSELoss"}),
         node_weights=torch.ones(1),
@@ -67,7 +66,7 @@ def test_dynamic_init_include(scalars, graph_data, output_mask) -> None:
     assert loss.node_weights == torch.ones(1)
 
 
-def test_dynamic_init_scalar(graph_data, output_mask) -> None:
+def test_dynamic_init_scalar(graph_data: HeteroData, output_mask: torch.Tensor) -> None:
     loss = GraphForecaster.get_loss_function(
         DictConfig(
             {
@@ -87,7 +86,7 @@ def test_dynamic_init_scalar(graph_data, output_mask) -> None:
     torch.testing.assert_close(loss.scalar.get_scalar(2), torch.ones((1, 2)))
 
 
-def test_dynamic_init_scalar_not_add(scalars, graph_data, output_mask) -> None:
+def test_dynamic_init_scalar_not_add(graph_data: HeteroData, output_mask: torch.Tensor) -> None:
     loss = GraphForecaster.get_loss_function(
         DictConfig(
             {
@@ -111,6 +110,8 @@ def test_combined_loss() -> None:
     cl = CombinedLoss(losses=[loss1, loss2], loss_weights=(1.0, 0.5))
     assert isinstance(cl, CombinedLoss)
     cl_class = CombinedLoss(
-        losses=[WeightedMSELoss, WeightedMAELoss], node_weights=torch.ones(1), loss_weights=(1.0, 0.5)
+        losses=[WeightedMSELoss, WeightedMAELoss],
+        node_weights=torch.ones(1),
+        loss_weights=(1.0, 0.5),
     )
     assert isinstance(cl_class, CombinedLoss)

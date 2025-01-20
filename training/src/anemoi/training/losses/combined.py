@@ -27,7 +27,6 @@ class CombinedLoss(torch.nn.Module):
         self,
         losses: Sequence[torch.nn.Module],
         loss_weights: tuple[int, ...],
-        **kwargs,
     ):
         """Combined loss function.
 
@@ -44,8 +43,6 @@ class CombinedLoss(torch.nn.Module):
             Loss objects.
         loss_weights : tuple[int, ...]
             Weights of each loss function in the combined loss.
-        kwargs: Any
-            Additional arguments to pass to the loss functions
 
         Examples
         --------

@@ -10,14 +10,17 @@
 
 import logging
 from collections import defaultdict
-from collections.abc import Generator, Mapping
-from typing import Optional, Union
+from collections.abc import Generator
+from collections.abc import Mapping
+from typing import Optional
+from typing import Union
 
 import numpy as np
 import pytorch_lightning as pl
 import torch
 from hydra.utils import instantiate
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
+from omegaconf import OmegaConf
 from timm.scheduler import CosineLRScheduler
 from torch.distributed.distributed_c10d import ProcessGroup
 from torch.distributed.optim import ZeroRedundancyOptimizer
@@ -30,7 +33,8 @@ from anemoi.training.losses.combined import CombinedLoss
 from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
 from anemoi.training.utils.jsonify import map_config_to_primitives
-from anemoi.training.utils.masks import Boolean1DMask, NoOutputMask
+from anemoi.training.utils.masks import Boolean1DMask
+from anemoi.training.utils.masks import NoOutputMask
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -249,7 +253,11 @@ class GraphForecaster(pl.LightningModule):
 
             losses = [
                 cls.get_loss_function(
-                    loss, scalars=scalars, graph_data=graph_data, output_mask=output_mask, **loss_kwargs
+                    loss,
+                    scalars=scalars,
+                    graph_data=graph_data,
+                    output_mask=output_mask,
+                    **loss_kwargs,
                 )
                 for loss in config.losses
             ]
