@@ -177,7 +177,14 @@ class AnemoiModelEncProcDec(nn.Module):
     def forward(self, x: Tensor, model_comm_group: Optional[ProcessGroup] = None) -> Tensor:
         batch_size = x.shape[0]
         ensemble_size = x.shape[2]
-
+        x_reshaped = torch.reshape(x, (batch_size, x.shape[1], ensemble_size, x.shape[3], 6, 13))
+        rand_idx = torch.randperm(x_reshaped.shape[-1])
+        num_list = torch.Tensor([i for i in range(x_reshaped.shape[-1])])
+        comb_list = torch.cat([rand_idx.view(x_reshaped.shape[-1], 1), num_list.view(x_reshaped.shape[-1], 1)], axis = 1)
+        sorted_comb_list = comb_list[comb_list[:, 0].sort()[1]]
+        rand_rev = [int(i) for i in sorted_comb_list[:, 1]]
+        x_rand = x_reshaped[..., rand_idx]
+    
         data_indices = self.data_indices.internal_model.input.name_to_index.items()
         level_list = []
         for var_str in data_indices:
@@ -203,16 +210,22 @@ class AnemoiModelEncProcDec(nn.Module):
         """
         num_grid_points = x.shape[-2]
         n_times = x.shape[1]
-        mapped_level_tensor = norm_level_tensor.view(1, 1, 1, 1, norm_level_tensor.shape[0]).expand(
-            batch_size, n_times, 1, num_grid_points, -1
+        norm_level_tensor = norm_level_tensor.reshape((6, 13))
+        mapped_level_tensor = norm_level_tensor.view(1, 1, 1, 1, 6, 13).expand(
+            batch_size, n_times, 1, num_grid_points, 6, 13
         ).to("cuda")  
-        x_data_vertical_latent = x + mapped_level_tensor
+        x_data_vertical_latent = x_rand + mapped_level_tensor #torch.cat((x, mapped_level_tensor), dim=-1)
         # add data positional info (lat/lon)
         x_data_latent = torch.cat(
             (
+                # pressure levels
                 einops.rearrange(
-                    x_data_vertical_latent, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"
+                    x_data_vertical_latent, "batch time ensemble grid vars levels -> (batch ensemble grid) (time vars levels)"
                 ),
+                # # surface and forcings
+                # einops.rearrange(
+                #     x_data_vertical_latent, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"
+                # ),               
                 self.node_attributes(self._graph_name_data, batch_size=batch_size),
             ),
             dim=-1,  # feature dimension
@@ -256,6 +269,20 @@ class AnemoiModelEncProcDec(nn.Module):
             einops.rearrange(
                 x_out,
                 "(batch ensemble grid) vars -> batch ensemble grid vars",
+                batch=batch_size,
+                ensemble=ensemble_size,
+            )
+            .to(dtype=x.dtype)
+            .clone()
+        )
+
+        x_out_reshape = torch.reshape(x_out, (batch_size, x_out.shape[1], x_out.shape[2], 6, 13))
+        x_reorder = x_out_reshape[..., rand_rev]
+
+        x_out = (
+            einops.rearrange(
+                x_reorder,
+                "batch ensemble grid vars level -> batch ensemble grid (vars level)",
                 batch=batch_size,
                 ensemble=ensemble_size,
             )
