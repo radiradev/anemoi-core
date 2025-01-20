@@ -34,7 +34,7 @@ class LimitedAreaRectilinearNodes(BaseNodeBuilder):
         super().__init__(name)
         self.resolution = resolution
         self.area_mask_builder = BBoxAreaMaskBuilder(reference_node_name, margin_radius_degrees, mask_attr_name)
-        self.hidden_attributes = BaseNodeBuilder.hidden_attributes | {"bbox", "resolution"}
+        self.hidden_attributes = BaseNodeBuilder.hidden_attributes | {"area_mask_builder", "resolution"}
 
     def register_nodes(self, graph: HeteroData) -> None:
         self.area_mask_builder.fit(graph)

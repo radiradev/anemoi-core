@@ -335,7 +335,7 @@ class Index2DGrid(BaseNodeAttribute):
             Position of each node in the 2d grid. where 1st value is its position in the X axis and 2nd value in y axis.
         """
         assert nodes["node_type"] == "LimitedAreaRectilinearNodes"
-        lon_min, lat_min, lon_max, lat_max = nodes["_bbox"]
+        lon_min, lat_min, lon_max, lat_max = nodes["_area_mask_builder"].bbox
         resolution = nodes["_resolution"]
         shape = (lat_max - lat_min) / resolution, (lon_max - lon_min) / resolution
         y_indices, x_indices = np.mgrid[0 : shape[0], 0 : shape[1]]
