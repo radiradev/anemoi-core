@@ -91,8 +91,6 @@ class DataSchema(BaseModel):
 
     format: str = Field(default=None)
     "Format of the data."
-    resolution: str = Field(default=None, examples=["o96", "n320", "o48"])
-    "Grid type and resolution."
     frequency: str = Field(default=None)
     "Time frequency requested from the dataset."
     timestep: str = Field(default=None)
@@ -104,7 +102,5 @@ class DataSchema(BaseModel):
     "Features that are not part of the forecast state but are used as forcing to generate the forecast state."
     diagnostic: list[str] = Field(default_factory=list)
     "Features that are only part of the forecast state and are not used as an input to the model."
-    num_features: int | None = Field(default=None)
-    "Number of features in the forecast state."  # Set in the code should not be in the config???
     remapped: dict | None = Field(default=None)
     "Dictionary of remapped names for variables."

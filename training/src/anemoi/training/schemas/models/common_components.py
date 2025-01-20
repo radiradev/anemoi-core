@@ -56,7 +56,7 @@ class TransformerModelComponent(BaseModel):
 
 
 class GNNModelComponent(BaseModel):
-    activation: str = Field(default="GELU")
+    activation: ActivationFunctons = Field(default="GELU")
     "Activation function to use for the GNN model component. Default to GELU."
     trainable_size: NonNegativeInt = Field(default=8)
     "Size of trainable parameters vector. Default to 8."

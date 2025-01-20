@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from omegaconf import OmegaConf
 from pydantic import BaseModel
@@ -43,7 +44,11 @@ class BaseSchema(BaseModel):
     class Config:
         """Pydantic configuration."""
 
-        arbitrary_types_allowed = True
+        use_attribute_docstrings = True
+        use_enum_values = True
+        validate_assignment = True
+        validate_default = True
+        extra = "allow"
 
     @model_validator(mode="after")
     def set_read_group_size_if_not_provided(self) -> BaseSchema:
@@ -60,6 +65,22 @@ class BaseSchema(BaseModel):
             / self.hardware.num_gpus_per_model
         )
         return self
+
+
+class UnvalidatedBaseSchema(BaseModel):
+    data: Any
+    dataloader: Any
+    diagnostics: Any
+    hardware: Any
+    graph: Any
+    model: Any
+    training: Any
+
+    class Config:
+        """Pydantic configuration."""
+
+        extra = "allow"
+        arbitrary_types_allowed = True
 
 
 def convert_to_omegaconf(config: BaseSchema) -> dict:

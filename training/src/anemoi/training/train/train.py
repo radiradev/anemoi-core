@@ -32,6 +32,7 @@ from anemoi.training.diagnostics.logger import get_tensorboard_logger
 from anemoi.training.diagnostics.logger import get_wandb_logger
 from anemoi.training.distributed.strategy import DDPGroupStrategy
 from anemoi.training.schemas.base_schema import BaseSchema
+from anemoi.training.schemas.base_schema import UnvalidatedBaseSchema
 from anemoi.training.schemas.base_schema import convert_to_omegaconf
 from anemoi.training.train.forecaster import GraphForecaster
 from anemoi.training.utils.checkpoint import transfer_learning_loading
@@ -63,7 +64,12 @@ class AnemoiTrainer:
         torch.set_float32_matmul_precision("high")
         # Resolve the config to avoid shenanigans with lazy loading
         OmegaConf.resolve(config)
-        self.config = BaseSchema(**config)
+        if config.no_validate:
+            self.config = UnvalidatedBaseSchema(**config)
+            LOGGER.info("Skipping config validation.")
+        else:
+            self.config = BaseSchema(**config)
+            LOGGER.info("Config validated.")
 
         self.start_from_checkpoint = bool(self.config.training.run_id) or bool(self.config.training.fork_run_id)
         self.load_weights_only = self.config.training.load_weights_only
