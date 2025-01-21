@@ -64,7 +64,7 @@ class AnemoiTrainer:
         torch.set_float32_matmul_precision("high")
         # Resolve the config to avoid shenanigans with lazy loading
         OmegaConf.resolve(config)
-        if config.no_validate:
+        if config.no_validation:
             self.config = UnvalidatedBaseSchema(**config)
             LOGGER.info("Skipping config validation.")
         else:
