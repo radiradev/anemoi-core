@@ -15,13 +15,14 @@ from abc import ABC
 from abc import abstractmethod
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from omegaconf import DictConfig
-    from anemoi.models.data_indices.collection import IndexCollection
-
 import numpy as np
 
 from anemoi.training.utils.variables_metadata import ExtractVariableGroupAndLevel
+
+if TYPE_CHECKING:
+    from omegaconf import DictConfig
+
+    from anemoi.models.data_indices.collection import IndexCollection
 
 LOGGER = logging.getLogger(__name__)
 
