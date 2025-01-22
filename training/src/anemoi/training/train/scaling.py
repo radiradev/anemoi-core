@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 import numpy as np
 
-from anemoi.training.utils.variables_metadata import get_variable_group_and_level
+from anemoi.training.utils.variables_metadata import ExtractVariableGroupAndLevel
 
 LOGGER = logging.getLogger(__name__)
 
@@ -60,6 +60,12 @@ class BaseVariableLossScaler(ABC):
         self.default_group = self.scaling_config.variable_groups.default
         self.metadata_variables = metadata_variables
 
+        self.ExtractVariableGroupAndLevel = ExtractVariableGroupAndLevel(
+            self.group_variables,
+            self.metadata_variables,
+            self.default_group,
+        )
+
     @abstractmethod
     def get_variable_scaling(self) -> np.ndarray: ...
 
@@ -81,11 +87,8 @@ class BaseVariableLossScaler(ABC):
             Variable level, i.e. pressure level or model level
 
         """
-        return get_variable_group_and_level(
+        return self.extract_variable_group_and_level.get_group_and_level(
             variable_name,
-            self.group_variables,
-            self.metadata_variables,
-            self.default_group,
         )
 
 
