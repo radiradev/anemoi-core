@@ -110,6 +110,9 @@ lr:
 # Variable loss scaling
 # 'variable' must be included in `scalars` in the losses for this to be applied.
 variable_loss_scaling:
+  # Variable groups definition for scaling by variable level.
+  # The variable level scaling methods are defined under additional_scalars
+  # The default group is appended as prefix to the metric of all variables not asigned to a group.
   variable_groups:
     default: sfc
     pl: [q, t, u, v, w, z]
