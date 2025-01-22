@@ -60,14 +60,16 @@ class BaseVariableLossScaler(ABC):
         self.default_group = self.scaling_config.variable_groups.default
         self.metadata_variables = metadata_variables
 
-        self.ExtractVariableGroupAndLevel = ExtractVariableGroupAndLevel(
+        self.extract_variable_group_and_level = ExtractVariableGroupAndLevel(
             self.group_variables,
             self.metadata_variables,
             self.default_group,
         )
 
     @abstractmethod
-    def get_variable_scaling(self) -> np.ndarray: ...
+    def get_variable_scaling(self) -> np.ndarray:
+        """Get the scaling of the variables."""
+        ...
 
     def get_variable_group(self, variable_name: str) -> tuple[str, str, int]:
         """Get the group of a variable.
@@ -87,13 +89,13 @@ class BaseVariableLossScaler(ABC):
             Variable level, i.e. pressure level or model level
 
         """
-        return self.ExtractVariableGroupAndLevel.get_group_and_level(
+        return self.extract_variable_group_and_level.get_group_and_level(
             variable_name,
         )
 
 
 class GeneralVariableLossScaler(BaseVariableLossScaler):
-    """General scaling of variables to loss scaling."""
+    """Scaling per variable defined in config file."""
 
     def get_variable_scaling(self) -> np.ndarray:
         variable_loss_scaling = (
