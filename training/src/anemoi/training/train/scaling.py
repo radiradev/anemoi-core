@@ -72,6 +72,7 @@ class BaseVariableLossScaler(BaseScaler):
 
         """
         super().__init__(scaling_config, data_indices)
+        del kwargs
         self.variable_groups = self.scaling_config.variable_groups
         # turn dictionary around
         self.group_variables = {}
@@ -171,6 +172,7 @@ class BaseVariableLevelScaler(BaseVariableLossScaler):
             Slope of scaling function.
         """
         super().__init__(scaling_config, data_indices, metadata_variables)
+        del kwargs
         self.scaling_group = group
         self.y_intercept = y_intercept
         self.slope = slope
@@ -239,6 +241,7 @@ class NoVariableLevelScaler(BaseVariableLevelScaler):
         **kwargs        
     ) -> None:
         """Initialise Scaler with constant scaling of 1."""
+        del kwargs
         assert (
             y_intercept == 1.0 and slope == 0
         ), "self.y_intercept must be 1.0 and self.slope 0.0 for no scaling to fit with definition of linear function."
@@ -287,6 +290,7 @@ class BaseTendencyScaler(BaseVariableLossScaler):
             Data statistics dictionary for tendencies
         """
         super().__init__(scaling_config, data_indices)
+        del kwargs
         self.statistics = statistics
         self.statistics_tendencies = statistics_tendencies
         self.name = name
