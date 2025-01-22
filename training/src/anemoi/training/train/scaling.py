@@ -57,6 +57,7 @@ class BaseVariableLossScaler(BaseScaler):
         scaling_config: DictConfig,
         data_indices: IndexCollection,
         metadata_variables: dict | None = None,
+        **kwargs,
     ) -> None:
         """Initialise Scaler.
 
@@ -141,6 +142,7 @@ class BaseVariableLevelScaler(BaseVariableLossScaler):
         slope: float,
         name: str,
         scale_dim: int,
+        **kwargs,
     ) -> None:
         """Initialise variable level scaler.
 
@@ -225,6 +227,7 @@ class NoVariableLevelScaler(BaseVariableLevelScaler):
         slope: float = 0.0,
         name: str | None = None,
         scale_dim: int | None = None,
+        **kwargs,
     ) -> None:
         """Initialise Scaler with constant scaling of 1."""
         assert (
@@ -259,6 +262,7 @@ class BaseTendencyScaler(BaseVariableLossScaler):
         statistics_tendencies: dict,
         name: str,
         scale_dim: int,
+        **kwargs,
     ) -> None:
         """Initialise variable level scaler.
 
