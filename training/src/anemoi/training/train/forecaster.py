@@ -104,7 +104,7 @@ class GraphForecaster(pl.LightningModule):
             config.training.variable_loss_scaling,
             data_indices,
             metadata["dataset"].get("variables_metadata"),
-        ).get_variable_scaling()
+        ).get_scaling()
 
         # Instantiate the pressure level scaling class with the training configuration
         config_container = OmegaConf.to_container(config.training.additional_scalars, resolve=False)
@@ -150,7 +150,7 @@ class GraphForecaster(pl.LightningModule):
             "limited_area_mask": (2, limited_area_mask),
         }
         # add addtional user-defined scalars
-        [self.scalars.update({scale.name: (scale.scale_dim, scale.get_variable_scaling())}) for scale in scalar]
+        [self.scalars.update({scale.name: (scale.scale_dim, scale.get_scaling())}) for scale in scalar]
 
         self.updated_loss_mask = False
 

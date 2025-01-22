@@ -228,7 +228,7 @@ def test_variable_loss_scaling_vals(
     variable_scaling = GeneralVariableLossScaler(
         config.training.variable_loss_scaling,
         data_indices,
-    ).get_variable_scaling()
+    ).get_scaling()
 
     scalar = [
         (
@@ -255,7 +255,7 @@ def test_variable_loss_scaling_vals(
     }
     # add addtional user-defined scalars
 
-    [scalars.update({scale.name: (scale.scale_dim, scale.get_variable_scaling())}) for scale in scalar]
+    [scalars.update({scale.name: (scale.scale_dim, scale.get_scaling())}) for scale in scalar]
     keys_list = list(scalars.keys())
     scalars[keys_list[0]][1] * scalars[keys_list[1]][1]
     assert torch.allclose(torch.tensor(scalars[keys_list[0]][1] * scalars[keys_list[1]][1]), expected_scaling)

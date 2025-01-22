@@ -26,8 +26,30 @@ from anemoi.training.utils.variables_metadata import ExtractVariableGroupAndLeve
 LOGGER = logging.getLogger(__name__)
 
 
-class BaseVariableLossScaler(ABC):
-    """Configurable method converting variable to loss scaling."""
+class BaseScaler(ABC):
+    """Base class for all loss scalers."""
+
+    def __init__(self, scaling_config: DictConfig, data_indices: IndexCollection) -> None:
+        """Initialise BaseScaler.
+
+        Parameters
+        ----------
+        scaling_config : DictConfig
+            Configuration for loss scaling.
+        data_indices : IndexCollection
+            Collection of data indices.
+        """
+        self.scaling_config = scaling_config
+        self.data_indices = data_indices
+
+    @abstractmethod
+    def get_scaling(self) -> np.ndarray:
+        """Abstract method to get loss scaling."""
+        ...
+
+
+class BaseVariableLossScaler(BaseScaler):
+    """Base class for all variable loss scalers."""
 
     def __init__(
         self,
@@ -47,8 +69,7 @@ class BaseVariableLossScaler(ABC):
             Dictionary with variable names as keys and metadata as values, by default None
 
         """
-        self.scaling_config = scaling_config
-        self.data_indices = data_indices
+        super().__init__(scaling_config, data_indices)
         self.variable_groups = self.scaling_config.variable_groups
         # turn dictionary around
         self.group_variables = {}
@@ -65,11 +86,6 @@ class BaseVariableLossScaler(ABC):
             self.metadata_variables,
             self.default_group,
         )
-
-    @abstractmethod
-    def get_variable_scaling(self) -> np.ndarray:
-        """Get the scaling of the variables."""
-        ...
 
     def get_variable_group(self, variable_name: str) -> tuple[str, str, int]:
         """Get the group of a variable.
@@ -97,7 +113,7 @@ class BaseVariableLossScaler(ABC):
 class GeneralVariableLossScaler(BaseVariableLossScaler):
     """Scaling per variable defined in config file."""
 
-    def get_variable_scaling(self) -> np.ndarray:
+    def get_scaling(self) -> np.ndarray:
         variable_loss_scaling = (
             np.ones((len(self.data_indices.internal_data.output.full),), dtype=np.float32) * self.scaling_config.default
         )
@@ -121,7 +137,7 @@ class GeneralVariableLossScaler(BaseVariableLossScaler):
 
 
 class BaseVariableLevelScaler(BaseVariableLossScaler):
-    """Configurable method converting variable level to scaling."""
+    """Configurable method converting variable level to loss scalings."""
 
     def __init__(
         self,
@@ -161,7 +177,7 @@ class BaseVariableLevelScaler(BaseVariableLossScaler):
     @abstractmethod
     def get_level_scaling(self, variable_level: int) -> float: ...
 
-    def get_variable_scaling(self) -> np.ndarray:
+    def get_scaling(self) -> np.ndarray:
         variable_level_scaling = np.ones((len(self.data_indices.internal_data.output.full),), dtype=np.float32)
 
         LOGGER.info(
@@ -277,7 +293,7 @@ class BaseTendencyScaler(BaseVariableLossScaler):
     @abstractmethod
     def get_level_scaling(self, variable_level: int) -> float: ...
 
-    def get_variable_scaling(self) -> np.ndarray:
+    def get_scaling(self) -> np.ndarray:
         variable_level_scaling = np.ones((len(self.data_indices.internal_data.output.full),), dtype=np.float32)
 
         LOGGER.info("Variable Level Scaling: Applying %s scaling to prognostic variables", self.name)
