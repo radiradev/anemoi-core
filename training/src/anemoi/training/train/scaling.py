@@ -57,7 +57,7 @@ class BaseVariableLossScaler(BaseScaler):
         scaling_config: DictConfig,
         data_indices: IndexCollection,
         metadata_variables: dict | None = None,
-        **kwargs
+        **kwargs,
     ) -> None:
         """Initialise Scaler.
 
@@ -74,20 +74,11 @@ class BaseVariableLossScaler(BaseScaler):
         super().__init__(scaling_config, data_indices)
         del kwargs
         self.variable_groups = self.scaling_config.variable_groups
-        # turn dictionary around
-        self.group_variables = {}
-        for group, variables in self.variable_groups.items():
-            if isinstance(variables, str):
-                variables = [variables]
-            for variable in variables:
-                self.group_variables[variable] = group
-        self.default_group = self.scaling_config.variable_groups.default
         self.metadata_variables = metadata_variables
 
         self.extract_variable_group_and_level = ExtractVariableGroupAndLevel(
-            self.group_variables,
+            self.variable_groups,
             self.metadata_variables,
-            self.default_group,
         )
 
     def get_variable_group(self, variable_name: str) -> tuple[str, str, int]:
@@ -152,7 +143,7 @@ class BaseVariableLevelScaler(BaseVariableLossScaler):
         slope: float,
         name: str,
         scale_dim: int,
-        **kwargs        
+        **kwargs,
     ) -> None:
         """Initialise variable level scaler.
 
@@ -238,7 +229,7 @@ class NoVariableLevelScaler(BaseVariableLevelScaler):
         slope: float = 0.0,
         name: str | None = None,
         scale_dim: int | None = None,
-        **kwargs        
+        **kwargs,
     ) -> None:
         """Initialise Scaler with constant scaling of 1."""
         del kwargs
@@ -274,7 +265,7 @@ class BaseTendencyScaler(BaseVariableLossScaler):
         statistics_tendencies: dict,
         name: str,
         scale_dim: int,
-        **kwargs
+        **kwargs,
     ) -> None:
         """Initialise variable level scaler.
 
