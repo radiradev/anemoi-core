@@ -87,7 +87,7 @@ class BaseVariableLossScaler(ABC):
             Variable level, i.e. pressure level or model level
 
         """
-        return self.extract_variable_group_and_level.get_group_and_level(
+        return self.ExtractVariableGroupAndLevel.get_group_and_level(
             variable_name,
         )
 
