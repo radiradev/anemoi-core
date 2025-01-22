@@ -263,7 +263,7 @@ def test_variable_loss_scaling_vals(
 
 @pytest.mark.parametrize("fake_data", [linear_scaler], indirect=["fake_data"])
 def test_metric_range(fake_data: tuple[DictConfig, IndexCollection]) -> None:
-    config, data_indices = fake_data
+    config, data_indices, _, _ = fake_data
 
     metric_range, metric_ranges_validation = GraphForecaster.get_val_metric_ranges(config, data_indices)
 
