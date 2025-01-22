@@ -6,14 +6,11 @@
 # In applying this licence, ECMWF does not waive the privileges and immunities
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
-
+from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from collections.abc import Generator
-from collections.abc import Mapping
-from typing import Optional
-from typing import Union
+from typing import TYPE_CHECKING
 
 import pytorch_lightning as pl
 import torch
@@ -21,12 +18,9 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
 from timm.scheduler import CosineLRScheduler
-from torch.distributed.distributed_c10d import ProcessGroup
 from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.utils.checkpoint import checkpoint
-from torch_geometric.data import HeteroData
 
-from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.models.interface import AnemoiModelInterface
 from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
@@ -34,7 +28,17 @@ from anemoi.training.train.scaling import GeneralVariableLossScaler
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.masks import Boolean1DMask
 from anemoi.training.utils.masks import NoOutputMask
+from anemoi.training.utils.variables_metadata import ExtractVariableGroupAndLevel
 from anemoi.utils.config import DotDict
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
+    from collections.abc import Mapping
+
+    from torch.distributed.distributed_c10d import ProcessGroup
+    from torch_geometric.data import HeteroData
+
+    from anemoi.models.data_indices.collection import IndexCollection
 
 LOGGER = logging.getLogger(__name__)
 
@@ -129,7 +133,11 @@ class GraphForecaster(pl.LightningModule):
                 for scalar_config in config_container
             ]
 
-        self.internal_metric_ranges, self.val_metric_ranges = self.get_val_metric_ranges(config, data_indices)
+        self.internal_metric_ranges, self.val_metric_ranges = self.get_val_metric_ranges(
+            config,
+            data_indices,
+            metadata["dataset"].get("variables_metadata"),
+        )
 
         # Check if the model is a stretched grid
         if graph_data["hidden"].node_type == "StretchedTriNodes":
@@ -207,9 +215,9 @@ class GraphForecaster(pl.LightningModule):
     @staticmethod
     def get_loss_function(
         config: DictConfig,
-        scalars: Union[dict[str, tuple[Union[int, tuple[int, ...], torch.Tensor]]], None] = None,  # noqa: FA100
+        scalars: dict[str, tuple[int | tuple[int, ...] | torch.Tensor]] | None = None,
         **kwargs,
-    ) -> Union[BaseWeightedLoss, torch.nn.ModuleList]:  # noqa: FA100
+    ) -> BaseWeightedLoss | torch.nn.ModuleList:
         """Get loss functions from config.
 
         Can be ModuleList if multiple losses are specified.
@@ -218,7 +226,7 @@ class GraphForecaster(pl.LightningModule):
         ----------
         config : DictConfig
             Loss function configuration, should include `scalars` if scalars are to be added to the loss function.
-        scalars : Union[dict[str, tuple[Union[int, tuple[int, ...], torch.Tensor]]], None], optional
+        scalars : dict[str, tuple[int | tuple[int, ...] | torch.Tensor]], optional
             Scalars which can be added to the loss function. Defaults to None., by default None
             If a scalar is to be added to the loss, ensure it is in `scalars` in the loss config
             E.g.
@@ -293,18 +301,26 @@ class GraphForecaster(pl.LightningModule):
         self.updated_loss_mask = True
 
     @staticmethod
-    def get_val_metric_ranges(config: DictConfig, data_indices: IndexCollection) -> tuple[dict, dict]:
+    def get_val_metric_ranges(
+        config: DictConfig,
+        data_indices: IndexCollection,
+        metadata_variables: dict | None = None,
+    ) -> tuple[dict, dict]:
 
         metric_ranges = defaultdict(list)
         metric_ranges_validation = defaultdict(list)
+        variable_groups = config.training.variable_loss_scaling.variable_groups
+
+        extract_variable_group_and_level = ExtractVariableGroupAndLevel(
+            variable_groups,
+            metadata_variables,
+        )
 
         for key, idx in data_indices.internal_model.output.name_to_index.items():
-            split = key.split("_")
-            if len(split) > 1 and split[-1].isdigit():
-                # Group metrics for pressure levels (e.g., Q, T, U, V, etc.)
-                metric_ranges[f"pl_{split[0]}"].append(idx)
-            else:
-                metric_ranges[f"sfc_{key}"].append(idx)
+            variable_group, variable_ref, _ = extract_variable_group_and_level.get_group_and_level(key)
+
+            # Add metrics for grouped variables and variables in default group
+            metric_ranges[f"{variable_group}_{variable_ref}"].append(idx)
 
             # Specific metrics from hydra to log in logger
             if key in config.training.metrics:
@@ -315,13 +331,11 @@ class GraphForecaster(pl.LightningModule):
 
         # metric for validation, after postprocessing
         for key, idx in data_indices.model.output.name_to_index.items():
-            # Split pressure levels on "_" separator
-            split = key.split("_")
-            if len(split) > 1 and split[1].isdigit():
-                # Create grouped metrics for pressure levels (e.g. Q, T, U, V, etc.) for logger
-                metric_ranges_validation[f"pl_{split[0]}"].append(idx)
-            else:
-                metric_ranges_validation[f"sfc_{key}"].append(idx)
+            variable_group, variable_ref, _ = extract_variable_group_and_level.get_group_and_level(key)
+
+            # Add metrics for grouped variables and variables in default group
+            metric_ranges_validation[f"{variable_group}_{variable_ref}"].append(idx)
+
             # Create specific metrics from hydra to log in logger
             if key in config.training.metrics:
                 metric_ranges_validation[key] = [idx]
@@ -392,10 +406,10 @@ class GraphForecaster(pl.LightningModule):
     def rollout_step(
         self,
         batch: torch.Tensor,
-        rollout: Optional[int] = None,  # noqa: FA100
+        rollout: int | None = None,
         training_mode: bool = True,
         validation_mode: bool = False,
-    ) -> Generator[tuple[Union[torch.Tensor, None], dict, list], None, None]:  # noqa: FA100
+    ) -> Generator[tuple[torch.Tensor | None, dict, list], None, None]:
         """Rollout step for the forecaster.
 
         Will run pre_processors on batch, but not post_processors on predictions.

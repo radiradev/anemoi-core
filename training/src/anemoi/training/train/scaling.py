@@ -72,20 +72,11 @@ class BaseVariableLossScaler(BaseScaler):
         """
         super().__init__(scaling_config, data_indices)
         self.variable_groups = self.scaling_config.variable_groups
-        # turn dictionary around
-        self.group_variables = {}
-        for group, variables in self.variable_groups.items():
-            if isinstance(variables, str):
-                variables = [variables]
-            for variable in variables:
-                self.group_variables[variable] = group
-        self.default_group = self.scaling_config.variable_groups.default
         self.metadata_variables = metadata_variables
 
         self.extract_variable_group_and_level = ExtractVariableGroupAndLevel(
-            self.group_variables,
+            self.variable_groups,
             self.metadata_variables,
-            self.default_group,
         )
 
     def get_variable_group(self, variable_name: str) -> tuple[str, str, int]:

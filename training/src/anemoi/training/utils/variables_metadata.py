@@ -18,24 +18,28 @@ class ExtractVariableGroupAndLevel:
 
     Parameters
     ----------
-    group_variables : dict
-        Dictionary with variable names as keys and groups as values.
+    variable_groups : dict
+        Dictionary with groups as keys and variable names as values
     metadata_variables : dict, optional
         Dictionary with variable names as keys and metadata as values, by default None
-    default_group : str, optional
-        Default group to return if the variable is not found in the group_variables dictionary, by default "sfc"
-
     """
 
     def __init__(
         self,
-        group_variables: dict,
+        variable_groups: dict,
         metadata_variables: dict | None = None,
-        default_group: str = "sfc",
     ) -> None:
-        self.group_variables = group_variables
+        self.variable_groups = variable_groups
+        # turn dictionary around
+        self.group_variables = {}
+        for group, variables in self.variable_groups.items():
+            if isinstance(variables, str):
+                variables = [variables]
+            for variable in variables:
+                self.group_variables[variable] = group
+        assert "default" in self.variable_groups, "Default group not defined in variable_groups"
+        self.default_group = self.variable_groups["default"]
         self.metadata_variables = metadata_variables
-        self.default_group = default_group
 
     def get_group_and_level(self, variable_name: str) -> tuple[str, str, int]:
         """Get the group and level of a variable.
