@@ -498,7 +498,7 @@ class BenchmarkProfiler(Profiler):
             f.write(model_summary)
             f.close()
 
-    def get_model_summary(self, model: GraphForecaster, example_input_array: np.ndarray) -> str:
+    def get_model_summary(self, model: GraphForecaster, example_input_array: np.ndarray, num_gpus_per_model: int =  1 ) -> str:
 
         from torchinfo import summary
 
@@ -506,6 +506,17 @@ class BenchmarkProfiler(Profiler):
         # since FlashAttention only supports fp16 and bf16 data type
         example_input_array = example_input_array.to(dtype=torch.float16)
         example_input_array = example_input_array.to("cuda")
+        #example_input_array.shape=torch.Size([1, 2, 1, 135520, 100])
+        #RuntimeError: Sizes of tensors must match except in dimension 1. Expected size 135520 but got size 542080 for tensor number 1 in the list.
+        #        self.example_input_array = batch[
+        #    :,
+        #    0 : self.config.training.multistep_input,
+        #    ...,
+        #    self.data_indices.data.input.full,
+        #]
+        if num_gpus_per_model > 1:
+            example_input_array = torch.chunk(example_input_array, chunks=num_gpus_per_model, dim=3)[0]
+        LOGGER.info(f"{example_input_array.shape=}")
         model.half()
         model = model.to("cuda")
 

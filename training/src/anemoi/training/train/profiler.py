@@ -167,13 +167,9 @@ class AnemoiProfiler(AnemoiTrainer):
     @cached_property
     def model_summary(self) -> str:
         if self.config.diagnostics.benchmark_profiler.model_summary.enabled:
-            if self.config.hardware.num_gpus_per_model > 1:
-                LOGGER.warning("Model Summary is not supported when using model sharding")
-                self.config.diagnostics.benchmark_profiler.model_summary.enabled = False
-                return None
             model = self.model
             example_input_array = self.example_input_array
-            return self.profiler.get_model_summary(model=model, example_input_array=example_input_array)
+            return self.profiler.get_model_summary(model=model, example_input_array=example_input_array,  num_gpus_per_model=self.config.hardware.num_gpus_per_model)
         return None
 
     @rank_zero_only
