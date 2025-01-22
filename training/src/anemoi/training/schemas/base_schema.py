@@ -15,8 +15,8 @@ from typing import Any
 
 from omegaconf import OmegaConf
 from pydantic import BaseModel
-from pydantic import ValidationError
 from pydantic import model_validator
+from pydantic_core import PydanticCustomError
 
 # to make these available at runtime for pydantic, bug should be resolved in
 # future versions (see https://github.com/astral-sh/ruff/issues/7866)
@@ -34,13 +34,22 @@ LOGGER = logging.getLogger(__name__)
 
 
 class BaseSchema(BaseModel):
+    """Top-level schema for the training configuration."""
+
     data: DataSchema
+    """Data configuration."""
     dataloader: DataLoaderSchema
+    """Dataloader configuration."""
     diagnostics: DiagnosticsSchema
+    """Diagnostics configuration such as logging, plots and metrics."""
     hardware: HardwareSchema
+    """Hardware configuration."""
     graph: BaseGraphSchema
+    """Graph configuration."""
     model: GNNConfig | TransformerConfig | GraphTransformerConfig
+    """Model configuration."""
     training: TrainingSchema
+    """Training configuration."""
 
     class Config:
         """Pydantic configuration."""
@@ -69,15 +78,17 @@ class BaseSchema(BaseModel):
 
     @model_validator(mode="after")
     def check_log_paths_available_for_loggers(self) -> BaseSchema:
-        if self.diagnostics.log.wandb and not self.hardware.paths.logs.wandb:
-            msg = "Wandb logging path not provided."
-            raise ValidationError(msg)
-        if self.diagnostics.log.mlflow and not self.hardware.paths.logs.mlflow:
-            msg = "MLFlow logging path not provided."
-            raise ValidationError(msg)
-        if self.diagnostics.log.tensorboard and not self.hardware.paths.logs.tensorboard:
-            msg = "Tensorboard logging path not provided."
-            raise ValidationError(msg)
+        logger = []
+        if self.diagnostics.log.wandb.enabled and not self.hardware.paths.logs.wandb:
+            logger.append("wandb")
+        if self.diagnostics.log.mlflow.enabled and not self.hardware.paths.logs.mlflow:
+            logger.append("mlflow")
+        if self.diagnostics.log.tensorboard.enabled and not self.hardware.paths.logs.tensorboard:
+            logger.append("tensorboard")
+
+        if logger:
+            msg = ", ".join(logger) + " logging path(s) not provided."
+            raise PydanticCustomError("logger_path_missing", msg)  # noqa: EM101
 
 
 class UnvalidatedBaseSchema(BaseModel):
