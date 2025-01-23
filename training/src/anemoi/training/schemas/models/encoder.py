@@ -10,6 +10,7 @@
 from typing import Literal
 
 from pydantic import Field
+from pydantic import NonNegativeInt
 
 from .common_components import GNNModelComponent
 from .common_components import TransformerModelComponent
@@ -23,5 +24,7 @@ class GNNEncoderSchema(GNNModelComponent):
 class GraphTransformerEncoderSchema(TransformerModelComponent):
     target_: Literal["anemoi.models.layers.mapper.GraphTransformerForwardMapper"] = Field(..., alias="_target_")
     "Graph Transfromer Encoder object from anemoi.models.layers.mapper."
+    trainable_size: NonNegativeInt = Field(default=8)
+    "Size of trainable parameters vector. Default to 8."
     sub_graph_edge_attributes: list[str] = Field(default=["edge_length", "edge_dirs"])
     "Edge attributes to consider in the encoder features."

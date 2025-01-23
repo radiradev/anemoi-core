@@ -45,8 +45,8 @@ class TransformerModelComponent(BaseModel):
     "Activation function to use for the transformer model component. Default to GELU."
     convert_: str = Field("all", alias="_convert_")
     "Target's parameters to convert to primitive containers. Other parameters will use OmegaConf. Default to all."
-    trainable_size: NonNegativeInt = Field(default=8)
-    "Size of trainable parameters vector. Default to 8."
+    cpu_offload: bool = Field(default=False)
+    "Offload to CPU. Default to False."
     num_chunks: NonNegativeInt = Field(default=1)
     "Number of chunks to divide the layer into. Default to 1."
     mlp_hidden_ratio: NonNegativeInt = Field(default=4)
@@ -62,6 +62,8 @@ class GNNModelComponent(BaseModel):
     "Size of trainable parameters vector. Default to 8."
     num_chunks: NonNegativeInt = Field(default=1)
     "Number of chunks to divide the layer into. Default to 1."
+    cpu_offload: bool = Field(default=False)
+    "Offload to CPU. Default to False."
     sub_graph_edge_attributes: list[str] = Field(default_factory=list)
     "Edge attributes to consider in the model component features."
     mlp_extra_layers: NonNegativeInt = Field(default=0)

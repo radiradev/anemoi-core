@@ -104,3 +104,5 @@ class DataSchema(BaseModel):
     "Features that are only part of the forecast state and are not used as an input to the model."
     remapped: dict | None = Field(default=None)
     "Dictionary of remapped names for variables."
+    num_features: int | None = Field(default=None)
+    "Number of features in the forecast state. To be set in the code."
