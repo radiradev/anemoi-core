@@ -255,7 +255,7 @@ many rollout steps are completed by the model.
 
 The various schedulers which are available are detailed in `schedulers
 <modules/schedulers>`_. It is possible to configure static, index based,
-or step/epoch incrementing classes.
+or step/epoch incrementing classes, and implement your own.
 
 .. note::
 
