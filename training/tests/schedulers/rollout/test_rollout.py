@@ -44,18 +44,18 @@ def test_at() -> None:
 
 def test_sync() -> None:
     sched = DebugScheduler()
-    sched.sync(epoch=10)
-    assert sched.rollout == 10
+    with sched.at(epoch=10):
+        assert sched.rollout == 10
 
 
 def test_count() -> None:
     sched = DebugScheduler()
-    sched.sync(epoch=10)
-    assert sched.count(n_epochs=5) == 2
-    assert sched.count(n_epochs=3) == 3
+    with sched.at(epoch=10):
+        assert sched.count(n_epochs=5) == 2
+        assert sched.count(n_epochs=3) == 3
 
 
 def test_int_conversion() -> None:
     sched = DebugScheduler()
-    sched.sync(epoch=10)
-    assert int(sched) == 10
+    with sched.at(epoch=10):
+        assert int(sched) == 10

@@ -1,4 +1,4 @@
-# (C) Copyright 2024 Anemoi contributors.
+# (C) Copyright 2024- Anemoi contributors.
 #
 # This software is licensed under the terms of the Apache Licence Version 2.0
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
@@ -15,24 +15,28 @@ import warnings
 
 import numpy as np
 import pytorch_lightning as pl
+import torch
+import torch.distributed as dist
 
+from anemoi.training.schedulers import STEPTYPE
+from anemoi.training.schedulers import VALID_INCREMENT_TYPE
+from anemoi.training.schedulers import VALID_STEP_TYPES
+from anemoi.training.schedulers import IncrementMixin
+from anemoi.training.schedulers.rollout import InterEpochRolloutMixin
 from anemoi.training.schedulers.rollout import RolloutScheduler
-from anemoi.training.schedulers.rollout.stepped import VALID_INCREMENT_TYPE
-from anemoi.training.schedulers.rollout.stepped import VALID_STEP_TYPES
-from anemoi.training.schedulers.rollout.stepped import IncrementMixin
 from anemoi.training.utils.seeding import get_base_seed
 
 
 class BaseRandom(RolloutScheduler):
     """BaseRandom Scheduler."""
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         """
         Initialise the base random rollout scheduler.
 
-        Set the seed with the environment variable `ANEMOI_BASE_SEED` if it exists,
+        Sets the seed with the environment variable `ANEMOI_BASE_SEED` if it exists,
         """
-        super().__init__()
+        super().__init__(**kwargs)
 
         try:
             seed = get_base_seed()
@@ -46,7 +50,7 @@ class BaseRandom(RolloutScheduler):
         """Get `np.rng` object, seeded off epoch and step."""
         return np.random.default_rng(abs(hash((self._rnd_seed, self._epoch, self._step))))
 
-    def broadcast(self, value: int) -> None:
+    def broadcast(self, value: int) -> int:
         """
         Broadcast the rollout value to all processes.
 
@@ -54,17 +58,30 @@ class BaseRandom(RolloutScheduler):
         ----------
         value : int
             Value to broadcast.
+
+        Returns
+        -------
+        int
+            Either broadcasted value or update value from broadcast
         """
-        # TODO(Harrison Cook): Need to broadcast the rollout to all processes
+        self._dist_rollout = torch.tensor([value])
+        try:
+            if dist.get_world_size() > 1:
+                dist.broadcast(self._dist_rollout, src=0)
+        except ValueError:
+            pass
+        return self._dist_rollout[0]
 
     def _randomly_pick(self, rollouts: list[int]) -> int:
         """
         Randomly pick from a list of rollouts.
 
+        Will also broadcast choice to all other processes.
+
         Parameters
         ----------
         rollouts : list[int]
-            s to choose from.
+            rollout's to choose from.
 
         Returns
         -------
@@ -72,8 +89,7 @@ class BaseRandom(RolloutScheduler):
             Randomly selected rollout.
         """
         rollout = self.rng.choice(rollouts)
-        self.broadcast(rollout)
-        return rollout
+        return self.broadcast(rollout)
 
 
 class RandomList(BaseRandom):
@@ -94,9 +110,9 @@ class RandomList(BaseRandom):
             from anemoi.training.schedulers.rollout import RandomList
 
             RollSched = RandomList(rollouts = [1, 2, 3, 4, 5])
-            RollSched.rollout_at(epoch = 1)
+            RollSched.at(epoch = 1).rollout
             # any value in the list
-            RollSched.rollout_at(epoch = 2)
+            RollSched.at(epoch = 2).rollout
             # any value in the list
             ```
         """
@@ -141,9 +157,9 @@ class RandomRange(RandomList):
         from anemoi.training.schedulers.rollout import RandomRange
 
         RollSched = RandomRange(minimum = 1, maximum = 5)
-        RollSched.rollout_at(epoch = 1)
+        RollSched.at(epoch = 1).rollout
         # any value between 1 and 5
-        RollSched.rollout_at(epoch = 2)
+        RollSched.at(epoch = 2).rollout
         # any value between 1 and 5
         ```
         """
@@ -167,7 +183,8 @@ class IncreasingRandom(IncrementMixin, BaseRandom):
         every_n: int = 1,
         increment: VALID_INCREMENT_TYPE = 1,
         *,
-        step_type: VALID_STEP_TYPES = "epoch",
+        step_type: VALID_STEP_TYPES = STEPTYPE.epoch,
+        **kwargs,
     ):
         """
         `IncreasingRandom` is a rollout scheduler that randomly selects a rollout from an increasing range of values.
@@ -197,13 +214,13 @@ class IncreasingRandom(IncrementMixin, BaseRandom):
         from anemoi.training.schedulers.rollout import IncreasingRandom
 
         RollSched = IncreasingRandom(minimum = 1, maximum = 10, step = 1, every_n_epochs = 1)
-        RollSched.rollout_at(epoch = 1)
+        RollSched.at(epoch = 1)
         # any value between 1 and 1
-        RollSched.rollout_at(epoch = 2)
+        RollSched.at(epoch = 2)
         # any value between 1 and 2
         ```
         """
-        super().__init__(every_n=every_n, increment=increment, step_type=step_type)
+        super().__init__(every_n=every_n, increment=increment, step_type=step_type, **kwargs)
 
         self._minimum = minimum
 
@@ -230,7 +247,7 @@ class IncreasingRandom(IncrementMixin, BaseRandom):
 
     @property
     def current_maximum(self) -> int:
-        return min(self._maximum, self._minimum + self.increment(self._step, self._epoch))
+        return min(self._maximum, self._minimum + self.total_increment)
 
     def description(self) -> str:
         return (
@@ -281,27 +298,13 @@ class EpochIncreasingRandom(IncreasingRandom):
         from anemoi.training.schedulers.rollout import EpochIncreasingRandom
 
         RollSched = EpochIncreasingRandom(minimum = 1, maximum = 10, range_step = 1, every_n_epochs = 1, increment = 1)
-        RollSched.rollout_at(epoch = 1)
-        # any value between 1 and 1
-        RollSched.rollout_at(epoch = 2)
-        # any value between 1 and 2
-
-        RollSched = EpochIncreasingRandom(
-            minimum = 1, maximum = 10, range_step = 1,
-            every_n_epochs = 1, increment = {0: 0, 10: 1}
-        )
-        RollSched.rollout_at(epoch = 1)
-        # any value between 1 and 1
-        RollSched.rollout_at(epoch = 9)
-        # any value between 1 and 1
-        RollSched.rollout_at(epoch = 10)
-        # any value between 1 and 2, and then increments of 1
+        RollSched.at(epoch = 1)
         ```
         """
         super().__init__(minimum, maximum, range_step, every_n_epochs, increment, step_type="epoch")
 
 
-class StepIncreasingRandom(IncreasingRandom):
+class StepIncreasingRandom(IncreasingRandom, InterEpochRolloutMixin):
     """
     `StepIncreasingRandom` is a rollout scheduler that randomly selects a rollout from an increasing range of values.
 
@@ -315,6 +318,8 @@ class StepIncreasingRandom(IncreasingRandom):
         range_step: int = 1,
         every_n_steps: int = 1,
         increment: int | dict[int, int] = 1,
+        *,
+        adjust_maximum: int = 0,
     ):
         """
         StepIncreasingRandom` is a rollout scheduler that randomly selects a rollout from an increasing range of values.
@@ -335,6 +340,9 @@ class StepIncreasingRandom(IncreasingRandom):
             If `every_n_steps` is 0, the rollout will stay at `minimum`.
         increment : int | dict[int, int], optional
             Value to increment the rollout by `every_n_epochs`, by default 1
+        adjust_maximum : int, optional
+            Value to adjust current maximum by, by default 0
+
 
         Example
         -------
@@ -342,27 +350,22 @@ class StepIncreasingRandom(IncreasingRandom):
         from anemoi.training.schedulers.rollout import StepIncreasingRandom
 
         RollSched = StepIncreasingRandom(minimum = 1, maximum = 10, range_step = 1, every_n_steps = 1, increment = 1)
-        RollSched.rollout_at(step = 1)
-        # any value between 1 and 1
-        RollSched.rollout_at(step = 2)
-        # any value between 1 and 2
-
-        RollSched = StepIncreasingRandom(
-            minimum = 1, maximum = 10, range_step = 1,
-            every_n_steps = 1, increment = {0: 0, 10: 1}
-        )
-        RollSched.rollout_at(step = 1)
-        # any value between 1 and 1
-        RollSched.rollout_at(step = 9)
-        # any value between 1 and 1
-        RollSched.rollout_at(step = 10)
-        # any value between 1 and 2, and then increments of 1
         ```
         """
         warnings.warn(
             "Pytorch Lightning datamodules can only be refreshed at the end of an epoch, "
-            "adjusting the rollout during an epoch will likely fail.",
+            "adjusting the rollout during an epoch will likely fail."
+            "\nIf you wish to enable this ensure that `adjust_maximum` covers the change"
+            "in rollout within any epoch.",
             UserWarning,
         )
 
-        super().__init__(minimum, maximum, range_step, every_n_steps, increment, step_type="step")
+        super().__init__(
+            minimum,
+            maximum,
+            range_step,
+            every_n_steps,
+            increment,
+            step_type="step",
+            adjust_maximum=adjust_maximum,
+        )

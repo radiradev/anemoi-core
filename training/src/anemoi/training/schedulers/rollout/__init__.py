@@ -9,11 +9,12 @@
 
 from __future__ import annotations
 
-from abc import ABC
 from abc import abstractmethod
 
+from anemoi.training.schedulers import Scheduler
 
-class RolloutScheduler(ABC):
+
+class RolloutScheduler(Scheduler):
     """
     `RolloutScheduler` is an abstract base class for rollout schedulers.
 
@@ -30,15 +31,9 @@ class RolloutScheduler(ABC):
         RollSched.step_epoch()
     ```
 
-    The rollout value must be calculatable given the epoch and the step,
-    accessible within subclasses by the `_epoch` and `_step` attributes.
-
     Override the `rollout` property to implement the rollout calculation,
     and the `maximum_rollout` property to provide the maximum rollout possible.
     """
-
-    _epoch: int = 0
-    _step: int = 0
 
     @property
     @abstractmethod
@@ -71,40 +66,12 @@ class RolloutScheduler(ABC):
         """Get rollout value as index."""
         return int(self.rollout)
 
-    def at(self, step: int | None = None, epoch: int | None = None) -> FrozenStateRecord:  # noqa: F821
-        """
-        Temporarily hold the scheduler at a specific step and epoch.
-
-        Parameters
-        ----------
-        step : int, optional
-            Step value to override with, by default None
-        epoch : int, optional
-            Epoch value to override with, by default None
-
-        Returns
-        -------
-        FrozenStateRecord
-            Record of the prior state.
-        """
-        prior_step = self._step
-        prior_epoch = self._epoch
-
-        class FrozenStateRecord:
-            """Freeze the state of the RolloutScheduler. Any changes will be reverted on exit."""
-
-            def __enter__(self):
-                pass
-
-            def __exit__(context_self, *a):  # noqa: N805
-                self._step = prior_step
-                self._epoch = prior_epoch
-
-        self._step = step if step is not None else prior_step
-        self._epoch = epoch if epoch is not None else prior_epoch
-        return FrozenStateRecord()
-
-    def rollout_at(self, step: int | None = None, epoch: int | None = None) -> int:
+    def rollout_at(
+        self,
+        step: int | None = None,
+        epoch: int | None = None,
+        epoch_record: dict[int, int] | None = None,
+    ) -> int:
         """
         Get the rollout at a specific step and epoch.
 
@@ -114,36 +81,16 @@ class RolloutScheduler(ABC):
             Step value to override with, by default None
         epoch : int, optional
             Epoch value to override with, by default None
+        epoch_record : dict[int, int], optional
+            Epoch record to override with, by default None
 
         Returns
         -------
         int
             Rollout value at the specified step and epoch.
         """
-        with self.at(step, epoch):
+        with self.at(step, epoch, epoch_record=epoch_record):
             return self.rollout
-
-    def step(self, count: int = 1, /) -> None:
-        """Step the scheduler by a count."""
-        self._step += count
-
-    def step_epoch(self, count: int = 1, /) -> None:
-        """Step the scheduler by a count of epochs."""
-        self._epoch += count
-
-    def sync(self, step: int | None = None, epoch: int | None = None) -> None:
-        """
-        Sync state of the Rollout Scheduler.
-
-        Parameters
-        ----------
-        step : int, optional
-            Override for step, by default None
-        epoch : int, optional
-            Override for epoch, by default None
-        """
-        self._step = step if step is not None else self._step
-        self._epoch = epoch if epoch is not None else self._epoch
 
     def count(self, n_steps: int | None = None, n_epochs: int | None = None) -> int:
         """
@@ -235,3 +182,25 @@ class Static(RolloutScheduler):
 
     def description(self) -> str:
         return f"Static rollout value of {self._rollout_value}."
+
+
+class InterEpochRolloutMixin(RolloutScheduler):
+    """Mixin to enable inter epoch rollout changes."""
+
+    def __init__(self, adjust_maximum: int, **kwargs):
+        """
+        Mixin to enable inter epoch rollout changes.
+
+        Adjusts the current maximum by a set value.
+
+        Parameters
+        ----------
+        adjust_maximum : int
+            Value to adjust `current_maximum` by
+        """
+        super().__init__(self, **kwargs)
+        self._adjust_maximum = adjust_maximum
+
+    @property
+    def current_maximum(self) -> int:
+        return super().current_maximum + self._adjust_maximum

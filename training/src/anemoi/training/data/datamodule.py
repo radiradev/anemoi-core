@@ -53,8 +53,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         self.graph_data = graph_data
 
         # Set the maximum rollout to be expected
-        rollout_scheduler: RolloutScheduler = instantiate(self.config.training.rollout)
-        self.starting_rollout = rollout_scheduler.current_maximum
+        self._rollout: RolloutScheduler = instantiate(self.config.training.rollout)
 
         # Set the training end date if not specified
         if self.config.dataloader.training.end is None:
@@ -127,7 +126,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
 
     @cached_property
     def ds_valid(self) -> NativeGridDataset:
-        r = max(self.starting_rollout, self.config.dataloader.get("validation_rollout", 1))
+        r = max(self.rollout.current_maximum, self.config.dataloader.get("validation_rollout", 1))
 
         if not self.config.dataloader.training.end < self.config.dataloader.validation.start:
             LOGGER.warning(
@@ -158,29 +157,51 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             label="test",
         )
 
-    def update_rollout(self, rollout: int) -> None:
-        """
-        Update the rollout values in the datamodule.
+    @property
+    def rollout(self) -> RolloutScheduler:
+        return self._rollout
 
-        Parameters
-        ----------
-        rollout : int
-            Rollout value
-        """
+    @rollout.setter
+    def rollout(self, rollout: RolloutScheduler) -> None:
+        self._rollout = rollout
+
+    def update_rollout(self) -> None:
+        """Update the rollout values in the underlying datasets from the scheduler."""
+        current_max = self.rollout.current_maximum
+
         for ds in [self.ds_train, self.ds_test]:
-            ds.update_rollout(rollout)
+            ds.update_rollout(current_max)
 
-        self.ds_valid.update_rollout(max(rollout, self.config.dataloader.get("validation_rollout", 1)))
+        self.ds_valid.update_rollout(max(current_max, self.config.dataloader.get("validation_rollout", 1)))
 
     def _get_dataset(
         self,
         data_reader: Callable,
         shuffle: bool = True,
-        rollout: int = 1,
+        rollout: int | None = None,
         label: str = "generic",
     ) -> NativeGridDataset:
+        """
+        Get dataset from reader.
 
-        r = max(rollout, self.starting_rollout)
+        Parameters
+        ----------
+        data_reader : Callable
+            Data reader
+        shuffle : bool, optional
+            Whether to shuffle, by default True
+        rollout : int | None, optional
+            Override to rollout value, if not set
+            will be given by `rollout.current_maximum`, by default None
+        label : str, optional
+            Name of the dataset, by default "generic"
+
+        Returns
+        -------
+        NativeGridDataset
+            Configured Dataset
+        """
+        r = rollout if rollout is not None else self.rollout.current_maximum
 
         # Compute effective batch size
         effective_bs = (

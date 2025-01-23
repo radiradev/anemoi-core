@@ -391,9 +391,15 @@ class AnemoiTrainer:
         LOGGER.info("Dataloaders will be reloaded every epoch to support dynamic rollout.")
         return True
 
+    def _set_datamodule_rollout(self) -> None:
+        """Set datamodule rollout to model rollout."""
+        self.datamodule.rollout = self.model.rollout
+
     def train(self) -> None:
         """Training entry point."""
         LOGGER.debug("Setting up trainer..")
+
+        self._set_datamodule_rollout()
 
         trainer = pl.Trainer(
             accelerator=self.accelerator,

@@ -23,11 +23,9 @@ def test_determism() -> None:
 
     sched.rollout  # Force a retrieval to try and break the determinism
 
-    for i in range(100):
-        sched.sync(epoch=i)
-        sched_1.sync(epoch=i)
-
-        assert sched.rollout == sched_1.rollout
+    for i in range(20):
+        with sched.at(epoch=i) and sched_1.at(epoch=i):
+            assert sched.rollout == sched_1.rollout
 
 
 @pytest.mark.parametrize(
@@ -90,13 +88,13 @@ def test_increasing_random_increment(
 ) -> None:
     sched = IncreasingRandom(minimum, maximum, step, every_n, 1)
 
-    sched.sync(epoch=epoch_test)
+    with sched.at(epoch=epoch_test, epoch_record={}):
 
-    assert sched.current_maximum == expected_max
-    assert sched.rollout in list(range(minimum, expected_max + 1, step))
-    assert sched.maximum_rollout == maximum
+        assert sched.current_maximum == expected_max
+        assert sched.rollout in list(range(minimum, expected_max + 1, step))
+        assert sched.maximum_rollout == maximum
 
-    pick_mock.assert_called_once_with(range(minimum, expected_max + 1, step))
+        pick_mock.assert_called_once_with(range(minimum, expected_max + 1, step))
 
 
 INCREMENT_DICT = {
@@ -148,7 +146,7 @@ def test_increasing_random_complex_increment(
 ) -> None:
     sched = IncreasingRandom(1, 10, 1, every_n, increment=increment)
 
-    sched.sync(epoch=epoch_test)
-    assert sched.rollout in list(range(1, expected_max + 1, 1))
-    assert sched.current_maximum == expected_max
-    pick_mock.assert_called_with(range(1, expected_max + 1, 1))
+    with sched.at(epoch=epoch_test, epoch_record={}):
+        assert sched.rollout in list(range(1, expected_max + 1, 1))
+        assert sched.current_maximum == expected_max
+        pick_mock.assert_called_with(range(1, expected_max + 1, 1))

@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from anemoi.training.diagnostics.callbacks.rollout import UpdateRollout
+from anemoi.training.schedulers.rollout import InterEpochRolloutMixin
 from anemoi.training.schedulers.rollout import RolloutScheduler
 from anemoi.training.train.forecaster import GraphForecaster
 from anemoi.training.train.train import AnemoiTrainer
@@ -58,7 +59,7 @@ def callback() -> UpdateRollout:
     callback = UpdateRollout()
     assert callback is not None
     assert hasattr(callback, "on_load_checkpoint")
-    assert hasattr(callback, "on_validation_epoch_end")
+    assert hasattr(callback, "on_train_epoch_end")
 
     return callback
 
@@ -72,7 +73,7 @@ def test_on_load_checkpoint(
     callback.on_load_checkpoint(fake_trainer, fake_forecaster, checkpoint)
     spy = fake_trainer.datamodule.update_rollout
 
-    spy.assert_called_once_with(rollout=checkpoint["epoch"])
+    spy.assert_called_once_with()
 
 
 def test_on_validation_epoch_sanity(
@@ -84,7 +85,7 @@ def test_on_validation_epoch_sanity(
     fake_trainer.sanity_checking = True
     spy = fake_trainer.datamodule.update_rollout
 
-    callback.on_validation_epoch_end(fake_trainer, fake_forecaster, None)
+    callback.on_train_epoch_end(fake_trainer, fake_forecaster, None, None)
     spy.assert_not_called()
 
 
@@ -97,6 +98,18 @@ def test_on_validation_epoch(
     spy = fake_trainer.datamodule.update_rollout
     fake_trainer.sanity_checking = False
 
-    callback.on_validation_epoch_end(fake_trainer, fake_forecaster, None)
+    callback.on_train_epoch_end(fake_trainer, fake_forecaster, None, None)
 
-    spy.assert_called_once_with(rollout=11)  # Offset 1
+    spy.assert_called_once()
+
+
+class DebugInterScheduler(DebugScheduler, InterEpochRolloutMixin):
+    pass
+
+
+def test_inter() -> None:
+    sched = DebugInterScheduler(adjust_maximum=10)
+    assert sched.rollout == 10
+
+    with sched.at(epoch=10):
+        assert sched.rollout == 20

@@ -605,19 +605,20 @@ class GraphForecaster(pl.LightningModule):
 
         return metrics
 
-    def on_train_start(self) -> None:
-        # Sync the rollout at the start of training
-        self.rollout.sync(step=self.global_step, epoch=self.current_epoch)
-
     def on_load_checkpoint(self, checkpoint: dict) -> None:
-        # Sync the rollout on the load of a checkpoint
-        self.rollout.sync(step=checkpoint["global_step"], epoch=checkpoint["epoch"])
+        _ = checkpoint
+        self.rollout = instantiate(self.config.training.rollout).get_state_from(self.rollout)
 
-    def on_train_epoch_start(self) -> None:
-        # Sync the rollout at the start of each epoch
-        # Cannot use stepping due to inconsistent behaviour with Pytorch Lightning
-        self.rollout.sync(step=self.global_step, epoch=self.current_epoch)
-        LOGGER.debug("Rollout at start of training epoch %d: %d.", self.current_epoch, int(self.rollout))
+    def on_train_batch_end(self, *_) -> None:
+        self.rollout.step()
+
+    def on_train_epoch_end(self, *_) -> None:
+        if self.trainer.limit_val_batches != 0:
+            self.rollout.step_epoch()
+
+    def on_validation_batch_end(self, *_) -> None:
+        if not self.trainer.sanity_checking:
+            self.rollout.step_epoch()
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
         train_loss, _, _ = self._step(batch, batch_idx)
@@ -639,7 +640,6 @@ class GraphForecaster(pl.LightningModule):
             rank_zero_only=True,
             sync_dist=False,
         )
-        self.rollout.step()
         return train_loss
 
     def lr_scheduler_step(self, scheduler: CosineLRScheduler, metric: None = None) -> None:
