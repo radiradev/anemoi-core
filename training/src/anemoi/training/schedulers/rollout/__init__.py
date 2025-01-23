@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 
-from anemoi.training.schedulers import Scheduler
+from anemoi.training.schedulers.schedulers import Scheduler
 
 
 class RolloutScheduler(Scheduler):

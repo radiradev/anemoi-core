@@ -8,23 +8,14 @@
 # nor does it submit to any jurisdiction.
 from __future__ import annotations
 
-import enum
 import warnings
-from typing import Literal
 
-from anemoi.training.schedulers import IncrementMixin
 from anemoi.training.schedulers.rollout import InterEpochRolloutMixin
 from anemoi.training.schedulers.rollout import RolloutScheduler
-
-VALID_STEP_TYPES = Literal["step", "epoch"]
-
-
-class STEPTYPE(str, enum.Enum):
-    step = "step"
-    epoch = "epoch"
-
-
-VALID_INCREMENT_TYPE = int | dict[int, int] | dict[VALID_STEP_TYPES, dict[int, int]]
+from anemoi.training.schedulers.schedulers import STEPTYPE
+from anemoi.training.schedulers.schedulers import VALID_INCREMENT_TYPE
+from anemoi.training.schedulers.schedulers import VALID_STEP_TYPES
+from anemoi.training.schedulers.schedulers import IncrementMixin
 
 
 class Stepped(RolloutScheduler, IncrementMixin):

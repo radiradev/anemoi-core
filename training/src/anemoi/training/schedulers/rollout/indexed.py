@@ -9,10 +9,10 @@
 
 import warnings
 
-from anemoi.training.schedulers import STEPTYPE
-from anemoi.training.schedulers import VALID_STEP_TYPES
 from anemoi.training.schedulers.rollout import InterEpochRolloutMixin
 from anemoi.training.schedulers.rollout import RolloutScheduler
+from anemoi.training.schedulers.schedulers import STEPTYPE
+from anemoi.training.schedulers.schedulers import VALID_STEP_TYPES
 from anemoi.training.schedulers.utils import get_closest_key
 
 
