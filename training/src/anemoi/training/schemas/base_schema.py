@@ -25,9 +25,9 @@ from .dataloader import DataLoaderSchema  # noqa: TC001
 from .diagnostics import DiagnosticsSchema  # noqa: TC001
 from .graphs.base_graph import BaseGraphSchema  # noqa: TC001
 from .hardware import HardwareSchema  # noqa: TC001
-from .models.models import GNNConfig  # noqa: TC001
-from .models.models import GraphTransformerConfig  # noqa: TC001
-from .models.models import TransformerConfig  # noqa: TC001
+from .models.models import GNNSchema  # noqa: TC001
+from .models.models import GraphTransformerSchema  # noqa: TC001
+from .models.models import TransformerSchema  # noqa: TC001
 from .training import TrainingSchema  # noqa: TC001
 
 LOGGER = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ class BaseSchema(BaseModel):
     """Hardware configuration."""
     graph: BaseGraphSchema
     """Graph configuration."""
-    model: GNNConfig | TransformerConfig | GraphTransformerConfig
+    model: GNNSchema | TransformerSchema | GraphTransformerSchema
     """Model configuration."""
     training: TrainingSchema
     """Training configuration."""

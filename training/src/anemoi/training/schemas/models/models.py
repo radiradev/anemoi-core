@@ -91,7 +91,7 @@ class BaseModelConfig(BaseModel):
     "Output mas, it must be a node attribute of the output nodes"
 
 
-class GNNConfig(BaseModelConfig):
+class GNNSchema(BaseModelConfig):
     processor: GNNProcessorSchema = Field(default_factory=GNNProcessorSchema)
     "GNN processor schema."
     encoder: GNNEncoderSchema = Field(default_factory=GNNEncoderSchema)
@@ -100,7 +100,7 @@ class GNNConfig(BaseModelConfig):
     "GNN decoder schema."
 
 
-class GraphTransformerConfig(BaseModelConfig):
+class GraphTransformerSchema(BaseModelConfig):
     processor: GraphTransformerProcessorSchema = Field(default_factory=GraphTransformerProcessorSchema)
     "Graph transformer processor schema."
     encoder: GraphTransformerEncoderSchema = Field(default_factory=GraphTransformerEncoderSchema)
@@ -109,7 +109,7 @@ class GraphTransformerConfig(BaseModelConfig):
     "Graph transformer decoder schema."
 
 
-class TransformerConfig(BaseModelConfig):
+class TransformerSchema(BaseModelConfig):
     processor: TransformerProcessorSchema = Field(default_factory=TransformerProcessorSchema)
     "Transformer processor schema."
     encoder: GraphTransformerEncoderSchema = Field(default_factory=GraphTransformerEncoderSchema)
