@@ -109,7 +109,8 @@ class DebugInterScheduler(DebugScheduler, InterEpochRolloutMixin):
 
 def test_inter() -> None:
     sched = DebugInterScheduler(adjust_maximum=10)
-    assert sched.rollout == 10
+    assert sched.current_maximum == 10
 
     with sched.at(epoch=10):
-        assert sched.rollout == 20
+        assert sched.rollout == 10
+        assert sched.current_maximum == 20

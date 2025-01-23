@@ -198,7 +198,7 @@ class InterEpochRolloutMixin(RolloutScheduler):
         adjust_maximum : int
             Value to adjust `current_maximum` by
         """
-        super().__init__(self, **kwargs)
+        super().__init__(**kwargs)
         self._adjust_maximum = adjust_maximum
 
     @property
