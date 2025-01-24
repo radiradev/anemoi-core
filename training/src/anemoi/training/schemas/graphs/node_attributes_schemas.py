@@ -27,7 +27,7 @@ class PlanarAreaWeightSchema(BaseModel):
         "anemoi.graphs.nodes.attributes.AreaWeights",
         "anemoi.graphs.nodes.attributes.PlanarAreaWeights",
         "anemoi.graphs.nodes.attributes.CutOutMask",
-        "anemoi.graphs.nodes.attributes.UniformWeights"
+        "anemoi.graphs.nodes.attributes.UniformWeights",
     ] = Field(..., alias="_target_")
     "Implementation of the area of the nodes as the weights from anemoi.graphs.nodes.attributes."
     norm: Literal["unit-max", "l1", "l2", "unit-sum", "unit-std"] = Field(default="unit-max")
@@ -73,11 +73,10 @@ class BooleanOperationSchema(BaseModel):
     "Implementation of boolean masks from anemoi.graphs.nodes.attributes"
 
 
-
 NodeAttributeSchemas = Union[
-    PlanarAreaWeightSchema | 
-    SphericalAreaWeightSchema | 
-    CutOutMaskSchema | 
-    NonmissingZarrVariableSchema |
-    BooleanOperationSchema
+    PlanarAreaWeightSchema
+    | SphericalAreaWeightSchema
+    | CutOutMaskSchema
+    | NonmissingZarrVariableSchema
+    | BooleanOperationSchema
 ]
