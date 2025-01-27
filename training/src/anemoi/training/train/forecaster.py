@@ -245,6 +245,9 @@ class GraphForecaster(pl.LightningModule):
         loss_config = OmegaConf.to_container(config, resolve=True)
         scalers_to_include = loss_config.pop("scalers", [])
 
+        if "*" in scalers_to_include:
+            scalers_to_include = list(scalers.keys())
+
         # Instantiate the loss function with the loss_init_config
         loss_function = instantiate(loss_config, **kwargs)
 
