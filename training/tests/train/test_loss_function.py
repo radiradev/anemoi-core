@@ -47,6 +47,23 @@ def test_dynamic_init_scaler() -> None:
     assert "test" in loss.scaler
     torch.testing.assert_close(loss.scaler.get_scaler(2), torch.ones((1, 2)))
 
+def test_dynamic_init_add_all() -> None:
+    loss = GraphForecaster.get_loss_function(
+        DictConfig(
+            {
+                "_target_": "anemoi.training.losses.mse.WeightedMSELoss",
+                "scalers": ["*"],
+            },
+        ),
+        node_weights=torch.ones(1),
+        scalers={"test": ((0, 1), torch.ones((1, 2)))},
+    )
+    assert isinstance(loss, BaseWeightedLoss)
+
+    torch.testing.assert_close(loss.node_weights, torch.ones(1))
+    assert "test" in loss.scaler
+    torch.testing.assert_close(loss.scaler.get_scaler(2), torch.ones((1, 2)))
+
 
 def test_dynamic_init_scaler_not_add() -> None:
     loss = GraphForecaster.get_loss_function(
@@ -54,6 +71,21 @@ def test_dynamic_init_scaler_not_add() -> None:
             {
                 "_target_": "anemoi.training.losses.mse.WeightedMSELoss",
                 "scalers": [],
+            },
+        ),
+        node_weights=torch.ones(1),
+        scalers={"test": (-1, torch.ones(2))},
+    )
+    assert isinstance(loss, BaseWeightedLoss)
+    torch.testing.assert_close(loss.node_weights, torch.ones(1))
+    assert "test" not in loss.scaler
+    
+def test_dynamic_init_scaler_exclude() -> None:
+    loss = GraphForecaster.get_loss_function(
+        DictConfig(
+            {
+                "_target_": "anemoi.training.losses.mse.WeightedMSELoss",
+                "scalers": ["*", "!test"],
             },
         ),
         node_weights=torch.ones(1),
