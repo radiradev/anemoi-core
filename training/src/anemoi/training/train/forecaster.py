@@ -246,7 +246,7 @@ class GraphForecaster(pl.LightningModule):
         scalers_to_include = loss_config.pop("scalers", [])
 
         if "*" in scalers_to_include:
-            scalers_to_include = list(scalers.keys())
+            scalers_to_include = [s for s in list(scalers.keys()) if f"!{s}" not in scalers_to_include]
 
         # Instantiate the loss function with the loss_init_config
         loss_function = instantiate(loss_config, **kwargs)

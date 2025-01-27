@@ -63,10 +63,12 @@ define whether to include them in the loss function by setting
       _target_: anemoi.training.losses.mse.WeightedMSELoss
       scalers: ['scaler1', 'scaler2']
 
-Currently, the following scalers are available for use:
+Scalers can be added as options for the loss functions using the
+`scaler` builders in `config.training.scaler`.
 
--  ``variable``: Scale by the feature/variable weights as defined in the
-   config ``config.training.variable_loss_scaling``.
+``*`` is a valid entry to use all `scalers` given, if a scaler is to be
+excluded add `!scaler_name`, i.e. ``['*', '!scaler_1']``, and
+``scaler_1`` will not be added.
 
 ********************
  Validation Metrics
