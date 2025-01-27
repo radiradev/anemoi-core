@@ -42,7 +42,7 @@ def fake_data(request: SubRequest) -> tuple[DictConfig, IndexCollection]:
                     "y": 0.5,
                 },
                 "metrics": ["other", "y_850"],
-                "additional_scalars": request.param,
+                "additional_scalers": request.param,
             },
         },
     )
@@ -230,10 +230,10 @@ def test_variable_loss_scaling_vals(
         data_indices,
     ).get_scaling()
 
-    scalar = [
+    scaler = [
         (
             instantiate(
-                scalar_config,
+                scaler_config,
                 scaling_config=config.training.variable_loss_scaling,
                 data_indices=data_indices,
                 statistics=statistics,
@@ -241,18 +241,18 @@ def test_variable_loss_scaling_vals(
                 metadata_variables=None,
             )
         )
-        for scalar_config in config.training.additional_scalars
+        for scaler_config in config.training.additional_scalers
     ]
 
-    scalars = {
+    scalers = {
         "variable": (-1, variable_scaling),
     }
-    # add addtional user-defined scalars
+    # add addtional user-defined scalers
 
-    [scalars.update({scale.name: (scale.scale_dim, scale.get_scaling())}) for scale in scalar]
-    keys_list = list(scalars.keys())
-    scalars[keys_list[0]][1] * scalars[keys_list[1]][1]
-    assert torch.allclose(torch.tensor(scalars[keys_list[0]][1] * scalars[keys_list[1]][1]), expected_scaling)
+    [scalers.update({scale.name: (scale.scale_dim, scale.get_scaling())}) for scale in scaler]
+    keys_list = list(scalers.keys())
+    scalers[keys_list[0]][1] * scalers[keys_list[1]][1]
+    assert torch.allclose(torch.tensor(scalers[keys_list[0]][1] * scalers[keys_list[1]][1]), expected_scaling)
 
 
 @pytest.mark.parametrize("fake_data", [linear_scaler], indirect=["fake_data"])
