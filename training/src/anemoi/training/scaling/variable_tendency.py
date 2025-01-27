@@ -79,7 +79,7 @@ class BaseTendencyScaler(BaseVariableLossScaler):
                     )
                     scaling = self.get_level_scaling(variable_stdev, variable_tendency_stdev)
                     LOGGER.info("Parameter %s is being scaled by statistic_tendencies by %.2f", key, scaling)
-                    variable_level_scaling[idx] *= scaling                
+                    variable_level_scaling[idx] *= scaling
 
         return variable_level_scaling
 
