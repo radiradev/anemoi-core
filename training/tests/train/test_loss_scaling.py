@@ -48,8 +48,8 @@ def fake_data(request: SubRequest) -> tuple[DictConfig, IndexCollection]:
     )
     name_to_index = {"x": 0, "y_50": 1, "y_500": 2, "y_850": 3, "z": 5, "q": 4, "other": 6, "d": 7}
     data_indices = IndexCollection(config=config, name_to_index=name_to_index)
-    statistics = {"stdev": [10.0, 10, 10, 7.0, 3.0, 1.0, 2.0, 3.5]}
-    statistics_tendencies = {"stdev": [5, 5, 5, 4.0, 7.5, 8.6, 1, 10]}
+    statistics = {"stdev": [0.0, 10.0, 10, 10, 7.0, 3.0, 1.0, 2.0, 3.5]}
+    statistics_tendencies = {"stdev": [0.0, 5, 5, 5, 4.0, 7.5, 8.6, 1, 10]}
     return config, data_indices, statistics, statistics_tendencies
 
 
@@ -185,11 +185,11 @@ expected_stdev_tendency_scaling = torch.Tensor(
         (10.0 / 5.0) * 0.5,  # y_50
         (10.0 / 5.0) * 0.5,  # y_500
         (10.0 / 5.0) * 0.5,  # y_850
-        1,  # q
-        0.1,  # z
+        1 * 1,  # q (diagnostic)
+        1 * 0.1,  # z (diagnostic)
         (1 / 8.6) * 100,  # other
-        (2 / 1) * 1,  # cos_d
-        (3.5 / 10) * 1,  # sin_d
+        1 * 1,  # cos_d (remapped)
+        1 * 1,  # sin_d (remapped)
     ],
 )
 
@@ -198,11 +198,11 @@ expected_var_tendency_scaling = torch.Tensor(
         (10.0**2) / (5.0**2) * 0.5,  # y_50
         (10.0**2) / (5.0**2) * 0.5,  # y_500
         (10.0**2) / (5.0**2) * 0.5,  # y_850
-        1,  # q
-        0.1,  # z
+        1,  # q (diagnostic)
+        0.1,  # z (diagnostic)
         (1**2) / (8.6**2) * 100,  # other
-        (2**2) / (1**2) * 1,  # cos_d
-        (3.5**2) / (10**2) * 1,  # sin_d
+        1 * 1,  # cos_d (remapped)
+        1 * 1,  # sin_d (remapped)
     ],
 )
 
@@ -251,7 +251,6 @@ def test_variable_loss_scaling_vals(
 
     [scalars.update({scale.name: (scale.scale_dim, scale.get_scaling())}) for scale in scalar]
     keys_list = list(scalars.keys())
-    scalars[keys_list[0]][1] * scalars[keys_list[1]][1]
     assert torch.allclose(torch.tensor(scalars[keys_list[0]][1] * scalars[keys_list[1]][1]), expected_scaling)
 
 

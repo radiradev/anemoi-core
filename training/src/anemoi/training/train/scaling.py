@@ -300,14 +300,15 @@ class BaseTendencyScaler(BaseVariableLossScaler):
 
         for key, idx in self.data_indices.internal_model.output.name_to_index.items():
             if idx in self.data_indices.internal_model.output.prognostic:
-                prog_idx = self.data_indices.internal_model.output.name_to_index[key]
-                variable_stdev = self.statistics["stdev"][prog_idx] if self.statistics_tendencies else 1
-                variable_tendency_stdev = (
-                    self.statistics_tendencies["stdev"][prog_idx] if self.statistics_tendencies else 1
-                )
-                scaling = self.get_level_scaling(variable_stdev, variable_tendency_stdev)
-                LOGGER.info("Parameter %s is being scaled by statistic_tendencies by %.2f", key, scaling)
-                variable_level_scaling[idx] *= scaling
+                if self.data_indices.data.output.name_to_index.get(key):
+                    prog_idx = self.data_indices.data.output.name_to_index[key]
+                    variable_stdev = self.statistics["stdev"][prog_idx] if self.statistics_tendencies else 1
+                    variable_tendency_stdev = (
+                        self.statistics_tendencies["stdev"][prog_idx] if self.statistics_tendencies else 1
+                    )
+                    scaling = self.get_level_scaling(variable_stdev, variable_tendency_stdev)
+                    LOGGER.info("Parameter %s is being scaled by statistic_tendencies by %.2f", key, scaling)
+                    variable_level_scaling[idx] *= scaling
 
         return variable_level_scaling
 
