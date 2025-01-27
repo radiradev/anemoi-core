@@ -249,8 +249,8 @@ def test_variable_loss_scaling_vals(
     }
     # add addtional user-defined scalers
 
-    [scalars.update({scale.name: (scale.scale_dim, scale.get_scaling())}) for scale in scaler]
-    keys_list = list(scalars.keys())
+    [scalers.update({scale.name: (scale.scale_dim, scale.get_scaling())}) for scale in scaler]
+    keys_list = list(scalers.keys())
     assert torch.allclose(torch.tensor(scalers[keys_list[0]][1] * scalers[keys_list[1]][1]), expected_scaling)
 
 
