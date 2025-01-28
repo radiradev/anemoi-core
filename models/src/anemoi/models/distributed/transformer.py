@@ -29,9 +29,7 @@ def _alltoallwrapper(output_list: list, input_list: list, group: ProcessGroup):
     """
     comm_size = dist.get_world_size(group=group)
 
-    if dist.is_mpi_available() or dist.is_nccl_available():
-        dist.all_to_all(output_list, input_list, group=group)
-    else:
+    if dist.get_backend(group) == "gloo":
         reqs = []
         for src in range(0, comm_size):
             if src == dist.get_rank(group=group):
@@ -41,6 +39,8 @@ def _alltoallwrapper(output_list: list, input_list: list, group: ProcessGroup):
 
         for req in reqs:
             req.wait()
+    else:
+        dist.all_to_all(output_list, input_list, group=group)
 
 
 def _headsalltoall(input_: Tensor, shapes: list, group: Optional[ProcessGroup] = None) -> Tensor:
