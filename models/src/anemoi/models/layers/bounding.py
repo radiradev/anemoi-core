@@ -14,6 +14,7 @@ from abc import abstractmethod
 from typing import Optional
 
 import torch
+import numpy as np
 from torch import nn
 
 from anemoi.models.data_indices.tensor import InputTensorIndex
@@ -137,7 +138,7 @@ class NormalizedReluBounding(BaseBounding):
 
         # Compute normalized min values
         self.data_index = [name_to_index[var] for var in variables]
-        norm_min_val = torch.zeros(len(variables))
+        self.norm_min_val = torch.zeros(len(variables))
         for ii, variable in enumerate(variables):
             stat_index = self.name_to_index_stats[variable]
             if self.normalizer[ii] == "mean-std":
@@ -156,7 +157,7 @@ class NormalizedReluBounding(BaseBounding):
                 self.norm_min_val[ii] = min_val[ii] / std
 
         # Reorder normalized min values based on data_index
-        self.norm_min_val = norm_min_val[torch.argsort(torch.tensor(self.data_index))]
+        self.norm_min_val = self.norm_min_val[np.argsort(np.array(self.data_index))]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Applies the ReLU activation with the normalized minimum values to the input tensor.
