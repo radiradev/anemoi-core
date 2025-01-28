@@ -13,6 +13,7 @@ from abc import ABC
 from abc import abstractmethod
 from typing import Optional
 
+import numpy as np
 import torch
 from torch import nn
 
@@ -137,26 +138,26 @@ class NormalizedReluBounding(BaseBounding):
 
         # Compute normalized min values
         self.data_index = [name_to_index[var] for var in variables]
-        norm_min_val = torch.zeros(len(variables))
+        self.norm_min_val = torch.zeros(len(variables))
         for ii, variable in enumerate(variables):
             stat_index = self.name_to_index_stats[variable]
             if self.normalizer[ii] == "mean-std":
                 mean = self.statistics["mean"][stat_index]
                 std = self.statistics["stdev"][stat_index]
-                norm_min_val[ii] = (self.min_val[ii] - mean) / std
+                self.norm_min_val[ii] = (min_val[ii] - mean) / std
             elif self.normalizer[ii] == "min-max":
                 min_stat = self.statistics["min"][stat_index]
                 max_stat = self.statistics["max"][stat_index]
-                norm_min_val[ii] = (self.min_val[ii] - min_stat) / (max_stat - min_stat)
+                self.norm_min_val[ii] = (min_val[ii] - min_stat) / (max_stat - min_stat)
             elif self.normalizer[ii] == "max":
                 max_stat = self.statistics["max"][stat_index]
-                norm_min_val[ii] = self.min_val[ii] / max_stat
+                self.norm_min_val[ii] = min_val[ii] / max_stat
             elif self.normalizer[ii] == "std":
                 std = self.statistics["stdev"][stat_index]
-                norm_min_val[ii] = self.min_val[ii] / std
+                self.norm_min_val[ii] = min_val[ii] / std
 
         # Reorder normalized min values based on data_index
-        self.norm_min_val = norm_min_val[torch.argsort(torch.tensor(self.data_index))]
+        self.norm_min_val = self.norm_min_val[np.argsort(np.array(self.data_index))]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Applies the ReLU activation with the normalized minimum values to the input tensor.
@@ -175,7 +176,6 @@ class NormalizedReluBounding(BaseBounding):
         x[..., self.data_index] = (
             torch.nn.functional.relu(x[..., self.data_index] - self.norm_min_val) + self.norm_min_val
         )
-
         return x
 
 
