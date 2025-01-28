@@ -15,6 +15,7 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig
 
 from anemoi.models.data_indices.collection import IndexCollection
+from anemoi.training.losses.scaling.variable import get_final_variable_scaling
 from anemoi.training.train.forecaster import GraphForecaster
 
 
@@ -229,8 +230,10 @@ def test_variable_loss_scaling_vals(
     # add addtional user-defined scalers
     scalers = {}
     [scalers.update({name: (scale.scale_dim, scale.get_scaling())}) for name, scale in scalers_from_config]
-    keys_list = list(scalers.keys())
-    assert torch.allclose(torch.tensor(scalers[keys_list[0]][1] * scalers[keys_list[1]][1]), expected_scaling)
+
+    final_variable_scaling = get_final_variable_scaling(scalers)
+
+    assert torch.allclose(torch.tensor(final_variable_scaling), expected_scaling)
 
 
 @pytest.mark.parametrize("fake_data", [linear_scaler], indirect=["fake_data"])

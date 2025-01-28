@@ -22,6 +22,7 @@ from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.utils.checkpoint import checkpoint
 
 from anemoi.models.interface import AnemoiModelInterface
+from anemoi.training.losses.scaling.variable import get_final_variable_scaling
 from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
 from anemoi.training.utils.jsonify import map_config_to_primitives
@@ -141,6 +142,13 @@ class GraphForecaster(pl.LightningModule):
         }
         # add addtional user-defined scalers
         [self.scalers.update({name: (scale.scale_dim, scale.get_scaling())}) for name, scale in scalers]
+
+        # print final variable scaling
+        final_variable_scaling = get_final_variable_scaling(self.scalers)
+        log_text = "Final Variable Scaling: "
+        for idx, name in enumerate(data_indices.internal_model.output.name_to_index.keys()):
+            log_text += f"{name}: {final_variable_scaling[idx]:.4g}, "
+        LOGGER.debug(log_text)
 
         self.updated_loss_mask = False
 
