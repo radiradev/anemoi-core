@@ -16,7 +16,6 @@ from omegaconf import DictConfig
 
 from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.training.train.forecaster import GraphForecaster
-from anemoi.training.train.scaling import GeneralVariableLossScaler
 
 
 @pytest.fixture
@@ -31,18 +30,26 @@ def fake_data(request: SubRequest) -> tuple[DictConfig, IndexCollection]:
                 },
             },
             "training": {
-                "variable_loss_scaling": {
+                "scalers": {
                     "variable_groups": {
                         "default": "sfc",
                         "pl": ["y"],
                     },
-                    "default": 1,
-                    "z": 0.1,
-                    "other": 100,
-                    "y": 0.5,
+                    "builders": {
+                        "additional_scaler": request.param,
+                        "general_variable": {
+                            "_target_": "anemoi.training.losses.scaling.variable.GeneralVariableLossScaler",
+                            "scale_dim": -1,  # dimension on which scaling applied
+                            "weights": {
+                                "default": 1,
+                                "z": 0.1,
+                                "other": 100,
+                                "y": 0.5,
+                            },
+                        },
+                    },
                 },
                 "metrics": ["other", "y_850"],
-                "additional_scalers": request.param,
             },
         },
     )
@@ -53,70 +60,50 @@ def fake_data(request: SubRequest) -> tuple[DictConfig, IndexCollection]:
     return config, data_indices, statistics, statistics_tendencies
 
 
-linear_scaler = [
-    {
-        "_target_": "anemoi.training.train.scaling.LinearVariableLevelScaler",
-        "group": "pl",
-        "y_intercept": 0.0,
-        "slope": 0.001,
-        "scale_dim": -1,
-        "name": "variable_pressure_level",
-    },
-]
-relu_scaler = [
-    {
-        "_target_": "anemoi.training.train.scaling.ReluVariableLevelScaler",
-        "group": "pl",
-        "y_intercept": 0.2,
-        "slope": 0.001,
-        "scale_dim": -1,
-        "name": "variable_pressure_level",
-    },
-]
-constant_scaler = [
-    {
-        "_target_": "anemoi.training.train.scaling.NoVariableLevelScaler",
-        "group": "pl",
-        "y_intercept": 1.0,
-        "slope": 0.0,
-        "scale_dim": -1,
-        "name": "variable_pressure_level",
-    },
-]
-polynomial_scaler = [
-    {
-        "_target_": "anemoi.training.train.scaling.PolynomialVariableLevelScaler",
-        "group": "pl",
-        "y_intercept": 0.2,
-        "slope": 0.001,
-        "scale_dim": -1,
-        "name": "variable_pressure_level",
-    },
-]
+linear_scaler = {
+    "_target_": "anemoi.training.losses.scaling.variable_level.LinearVariableLevelScaler",
+    "group": "pl",
+    "y_intercept": 0.0,
+    "slope": 0.001,
+    "scale_dim": -1,
+}
 
-std_dev_scaler = [
-    {
-        "_target_": "anemoi.training.train.scaling.StdevTendencyScaler",
-        "name": "tendency",
-        "scale_dim": -1,
-    },
-]
+relu_scaler = {
+    "_target_": "anemoi.training.losses.scaling.variable_level.ReluVariableLevelScaler",
+    "group": "pl",
+    "y_intercept": 0.2,
+    "slope": 0.001,
+    "scale_dim": -1,
+}
 
-var_scaler = [
-    {
-        "_target_": "anemoi.training.train.scaling.VarTendencyScaler",
-        "name": "tendency",
-        "scale_dim": -1,
-    },
-]
+constant_scaler = {
+    "_target_": "anemoi.training.losses.scaling.variable_level.NoVariableLevelScaler",
+    "group": "pl",
+    "scale_dim": -1,
+}
+polynomial_scaler = {
+    "_target_": "anemoi.training.losses.scaling.variable_level.PolynomialVariableLevelScaler",
+    "group": "pl",
+    "y_intercept": 0.2,
+    "slope": 0.001,
+    "scale_dim": -1,
+}
 
-no_tend_scaler = [
-    {
-        "_target_": "anemoi.training.train.scaling.NoTendencyScaler",
-        "name": "tendency",
-        "scale_dim": -1,
-    },
-]
+
+std_dev_scaler = {
+    "_target_": "anemoi.training.losses.scaling.variable_tendency.StdevTendencyScaler",
+    "scale_dim": -1,
+}
+
+var_scaler = {
+    "_target_": "anemoi.training.losses.scaling.variable_tendency.VarTendencyScaler",
+    "scale_dim": -1,
+}
+
+no_tend_scaler = {
+    "_target_": "anemoi.training.losses.scaling.variable_tendency.NoTendencyScaler",
+    "scale_dim": -1,
+}
 
 expected_linear_scaling = torch.Tensor(
     [
@@ -225,31 +212,23 @@ def test_variable_loss_scaling_vals(
     expected_scaling: torch.Tensor,
 ) -> None:
     config, data_indices, statistics, statistics_tendencies = fake_data
-    variable_scaling = GeneralVariableLossScaler(
-        config.training.variable_loss_scaling,
-        data_indices,
-    ).get_scaling()
-
-    scaler = [
-        (
+    scalers_from_config = [
+        [
+            name,
             instantiate(
                 scaler_config,
-                scaling_config=config.training.variable_loss_scaling,
+                group_config=config.training.scalers.variable_groups,
                 data_indices=data_indices,
                 statistics=statistics,
                 statistics_tendencies=statistics_tendencies,
-                metadata_variables=None,
-            )
-        )
-        for scaler_config in config.training.additional_scalers
+            ),
+        ]
+        for name, scaler_config in config.training.scalers.builders.items()
     ]
 
-    scalers = {
-        "variable": (-1, variable_scaling),
-    }
     # add addtional user-defined scalers
-
-    [scalers.update({scale.name: (scale.scale_dim, scale.get_scaling())}) for scale in scaler]
+    scalers = {}
+    [scalers.update({name: (scale.scale_dim, scale.get_scaling())}) for name, scale in scalers_from_config]
     keys_list = list(scalers.keys())
     assert torch.allclose(torch.tensor(scalers[keys_list[0]][1] * scalers[keys_list[1]][1]), expected_scaling)
 

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from anemoi.training.scaling import BaseScaler
+from anemoi.training.losses.scaling import BaseScaler
 
 if TYPE_CHECKING:
 

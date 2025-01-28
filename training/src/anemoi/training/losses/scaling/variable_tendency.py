@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from anemoi.training.scaling.variable import BaseVariableLossScaler
+from anemoi.training.losses.scaling.variable import BaseVariableLossScaler
 
 if TYPE_CHECKING:
     from omegaconf import DictConfig
@@ -70,16 +70,18 @@ class BaseTendencyScaler(BaseVariableLossScaler):
         LOGGER.info("Variable Level Scaling: Applying %s scaling to prognostic variables", self.__class__.__name__)
 
         for key, idx in self.data_indices.internal_model.output.name_to_index.items():
-            if idx in self.data_indices.internal_model.output.prognostic:
-                if self.data_indices.data.output.name_to_index.get(key):
-                    prog_idx = self.data_indices.data.output.name_to_index[key]
-                    variable_stdev = self.statistics["stdev"][prog_idx] if self.statistics_tendencies else 1
-                    variable_tendency_stdev = (
-                        self.statistics_tendencies["stdev"][prog_idx] if self.statistics_tendencies else 1
-                    )
-                    scaling = self.get_level_scaling(variable_stdev, variable_tendency_stdev)
-                    LOGGER.info("Parameter %s is being scaled by statistic_tendencies by %.2f", key, scaling)
-                    variable_level_scaling[idx] *= scaling
+            if (
+                idx in self.data_indices.internal_model.output.prognostic
+                and self.data_indices.data.output.name_to_index.get(key)
+            ):
+                prog_idx = self.data_indices.data.output.name_to_index[key]
+                variable_stdev = self.statistics["stdev"][prog_idx] if self.statistics_tendencies else 1
+                variable_tendency_stdev = (
+                    self.statistics_tendencies["stdev"][prog_idx] if self.statistics_tendencies else 1
+                )
+                scaling = self.get_level_scaling(variable_stdev, variable_tendency_stdev)
+                LOGGER.info("Parameter %s is being scaled by statistic_tendencies by %.2f", key, scaling)
+                variable_level_scaling[idx] *= scaling
 
         return variable_level_scaling
 

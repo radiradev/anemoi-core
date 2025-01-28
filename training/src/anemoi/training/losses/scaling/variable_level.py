@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from anemoi.training.scaling.variable import BaseVariableLossScaler
+from anemoi.training.losses.scaling.variable import BaseVariableLossScaler
 
 if TYPE_CHECKING:
     from omegaconf import DictConfig
@@ -128,28 +128,23 @@ class NoVariableLevelScaler(BaseVariableLevelScaler):
 
     def __init__(
         self,
-        scaling_config: DictConfig,
+        group_config: DictConfig,
         data_indices: IndexCollection,
-        metadata_variables: dict,
         group: str,
-        y_intercept: float = 1.0,
-        slope: float = 0.0,
         scale_dim: int | None = None,
+        metadata_variables: dict | None = None,
         **kwargs,
     ) -> None:
         """Initialise Scaler with constant scaling of 1."""
         del kwargs
-        assert (
-            y_intercept == 1.0 and slope == 0
-        ), "self.y_intercept must be 1.0 and self.slope 0.0 for no scaling to fit with definition of linear function."
         super().__init__(
-            scaling_config,
+            group_config,
             data_indices,
-            metadata_variables,
             group,
             y_intercept=1.0,
             slope=0.0,
             scale_dim=scale_dim,
+            metadata_variables=metadata_variables,
         )
 
     @staticmethod
