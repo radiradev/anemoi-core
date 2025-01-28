@@ -13,8 +13,8 @@ from abc import ABC
 from abc import abstractmethod
 from typing import Optional
 
-import torch
 import numpy as np
+import torch
 from torch import nn
 
 from anemoi.models.data_indices.tensor import InputTensorIndex
