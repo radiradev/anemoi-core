@@ -135,7 +135,9 @@ class NormalizedReluBounding(BaseBounding):
                 "The length of the min_val list must match the number of variables in NormalizedReluBounding."
             )
 
-        self.norm_min_val = torch.zeros(len(variables))
+        # Compute normalized min values
+        self.data_index = [name_to_index[var] for var in variables]
+        norm_min_val = torch.zeros(len(variables))
         for ii, variable in enumerate(variables):
             stat_index = self.name_to_index_stats[variable]
             if self.normalizer[ii] == "mean-std":
@@ -152,6 +154,9 @@ class NormalizedReluBounding(BaseBounding):
             elif self.normalizer[ii] == "std":
                 std = self.statistics["stdev"][stat_index]
                 self.norm_min_val[ii] = min_val[ii] / std
+
+        # Reorder normalized min values based on data_index
+        self.norm_min_val = norm_min_val[torch.argsort(torch.tensor(self.data_index))]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Applies the ReLU activation with the normalized minimum values to the input tensor.
