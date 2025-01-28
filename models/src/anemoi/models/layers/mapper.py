@@ -98,7 +98,7 @@ class BackwardMapperPostProcessMixin:
 
     def post_process(self, x_dst, shapes_dst, model_comm_group=None):
         x_dst = self.node_data_extractor(x_dst)
-        x_dst = gather_tensor(x_dst, 0, change_channels_in_shape(shapes_dst, self.out_channels_dst), model_comm_group)
+        #x_dst = gather_tensor(x_dst, 0, change_channels_in_shape(shapes_dst, self.out_channels_dst), model_comm_group)
         return x_dst
 
 
@@ -107,7 +107,7 @@ class ForwardMapperPreProcessMixin:
 
     def pre_process(self, x, shard_shapes, model_comm_group=None):
         x_src, x_dst, shapes_src, shapes_dst = super().pre_process(x, shard_shapes, model_comm_group)
-        x_src = shard_tensor(x_src, 0, shapes_src, model_comm_group)
+        #x_src = shard_tensor(x_src, 0, shapes_src, model_comm_group)
         x_dst = shard_tensor(x_dst, 0, shapes_dst, model_comm_group)
         x_src = self.emb_nodes_src(x_src)
         x_dst = self.emb_nodes_dst(x_dst)
@@ -412,7 +412,7 @@ class GraphTransformerBackwardMapper(BackwardMapperPostProcessMixin, GraphTransf
     def pre_process(self, x, shard_shapes, model_comm_group=None):
         x_src, x_dst, shapes_src, shapes_dst = super().pre_process(x, shard_shapes, model_comm_group)
         shapes_src = change_channels_in_shape(shapes_src, self.hidden_dim)
-        x_dst = shard_tensor(x_dst, 0, shapes_dst, model_comm_group)
+        #x_dst = shard_tensor(x_dst, 0, shapes_dst, model_comm_group)
         x_dst = self.emb_nodes_dst(x_dst)
         shapes_dst = change_channels_in_shape(shapes_dst, self.hidden_dim)
         return x_src, x_dst, shapes_src, shapes_dst

@@ -20,7 +20,7 @@ from torch.distributed.distributed_c10d import ProcessGroup
 from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 
-from anemoi.models.distributed.shapes import get_shape_shards
+from anemoi.models.distributed.shapes import get_shape_shards, apply_shard_shapes
 from anemoi.models.layers.graph import NamedNodesAttributes
 from anemoi.utils.config import DotDict
 
@@ -172,23 +172,31 @@ class AnemoiModelEncProcDec(nn.Module):
             use_reentrant=use_reentrant,
         )
 
-    def forward(self, x: Tensor, model_comm_group: Optional[ProcessGroup] = None) -> Tensor:
+    def forward(self, x: Tensor, model_comm_group: Optional[ProcessGroup] = None, batch_shard_slice: slice = None, grid_shard_shapes: list = None) -> Tensor:
         batch_size = x.shape[0]
         ensemble_size = x.shape[2]
 
         # add data positional info (lat/lon)
+        node_attributes_data = self.node_attributes(self._graph_name_data, batch_size=batch_size)
+        if batch_shard_slice is not None:
+            node_attributes_data = node_attributes_data[batch_shard_slice, :]
+
         x_data_latent = torch.cat(
             (
                 einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
-                self.node_attributes(self._graph_name_data, batch_size=batch_size),
+                node_attributes_data,
             ),
             dim=-1,  # feature dimension
         )
 
+
         x_hidden_latent = self.node_attributes(self._graph_name_hidden, batch_size=batch_size)
 
         # get shard shapes
-        shard_shapes_data = get_shape_shards(x_data_latent, 0, model_comm_group)
+        if grid_shard_shapes is None:
+            shard_shapes_data = get_shape_shards(x_data_latent, 0, model_comm_group, grid_shard_shapes)
+        else:
+            shard_shapes_data = apply_shard_shapes(x_data_latent, 0, grid_shard_shapes)
         shard_shapes_hidden = get_shape_shards(x_hidden_latent, 0, model_comm_group)
 
         # Run encoder
