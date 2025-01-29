@@ -26,6 +26,8 @@ from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.layers.graph import NamedNodesAttributes
 from anemoi.utils.config import DotDict
 
+from anemoi.models.layers.mixer import ChannelMixer
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -106,6 +108,19 @@ class AnemoiModelEncProcDec(nn.Module):
                 for _ in range(self.num_chunks_enc)
             ]
         )
+
+        mlp_ratio_mixer = 4
+        self.encoder_mixer = ChannelMixer(
+                in_channels=self.num_channels,
+                hidden_dim=mlp_ratio_mixer * self.num_channels,
+                out_channels=self.num_channels,
+                )
+
+        self.decoder_mixer = ChannelMixer(
+                in_channels=self.num_channels,
+                hidden_dim=mlp_ratio_mixer * self.num_channels,
+                out_channels=self.num_channels,
+                )
 
         # Processor hidden -> hidden
         self.processor = instantiate(
@@ -211,13 +226,15 @@ class AnemoiModelEncProcDec(nn.Module):
             use_reentrant=use_reentrant,
         )
 
-    def extract_features(self, x: Tensor, shapes_x: tuple, model_comm_group: Optional[ProcessGroup] = None) -> Tensor:
+    def mix_channels_and_extract_features(self, x: Tensor, x_ref, shapes_x: tuple, batch_size: int, ensemble_size: int, model_comm_group: Optional[ProcessGroup] = None) -> Tensor:
         """Extracts output features from the output of the decoder.
 
         Parameters
         ----------
         x : Tensor
             Output of the decoder
+        x_ref : Tensor
+            Reference data for skipped connection
         batch_size : int
             Batch size
         ensemble_size : int
@@ -230,8 +247,28 @@ class AnemoiModelEncProcDec(nn.Module):
         Tensor
             Extracted features
         """
+        x = self.decoder_mixer(x)
         x = self.node_data_extractor(x)
         x = gather_tensor(x, 0, change_channels_in_shape(shapes_x, self.num_output_channels), model_comm_group)
+
+        x = (
+            einops.rearrange(
+                x,
+                "(batch ensemble grid) vars -> batch ensemble grid vars",
+                batch=batch_size,
+                ensemble=ensemble_size,
+            )
+            .to(dtype=x_ref.dtype)
+            .clone()
+        )
+
+        # residual connection (just for the prognostic variables)
+        x[..., self._internal_output_idx] += x_ref[:, -1, :, :, self._internal_input_idx]
+
+        for bounding in self.boundings:
+            # bounding performed in the order specified in the config file
+            x = bounding(x)
+
         return x
 
     def forward(self, x: Tensor, model_comm_group: Optional[ProcessGroup] = None) -> Tensor:
@@ -239,7 +276,7 @@ class AnemoiModelEncProcDec(nn.Module):
         ensemble_size = x.shape[2]
 
         # add data positional info (lat/lon)
-        x_data_latent = torch.cat(
+        x_data = torch.cat(
             (
                 einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
                 self.node_attributes(self._graph_name_data, batch_size=batch_size),
@@ -250,23 +287,22 @@ class AnemoiModelEncProcDec(nn.Module):
         x_hidden_latent = self.node_attributes(self._graph_name_hidden, batch_size=batch_size)
 
         # get shard shapes
-        shard_shapes_data = get_shape_shards(x_data_latent, 0, model_comm_group)
+        shard_shapes_data = get_shape_shards(x_data, 0, model_comm_group)
         shard_shapes_hidden = get_shape_shards(x_hidden_latent, 0, model_comm_group)
 
         # TODO: fix sharding: grid dimension changes due to 1hop sharding, vars changes do to chunking
         # Run encoder
-        x_latent = []
+        x_latent = [] # will be sharded, embedded and updated
         for i in range(self.num_chunks_enc):
             x_data_latent, x_latent_i = self._run_mapper(
                 self.encoder_list[i],
-                (x_data_latent, x_hidden_latent),
+                (x_data, x_hidden_latent),
                 batch_size=batch_size,
                 shard_shapes=(shard_shapes_data, shard_shapes_hidden),
                 model_comm_group=model_comm_group,
             )
             x_latent.append(x_latent_i)
-
-        x_latent = torch.cat(x_latent, dim=-1)
+        x_latent = checkpoint(self.encoder_mixer, x_latent, use_reentrant=False)
 
         x_latent_proc = self.processor(
             x_latent,
@@ -282,7 +318,7 @@ class AnemoiModelEncProcDec(nn.Module):
 
         x_out = []
         x_latent_proc_chunk = torch.tensor_split(x_latent_proc, self.num_chunks_dec, dim=-1)
-        # TODO: do we also need to chunk x_data_latent?
+        # TODO: do we also need to chunk x_data_latent? -> this is always embedded so no need for chunking here
         for i in range(self.num_chunks_dec):
             x_out.append(
                 self._run_mapper(
@@ -293,26 +329,6 @@ class AnemoiModelEncProcDec(nn.Module):
                     model_comm_group=model_comm_group,
                 )
             )
-
-        x_out = torch.cat(x_out, dim=-1)
-        x_out = self.extract_features(x_out, shard_shapes_data, model_comm_group)
-
-        x_out = (
-            einops.rearrange(
-                x_out,
-                "(batch ensemble grid) vars -> batch ensemble grid vars",
-                batch=batch_size,
-                ensemble=ensemble_size,
-            )
-            .to(dtype=x.dtype)
-            .clone()
-        )
-
-        # residual connection (just for the prognostic variables)
-        x_out[..., self._internal_output_idx] += x[:, -1, :, :, self._internal_input_idx]
-
-        for bounding in self.boundings:
-            # bounding performed in the order specified in the config file
-            x_out = bounding(x_out)
+        x_out = checkpoint(self.mix_channels_and_extract_features, x_out, x, shard_shapes_data, batch_size, ensemble_size, model_comm_group, use_reentrant=False)
 
         return x_out
