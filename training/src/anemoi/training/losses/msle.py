@@ -20,7 +20,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class WeightedMSLELoss(BaseWeightedLoss):
-    """Node-weighted RMLE loss."""
+    """Node-weighted MSLE loss."""
 
     name = "wmsle"
 
@@ -30,7 +30,7 @@ class WeightedMSLELoss(BaseWeightedLoss):
         ignore_nans: bool = False,
         **kwargs,
     ) -> None:
-        """Node- and (inverse-)variance-weighted RMSE Loss.
+        """Node- and (inverse-)variance-weighted MSLE Loss.
 
         Parameters
         ----------
@@ -53,7 +53,7 @@ class WeightedMSLELoss(BaseWeightedLoss):
         scalar_indices: tuple[int, ...] | None = None,
         without_scalars: list[str] | list[int] | None = None,
     ) -> torch.Tensor:
-        """Calculates the lat-weighted RMSE loss.
+        """Calculates the lat-weighted MSLE loss.
 
         Parameters
         ----------
