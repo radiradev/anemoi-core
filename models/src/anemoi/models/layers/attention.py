@@ -117,19 +117,19 @@ class MultiHeadSelfAttention(nn.Module):
         assert (
             self.attention_implementation in attn_funcs
         ), f"{self.attention_implementation} not supported. \
-              Please change model.processor.attention_implementation in the config to one of: {attn_funcs.keys()}"
+              Please change model.processor.attention_implementation to one of: {attn_funcs.keys()}"
         LOGGER.info(f"Using {self.attention_implementation}")
-
-        # initalise the attn func here
-        self.attention = attn_funcs[self.attention_implementation]()
 
         if self.attention_implementation == "flex_attention":
             assert (
                 self.embed_dim / self.num_heads >= 16
-            ), f"Embedding dimension ({self.embed_dim}) devided by number of heads ({self.num_heads}) must be >= 16."
+            ), f"Embedding dimension ({self.embed_dim}) divided by number of heads ({self.num_heads}) must be >= 16."
             assert math.log2(
                 self.embed_dim
             ).is_integer(), f"Embedding dimension must be a power of 2. {self.embed_dim} is not valid."
+
+            # initalise the attn func here
+            self.attention = attn_funcs[self.attention_implementation]()
 
     def forward(
         self, x: Tensor, shapes: list, batch_size: int, model_comm_group: Optional[ProcessGroup] = None
@@ -313,7 +313,10 @@ class FlashAttentionWrapper(nn.Module):
 
     def __init__(self):
         super().__init__()
-        import flash_attn
+        try:
+            import flash_attn
+        except ImportError:
+            raise ImportError("Error: Flash-attn not installed. Please install flash-attn to use Flash Attention")
 
         if version.parse(flash_attn.__version__) < version.parse("2.6.0"):
             raise RuntimeError("Error: Flash-attn version is too low. Update to 2.6.0 or higher.")
