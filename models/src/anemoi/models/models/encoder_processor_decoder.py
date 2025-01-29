@@ -69,11 +69,13 @@ class AnemoiModelEncProcDec(nn.Module):
 
         self.num_chunks_enc = model_config.model.encoder.num_chunks
         num_heads_enc = model_config.model.encoder.num_heads // self.num_chunks_enc
-        hidden_dim_encoder = self.num_channels // self.num_chunks_enc
+        hidden_dim_encoder = self.num_channels
+        out_dim_encoder = self.num_channels // self.num_chunks_enc # this only determines the inner dimension of the mapper, output is still hidden_dim_encoder
 
         self.num_chunks_dec = model_config.model.decoder.num_chunks
         num_heads_dec = model_config.model.decoder.num_heads // self.num_chunks_dec
-        hidden_dim_decoder = self.num_channels // self.num_chunks_dec
+        hidden_dim_decoder = self.num_channels
+        out_dim_decoder = self.num_channels // self.num_chunks_dec # this only determines the inner dimension of the mapper, output is still hidden_dim_decoder
 
         LOGGER.info(
             "Num_chunks_enc: %s, hidden_dim_encoder: %s, num_heads_enc: %s",
@@ -100,6 +102,7 @@ class AnemoiModelEncProcDec(nn.Module):
                     in_channels_src=input_dim,
                     in_channels_dst=self.node_attributes.attr_ndims[self._graph_name_hidden],
                     hidden_dim=hidden_dim_encoder,
+                    out_channels_dst=out_dim_encoder,
                     num_heads=num_heads_enc,
                     sub_graph=self._graph_data[(self._graph_name_data, "to", self._graph_name_hidden)],
                     src_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
@@ -130,7 +133,7 @@ class AnemoiModelEncProcDec(nn.Module):
                     in_channels_dst=input_dim,
                     hidden_dim=hidden_dim_decoder,
                     num_heads=num_heads_dec,
-                    out_channels_dst=self.num_output_channels,
+                    out_channels_dst=out_dim_decoder,
                     sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_data)],
                     src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
                     dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
@@ -282,7 +285,13 @@ class AnemoiModelEncProcDec(nn.Module):
 
         # TODO: fix sharding: grid dimension changes due to 1hop sharding, vars changes do to chunking
         # Run encoder
-        x_latent = [] # will be sharded, embedded and updated
+
+        if torch.is_autocast_enabled():
+            target_dtype = torch.get_autocast_gpu_dtype()
+        else:
+            target_dtype = x_data.dtype
+
+        x_latent = torch.zeros((*x_hidden_latent.shape[:-1], self.num_channels), dtype=target_dtype, device=x_hidden_latent.device)
         for i in range(self.num_chunks_enc):
             x_data_latent, x_latent_i = self._run_mapper(
                 self.encoder_list[i],
@@ -291,7 +300,7 @@ class AnemoiModelEncProcDec(nn.Module):
                 shard_shapes=(shard_shapes_data, shard_shapes_hidden),
                 model_comm_group=model_comm_group,
             )
-            x_latent.append(x_latent_i)
+            x_latent = x_latent + x_latent_i
         x_latent = checkpoint(self.encoder_mixer, x_latent, use_reentrant=False)
 
         x_latent_proc = self.processor(
@@ -305,19 +314,14 @@ class AnemoiModelEncProcDec(nn.Module):
         x_latent_proc = x_latent_proc + x_latent
 
         # Run decoder
-
-        x_out = []
-        x_latent_proc_chunk = torch.tensor_split(x_latent_proc, self.num_chunks_dec, dim=-1)
-        # TODO: do we also need to chunk x_data_latent? -> this is always embedded so no need for chunking here
+        x_out = torch.zeros((*x_data.shape[:-1], self.num_channels), dtype=target_dtype, device=x_data.device)
         for i in range(self.num_chunks_dec):
-            x_out.append(
-                self._run_mapper(
+            x_out = x_out + self._run_mapper(
                     self.decoder_list[i],
-                    (x_latent_proc_chunk[i], x_data),
+                    (x_latent_proc, x_data),
                     batch_size=batch_size,
                     shard_shapes=(shard_shapes_hidden, shard_shapes_data),
                     model_comm_group=model_comm_group,
-                )
             )
         x_out = checkpoint(self.mix_channels_and_extract_features, x_out, x, shard_shapes_data, batch_size, ensemble_size, model_comm_group, use_reentrant=False)
 

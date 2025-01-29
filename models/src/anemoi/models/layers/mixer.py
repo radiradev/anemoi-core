@@ -68,8 +68,7 @@ class ChannelMixer(nn.Module):
     ):
         num_chunks = self.num_chunks if self.training else NUM_CHUNKS_INFERENCE
 
-        # combine inputs
-        nodes = torch.cat(x, dim=-1)
+        nodes = x
 
         # compute nodes_new_dst = self.node_dst_mlp(out) + out in chunks:
         nodes_new_dst = torch.cat(

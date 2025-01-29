@@ -727,7 +727,7 @@ class GraphTransformerBaseMapperAttention(GraphEdgeMixin, BaseMapper):
         cpu_offload: bool = False,
         activation: str = "GELU",
         num_heads: int = 16,
-        mlp_hidden_ratio: int = 4,
+        mlp_hidden_ratio: int = 4, # not used anymore
         sub_graph: Optional[HeteroData] = None,
         sub_graph_edge_attributes: Optional[list[str]] = None,
         src_grid_size: int = 0,
@@ -772,7 +772,7 @@ class GraphTransformerBaseMapperAttention(GraphEdgeMixin, BaseMapper):
 
         self.proc = GraphTransformerMapperBlockAttention(
             hidden_dim,
-            mlp_hidden_ratio * hidden_dim,
+            out_channels_dst, # to do -> rename this variable everywhere because this is inner dim of self attention now
             hidden_dim,
             num_heads=num_heads,
             edge_dim=self.edge_dim,

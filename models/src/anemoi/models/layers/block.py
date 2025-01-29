@@ -650,6 +650,7 @@ class GraphTransformerBaseBlockAttention(BaseBlock, ABC):
     def __init__(
         self,
         in_channels: int,
+        hidden_dim: int,
         out_channels: int,
         edge_dim: int,
         num_heads: int = 16,
@@ -674,7 +675,7 @@ class GraphTransformerBaseBlockAttention(BaseBlock, ABC):
         """
         super().__init__(**kwargs)
 
-        self.out_channels_conv = out_channels // num_heads
+        self.out_channels_conv = hidden_dim // num_heads
         self.num_heads = num_heads
 
         self.num_chunks = num_chunks
@@ -687,7 +688,7 @@ class GraphTransformerBaseBlockAttention(BaseBlock, ABC):
 
         self.conv = GraphTransformerConv(out_channels=self.out_channels_conv)
 
-        self.projection = nn.Linear(out_channels, out_channels)
+        self.projection = nn.Linear(hidden_dim, out_channels)
 
         self.layer_norm1 = nn.LayerNorm(in_channels)
 
@@ -759,7 +760,7 @@ class GraphTransformerMapperBlockAttention(GraphTransformerBaseBlockAttention):
     def __init__(
         self,
         in_channels: int,
-        hidden_dim: int, # not used
+        hidden_dim: int,
         out_channels: int,
         edge_dim: int,
         num_heads: int = 16,
@@ -790,6 +791,7 @@ class GraphTransformerMapperBlockAttention(GraphTransformerBaseBlockAttention):
         """
         super().__init__(
             in_channels=in_channels,
+            hidden_dim=hidden_dim,
             out_channels=out_channels,
             edge_dim=edge_dim,
             num_heads=num_heads,
