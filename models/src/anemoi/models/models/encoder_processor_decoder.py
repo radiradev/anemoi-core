@@ -313,7 +313,7 @@ class AnemoiModelEncProcDec(nn.Module):
             x_out.append(
                 self._run_mapper(
                     self.decoder_list[i],
-                    (x_latent_proc_chunk[i], x_data_latent),
+                    (x_latent_proc_chunk[i], x_data),
                     batch_size=batch_size,
                     shard_shapes=(shard_shapes_hidden, shard_shapes_data),
                     model_comm_group=model_comm_group,
