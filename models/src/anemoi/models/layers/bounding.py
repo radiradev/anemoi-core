@@ -137,7 +137,6 @@ class NormalizedReluBounding(BaseBounding):
             )
 
         # Compute normalized min values
-        self.data_index = [name_to_index[var] for var in variables]
         self.norm_min_val = torch.zeros(len(variables))
         for ii, variable in enumerate(variables):
             stat_index = self.name_to_index_stats[variable]
@@ -156,11 +155,6 @@ class NormalizedReluBounding(BaseBounding):
                 std = self.statistics["stdev"][stat_index]
                 self.norm_min_val[ii] = min_val[ii] / std
 
-        # Reorder normalized min values based on data_index
-        #breakpoint()
-        #self.norm_min_val = self.norm_min_val[np.argsort(np.array(self.data_index))]
-        #breakpoint()
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Applies the ReLU activation with the normalized minimum values to the input tensor.
 
@@ -175,7 +169,6 @@ class NormalizedReluBounding(BaseBounding):
             The processed tensor with bounding applied.
         """
         self.norm_min_val = self.norm_min_val.to(x.device)
-        breakpoint()
         x[..., self.data_index] = (
             torch.nn.functional.relu(x[..., self.data_index] - self.norm_min_val) + self.norm_min_val
         )
