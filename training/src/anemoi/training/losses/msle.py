@@ -19,10 +19,10 @@ from anemoi.training.losses.mse import BaseWeightedLoss
 LOGGER = logging.getLogger(__name__)
 
 
-class WeightedRMLELoss(BaseWeightedLoss):
+class WeightedMSLELoss(BaseWeightedLoss):
     """Node-weighted RMLE loss."""
 
-    name = "wrmle"
+    name = "wmsle"
 
     def __init__(
         self,
