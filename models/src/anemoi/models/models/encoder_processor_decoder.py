@@ -109,18 +109,8 @@ class AnemoiModelEncProcDec(nn.Module):
             ]
         )
 
-        mlp_ratio_mixer = 4
-        self.encoder_mixer = ChannelMixer(
-                in_channels=self.num_channels,
-                hidden_dim=mlp_ratio_mixer * self.num_channels,
-                out_channels=self.num_channels,
-                )
-
-        self.decoder_mixer = ChannelMixer(
-                in_channels=self.num_channels,
-                hidden_dim=mlp_ratio_mixer * self.num_channels,
-                out_channels=self.num_channels,
-                )
+        self.encoder_mixer = instantiate(model_config.model.encoder_mixer)
+        self.decoder_mixer = instantiate(model_config.model.decoder_mixer)
 
         # Processor hidden -> hidden
         self.processor = instantiate(
