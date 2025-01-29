@@ -846,9 +846,13 @@ class PlotLoss(BasePerBatchPlotCallback):
         parameter_positions = list(pl_module.data_indices.internal_model.output.name_to_index.values())
         # reorder parameter_names by position
         self.parameter_names = [parameter_names[i] for i in np.argsort(parameter_positions)]
+        self.metadata_variables = pl_module.model.metadata["dataset"].get("variables_metadata")
 
         # Sort the list using the custom key
-        argsort_indices = argsort_variablename_variablelevel(self.parameter_names)
+        argsort_indices = argsort_variablename_variablelevel(
+            self.parameter_names,
+            metadata_variables=self.metadata_variables,
+        )
         self.parameter_names = [self.parameter_names[i] for i in argsort_indices]
 
         if not isinstance(pl_module.loss, BaseWeightedLoss):

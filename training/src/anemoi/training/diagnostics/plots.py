@@ -31,6 +31,7 @@ from scipy.interpolate import griddata
 
 from anemoi.training.diagnostics.maps import Coastlines
 from anemoi.training.diagnostics.maps import EquirectangularProjection
+from anemoi.training.utils.variables_metadata import ExtractVariableGroupAndLevel
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
@@ -58,7 +59,7 @@ def equirectangular_projection(latlons: np.array) -> np.array:
     return pc_lat, pc_lon
 
 
-def argsort_variablename_variablelevel(data: list[str]) -> list[int]:
+def argsort_variablename_variablelevel(data: list[str], metadata_variables: dict | None = None) -> list[int]:
     """Custom sort key to process the strings.
 
     Sort parameter names by alpha part, then by numeric part at last
@@ -74,12 +75,16 @@ def argsort_variablename_variablelevel(data: list[str]) -> list[int]:
     list[int]
         Sorted indices of the input list.
     """
+    extract_variable_group_and_level = ExtractVariableGroupAndLevel(
+        {"default": ""},
+        metadata_variables,
+    )
 
     def custom_sort_key(index: int) -> tuple:
         s = data[index]  # Access the element by index
-        parts = s.split("_")
-        alpha_part = s if len(parts) == 1 else s[: -len(parts[-1]) - 1]
-        numeric_part = int(parts[-1]) if len(parts) > 1 and parts[-1].isdigit() else float("inf")
+        _, alpha_part, numeric_part = extract_variable_group_and_level.get_group_and_level(s)
+        if numeric_part is None:
+            numeric_part = float("inf")
         return (alpha_part, numeric_part, s)
 
     # Generate argsort indices
