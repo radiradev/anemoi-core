@@ -54,7 +54,7 @@ class MultiHeadSelfAttention(nn.Module):
 
         softcap: Softcapping prevents the logits from growing excessively large
 
-        use_alibi_slopes: Adds bias of (-alibi_slope * |i + seqlen_k - seqlen_q - j|) to the attention score of
+        use_alibi_slopes: Adds bias of `(-alibi_slope * |i + seqlen_k - seqlen_q - j|)` to the attention score of
         query i and key j, where alibi_slope is calculated using get_alibi_slopes
 
         Parameters
