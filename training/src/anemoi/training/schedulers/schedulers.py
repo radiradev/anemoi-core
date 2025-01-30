@@ -60,6 +60,8 @@ class Scheduler(ABC):
         """
         Temporarily hold the scheduler at a specific step and epoch.
 
+        Used as context manager.
+
         Parameters
         ----------
         step : int, optional
@@ -71,10 +73,23 @@ class Scheduler(ABC):
             Is a dict of epoch: step, the value of step when the epoch
             was updated. by default None
 
+        Examples
+        --------
+        ```python
+        from anemoi.training.schedulers.schedulers import Scheduler
+
+        scheduler = Scheduler()
+        with scheduler.at(step = 10, epoch = 1):
+            print(scheduler._step)
+            # 10
+        print(scheduler._step)
+        # 0
+        ```
+
         Returns
         -------
         FrozenStateRecord
-            Record of the prior state.
+            Record of the prior state, to be used as a context manager.
         """
         if self._require_epoch_record and epoch_record is None:
             error_msg = (

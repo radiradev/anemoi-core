@@ -65,11 +65,9 @@ class BaseRandom(RolloutScheduler):
             Either broadcasted value or update value from broadcast
         """
         self._dist_rollout = torch.tensor([value])
-        try:
-            if dist.get_world_size() > 1:
-                dist.broadcast(self._dist_rollout, src=0)
-        except ValueError:
-            pass
+
+        if dist.is_initialized() and dist.get_world_size() > 1:
+            dist.broadcast(self._dist_rollout, src=0)
         return self._dist_rollout[0]
 
     def _randomly_pick(self, rollouts: list[int]) -> int:
@@ -101,20 +99,20 @@ class RandomList(BaseRandom):
 
         Parameters
         ----------
-            rollouts : list[int]
-                List of rollouts to choose from.
+        rollouts : list[int]
+            List of rollouts to choose from.
 
-            Example
-            -------
-            ```python
-            from anemoi.training.schedulers.rollout import RandomList
+        Example
+        -------
+        ```python
+        from anemoi.training.schedulers.rollout import RandomList
 
-            RollSched = RandomList(rollouts = [1, 2, 3, 4, 5])
-            RollSched.at(epoch = 1).rollout
-            # any value in the list
-            RollSched.at(epoch = 2).rollout
-            # any value in the list
-            ```
+        RollSched = RandomList(rollouts = [1, 2, 3, 4, 5])
+        RollSched.at(epoch = 1).rollout
+        # any value in the list
+        RollSched.at(epoch = 2).rollout
+        # any value in the list
+        ```
         """
         super().__init__()
         self._rollouts = rollouts
