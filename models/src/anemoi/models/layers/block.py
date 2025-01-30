@@ -891,12 +891,10 @@ class GraphTransformerMapperBlockAttention(GraphTransformerBaseBlockAttention):
         else:
             out = self.conv(query=query, key=key, value=value, edge_attr=edges, edge_index=edge_index, size=size)
 
-        pdb.set_trace()
         out = self.shard_output_seq(out, shapes, batch_size, model_comm_group)
 
         # compute out = self.projection(out + x_r) in chunks:
+        # this should be ok, x_r acts on target nodes and these should not get any gradients if there are no edges 
         out = torch.cat([self.projection(chunk) for chunk in torch.tensor_split(out + x_r, num_chunks, dim=0)], dim=0)
 
-        out = out + x_skip[1]
-
-        return (x_skip[0], out), edge_attr
+        return (x_skip[0], out, x_skip[1]), edge_attr

@@ -64,11 +64,12 @@ class ChannelMixer(nn.Module):
 
     def forward(
         self,
-        x: PairTensor,
+        x: Tensor,
+        x_skip: Tensor,
     ):
         num_chunks = self.num_chunks if self.training else NUM_CHUNKS_INFERENCE
 
-        nodes = x
+        nodes = x + x_skip # skipped connection after attention
 
         # compute nodes_new_dst = self.node_dst_mlp(out) + out in chunks:
         nodes_new_dst = torch.cat(

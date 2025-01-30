@@ -26,6 +26,7 @@ from anemoi.models.distributed.graph import gather_tensor
 from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.distributed.khop_edges import sort_edges_1hop_sharding
+from anemoi.models.distributed.khop_edges import sort_edges_1hop_chunks
 from anemoi.models.distributed.shapes import change_channels_in_shape
 from anemoi.models.layers.block import GraphConvMapperBlock
 from anemoi.models.layers.block import GraphTransformerMapperBlock
@@ -825,18 +826,31 @@ class GraphTransformerBaseMapperAttention(GraphEdgeMixin, BaseMapper):
         self,
         x: PairTensor,
         batch_size: int,
+        chunk_number: int,
+        number_of_chunks: int,
         shard_shapes: tuple[tuple[int], tuple[int]],
         model_comm_group: Optional[ProcessGroup] = None,
     ) -> PairTensor:
         size = (sum(x[0] for x in shard_shapes[0]), sum(x[0] for x in shard_shapes[1]))
         edge_attr = self.trainable(self.edge_attr, batch_size)
         edge_index = self._expand_edges(self.edge_index_base, self.edge_inc, batch_size)
+
+        if chunk_number > 1:
+            assert batch_size == 1, "batch size must be 1 for chunking"
+        
+        # split 1-hop edges into chunks, chose chunk according to chunk_number, operate on these edges only
+        edge_attr_list, edge_index_list = sort_edges_1hop_chunks(
+            num_nodes=size, edge_attr=edge_attr, edge_index=edge_index, num_chunks=number_of_chunks
+        )
+        edge_attr = edge_attr_list[chunk_number]
+        edge_index = edge_index_list[chunk_number]
+
         shapes_edge_attr = get_shape_shards(edge_attr, 0, model_comm_group)
         edge_attr = shard_tensor(edge_attr, 0, shapes_edge_attr, model_comm_group)
 
         x_src, x_dst, shapes_src, shapes_dst = self.pre_process(x, shard_shapes, model_comm_group)
 
-        (x_src, x_dst), edge_attr = self.proc(
+        (x_src, x_dst, x_dst_skip), edge_attr = self.proc(
             (x_src, x_dst),
             edge_attr,
             edge_index,
@@ -848,7 +862,7 @@ class GraphTransformerBaseMapperAttention(GraphEdgeMixin, BaseMapper):
 
         x_dst = self.post_process(x_dst, shapes_dst, model_comm_group)
 
-        return x_dst
+        return x_dst, x_dst_skip if chunk_number == number_of_chunks - 1 else None
 
 
 class GraphTransformerForwardMapperAttention(ForwardMapperPreProcessMixin, GraphTransformerBaseMapperAttention):
@@ -920,10 +934,16 @@ class GraphTransformerForwardMapperAttention(ForwardMapperPreProcessMixin, Graph
         x: PairTensor,
         batch_size: int,
         shard_shapes: tuple[tuple[int], tuple[int]],
+        chunk_number: int,
+        number_of_chunks: int,
         model_comm_group: Optional[ProcessGroup] = None,
     ) -> PairTensor:
-        x_dst = super().forward(x, batch_size, shard_shapes, model_comm_group)
-        return x[0], x_dst
+        x_dst, x_dst_skip = super().forward(x, batch_size, chunk_number, number_of_chunks, shard_shapes, model_comm_group)
+
+        out1 = x[0] if chunk_number == number_of_chunks - 1 else None
+        out2 = x_dst
+        out3 = x_dst_skip if chunk_number == number_of_chunks - 1 else None
+        return out1, out2, out3               
 
 
 class GraphTransformerBackwardMapperAttention(GraphTransformerBaseMapperAttention):  # moved PostProcessMixin up to enc_proc_dec
@@ -987,11 +1007,6 @@ class GraphTransformerBackwardMapperAttention(GraphTransformerBaseMapperAttentio
             dst_grid_size=dst_grid_size,
             layer_kernels=layer_kernels,
         )
-
-
-        # self.node_data_extractor = nn.Sequential(
-        #     layer_kernels["LayerNorm"](normalized_shape=self.hidden_dim), layer_kernels["Linear"](self.hidden_dim, self.out_channels_dst)
-        # )
 
     def pre_process(self, x, shard_shapes, model_comm_group=None):
         x_src, x_dst, shapes_src, shapes_dst = super().pre_process(x, shard_shapes, model_comm_group)
