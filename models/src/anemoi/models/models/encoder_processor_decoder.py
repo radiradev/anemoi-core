@@ -73,10 +73,16 @@ class AnemoiModelEncProcDec(nn.Module):
         self.level_shuffle = model_config.training.vertical_embeddings.level_shuffle
         self.vertical_embeddings_method = model_config.training.vertical_embeddings.method
 
-        input_dim = (
-            self.multi_step * (self.num_input_channels)
-            + self.node_attributes.attr_ndims[self._graph_name_data]
-        )
+        if self.vertical_embeddings_method == 'concat':
+            input_dim = (
+                self.multi_step * (self.num_input_channels + self.num_input_channels * self.encoded_dim)
+                + self.node_attributes.attr_ndims[self._graph_name_data]
+            )
+        else:
+            input_dim = (
+                self.multi_step * (self.num_input_channels)
+                + self.node_attributes.attr_ndims[self._graph_name_data]
+            )
 
         # Encoder data -> hidden
         self.encoder = instantiate(
@@ -184,8 +190,6 @@ class AnemoiModelEncProcDec(nn.Module):
         ensemble_size = x.shape[2]
         num_grid_points = x.shape[3]        
         num_variables = int(x.shape[4]/self.num_levels)
-
-        import ipdb; ipdb.set_trace()
 
         x_reshaped = torch.reshape(x, (batch_size, n_times, ensemble_size, num_grid_points, num_variables, self.num_levels))
         if self.level_shuffle:
