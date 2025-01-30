@@ -172,14 +172,14 @@ class AnemoiModelEncProcDec(nn.Module):
             use_reentrant=use_reentrant,
         )
 
-    def forward(self, x: Tensor, model_comm_group: Optional[ProcessGroup] = None, batch_shard_slice: slice = None, grid_shard_shapes: list = None) -> Tensor:
+    def forward(self, x: Tensor, model_comm_group: Optional[ProcessGroup] = None, grid_shard_slice: slice = None, grid_shard_shapes: list = None) -> Tensor:
         batch_size = x.shape[0]
         ensemble_size = x.shape[2]
 
         # add data positional info (lat/lon)
         node_attributes_data = self.node_attributes(self._graph_name_data, batch_size=batch_size)
-        if batch_shard_slice is not None:
-            node_attributes_data = node_attributes_data[batch_shard_slice, :]
+        if grid_shard_slice is not None:
+            node_attributes_data = node_attributes_data[grid_shard_slice, :]
 
         x_data_latent = torch.cat(
             (

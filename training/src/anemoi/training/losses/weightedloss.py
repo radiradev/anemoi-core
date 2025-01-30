@@ -17,8 +17,10 @@ from abc import abstractmethod
 
 import torch
 from torch import nn
+from torch.distributed.distributed_c10d import ProcessGroup
 
 from anemoi.training.losses.utils import ScaleTensor
+from anemoi.models.distributed.graph import reduce_tensor
 
 LOGGER = logging.getLogger(__name__)
 
@@ -111,7 +113,13 @@ class BaseWeightedLoss(nn.Module, ABC):
         scalar = scalar.expand_as(x)
         return x[subset_indices] * scalar[subset_indices]
 
-    def scale_by_node_weights(self, x: torch.Tensor, squash: bool = True) -> torch.Tensor:
+    def scale_by_node_weights(
+        self,
+        x: torch.Tensor,
+        squash: bool = True,
+        grid_shard_slice: slice = None,
+        group: ProcessGroup = None,
+    ) -> torch.Tensor:
         """Scale a tensor by the node_weights.
 
         Equivalent to reducing and averaging accordingly across all
@@ -124,25 +132,50 @@ class BaseWeightedLoss(nn.Module, ABC):
         squash : bool, optional
             Average last dimension, by default True
             If False, the loss returned of shape (n_outputs)
+        grid_shard_slice : slice, optional
+            Slice of this gpus grid shard if sharded, by default None
+        group : ProcessGroup, optional
+            Distributed group, by default None
 
         Returns
         -------
         torch.Tensor
             Scaled error tensor
         """
-        # Squash by last dimension
+        if grid_shard_slice is None:
+            node_weights = self.node_weights
+        else:
+            node_weights = self.node_weights[grid_shard_slice]
+            
         if squash:
             x = self.avg_function(x, dim=-1)
-            # Weight by area
-            x *= self.node_weights.expand_as(x)
-            x /= self.sum_function(self.node_weights.expand_as(x))
-            return self.sum_function(x)
+            # Weight by area, restrict to coresponding grid shard if sharded
+            x *= node_weights.expand_as(x)
+            local_weight_sum = self.sum_function(node_weights.expand_as(x))
+            if grid_shard_slice is None:
+                global_weight_sum = local_weight_sum
+            else:
+                global_weight_sum = reduce_tensor(local_weight_sum, group)
+            x /= global_weight_sum
+            out = self.sum_function(x)
+            if grid_shard_slice is not None:
+                out = reduce_tensor(out, group)
+
+            return out
 
         # Weight by area, due to weighting construction is analagous to a mean
-        x *= self.node_weights[..., None].expand_as(x)
+        x *= node_weights[..., None].expand_as(x)
         # keep last dimension (variables) when summing weights
-        x /= self.sum_function(self.node_weights[..., None].expand_as(x), dim=(0, 1, 2))
-        return self.sum_function(x, dim=(0, 1, 2))
+        local_weight_sum = self.sum_function(node_weights[..., None].expand_as(x), dim=(0, 1, 2))
+        if grid_shard_slice is None:
+            global_weight_sum = local_weight_sum
+        else:
+            global_weight_sum = reduce_tensor(local_weight_sum, group)
+        x /= global_weight_sum
+        out = self.sum_function(x, dim=(0, 1, 2))
+        if grid_shard_slice is not None:
+            out = reduce_tensor(out, group)
+        return out
 
     @abstractmethod
     def forward(
