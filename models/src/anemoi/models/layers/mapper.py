@@ -24,11 +24,12 @@ from torch_geometric.typing import PairTensor
 
 from anemoi.models.distributed.graph import gather_tensor
 from anemoi.models.distributed.graph import shard_tensor
+from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.distributed.khop_edges import sort_edges_1hop_sharding
 from anemoi.models.distributed.shapes import change_channels_in_shape
-from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.layers.block import GraphConvMapperBlock
 from anemoi.models.layers.block import GraphTransformerMapperBlock
+from anemoi.models.layers.block import GraphTransformerMapperBlockAttention
 from anemoi.models.layers.graph import TrainableTensor
 from anemoi.models.layers.mlp import MLP
 from anemoi.utils.config import DotDict
@@ -243,7 +244,7 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
             num_heads=num_heads,
             edge_dim=self.edge_dim,
             activation=activation,
-            num_chunks=num_chunks,
+            num_chunks=1,  # disable "inner chunking" for now
             layer_kernels=layer_kernels,
         )
 
@@ -356,7 +357,7 @@ class GraphTransformerForwardMapper(ForwardMapperPreProcessMixin, GraphTransform
         return x[0], x_dst
 
 
-class GraphTransformerBackwardMapper(BackwardMapperPostProcessMixin, GraphTransformerBaseMapper):
+class GraphTransformerBackwardMapper(GraphTransformerBaseMapper):  # moved PostProcessMixin up to enc_proc_dec
     """Graph Transformer Mapper from hidden -> data."""
 
     def __init__(
@@ -422,7 +423,7 @@ class GraphTransformerBackwardMapper(BackwardMapperPostProcessMixin, GraphTransf
         )
 
         self.node_data_extractor = nn.Sequential(
-            nn.LayerNorm(self.hidden_dim), nn.Linear(self.hidden_dim, self.out_channels_dst)
+            layer_kernels["LayerNorm"](normalized_shape=self.hidden_dim), layer_kernels["Linear"](self.hidden_dim, self.out_channels_dst)
         )
 
     def pre_process(self, x, shard_shapes, model_comm_group=None):
@@ -739,3 +740,263 @@ class GNNBackwardMapper(BackwardMapperPostProcessMixin, GNNBaseMapper):
 
         _, x_dst = super().forward(x, batch_size, shard_shapes, model_comm_group)
         return x_dst
+
+
+class GraphTransformerBaseMapperAttention(GraphEdgeMixin, BaseMapper):
+    """Graph Transformer Base Mapper from hidden -> data or data -> hidden."""
+
+    def __init__(
+        self,
+        in_channels_src: int = 0,
+        in_channels_dst: int = 0,
+        hidden_dim: int = 128,
+        trainable_size: int = 8,
+        out_channels_dst: Optional[int] = None,
+        num_chunks: int = 1,
+        cpu_offload: bool = False,
+        activation: str = "GELU",
+        num_heads: int = 16,
+        mlp_hidden_ratio: int = 4, # not used anymore
+        sub_graph: Optional[HeteroData] = None,
+        sub_graph_edge_attributes: Optional[list[str]] = None,
+        src_grid_size: int = 0,
+        dst_grid_size: int = 0,
+        layer_kernels: DotDict = None,
+    ) -> None:
+        """Initialize GraphTransformerBaseMapper.
+
+        Parameters
+        ----------
+        in_channels_src : int
+            Input channels of the source node
+        in_channels_dst : int
+            Input channels of the destination node
+        hidden_dim : int
+            Hidden dimension
+        trainable_size : int
+            Trainable tensor of edge
+        num_heads: int
+            Number of heads to use, default 16
+        mlp_hidden_ratio: int
+            ratio of mlp hidden dimension to embedding dimension, default 4
+        activation : str, optional
+            Activation function, by default "GELU"
+        cpu_offload : bool, optional
+            Whether to offload processing to CPU, by default False
+        out_channels_dst : Optional[int], optional
+            Output channels of the destination node, by default None
+        layer_kernels : DotDict, optional
+            A dict of layer implementations e.g. layer_kernels['Linear'] = "torch.nn.Linear"
+            Defined in config/models/<model>.yaml
+        """
+        super().__init__(
+            in_channels_src,
+            in_channels_dst,
+            hidden_dim,
+            out_channels_dst=out_channels_dst,
+            num_chunks=num_chunks,
+            cpu_offload=cpu_offload,
+            activation=activation,
+        )
+
+        # Linear = layer_kernels.get("Linear", torch.nn.Linear)
+        Linear = layer_kernels["Linear"]
+
+        self._register_edges(sub_graph, sub_graph_edge_attributes, src_grid_size, dst_grid_size, trainable_size)
+
+        self.trainable = TrainableTensor(trainable_size=trainable_size, tensor_size=self.edge_attr.shape[0])
+
+        self.proc = GraphTransformerMapperBlockAttention(
+            hidden_dim,
+            mlp_hidden_ratio * hidden_dim,
+            hidden_dim,
+            num_heads=num_heads,
+            edge_dim=self.edge_dim,
+            activation=activation,
+            num_chunks=1,  # disable "inner chunking" for now
+            layer_kernels=layer_kernels,
+        )
+
+        self.offload_layers(cpu_offload)
+
+        self.emb_nodes_dst = Linear(self.in_channels_dst, self.hidden_dim)
+
+    def forward(
+        self,
+        x: PairTensor,
+        batch_size: int,
+        shard_shapes: tuple[tuple[int], tuple[int]],
+        model_comm_group: Optional[ProcessGroup] = None,
+    ) -> PairTensor:
+        size = (sum(x[0] for x in shard_shapes[0]), sum(x[0] for x in shard_shapes[1]))
+        edge_attr = self.trainable(self.edge_attr, batch_size)
+        edge_index = self._expand_edges(self.edge_index_base, self.edge_inc, batch_size)
+        shapes_edge_attr = get_shape_shards(edge_attr, 0, model_comm_group)
+        edge_attr = shard_tensor(edge_attr, 0, shapes_edge_attr, model_comm_group)
+
+        x_src, x_dst, shapes_src, shapes_dst = self.pre_process(x, shard_shapes, model_comm_group)
+
+        (x_src, x_dst), edge_attr = self.proc(
+            (x_src, x_dst),
+            edge_attr,
+            edge_index,
+            (shapes_src, shapes_dst, shapes_edge_attr),
+            batch_size,
+            model_comm_group,
+            size=size,
+        )
+
+        x_dst = self.post_process(x_dst, shapes_dst, model_comm_group)
+
+        return x_dst
+
+
+class GraphTransformerForwardMapperAttention(ForwardMapperPreProcessMixin, GraphTransformerBaseMapperAttention):
+    """Graph Transformer Mapper from data -> hidden."""
+
+    def __init__(
+        self,
+        in_channels_src: int = 0,
+        in_channels_dst: int = 0,
+        hidden_dim: int = 128,
+        trainable_size: int = 8,
+        out_channels_dst: Optional[int] = None,
+        num_chunks: int = 1,
+        cpu_offload: bool = False,
+        activation: str = "GELU",
+        num_heads: int = 16,
+        mlp_hidden_ratio: int = 4,
+        sub_graph: Optional[HeteroData] = None,
+        sub_graph_edge_attributes: Optional[list[str]] = None,
+        src_grid_size: int = 0,
+        dst_grid_size: int = 0,
+        layer_kernels: DotDict = None,
+    ) -> None:
+        """Initialize GraphTransformerForwardMapper.
+
+        Parameters
+        ----------
+        in_channels_src : int
+            Input channels of the source node
+        in_channels_dst : int
+            Input channels of the destination node
+        hidden_dim : int
+            Hidden dimension
+        trainable_size : int
+            Trainable tensor of edge
+        num_heads: int
+            Number of heads to use, default 16
+        mlp_hidden_ratio: int
+            ratio of mlp hidden dimension to embedding dimension, default 4
+        activation : str, optional
+            Activation function, by default "GELU"
+        cpu_offload : bool, optional
+            Whether to offload processing to CPU, by default False
+        out_channels_dst : Optional[int], optional
+            Output channels of the destination node, by default None
+        """
+        super().__init__(
+            in_channels_src,
+            in_channels_dst,
+            hidden_dim,
+            trainable_size,
+            out_channels_dst=out_channels_dst,
+            num_chunks=num_chunks,
+            cpu_offload=cpu_offload,
+            activation=activation,
+            num_heads=num_heads,
+            mlp_hidden_ratio=mlp_hidden_ratio,
+            sub_graph=sub_graph,
+            sub_graph_edge_attributes=sub_graph_edge_attributes,
+            src_grid_size=src_grid_size,
+            dst_grid_size=dst_grid_size,
+            layer_kernels=layer_kernels,
+        )
+
+        self.emb_nodes_src = layer_kernels["Linear"](self.in_channels_src, self.hidden_dim)
+
+    def forward(
+        self,
+        x: PairTensor,
+        batch_size: int,
+        shard_shapes: tuple[tuple[int], tuple[int]],
+        model_comm_group: Optional[ProcessGroup] = None,
+    ) -> PairTensor:
+        x_dst = super().forward(x, batch_size, shard_shapes, model_comm_group)
+        return x[0], x_dst
+
+
+class GraphTransformerBackwardMapperAttention(GraphTransformerBaseMapperAttention):  # moved PostProcessMixin up to enc_proc_dec
+    """Graph Transformer Mapper from hidden -> data."""
+
+    def __init__(
+        self,
+        in_channels_src: int = 0,
+        in_channels_dst: int = 0,
+        hidden_dim: int = 128,
+        trainable_size: int = 8,
+        out_channels_dst: Optional[int] = None,
+        num_chunks: int = 1,
+        cpu_offload: bool = False,
+        activation: str = "GELU",
+        num_heads: int = 16,
+        mlp_hidden_ratio: int = 4,
+        sub_graph: Optional[HeteroData] = None,
+        sub_graph_edge_attributes: Optional[list[str]] = None,
+        src_grid_size: int = 0,
+        dst_grid_size: int = 0,
+        layer_kernels: DotDict = None,
+    ) -> None:
+        """Initialize GraphTransformerBackwardMapper.
+
+        Parameters
+        ----------
+        in_channels_src : int
+            Input channels of the source node
+        in_channels_dst : int
+            Input channels of the destination node
+        hidden_dim : int
+            Hidden dimension
+        trainable_size : int
+            Trainable tensor of edge
+        num_heads: int
+            Number of heads to use, default 16
+        mlp_hidden_ratio: int
+            ratio of mlp hidden dimension to embedding dimension, default 4
+        activation : str, optional
+            Activation function, by default "GELU"
+        cpu_offload : bool, optional
+            Whether to offload processing to CPU, by default False
+        out_channels_dst : Optional[int], optional
+            Output channels of the destination node, by default None
+        """
+        super().__init__(
+            in_channels_src,
+            in_channels_dst,
+            hidden_dim,
+            trainable_size,
+            out_channels_dst=out_channels_dst,
+            num_chunks=num_chunks,
+            cpu_offload=cpu_offload,
+            activation=activation,
+            num_heads=num_heads,
+            mlp_hidden_ratio=mlp_hidden_ratio,
+            sub_graph=sub_graph,
+            sub_graph_edge_attributes=sub_graph_edge_attributes,
+            src_grid_size=src_grid_size,
+            dst_grid_size=dst_grid_size,
+            layer_kernels=layer_kernels,
+        )
+
+
+        # self.node_data_extractor = nn.Sequential(
+        #     layer_kernels["LayerNorm"](normalized_shape=self.hidden_dim), layer_kernels["Linear"](self.hidden_dim, self.out_channels_dst)
+        # )
+
+    def pre_process(self, x, shard_shapes, model_comm_group=None):
+        x_src, x_dst, shapes_src, shapes_dst = super().pre_process(x, shard_shapes, model_comm_group)
+        shapes_src = change_channels_in_shape(shapes_src, self.hidden_dim)
+        x_dst = shard_tensor(x_dst, 0, shapes_dst, model_comm_group)
+        x_dst = self.emb_nodes_dst(x_dst)
+        shapes_dst = change_channels_in_shape(shapes_dst, self.hidden_dim)
+        return x_src, x_dst, shapes_src, shapes_dst

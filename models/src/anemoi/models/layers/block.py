@@ -14,6 +14,8 @@ from abc import ABC
 from abc import abstractmethod
 from typing import Optional
 
+import pdb
+
 import einops
 import torch
 from torch import Tensor
@@ -665,3 +667,236 @@ class GraphTransformerProcessorBlock(GraphTransformerBaseBlock):
         nodes_new = self.node_dst_mlp(out) + out
 
         return nodes_new, edge_attr
+
+
+class GraphTransformerBaseBlockAttention(BaseBlock, ABC):
+    """Message passing block with MLPs for node embeddings."""
+
+    def __init__(
+        self,
+        in_channels: int,
+        hidden_dim: int,
+        out_channels: int,
+        edge_dim: int,
+        layer_kernels: DotDict,
+        num_heads: int = 16,
+        bias: bool = True,
+        num_chunks: int = 1,
+        **kwargs,
+    ) -> None:
+        """Initialize GraphTransformerBlock.
+
+        Parameters
+        ----------
+        in_channels : int
+            Number of input channels.
+        out_channels : int
+            Number of output channels.
+        edge_dim : int,
+            Edge dimension
+        layer_kernels : DotDict
+            A dict of layer implementations e.g. layer_kernels['Linear'] = "torch.nn.Linear"
+            Defined in config/models/<model>.yaml
+        num_heads : int,
+            Number of heads
+        bias : bool, by default True,
+            Add bias or not
+        """
+        super().__init__(**kwargs)
+
+        self.out_channels_conv = out_channels // num_heads
+        self.num_heads = num_heads
+
+        self.num_chunks = num_chunks
+
+        linear = layer_kernels["Linear"]
+        layerNorm = layer_kernels["LayerNorm"]
+        self.lin_key = linear(in_channels, num_heads * self.out_channels_conv)
+        self.lin_query = linear(in_channels, num_heads * self.out_channels_conv)
+        self.lin_value = linear(in_channels, num_heads * self.out_channels_conv)
+        self.lin_self = linear(in_channels, num_heads * self.out_channels_conv, bias=bias)
+        self.lin_edge = linear(edge_dim, num_heads * self.out_channels_conv)  # , bias=False)
+
+        self.conv = GraphTransformerConv(out_channels=self.out_channels_conv)
+
+        self.projection = linear(out_channels, out_channels)
+
+        self.layer_norm_attention = layerNorm(normalized_shape=in_channels)
+
+
+    def shard_qkve_heads(
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        edges: Tensor,
+        shapes: tuple,
+        batch_size: int,
+        model_comm_group: Optional[ProcessGroup] = None,
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        """Shards qkv and edges along head dimension."""
+        shape_src_nodes, shape_dst_nodes, shape_edges = shapes
+
+        query, key, value, edges = (
+            einops.rearrange(
+                t,
+                "(batch grid) (heads vars) -> batch heads grid vars",
+                heads=self.num_heads,
+                vars=self.out_channels_conv,
+                batch=batch_size,
+            )
+            for t in (query, key, value, edges)
+        )
+        query = shard_heads(query, shapes=shape_dst_nodes, mgroup=model_comm_group)
+        key = shard_heads(key, shapes=shape_src_nodes, mgroup=model_comm_group)
+        value = shard_heads(value, shapes=shape_src_nodes, mgroup=model_comm_group)
+        edges = shard_heads(edges, shapes=shape_edges, mgroup=model_comm_group)
+
+        query, key, value, edges = (
+            einops.rearrange(t, "batch heads grid vars -> (batch grid) heads vars") for t in (query, key, value, edges)
+        )
+
+        return query, key, value, edges
+
+    def shard_output_seq(
+        self,
+        out: Tensor,
+        shapes: tuple,
+        batch_size: int,
+        model_comm_group: Optional[ProcessGroup] = None,
+    ) -> Tensor:
+        """Shards Tensor sequence dimension."""
+        shape_dst_nodes = shapes[1]
+
+        out = einops.rearrange(out, "(batch grid) heads vars -> batch heads grid vars", batch=batch_size)
+        out = shard_sequence(out, shapes=shape_dst_nodes, mgroup=model_comm_group)
+        out = einops.rearrange(out, "batch heads grid vars -> (batch grid) (heads vars)")
+
+        return out
+
+    @abstractmethod
+    def forward(
+        self,
+        x: OptPairTensor,
+        edge_attr: Tensor,
+        edge_index: Adj,
+        shapes: tuple,
+        batch_size: int,
+        model_comm_group: Optional[ProcessGroup] = None,
+        size: Optional[Size] = None,
+    ): ...
+
+
+class GraphTransformerMapperBlockAttention(GraphTransformerBaseBlockAttention):
+    """Graph Transformer Block for node embeddings."""
+
+    def __init__(
+        self,
+        in_channels: int,
+        hidden_dim: int,
+        out_channels: int,
+        edge_dim: int,
+        layer_kernels: DotDict,
+        num_heads: int = 16,
+        bias: bool = True,
+        activation: str = "GELU", # not used
+        num_chunks: int = 1,
+        update_src_nodes: bool = False, # not used
+        **kwargs,
+    ) -> None:
+        """Initialize GraphTransformerBlock.
+
+        Parameters
+        ----------
+        in_channels : int
+            Number of input channels.
+        out_channels : int
+            Number of output channels.
+        edge_dim : int,
+            Edge dimension
+        layer_kernels : DotDict
+            A dict of layer implementations e.g. layer_kernels['Linear'] = "torch.nn.Linear"
+            Defined in config/models/<model>.yaml
+        num_heads : int,
+            Number of heads
+        bias : bool, by default True,
+            Add bias or not
+        activation : str, optional
+            Activation function, by default "GELU"
+        update_src_nodes: bool, by default False
+            Update src if src and dst nodes are given
+        """
+        super().__init__(
+            in_channels=in_channels,
+            hidden_dim=hidden_dim,
+            out_channels=out_channels,
+            edge_dim=edge_dim,
+            layer_kernels=layer_kernels,
+            num_heads=num_heads,
+            bias=bias,
+            num_chunks=num_chunks,
+            **kwargs,
+        )
+
+        self.layer_norm_attention_src = self.layer_norm_attention
+        self.layer_norm_attention_dest = layer_kernels["LayerNorm"](normalized_shape=in_channels)
+
+    def forward(
+        self,
+        x: OptPairTensor,
+        edge_attr: Tensor,
+        edge_index: Adj,
+        shapes: tuple,
+        batch_size: int,
+        model_comm_group: Optional[ProcessGroup] = None,
+        size: Optional[Size] = None,
+    ):
+        x_skip = x
+
+        x = (
+            self.layer_norm_attention_src(x[0]),
+            self.layer_norm_attention_dest(x[1]),
+        )
+
+        x_r = self.lin_self(x[1])
+        query = self.lin_query(x[1])
+        key = self.lin_key(x[0])
+        value = self.lin_value(x[0])
+        edges = self.lin_edge(edge_attr)
+
+        if model_comm_group is not None:
+            assert (
+                model_comm_group.size() == 1 or batch_size == 1
+            ), "Only batch size of 1 is supported when model is sharded across GPUs"
+
+        query, key, value, edges = self.shard_qkve_heads(query, key, value, edges, shapes, batch_size, model_comm_group)
+
+        num_chunks = self.num_chunks if self.training else NUM_CHUNKS_INFERENCE
+
+        if num_chunks > 1:
+            # split 1-hop edges into chunks, compute self.conv chunk-wise and aggregate
+            edge_attr_list, edge_index_list = sort_edges_1hop_chunks(
+                num_nodes=size, edge_attr=edges, edge_index=edge_index, num_chunks=num_chunks
+            )
+            out = torch.zeros((x[1].shape[0], self.num_heads, self.out_channels_conv), device=x[1].device)
+            for i in range(num_chunks):
+                out += self.conv(
+                    query=query,
+                    key=key,
+                    value=value,
+                    edge_attr=edge_attr_list[i],
+                    edge_index=edge_index_list[i],
+                    size=size,
+                )
+        else:
+            out = self.conv(query=query, key=key, value=value, edge_attr=edges, edge_index=edge_index, size=size)
+
+        pdb.set_trace()
+        out = self.shard_output_seq(out, shapes, batch_size, model_comm_group)
+
+        # compute out = self.projection(out + x_r) in chunks:
+        out = torch.cat([self.projection(chunk) for chunk in torch.tensor_split(out + x_r, num_chunks, dim=0)], dim=0)
+
+        out = out + x_skip[1]
+
+        return (x_skip[0], out), edge_attr

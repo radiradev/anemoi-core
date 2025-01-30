@@ -20,10 +20,14 @@ from torch.distributed.distributed_c10d import ProcessGroup
 from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 
+from anemoi.models.distributed.graph import gather_tensor
+from anemoi.models.distributed.shapes import change_channels_in_shape
 from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.layers.graph import NamedNodesAttributes
 from anemoi.models.layers.utils import load_layer_kernels
 from anemoi.utils.config import DotDict
+
+from anemoi.models.layers.mixer import ChannelMixer
 
 LOGGER = logging.getLogger(__name__)
 
@@ -64,6 +68,29 @@ class AnemoiModelEncProcDec(nn.Module):
         self.multi_step = model_config.training.multistep_input
         self.num_channels = model_config.model.num_channels
 
+        self.num_chunks_enc = model_config.model.encoder.num_chunks
+        num_heads_enc = model_config.model.encoder.num_heads #// self.num_chunks_enc
+        hidden_dim_encoder = self.num_channels
+        out_dim_encoder = self.num_channels #// self.num_chunks_enc # this only determines the inner dimension of the mapper, output is still hidden_dim_encoder
+
+        self.num_chunks_dec = model_config.model.decoder.num_chunks
+        num_heads_dec = model_config.model.decoder.num_heads #// self.num_chunks_dec
+        hidden_dim_decoder = self.num_channels
+        out_dim_decoder = self.num_channels #// self.num_chunks_dec # this only determines the inner dimension of the mapper, output is still hidden_dim_decoder
+
+        LOGGER.info(
+            "Num_chunks_enc: %s, hidden_dim_encoder: %s, num_heads_enc: %s",
+            self.num_chunks_enc,
+            hidden_dim_encoder,
+            num_heads_enc,
+        )
+        LOGGER.info(
+            "Num_chunks_dec: %s, hidden_dim_decoder: %s, num_heads_dec: %s",
+            self.num_chunks_dec,
+            hidden_dim_decoder,
+            num_heads_dec,
+        )
+
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
 
         input_dim = self.multi_step * self.num_input_channels + self.node_attributes.attr_ndims[self._graph_name_data]
@@ -72,16 +99,26 @@ class AnemoiModelEncProcDec(nn.Module):
         self.layer_kernels = load_layer_kernels(model_config.get("model.layer_kernels", {}))
 
         # Encoder data -> hidden
-        self.encoder = instantiate(
-            model_config.model.encoder,
-            in_channels_src=input_dim,
-            in_channels_dst=self.node_attributes.attr_ndims[self._graph_name_hidden],
-            hidden_dim=self.num_channels,
-            sub_graph=self._graph_data[(self._graph_name_data, "to", self._graph_name_hidden)],
-            src_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
-            dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-            layer_kernels=self.layer_kernels,
+        self.encoder_list = nn.ModuleList(
+            [
+                instantiate(
+                    model_config.model.encoder,
+                    in_channels_src=input_dim,
+                    in_channels_dst=self.node_attributes.attr_ndims[self._graph_name_hidden],
+                    hidden_dim=hidden_dim_encoder,
+                    out_channels_dst=out_dim_encoder,
+                    num_heads=num_heads_enc,
+                    sub_graph=self._graph_data[(self._graph_name_data, "to", self._graph_name_hidden)],
+                    src_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
+                    dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
+                    layer_kernels=self.layer_kernels,
         )
+                for _ in range(self.num_chunks_enc)
+            ]
+        )
+
+        self.encoder_mixer = instantiate(model_config.model.encoder_mixer)
+        self.decoder_mixer = instantiate(model_config.model.decoder_mixer)
 
         # Processor hidden -> hidden
         self.processor = instantiate(
@@ -94,16 +131,26 @@ class AnemoiModelEncProcDec(nn.Module):
         )
 
         # Decoder hidden -> data
-        self.decoder = instantiate(
-            model_config.model.decoder,
-            in_channels_src=self.num_channels,
-            in_channels_dst=input_dim,
-            hidden_dim=self.num_channels,
-            out_channels_dst=self.num_output_channels,
-            sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_data)],
-            src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-            dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
-            layer_kernels=self.layer_kernels,
+        self.decoder_list = nn.ModuleList(
+            [
+                instantiate(
+                    model_config.model.decoder,
+                    in_channels_src=hidden_dim_decoder,
+                    in_channels_dst=input_dim,
+                    hidden_dim=hidden_dim_decoder,
+                    num_heads=num_heads_dec,
+                    out_channels_dst=out_dim_decoder,
+                    sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_data)],
+                    src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
+                    dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
+                    layer_kernels=self.layer_kernels,
+                )
+                for _ in range(self.num_chunks_dec)
+            ]
+        )
+
+        self.node_data_extractor = nn.Sequential(
+            nn.LayerNorm(self.num_channels), nn.Linear(self.num_channels, self.num_output_channels)
         )
 
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
@@ -179,12 +226,57 @@ class AnemoiModelEncProcDec(nn.Module):
             use_reentrant=use_reentrant,
         )
 
+    def mix_channels_and_extract_features(self, x: Tensor, x_ref, shapes_x: tuple, batch_size: int, ensemble_size: int, model_comm_group: Optional[ProcessGroup] = None) -> Tensor:
+        """Extracts output features from the output of the decoder.
+
+        Parameters
+        ----------
+        x : Tensor
+            Output of the decoder
+        x_ref : Tensor
+            Reference data for skipped connection
+        batch_size : int
+            Batch size
+        ensemble_size : int
+            Ensemble size
+        model_comm_group : Optional[ProcessGroup]
+            Model communication group
+
+        Returns
+        -------
+        Tensor
+            Extracted features
+        """
+        x = self.decoder_mixer(x)
+        x = self.node_data_extractor(x)
+        x = gather_tensor(x, 0, change_channels_in_shape(shapes_x, self.num_output_channels), model_comm_group)
+
+        x = (
+            einops.rearrange(
+                x,
+                "(batch ensemble grid) vars -> batch ensemble grid vars",
+                batch=batch_size,
+                ensemble=ensemble_size,
+            )
+            .to(dtype=x_ref.dtype)
+            .clone()
+        )
+
+        # residual connection (just for the prognostic variables)
+        x[..., self._internal_output_idx] += x_ref[:, -1, :, :, self._internal_input_idx]
+
+        for bounding in self.boundings:
+            # bounding performed in the order specified in the config file
+            x = bounding(x)
+
+        return x
+
     def forward(self, x: Tensor, model_comm_group: Optional[ProcessGroup] = None) -> Tensor:
         batch_size = x.shape[0]
         ensemble_size = x.shape[2]
 
         # add data positional info (lat/lon)
-        x_data_latent = torch.cat(
+        x_data = torch.cat(
             (
                 einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
                 self.node_attributes(self._graph_name_data, batch_size=batch_size),
@@ -195,17 +287,28 @@ class AnemoiModelEncProcDec(nn.Module):
         x_hidden_latent = self.node_attributes(self._graph_name_hidden, batch_size=batch_size)
 
         # get shard shapes
-        shard_shapes_data = get_shape_shards(x_data_latent, 0, model_comm_group)
+        shard_shapes_data = get_shape_shards(x_data, 0, model_comm_group)
         shard_shapes_hidden = get_shape_shards(x_hidden_latent, 0, model_comm_group)
 
+        # TODO: fix sharding: grid dimension changes due to 1hop sharding, vars changes do to chunking
         # Run encoder
-        x_data_latent, x_latent = self._run_mapper(
-            self.encoder,
-            (x_data_latent, x_hidden_latent),
-            batch_size=batch_size,
-            shard_shapes=(shard_shapes_data, shard_shapes_hidden),
-            model_comm_group=model_comm_group,
-        )
+
+        if torch.is_autocast_enabled():
+            target_dtype = torch.get_autocast_gpu_dtype()
+        else:
+            target_dtype = x_data.dtype
+
+        x_latent = torch.zeros((*x_hidden_latent.shape[:-1], self.num_channels), dtype=target_dtype, device=x_hidden_latent.device)
+        for i in range(self.num_chunks_enc):
+            x_data_latent, x_latent_i = self._run_mapper(
+                self.encoder_list[i],
+                (x_data, x_hidden_latent),
+                batch_size=batch_size,
+                shard_shapes=(shard_shapes_data, shard_shapes_hidden),
+                model_comm_group=model_comm_group,
+            )
+            x_latent = x_latent + x_latent_i
+        x_latent = checkpoint(self.encoder_mixer, x_latent, use_reentrant=False)
 
         x_latent_proc = self.processor(
             x_latent,
@@ -218,30 +321,15 @@ class AnemoiModelEncProcDec(nn.Module):
         x_latent_proc = x_latent_proc + x_latent
 
         # Run decoder
-        x_out = self._run_mapper(
-            self.decoder,
-            (x_latent_proc, x_data_latent),
-            batch_size=batch_size,
-            shard_shapes=(shard_shapes_hidden, shard_shapes_data),
-            model_comm_group=model_comm_group,
-        )
-
-        x_out = (
-            einops.rearrange(
-                x_out,
-                "(batch ensemble grid) vars -> batch ensemble grid vars",
-                batch=batch_size,
-                ensemble=ensemble_size,
+        x_out = torch.zeros((*x_data.shape[:-1], self.num_channels), dtype=target_dtype, device=x_data.device)
+        for i in range(self.num_chunks_dec):
+            x_out = x_out + self._run_mapper(
+                    self.decoder_list[i],
+                    (x_latent_proc, x_data),
+                    batch_size=batch_size,
+                    shard_shapes=(shard_shapes_hidden, shard_shapes_data),
+                    model_comm_group=model_comm_group,
             )
-            .to(dtype=x.dtype)
-            .clone()
-        )
-
-        # residual connection (just for the prognostic variables)
-        x_out[..., self._internal_output_idx] += x[:, -1, :, :, self._internal_input_idx]
-
-        for bounding in self.boundings:
-            # bounding performed in the order specified in the config file
-            x_out = bounding(x_out)
+        x_out = checkpoint(self.mix_channels_and_extract_features, x_out, x, shard_shapes_data, batch_size, ensemble_size, model_comm_group, use_reentrant=False)
 
         return x_out
