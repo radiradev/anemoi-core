@@ -13,7 +13,6 @@ from abc import ABC
 from abc import abstractmethod
 from typing import Optional
 
-import numpy as np
 import torch
 from torch import nn
 
