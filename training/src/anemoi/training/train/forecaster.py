@@ -606,18 +606,23 @@ class GraphForecaster(pl.LightningModule):
         return metrics
 
     def on_load_checkpoint(self, checkpoint: dict) -> None:
-        _ = checkpoint
-        self.rollout = instantiate(self.config.training.rollout).get_state_from(self.rollout)
+        if "rollout" in checkpoint:
+            self.rollout = instantiate(self.config.training.rollout).get_state_from(checkpoint["rollout"])
+
+    def on_save_checkpoint(self, checkpoint: dict) -> None:
+        checkpoint["rollout"] = self.rollout
 
     def on_train_batch_end(self, *_) -> None:
         self.rollout.step()
 
     def on_train_epoch_end(self, *_) -> None:
-        if self.trainer.limit_val_batches != 0:
+        if self.trainer.limit_val_batches == 0:
+            LOGGER.debug("Stepping Rollout on train epoch end")
             self.rollout.step_epoch()
 
-    def on_validation_batch_end(self, *_) -> None:
+    def on_validation_epoch_end(self, *_) -> None:
         if not self.trainer.sanity_checking:
+            LOGGER.debug("Stepping Rollout on validation epoch end")
             self.rollout.step_epoch()
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:

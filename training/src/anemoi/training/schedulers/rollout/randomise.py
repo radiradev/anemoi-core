@@ -251,7 +251,7 @@ class IncreasingRandom(IncrementMixin, BaseRandom):
         return (
             f"Randomly select a rollout from the increasing range "
             f"{range(self._minimum, self._maximum, self._step)}"
-            f"with the upper bound increasing by {self._step} every {self._every_n} {self._step_type}"
+            f"with the upper bound increasing by {self._step} every {self._every_n} {self._step_type!s}/s"
         )
 
 

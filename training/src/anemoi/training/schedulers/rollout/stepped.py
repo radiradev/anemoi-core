@@ -93,7 +93,7 @@ class Stepped(RolloutScheduler, IncrementMixin):
     def description(self) -> str:
         return (
             "Stepped rollout scheduler stepping between "
-            f"{self._minimum} and {self._maximum} by {self._increment} for every {self._every_n} {self._step_type}/s."
+            f"{self._minimum} and {self._maximum} by {self._increment} for every {self._every_n} {self._step_type!s}/s."
         )
 
 

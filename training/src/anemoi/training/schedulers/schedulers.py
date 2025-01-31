@@ -12,7 +12,8 @@ from __future__ import annotations
 import enum
 from abc import ABC
 from typing import Literal
-from typing import Self
+
+from typing_extensions import Self
 
 from anemoi.training.schedulers.utils import get_closest_key
 from anemoi.training.schedulers.utils import get_value_from_closest_key
