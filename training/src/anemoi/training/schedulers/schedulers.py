@@ -215,7 +215,7 @@ class IncrementMixin(Scheduler):
 
         if isinstance(next(iter(self._increment.keys())), str):
             increment_step_type = next(iter(self._increment.keys()))
-            if increment_step_type not in STEPTYPE:
+            if increment_step_type not in STEPTYPE.__members__:
                 error_msg = "Increment dictionary keys must be either 'step' or 'epoch'."
                 raise ValueError(error_msg)
 
