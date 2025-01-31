@@ -451,7 +451,10 @@ class GraphForecaster(pl.LightningModule):
         )
         assert batch.shape[1] >= rollout + self.multi_step, msg
 
-        for rollout_step in range(rollout or int(self.rollout)):
+        rollout = rollout or int(self.rollout)
+        assert rollout >= 1, "Rollout must be at least 1"
+
+        for rollout_step in range():
             # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
             y_pred = self(x)
 

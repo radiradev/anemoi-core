@@ -228,7 +228,13 @@ class IncrementMixin(Scheduler):
         error_msg = "Increment dictionary keys must be either int or a single str."
         raise TypeError(error_msg)
 
-    def get_total_increment(self, step: int, epoch: int, epoch_record: dict[int, int]) -> int:
+    def get_total_increment(
+        self,
+        step: int,
+        epoch: int,
+        epoch_record: dict[int, int],
+        maximum_value: int | None = None,
+    ) -> int:
         """
         Get total increment when at a certain step / epoch.
 
@@ -242,6 +248,8 @@ class IncrementMixin(Scheduler):
             Epoch
         epoch_record : dict[int, int]
             Record of epoch to step
+        maximum_value : int, optional
+            Maximum value to allow the increment to reach, by default None
 
         Returns
         -------
@@ -264,7 +272,7 @@ class IncrementMixin(Scheduler):
             else:
                 instantaneous_values[STEPTYPE.epoch] = get_value_from_closest_key(step_record, current_value, 0)
 
-            total_increment += self.instantaneous_increment(**instantaneous_values)
+            total_increment = min(maximum_value, total_increment + self.instantaneous_increment(**instantaneous_values))
 
         return total_increment
 

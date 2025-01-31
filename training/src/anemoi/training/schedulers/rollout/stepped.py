@@ -82,7 +82,13 @@ class Stepped(RolloutScheduler, IncrementMixin):
 
     @property
     def rollout(self) -> int:
-        return min(self._maximum, self._minimum + self.total_increment)
+        increment = self.get_total_increment(
+            self._step,
+            self._epoch,
+            self._epoch_record,
+            maximum_value=self._maximum - self._minimum,
+        )
+        return max(self._minimum, min(self._maximum, self._minimum + increment))
 
     @property
     def maximum_rollout(self) -> int:

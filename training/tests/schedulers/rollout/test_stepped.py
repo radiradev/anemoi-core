@@ -131,3 +131,41 @@ def test_step_per_epoch_change() -> None:
 
         assert ex == roll_sched.rollout
         assert e in roll_sched._epoch_record
+
+
+def test_step_negative_stepping() -> None:
+    states = [
+        # Epoch, Step, Expected
+        (1, 100, 1),
+        (2, 200, 1),
+        (3, 300, 11),
+        (4, 400, 20),
+        (5, 500, 20),
+        (6, 600, 20),
+        (7, 700, 18),
+        (8, 800, 16),
+        (9, 900, 14),
+        (10, 1000, 12),
+        (100, 100 * 100, 1),
+    ]
+
+    roll_sched = Stepped(
+        minimum=1,
+        maximum=20,
+        every_n=1,
+        increment={"step": {0: 0, 300: 10, 700: -2}},
+        step_type="epoch",
+    )
+
+    step_record = 0
+    epoch_record = 0
+
+    for e, s, ex in states:
+        roll_sched.step(s - step_record)
+        roll_sched.step_epoch(e - epoch_record)
+
+        step_record = s
+        epoch_record = e
+
+        assert ex == roll_sched.rollout
+        assert e in roll_sched._epoch_record

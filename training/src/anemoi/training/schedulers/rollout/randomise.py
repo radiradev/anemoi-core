@@ -245,7 +245,13 @@ class IncreasingRandom(IncrementMixin, BaseRandom):
 
     @property
     def current_maximum(self) -> int:
-        return min(self._maximum, self._minimum + self.total_increment)
+        increment = self.get_total_increment(
+            self._step,
+            self._epoch,
+            self._epoch_record,
+            maximum_value=self._maximum - self._minimum,
+        )
+        return min(self._maximum, self._minimum + increment)
 
     def description(self) -> str:
         return (
