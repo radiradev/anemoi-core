@@ -12,6 +12,7 @@ from __future__ import annotations
 import enum
 from abc import ABC
 from typing import Literal
+from typing import Union
 
 from typing_extensions import Self
 
@@ -22,11 +23,11 @@ VALID_STEP_TYPES = Literal["step", "epoch"]
 
 
 class STEPTYPE(str, enum.Enum):
-    step = "step"
-    epoch = "epoch"
+    step: str = "step"
+    epoch: str = "epoch"
 
 
-VALID_INCREMENT_TYPE = int | dict[int, int] | dict[VALID_STEP_TYPES, dict[int, int]]
+VALID_INCREMENT_TYPE = Union[int, dict[int, int], dict[VALID_STEP_TYPES, dict[int, int]]]
 
 
 class Scheduler(ABC):
@@ -172,7 +173,7 @@ class IncrementMixin(Scheduler):
     def __init__(self, every_n: int, step_type: VALID_STEP_TYPES, increment: VALID_INCREMENT_TYPE = 1, **kwargs):
         super().__init__(**kwargs)
 
-        if step_type not in STEPTYPE:
+        if step_type not in STEPTYPE.__members__.values():
             error_msg = "Step type must be either 'step' or 'epoch'."
             raise ValueError(error_msg)
 
@@ -215,7 +216,7 @@ class IncrementMixin(Scheduler):
 
         if isinstance(next(iter(self._increment.keys())), str):
             increment_step_type = next(iter(self._increment.keys()))
-            if increment_step_type not in STEPTYPE.__members__:
+            if increment_step_type not in STEPTYPE.__members__.values():
                 error_msg = "Increment dictionary keys must be either 'step' or 'epoch'."
                 raise ValueError(error_msg)
 

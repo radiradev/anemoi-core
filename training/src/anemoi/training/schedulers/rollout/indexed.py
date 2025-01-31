@@ -59,7 +59,7 @@ class PositionalIndexed(RolloutScheduler):
         ```
         """
         super().__init__()
-        if step_type not in STEPTYPE:
+        if step_type not in STEPTYPE.__members__.values():
             error_msg = "Invalid step_type. Must be 'epoch' or 'step'."
             raise ValueError(error_msg)
 
