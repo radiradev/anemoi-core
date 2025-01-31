@@ -21,7 +21,6 @@ from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 
 from anemoi.models.distributed.shapes import get_shape_shards
-from anemoi.models.layers.fourier import levels_expansion
 from anemoi.models.layers.graph import NamedNodesAttributes
 from anemoi.utils.config import DotDict
 
@@ -63,11 +62,6 @@ class AnemoiModelEncProcDec(nn.Module):
         self.num_channels = model_config.model.num_channels
 
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
-
-        #! FOURIER AND ENCODED DIMENSIONS FOR PRESSURE LEVELS
-        self.fourier_dim = model_config.training.vertical_embeddings.fourier_dim # small otherwise CUDA OOM
-        self.hidden_dim = model_config.training.vertical_embeddings.hidden_dim
-        self.encoded_dim = model_config.training.vertical_embeddings.encoded_dim # small otherwise CUDA OOM
         
         self.num_levels = model_config.training.vertical_embeddings.num_levels
         self.level_shuffle = model_config.training.vertical_embeddings.level_shuffle
@@ -83,6 +77,8 @@ class AnemoiModelEncProcDec(nn.Module):
                 self.multi_step * (self.num_input_channels)
                 + self.node_attributes.attr_ndims[self._graph_name_data]
             )
+
+        self.embedder = VerticalInformationEmbedder(model_config.training.vertical_embeddings,self.data_indices.internal_model.input.name_to_index.items())
 
         # Encoder data -> hidden
         self.encoder = instantiate(
@@ -185,58 +181,8 @@ class AnemoiModelEncProcDec(nn.Module):
         )
 
     def forward(self, x: Tensor, model_comm_group: Optional[ProcessGroup] = None) -> Tensor:
-        batch_size = x.shape[0]
-        n_times = x.shape[1]
-        ensemble_size = x.shape[2]
-        num_grid_points = x.shape[3]        
-        num_variables = int(x.shape[4]/self.num_levels)
 
-        x_reshaped = torch.reshape(x, (batch_size, n_times, ensemble_size, num_grid_points, num_variables, self.num_levels))
-        if self.level_shuffle:
-            rand_idx = torch.randperm(self.num_levels)
-            num_list = torch.Tensor([i for i in range(self.num_levels)])
-            comb_list = torch.cat([rand_idx.view(self.num_levels, 1), num_list.view(self.num_levels, 1)], axis = 1)
-            sorted_comb_list = comb_list[comb_list[:, 0].sort()[1]]
-            rand_rev = [int(i) for i in sorted_comb_list[:, 1]]
-            x_rand = x_reshaped[..., rand_idx]
-        else:
-            x_rand = x_reshaped
-    
-        data_indices = self.data_indices.internal_model.input.name_to_index.items()
-        level_list = []
-        for var_str in data_indices:
-            parts = var_str[0].split("_")
-            # extract pressure level. If not pressure level, assume surface and assign 1000
-            # TODO: make this dependent on new variable groups
-            numeric_part = float(parts[-1]) if len(parts) > 1 and parts[-1].isdigit() else 1000
-            level_list.append(numeric_part)
-        level_tensor = torch.tensor(level_list)
-        if self.level_shuffle:
-            level_tensor= level_tensor.reshape((6,self.num_levels))[...,rand_idx].ravel()
-
-        #! ADDED Fourier transform
-        vertical_encodings = levels_expansion(level_tensor, self.fourier_dim)
-
-        # Construct MLP to transform vertical encodings
-        act_func = nn.ReLU()
-        mlp = nn.Sequential(nn.Linear(self.fourier_dim, self.hidden_dim), act_func)
-        mlp.append(nn.Linear(self.hidden_dim, self.encoded_dim))
-        mlp.append(act_func)
-        mapped_vertical_features = mlp(vertical_encodings).ravel().to("cuda")
-
-        if self.vertical_embeddings_method == 'concat':
-            ## TODO: Can you check this please Ana?
-            mapped_vertical_features = mapped_vertical_features.view(1, 1, 1, 1, num_variables, self.num_levels).expand(
-                batch_size, n_times, 1, num_grid_points, num_variables, self.num_levels, -1
-            ) # ([4, 2, 1, 40320, 6, 13, 99*self.encoded_dim]
-            x_data_vertical_latent = torch.cat((x, mapped_vertical_features), dim=-1)
-        elif self.vertical_embeddings_method == 'addition':
-            mapped_vertical_features = mapped_vertical_features.view(1, 1, 1, 1, num_variables, self.num_levels).expand(
-                batch_size, n_times, 1, num_grid_points, num_variables, self.num_levels
-            ) # ([4, 2, 1, 40320, 6, 13]
-            x_data_vertical_latent = x_rand + mapped_vertical_features
-        else:
-            x_data_vertical_latent = x_rand
+        x_data_vertical_latent=self.embedder(x)
 
         # add data positional info (lat/lon)
         x_data_latent = torch.cat(
@@ -296,7 +242,7 @@ class AnemoiModelEncProcDec(nn.Module):
 
         x_out_reshape = torch.reshape(x_out, (batch_size, x_out.shape[1], x_out.shape[2], num_variables, self.num_levels))
         if self.level_shuffle:
-            x_reorder = x_out_reshape[..., rand_rev]
+            x_reorder = x_out_reshape[..., self.embedder.rand_rev]
         else:
             x_reorder = x_out_reshape
 
