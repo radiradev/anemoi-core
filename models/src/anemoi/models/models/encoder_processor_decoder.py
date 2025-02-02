@@ -22,6 +22,7 @@ from torch_geometric.data import HeteroData
 
 from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.layers.graph import NamedNodesAttributes
+from anemoi.models.layers.embedder import VerticalInformationEmbedder
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -66,10 +67,11 @@ class AnemoiModelEncProcDec(nn.Module):
         self.num_levels = model_config.training.vertical_embeddings.num_levels
         self.level_shuffle = model_config.training.vertical_embeddings.level_shuffle
         self.vertical_embeddings_method = model_config.training.vertical_embeddings.method
+        self.embedder = VerticalInformationEmbedder(model_config.training.vertical_embeddings,self.data_indices.internal_model.input.name_to_index.items())
 
         if self.vertical_embeddings_method == 'concat':
             input_dim = (
-                self.multi_step * (self.num_input_channels + self.num_input_channels * self.encoded_dim)
+                self.multi_step * (self.num_input_channels + self.num_input_channels * self.embedder.encoded_dim)
                 + self.node_attributes.attr_ndims[self._graph_name_data]
             )
         else:
@@ -77,8 +79,6 @@ class AnemoiModelEncProcDec(nn.Module):
                 self.multi_step * (self.num_input_channels)
                 + self.node_attributes.attr_ndims[self._graph_name_data]
             )
-
-        self.embedder = VerticalInformationEmbedder(model_config.training.vertical_embeddings,self.data_indices.internal_model.input.name_to_index.items())
 
         # Encoder data -> hidden
         self.encoder = instantiate(
@@ -181,16 +181,14 @@ class AnemoiModelEncProcDec(nn.Module):
         )
 
     def forward(self, x: Tensor, model_comm_group: Optional[ProcessGroup] = None) -> Tensor:
-
+        batch_size = x.shape[0]
+        ensemble_size = x.shape[2]
         x_data_vertical_latent=self.embedder(x)
 
         # add data positional info (lat/lon)
         x_data_latent = torch.cat(
             (
-                # pressure levels
-                einops.rearrange(
-                    x_data_vertical_latent, "batch time ensemble grid vars levels -> (batch ensemble grid) (time vars levels)"
-                ),
+                x_data_vertical_latent,
                 self.node_attributes(self._graph_name_data, batch_size=batch_size),
             ),
             dim=-1,  # feature dimension
@@ -240,7 +238,7 @@ class AnemoiModelEncProcDec(nn.Module):
             .clone()
         )
 
-        x_out_reshape = torch.reshape(x_out, (batch_size, x_out.shape[1], x_out.shape[2], num_variables, self.num_levels))
+        x_out_reshape = torch.reshape(x_out, (batch_size, x_out.shape[1], x_out.shape[2], self.embedder.num_variables, self.num_levels))
         if self.level_shuffle:
             x_reorder = x_out_reshape[..., self.embedder.rand_rev]
         else:

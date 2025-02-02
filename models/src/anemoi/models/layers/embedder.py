@@ -17,6 +17,12 @@ class VerticalInformationEmbedder(nn.Module):
         self.data_indices = data_indices
         self.vertical_embeddings_method = config.method
 
+        if self.vertical_embeddings_method not in ['concat', 'addition']:
+            raise ValueError(f"Unknown vertical embeddings method: {self.vertical_embeddings_method}")
+
+        if self.vertical_embeddings_method == 'addition':
+            assert config.encoded_dim == 1 , "For addition method, encoded_dim must be equal to 1"
+
         #! FOURIER AND ENCODED DIMENSIONS FOR PRESSURE LEVELS
         self.fourier_dim = config.fourier_dim # small otherwise CUDA OOM
         self.hidden_dim = config.hidden_dim
