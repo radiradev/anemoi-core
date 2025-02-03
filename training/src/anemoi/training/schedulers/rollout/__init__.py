@@ -140,12 +140,6 @@ class RolloutScheduler(Scheduler):
     def __rsub__(self, other: int) -> int:
         return other - self.rollout
 
-    def __mul__(self, other: int) -> int:
-        return self.rollout * other
-
-    def __rmul__(self, other: int) -> int:
-        return other * self.rollout
-
 
 class Static(RolloutScheduler):
     """`Static` is a rollout scheduler that always returns the same rollout value."""
