@@ -275,16 +275,16 @@ Shown below is the default rollout scheduler in ``config.training``.
    # Dataloader rollout counter can only be updated at the end of each epoch
    # So updates during an epoch will only be reflected at the end of said epoch.
    rollout:
-   _target_: anemoi.training.schedulers.rollout.stepped.EpochStepped
-   minimum: 1
-   maximum: 12
-   # increase rollout every n epochs
-   every_n_epochs: 1
-   # Control the incrementing of the rollout window
-   increment:
-      step:
-         0: 0
-         200000: 1 # After 200k steps, increment by 1 every 1 epoch
+      _target_: anemoi.training.schedulers.rollout.stepped.EpochStepped
+      minimum: 1
+      maximum: 12
+      # increase rollout every n epochs
+      every_n_epochs: 1
+      # Control the incrementing of the rollout window
+      increment:
+         step:
+            0: 0
+            200000: 1 # After 200k steps, increment by 1 every 1 epoch
 
 This will trigger the scheduler every epoch, but only begin incrementing
 the rollout value by 1 after the 200,000th step.
