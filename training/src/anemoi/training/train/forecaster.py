@@ -620,13 +620,13 @@ class GraphForecaster(pl.LightningModule):
 
     def on_train_epoch_end(self, *_) -> None:
         if self.trainer.limit_val_batches == 0:
-            LOGGER.debug("Stepping Rollout on train epoch end, rollout: ", int(self.rollout))
             self.rollout.step_epoch()
+            LOGGER.info("Stepping Rollout on validation epoch end, rollout: %i", int(self.rollout))
 
     def on_validation_epoch_end(self, *_) -> None:
         if not self.trainer.sanity_checking:
-            LOGGER.debug("Stepping Rollout on validation epoch end, rollout: ", int(self.rollout))
             self.rollout.step_epoch()
+            LOGGER.info("Stepping Rollout on validation epoch end, rollout: %i", int(self.rollout))
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
         train_loss, _, _ = self._step(batch, batch_idx)
