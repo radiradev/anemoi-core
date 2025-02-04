@@ -35,7 +35,6 @@ def _alltoallwrapper(output_list: list, input_list: list, group: ProcessGroup):
         torch_version = torch.__version__.split(".")
         torch_major_version = int(torch_version[0])
         torch_minor_version = int(torch_version[1])
-        print(f"{torch_version=}")
         if torch_major_version <= 2 and torch_minor_version < 6:
             raise NotImplementedError("Gloo all_to_all not implemented for torch < v2.6")
 
