@@ -15,16 +15,18 @@ import torch.distributed as dist
 from torch import Tensor
 from torch.distributed.distributed_c10d import ProcessGroup
 
-def apply_shard_shapes(tensor: Tensor, dim: int, shard_shapes_dim: list) -> list: # TODO: rename
+
+def apply_shard_shapes(tensor: Tensor, dim: int, shard_shapes_dim: list) -> list:  # TODO: rename
     """Get shape of tensor shards."""
     assert dim < tensor.dim(), f"Error, tensor dimension is {tensor.dim()} which cannot be split along {dim}"
-    
+
     shape_shards = [list(tensor.shape) for _ in range(len(shard_shapes_dim))]
     for i, shard_shape in enumerate(shard_shapes_dim):
         shape_shards[i][dim] = shard_shape
 
     return shape_shards
-    #return [list(tensor[: dim].shape) + [shard_shape] + list(tensor[dim + 1:]) for shard_shape in shard_shapes_dim]
+    # return [list(tensor[: dim].shape) + [shard_shape] + list(tensor[dim + 1:]) for shard_shape in shard_shapes_dim]
+
 
 def get_shape_shards(tensor: Tensor, dim: int, model_comm_group: Optional[ProcessGroup] = None) -> list:
     """Get shape of tensor shards."""

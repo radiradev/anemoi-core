@@ -75,6 +75,8 @@ class AnemoiModelEncProcDecHierarchical(AnemoiModelEncProcDec):
 
         input_dim = self.multi_step * self.num_input_channels + self.node_attributes.attr_ndims[self._graph_name_data]
 
+        self.supports_sharded_input = False
+
         # Encoder data -> hidden
         self.encoder = instantiate(
             model_config.model.encoder,

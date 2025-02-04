@@ -7,6 +7,7 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
+from __future__ import annotations
 
 import logging
 from collections import defaultdict
@@ -28,8 +29,8 @@ from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 
 from anemoi.models.data_indices.collection import IndexCollection
-from anemoi.models.distributed.shapes import apply_shard_shapes
 from anemoi.models.distributed.graph import gather_tensor
+from anemoi.models.distributed.shapes import apply_shard_shapes
 from anemoi.models.interface import AnemoiModelInterface
 from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
@@ -92,6 +93,14 @@ class GraphForecaster(pl.LightningModule):
         self.config = config
         self.data_indices = data_indices
 
+        self.keep_batch_sharded = self.config.model.get("keep_batch_sharded", False)
+        model_supports_sharding = getattr(self.model.model, "supports_sharded_input", False)
+        sharding_config_valid = model_supports_sharding or not self.keep_batch_sharded
+        assert sharding_config_valid, (
+            f"Model {self.model.model} does not support sharded inputs, but `model.keep_batch_sharded=True` was set. ",
+            "Please set `model.keep_batch_sharded=False` or ensure that the model supports sharded inputs.",
+        ) # TODO: make sure this is correct, i.e. sharded loss supported iff BaseWeightedLoss (currently only MSE)
+
         self.save_hyperparameters()
 
         self.latlons_data = graph_data[config.graph.data].x
@@ -135,6 +144,9 @@ class GraphForecaster(pl.LightningModule):
         if not isinstance(self.metrics, torch.nn.ModuleList):
             self.metrics = torch.nn.ModuleList([self.metrics])
 
+        # set flag if loss and metrics support sharding (isinstance(BaseWeightedLoss)),
+        self.metrics_support_sharding = all(isinstance(metric, BaseWeightedLoss) for metric in self.metrics)
+
         if config.training.loss_gradient_scaling:
             self.loss.register_full_backward_hook(grad_scaler, prepend=False)
 
@@ -174,16 +186,21 @@ class GraphForecaster(pl.LightningModule):
         self.reader_group_id = 0
         self.reader_group_rank = 0
 
-    def forward(self, x: torch.Tensor, grid_shard_slice: slice = None, grid_shard_shapes: list = None) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        grid_shard_slice: slice | None = None,
+        grid_shard_shapes: list | None = None,
+    ) -> torch.Tensor:
         return self.model(x, self.model_comm_group, grid_shard_slice, grid_shard_shapes)
 
     # Future import breaks other type hints TODO Harrison Cook
     @staticmethod
     def get_loss_function(
         config: DictConfig,
-        scalars: Union[dict[str, tuple[Union[int, tuple[int, ...], torch.Tensor]]], None] = None,  # noqa: FA100
+        scalars: Union[dict[str, tuple[Union[int, tuple[int, ...], torch.Tensor]]], None] = None,
         **kwargs,
-    ) -> Union[BaseWeightedLoss, torch.nn.ModuleList]:  # noqa: FA100
+    ) -> Union[BaseWeightedLoss, torch.nn.ModuleList]:
         """Get loss functions from config.
 
         Can be ModuleList if multiple losses are specified.
@@ -406,25 +423,26 @@ class GraphForecaster(pl.LightningModule):
         self,
         y_pred: torch.Tensor,
         y: torch.Tensor,
+        rollout_step: int,
         validation_mode: bool = False,
-        rollout_step = int,
-        grid_shard_slice: slice = None,
-        grid_shard_shapes: list = None,
+        grid_shard_slice: slice | None = None,
+        grid_shard_shapes: list | None = None,
     ) -> torch.Tensor:
-        # gather y_pred and y,
-        loss_val_supports_sharding = True # TODO: make this configurable, all(loss.supports_sharding for loss in self.loss)
-        if self.config.model.get("keep_batch_sharded", True) and not loss_val_supports_sharding:
+        is_sharded = grid_shard_slice is not None
+        sharding_supported = self.metrics_support_sharding or not validation_mode
+        if is_sharded and not sharding_supported:  # gather tensors if loss and metrics do not support sharding
             shard_shapes = apply_shard_shapes(y_pred, -2, grid_shard_shapes)
-            y_full = gather_tensor(torch.clone(y), -2, shard_shapes, self.model_comm_group)
             y_pred_full = gather_tensor(torch.clone(y_pred), -2, shard_shapes, self.model_comm_group)
+            y_full = gather_tensor(torch.clone(y), -2, shard_shapes, self.model_comm_group)
+            grid_shard_slice, grid_shard_shapes = None, None
         else:
-            y_full, y_pred_full = y, y_pred
+            y_pred_full, y_full = y_pred, y
 
         loss = self.loss(
             y_pred_full,
-            y_full, 
+            y_full,
             grid_shard_slice=grid_shard_slice,
-            group=self.model_comm_group
+            group=self.model_comm_group,
         )
 
         metrics_next = {}
@@ -441,12 +459,12 @@ class GraphForecaster(pl.LightningModule):
     def rollout_step(
         self,
         batch: torch.Tensor,
-        rollout: Optional[int] = None,  # noqa: FA100
+        rollout: Optional[int] = None,
         training_mode: bool = True,
         validation_mode: bool = False,
-        grid_shard_slice: slice = None,
-        grid_shard_shapes: list = None,
-    ) -> Generator[tuple[Union[torch.Tensor, None], dict, list], None, None]:  # noqa: FA100
+        grid_shard_slice: slice | None = None,
+        grid_shard_shapes: list | None = None,
+    ) -> Generator[tuple[Union[torch.Tensor, None], dict, list], None, None]:
         """Rollout step for the forecaster.
 
         Will run pre_processors on batch, but not post_processors on predictions.
@@ -476,7 +494,7 @@ class GraphForecaster(pl.LightningModule):
             None
         """
         # for validation not normalized in-place because remappers cannot be applied in-place
-        batch = self.model.pre_processors(batch, in_place=True) # temporary 9km fix (disable remapper for this)
+        batch = self.model.pre_processors(batch, in_place=True)  # temporary 9km fix (disable remapper for this)
 
         if not self.updated_loss_mask:
             # update loss scalar after first application and initialization of preprocessors
@@ -487,7 +505,7 @@ class GraphForecaster(pl.LightningModule):
             :,
             0 : self.multi_step,
             ...,
-            self.data_indices.internal_data.input.full, # potential optimization: somehow make this a slice to avoid mem copy
+            self.data_indices.internal_data.input.full,
         ]  # (bs, multi_step, latlon, nvar)
         msg = (
             "Batch length not sufficient for requested multi_step length!"
@@ -501,15 +519,20 @@ class GraphForecaster(pl.LightningModule):
 
             y = batch[:, self.multi_step + rollout_step, ..., self.data_indices.internal_data.output.full]
             # y includes the auxiliary variables, so we must leave those out when computing the loss
-            loss, metrics_next = checkpoint(
-                self.compute_loss_metrics,
-                y_pred,
-                y,
-                validation_mode,
-                rollout_step,
-                grid_shard_slice,
-                grid_shard_shapes,
-                use_reentrant=False) if training_mode else None
+            loss, metrics_next = (
+                checkpoint(
+                    self.compute_loss_metrics,
+                    y_pred,
+                    y,
+                    rollout_step,
+                    validation_mode,
+                    grid_shard_slice,
+                    grid_shard_shapes,
+                    use_reentrant=False,
+                )
+                if training_mode
+                else None
+            )
 
             x = self.advance_input(x, y_pred, batch, rollout_step)
 
@@ -526,7 +549,6 @@ class GraphForecaster(pl.LightningModule):
         if self.config.model.get("keep_batch_sharded", True):
             grid_shard_slice = self.grid_indices.get_shard_indices(self.reader_group_rank)
         else:
-            # TODO: also test this, currently not used
             batch = self.allgather_batch(batch, grid_shard_shapes)
             grid_shard_slice = None
             grid_shard_shapes = None
@@ -574,7 +596,9 @@ class GraphForecaster(pl.LightningModule):
         last_shard_shape = list(batch.shape)
         last_shard_shape[-2] = grid_shard_shapes[-1]
 
-        tensor_list = [torch.empty(tuple(shard_shape), device=self.device) for _ in range(self.reader_group_size - 1)] + [torch.empty(last_shard_shape, device=self.device)]
+        tensor_list = [
+            torch.empty(tuple(shard_shape), device=self.device) for _ in range(self.reader_group_size - 1)
+        ] + [torch.empty(last_shard_shape, device=self.device)]
 
         torch.distributed.all_gather(
             tensor_list,
@@ -589,7 +613,7 @@ class GraphForecaster(pl.LightningModule):
         y_pred: torch.Tensor,
         y: torch.Tensor,
         rollout_step: int,
-        grid_shard_slice: slice = None,
+        grid_shard_slice: slice | None = None,
     ) -> tuple[dict, list[torch.Tensor]]:
         """Calculate metrics on the validation output.
 
@@ -608,14 +632,13 @@ class GraphForecaster(pl.LightningModule):
                 validation metrics and predictions
         """
         metrics = {}
-        y_postprocessed = self.model.post_processors(y, in_place=True) # temporary 9km fix
-        y_pred_postprocessed = self.model.post_processors(y_pred, in_place=True) # temporary 9km fix
+        y_postprocessed = self.model.post_processors(y, in_place=True)  # temporary 9km fix
+        y_pred_postprocessed = self.model.post_processors(y_pred, in_place=True)  # temporary 9km fix
 
         for metric in self.metrics:
             metric_name = getattr(metric, "name", metric.__class__.__name__.lower())
 
             if not isinstance(metric, BaseWeightedLoss):
-                # TODO: what to do here with sharding? Currently not supported
                 # If not a weighted loss, we cannot feature scale, so call normally
                 metrics[f"{metric_name}/{rollout_step + 1}"] = metric(
                     y_pred_postprocessed,

@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING
 from typing import Union
 
 import numpy as np
-import torch
 
 if TYPE_CHECKING:
     from torch_geometric.data import HeteroData
@@ -47,7 +46,7 @@ class BaseGridIndices(ABC):
             grid_end = (reader_group_rank + 1) * grid_shard_size
 
         return slice(grid_start, grid_end)
-    
+
     def get_shard_shapes(self) -> list:
         grid_shard_size = self.grid_size // self.reader_group_size
         last_shard_size = self.grid_size - (grid_shard_size * (self.reader_group_size - 1))
