@@ -261,8 +261,10 @@ class AnemoiModelEncProcDec(nn.Module):
         # get shard shapes
         shard_shapes_data = get_shape_shards(x_data, 0, model_comm_group)
         shard_shapes_hidden = get_shape_shards(x_hidden_latent, 0, model_comm_group)
+        rank = torch.distributed.get_rank(model_comm_group)
+        data_grid_shard_size = shard_shapes_data[rank][0]
+        hidden_grid_shard_size = shard_shapes_hidden[rank][0]        
 
-        # TODO: fix sharding: grid dimension changes due to 1hop sharding, vars changes do to chunking
         # Run encoder
 
         if torch.is_autocast_enabled():
@@ -270,7 +272,8 @@ class AnemoiModelEncProcDec(nn.Module):
         else:
             target_dtype = x_data.dtype
 
-        x_latent = torch.zeros((*x_hidden_latent.shape[:-1], self.num_channels), dtype=target_dtype, device=x_hidden_latent.device)
+        # shape: (grid_shard, vars)
+        x_latent = torch.zeros((hidden_grid_shard_size, self.num_channels), dtype=target_dtype, device=x_hidden_latent.device)
         for i in range(self.num_chunks_enc):
             # x_latent_skip, x_data_latent, the same in each iter -> check!, mapper returns None until last iter
             x_data_latent, x_latent_i, x_latent_skip = self._run_mapper(
@@ -283,6 +286,7 @@ class AnemoiModelEncProcDec(nn.Module):
                 model_comm_group=model_comm_group,
             )
             x_latent = x_latent + x_latent_i
+
         x_latent = checkpoint(self.encoder_mixer, x_latent, x_latent_skip, use_reentrant=False)
 
         x_latent_proc = self.processor(
@@ -296,7 +300,7 @@ class AnemoiModelEncProcDec(nn.Module):
         x_latent_proc = x_latent_proc + x_latent
 
         # Run decoder
-        x_out = torch.zeros((*x_data.shape[:-1], self.num_channels), dtype=target_dtype, device=x_data.device)
+        x_out = torch.zeros((data_grid_shard_size, self.num_channels), dtype=target_dtype, device=x_data.device)
         for i in range(self.num_chunks_dec):
             # x_out_skip is the same in each iter -> check!, mapper returns None until last iter
             x_out_i, x_out_skip = self._run_mapper(
@@ -312,7 +316,7 @@ class AnemoiModelEncProcDec(nn.Module):
 
         x_out = checkpoint(
             self.mix_channels_and_extract_features,
-            x_out, 
+            x_out,
             x_out_skip, 
             x, 
             shard_shapes_data, 
