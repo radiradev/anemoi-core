@@ -64,10 +64,14 @@ class AnemoiModelEncProcDec(nn.Module):
 
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
         
-        self.num_levels = model_config.training.vertical_embeddings.num_levels
-        self.level_shuffle = model_config.training.vertical_embeddings.level_shuffle
-        self.vertical_embeddings_method = model_config.training.vertical_embeddings.method
-        self.embedder = VerticalInformationEmbedder(model_config.training.vertical_embeddings,self.data_indices.internal_model.input.name_to_index.items())
+
+        
+        vertical_embeddings_config = model_config.training.vertical_embeddings
+        self.vertical_embeddings_method = vertical_embeddings_config.method
+        self.num_levels = vertical_embeddings_config.num_levels
+        self.level_shuffle = vertical_embeddings_config.level_shuffle
+
+        self.embedder = VerticalInformationEmbedder(level_shuffle=self.level_shuffle, method=self.vertical_embeddings_method, fourier_dim=vertical_embeddings_config.fourier_dim,hidden_dim=vertical_embeddings_config.hidden_dim,encoded_dim=vertical_embeddings_config.encoded_dim,num_levels=self.num_levels  ,data_indices=self.data_indices.internal_model.input.name_to_index.items())
 
         if self.vertical_embeddings_method == 'concat':
             input_dim = (
@@ -138,6 +142,16 @@ class AnemoiModelEncProcDec(nn.Module):
         assert len(self._internal_input_idx) == len(
             self._internal_output_idx,
         ), f"Internal model indices must match {self._internal_input_idx} != {self._internal_output_idx}"
+
+    def get_levels(self):
+        level_list = []
+        for var_str in self.data_indices:
+            parts = var_str[0].split("_")
+            # extract pressure level. If not pressure level, assume surface and assign 1000
+            # TODO: make this dependent on new variable groups
+            numeric_part = float(parts[-1]) if len(parts) > 1 and parts[-1].isdigit() else 1000
+            level_list.append(numeric_part)
+        return level_list
 
     def _run_mapper(
         self,
