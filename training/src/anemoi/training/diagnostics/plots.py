@@ -491,52 +491,47 @@ def plot_flat_sample(
     -------
     None
     """
+    default_cmap = "viridis"
+    default_cmap_error = "bwr"
     precip_and_related_fields = precip_and_related_fields or []
+    data = [None for _ in range(6)]
+    titles = [None for _ in range(6)]
+    # default titles for 6 plots
+    titles[0] = f"{vname} input"
+    titles[1] = f"{vname} target"
+    titles[2] = f"{vname} pred"
+    titles[3] = f"{vname} pred err"
+    titles[4] = f"{vname} increment [pred - input]"
+    titles[5] = f"{vname} persist err"
+    cmaps = [default_cmap] * 3 + [default_cmap_error] * 3  # blue-white-red colormap for errors
+    norms = [None for _ in range(6)]
+    norms[3] = TwoSlopeNorm(vcenter=0.0)  # center the error colormap at 0
+    norms[4] = TwoSlopeNorm(vcenter=0.0)
+    norms[5] = TwoSlopeNorm(vcenter=0.0)
+
     if vname in precip_and_related_fields:
         # Create a custom colormap for precipitation
         nws_precip_colors = cmap_precip
         precip_colormap = ListedColormap(nws_precip_colors)
 
+        # converting to mm from m
+        truth *= 1000.0
+        pred *= 1000.0
+
+        data[1] = truth
+        data[2] = pred
+        data[3] = truth - pred
+
+        cmaps[1] = precip_colormap
+        cmaps[2] = precip_colormap
+
         # Defining the actual precipitation accumulation levels in mm
         cummulation_lvls = clevels
         norm = BoundaryNorm(cummulation_lvls, len(cummulation_lvls) + 1)
 
-        # converting to mm from m
-        truth *= 1000.0
-        pred *= 1000.0
-        single_plot(
-            fig,
-            ax[1],
-            lon,
-            lat,
-            truth,
-            cmap=precip_colormap,
-            norm=norm,
-            title=f"{vname} target",
-            datashader=datashader,
-        )
-        single_plot(
-            fig,
-            ax[2],
-            lon,
-            lat,
-            pred,
-            cmap=precip_colormap,
-            norm=norm,
-            title=f"{vname} pred",
-            datashader=datashader,
-        )
-        single_plot(
-            fig,
-            ax[3],
-            lon,
-            lat,
-            truth - pred,
-            cmap="bwr",
-            norm=TwoSlopeNorm(vcenter=0.0),
-            title=f"{vname} pred err",
-            datashader=datashader,
-        )
+        norms[1] = norm
+        norms[2] = norm
+
     elif vname == "mwd":
         cyclic_colormap = "twilight"
 
@@ -547,98 +542,43 @@ def plot_flat_sample(
 
         sample_shape = truth.shape
         pred = np.maximum(np.zeros(sample_shape), np.minimum(360 * np.ones(sample_shape), (pred)))
-        single_plot(
-            fig,
-            ax[1],
-            lon=lon,
-            lat=lat,
-            data=truth,
-            cmap=cyclic_colormap,
-            title=f"{vname} target",
-            datashader=datashader,
-        )
-        single_plot(
-            fig,
-            ax[2],
-            lon=lon,
-            lat=lat,
-            data=pred,
-            cmap=cyclic_colormap,
-            title=f"capped {vname} pred",
-            datashader=datashader,
-        )
-        err_plot = error_plot_in_degrees(truth, pred)
-        single_plot(
-            fig,
-            ax[3],
-            lon=lon,
-            lat=lat,
-            data=err_plot,
-            cmap="bwr",
-            norm=TwoSlopeNorm(vcenter=0.0),
-            title=f"{vname} pred err: {np.nanmean(np.abs(err_plot)):.{4}f} deg.",
-            datashader=datashader,
-        )
+
+        data[1] = truth
+        data[2] = pred
+        data[3] = error_plot_in_degrees(truth, pred)
+
+        cmaps[1] = cyclic_colormap
+        cmaps[2] = cyclic_colormap
+
+        titles[2] = f"capped {vname} pred"
+        titles[3] = f"{vname} pred err: {np.nanmean(np.abs(data[3])):.{4}f} deg."
+
     else:
         combined_data = np.concatenate((input_, truth, pred))
         # For 'errors', only persistence and increments need identical colorbar-limits
         combined_error = np.concatenate(((pred - input_), (truth - input_)))
         norm = Normalize(vmin=np.nanmin(combined_data), vmax=np.nanmax(combined_data))
-        norm_error = TwoSlopeNorm(
-            vmin=min(np.nanmin(combined_error), -1e-5),
-            vcenter=0.0,
-            vmax=max(np.nanmax(combined_error), 1e-5),
-        )
-        single_plot(fig, ax[1], lon, lat, truth, norm=norm, title=f"{vname} target", datashader=datashader)
-        single_plot(fig, ax[2], lon, lat, pred, norm=norm, title=f"{vname} pred", datashader=datashader)
-        single_plot(
-            fig,
-            ax[3],
-            lon,
-            lat,
-            truth - pred,
-            cmap="bwr",
-            norm=TwoSlopeNorm(vcenter=0.0),
-            title=f"{vname} pred err",
-            datashader=datashader,
-        )
+        norm_error = TwoSlopeNorm(vmin=np.nanmin(combined_error), vcenter=0.0, vmax=np.nanmax(combined_error))
+
+        data[1] = truth
+        data[2] = pred
+        data[3] = truth - pred
+
+        norms[1] = norm
+        norms[2] = norm
 
     if sum(input_) != 0:
+        # prognostic fields: plot input as well
         if vname == "mwd":
-            single_plot(
-                fig,
-                ax[0],
-                lon=lon,
-                lat=lat,
-                data=input_,
-                cmap=cyclic_colormap,
-                title=f"{vname} input",
-                datashader=datashader,
-            )
-            err_plot = error_plot_in_degrees(pred, input_)
-            single_plot(
-                fig,
-                ax[4],
-                lon=lon,
-                lat=lat,
-                data=err_plot,
-                cmap="bwr",
-                norm=TwoSlopeNorm(vcenter=0.0),
-                title=f"{vname} increment [pred - input] % 360",
-                datashader=datashader,
-            )
-            err_plot = error_plot_in_degrees(truth, input_)
-            single_plot(
-                fig,
-                ax[5],
-                lon=lon,
-                lat=lat,
-                data=err_plot,
-                cmap="bwr",
-                norm=TwoSlopeNorm(vcenter=0.0),
-                title=f"{vname} persist err: {np.nanmean(np.abs(err_plot)):.{4}f} deg.",
-                datashader=datashader,
-            )
+            data[0] = input_
+            data[4] = error_plot_in_degrees(pred, input_)
+            data[5] = error_plot_in_degrees(truth, input_)
+
+            cmaps[0] = cyclic_colormap
+
+            titles[4] = f"{vname} increment [pred - input] % 360"
+            titles[5] = f"{vname} persist err: {np.nanmean(np.abs(data[5])):.{4}f} deg."
+
         elif vname in precip_and_related_fields:
             # Create a custom colormap for precipitation
             nws_precip_colors = cmap_precip
@@ -652,66 +592,40 @@ def plot_flat_sample(
             input_ *= 1000.0
             truth *= 1000.0
             pred *= 1000.0
-            single_plot(
-                fig,
-                ax[0],
-                lon=lon,
-                lat=lat,
-                data=input_,
-                cmap=precip_colormap,
-                title=f"{vname} input",
-                datashader=datashader,
-            )
-            single_plot(
-                fig,
-                ax[4],
-                lon=lon,
-                lat=lat,
-                data=pred - input_,
-                cmap="bwr",
-                norm=TwoSlopeNorm(vcenter=0.0),
-                title=f"{vname} increment [pred - input]",
-                datashader=datashader,
-            )
-            single_plot(
-                fig,
-                ax[5],
-                lon=lon,
-                lat=lat,
-                data=truth - input_,
-                cmap="bwr",
-                norm=TwoSlopeNorm(vcenter=0.0),
-                title=f"{vname} persist err",
-                datashader=datashader,
-            )
+
+            data[0] = input_
+            data[4] = pred - input_
+            data[5] = truth - input_
+
+            cmaps[0] = precip_colormap
+
         else:
-            single_plot(fig, ax[0], lon, lat, input_, norm=norm, title=f"{vname} input", datashader=datashader)
-            single_plot(
-                fig,
-                ax[4],
-                lon,
-                lat,
-                pred - input_,
-                cmap="bwr",
-                norm=norm_error,
-                title=f"{vname} increment [pred - input]",
-                datashader=datashader,
-            )
-            single_plot(
-                fig,
-                ax[5],
-                lon,
-                lat,
-                truth - input_,
-                cmap="bwr",
-                norm=norm_error,
-                title=f"{vname} persist err",
-                datashader=datashader,
-            )
+            data[0] = input_
+            data[4] = pred - input_
+            data[5] = truth - input_
+
+            norms[0] = norm
+            norms[4] = norm_error
+            norms[5] = norm_error
+
     else:
         ax[0].axis("off")
         ax[4].axis("off")
         ax[5].axis("off")
+
+    for ii in range(6):
+        if data[ii] is not None:
+            single_plot(
+                fig,
+                ax[ii],
+                lon,
+                lat,
+                data[ii],
+                cmap=cmaps[ii],
+                norm=norms[ii],
+                title=titles[ii],
+                datashader=datashader,
+            )
 
 
 def single_plot(
