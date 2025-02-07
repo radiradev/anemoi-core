@@ -25,6 +25,8 @@ from omegaconf import OmegaConf
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
+from scipy.sparse import load_npz
+
 from anemoi.training.data.datamodule import AnemoiDatasetsDataModule
 from anemoi.training.diagnostics.callbacks import get_callbacks
 from anemoi.training.diagnostics.logger import get_mlflow_logger
@@ -143,12 +145,28 @@ class AnemoiTrainer:
         )
 
     @cached_property
+    def interp_data(self) -> dict:
+        """Interpolation data.
+
+        Loads interpolation data.
+        """
+        interp_data = {}  
+        if self.config.hardware.files.interp_up:
+            interp_data["up"] = load_npz(Path(self.config.hardware.paths.inter_mat, self.config.hardware.files.interp_up))
+
+        if self.config.hardware.files.interp_down:
+            interp_data["down"] = load_npz(Path(self.config.hardware.paths.inter_mat, self.config.hardware.files.interp_down))
+
+        return interp_data
+
+    @cached_property
     def model(self) -> GraphForecaster:
         """Provide the model instance."""
         kwargs = {
             "config": self.config,
             "data_indices": self.data_indices,
             "graph_data": self.graph_data,
+            "interp_data": self.interp_data,
             "metadata": self.metadata,
             "statistics": self.datamodule.statistics,
             "supporting_arrays": self.supporting_arrays,

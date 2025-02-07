@@ -47,6 +47,7 @@ class GraphForecaster(pl.LightningModule):
         *,
         config: DictConfig,
         graph_data: HeteroData,
+        interp_data: dict,
         statistics: dict,
         data_indices: IndexCollection,
         metadata: dict,
@@ -143,14 +144,14 @@ class GraphForecaster(pl.LightningModule):
             * config.training.lr.rate
             / config.hardware.num_gpus_per_model
         )
-        self.warmup_t = getattr(config.training.lr, "warmup_t", 1000)
         self.lr_iterations = config.training.lr.iterations
+        self.lr_warmup = config.training.lr.warmup
         self.lr_min = config.training.lr.min
         self.rollout = config.training.rollout.start
         self.rollout_epoch_increment = config.training.rollout.epoch_increment
         self.rollout_max = config.training.rollout.max
 
-        self.use_zero_optimizer = config.training.zero_optimizer
+        self.optimizer_settings = config.training.optimizer
 
         self.model_comm_group = None
         self.reader_groups = None
@@ -691,24 +692,24 @@ class GraphForecaster(pl.LightningModule):
         return val_loss, y_preds
 
     def configure_optimizers(self) -> tuple[list[torch.optim.Optimizer], list[dict]]:
-        if self.use_zero_optimizer:
+        if self.optimizer_settings.zero:
             optimizer = ZeroRedundancyOptimizer(
                 self.trainer.model.parameters(),
-                optimizer_class=torch.optim.AdamW,
-                betas=(0.9, 0.95),
                 lr=self.lr,
+                optimizer_class=torch.optim.AdamW,
+                **self.optimizer_settings.kwargs,
             )
         else:
             optimizer = torch.optim.AdamW(
                 self.trainer.model.parameters(),
-                betas=(0.9, 0.95),
                 lr=self.lr,
-            )  # , fused=True)
+                **self.optimizer_settings.kwargs,
+            )
 
         scheduler = CosineLRScheduler(
             optimizer,
             lr_min=self.lr_min,
             t_initial=self.lr_iterations,
-            warmup_t=self.warmup_t,
+            warmup_t=self.lr_warmup,
         )
         return [optimizer], [{"scheduler": scheduler, "interval": "step"}]

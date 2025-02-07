@@ -38,6 +38,7 @@ class AnemoiModelEncProcDec(nn.Module):
         data_indices: dict,
         statistics: dict,
         graph_data: HeteroData,
+        interp_data: dict,
     ) -> None:
         """Initializes the graph neural network.
 
@@ -66,7 +67,20 @@ class AnemoiModelEncProcDec(nn.Module):
 
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
 
+        # input_dim = self.multi_step * self.num_input_channels + self.num_input_channels_prognostic + self.node_attributes.attr_ndims[self._graph_name_data] + 1
         input_dim = self.multi_step * self.num_input_channels + self.node_attributes.attr_ndims[self._graph_name_data]
+
+        self._interp_data = interp_data
+
+        # we can't register these as buffers because DDP does not support sparse tensors
+        # these will be moved to the GPU when first used via sefl.interpolate_down/interpolate_up
+        self.A_down, self.A_up = None, None
+        if "down" in self._interp_data:
+            self.A_down = self._make_interpolation_matrix(self._interp_data["down"])
+            LOGGER.info("A_down %s", self.A_down.shape)
+        if "up" in self._interp_data:
+            self.A_up = self._make_interpolation_matrix(self._interp_data["up"])
+            LOGGER.info("A_up %s", self.A_up.shape)
 
         # read config.model.layer_kernels to get the implementation for certain layers
         self.layer_kernels = load_layer_kernels(model_config.get("model.layer_kernels", {}))
@@ -119,9 +133,33 @@ class AnemoiModelEncProcDec(nn.Module):
             ]
         )
 
+    def _make_interpolation_matrix(self, A, data_type=torch.float32):
+        A_ = torch.sparse_coo_tensor(
+            torch.tensor(np.vstack(A.nonzero()), dtype=torch.long),
+            torch.tensor(A.data, dtype=data_type),
+            size=A.shape,
+        ).coalesce()
+        return A_
+
+    def _multiply_sparse(self, x, A):
+        return torch.sparse.mm(A, x)
+
+    def _interploate_fields(self, x, A, batch_size=None, grad_checkpoint=False):
+        if not batch_size:
+            batch_size = x.shape[0]
+        out = []
+        with torch.amp.autocast(device_type="cuda", enabled=False):
+            for i in range(batch_size):
+                if grad_checkpoint:
+                    out.append(torch.utils.checkpoint(self.multiply_sparse, x[i, ...], A, use_reentrant=False))
+                else:
+                    out.append(self._multiply_sparse(x[i, ...], A))
+        return torch.stack(out)
+
     def _calculate_shapes_and_indices(self, data_indices: dict) -> None:
         self.num_input_channels = len(data_indices.internal_model.input)
         self.num_output_channels = len(data_indices.internal_model.output)
+        self.num_input_channels_prognostic = len(data_indices.model.input.prognostic)
         self._internal_input_idx = data_indices.internal_model.input.prognostic
         self._internal_output_idx = data_indices.internal_model.output.prognostic
 
