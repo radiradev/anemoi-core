@@ -558,7 +558,6 @@ def plot_flat_sample(
         # For 'errors', only persistence and increments need identical colorbar-limits
         combined_error = np.concatenate(((pred - input_), (truth - input_)))
         norm = Normalize(vmin=np.nanmin(combined_data), vmax=np.nanmax(combined_data))
-        norm_error = TwoSlopeNorm(vmin=np.nanmin(combined_error), vcenter=0.0, vmax=np.nanmax(combined_error))
 
         norms[1] = norm
         norms[2] = norm
@@ -576,6 +575,7 @@ def plot_flat_sample(
             titles[5] = f"{vname} persist err: {np.nanmean(np.abs(data[5])):.{4}f} deg."
 
         else:
+            norm_error = TwoSlopeNorm(vmin=np.nanmin(combined_error), vcenter=0.0, vmax=np.nanmax(combined_error))
             norms[0] = norm
             norms[4] = norm_error
             norms[5] = norm_error
