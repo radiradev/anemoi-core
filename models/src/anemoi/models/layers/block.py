@@ -317,6 +317,7 @@ class GraphTransformerBaseBlock(BaseBlock, ABC):
         layer_kernels: DotDict,
         num_heads: int = 16,
         bias: bool = True,
+        qk_norm: bool = False,
         activation: str = "GELU",
         num_chunks: int = 1,
         update_src_nodes: bool = False,
@@ -339,6 +340,8 @@ class GraphTransformerBaseBlock(BaseBlock, ABC):
             Number of heads
         bias : bool, by default True,
             Add bias or not
+        qk_norm : bool, by default False
+            Normalize query and key
         activation : str, optional
             Activation function, by default "GELU"
         update_src_nodes: bool, by default False
@@ -350,7 +353,7 @@ class GraphTransformerBaseBlock(BaseBlock, ABC):
 
         self.out_channels_conv = out_channels // num_heads
         self.num_heads = num_heads
-
+        self.qk_norm = qk_norm
         self.num_chunks = num_chunks
 
         linear = layer_kernels["Linear"]
@@ -364,6 +367,11 @@ class GraphTransformerBaseBlock(BaseBlock, ABC):
         self.conv = GraphTransformerConv(out_channels=self.out_channels_conv)
 
         self.projection = linear(out_channels, out_channels)
+
+        if self.qk_norm:
+            self.q_norm = AutocastLayerNorm(self.out_channels_conv, bias=False)
+            self.k_norm = AutocastLayerNorm(self.out_channels_conv, bias=False)
+
 
         try:
             act_func = getattr(nn, activation)
@@ -538,6 +546,10 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
 
         query, key, value, edges = self.shard_qkve_heads(query, key, value, edges, shapes, batch_size, model_comm_group)
 
+        if self.qk_norm:
+            query = self.q_norm(query)
+            key = self.k_norm(key)
+
         num_chunks = self.num_chunks if self.training else NUM_CHUNKS_INFERENCE
 
         if num_chunks > 1:
@@ -663,6 +675,11 @@ class GraphTransformerProcessorBlock(GraphTransformerBaseBlock):
             ), "Only batch size of 1 is supported when model is sharded across GPUs"
 
         query, key, value, edges = self.shard_qkve_heads(query, key, value, edges, shapes, batch_size, model_comm_group)
+
+        if self.qk_norm:
+            query = self.q_norm(query)
+            key = self.k_norm(key)
+
         out = self.conv(query=query, key=key, value=value, edge_attr=edges, edge_index=edge_index, size=size)
         out = self.shard_output_seq(out, shapes, batch_size, model_comm_group)
         out = self.projection(out + x_r)
