@@ -371,6 +371,7 @@ class GraphTransformerBackwardMapper(BackwardMapperPostProcessMixin, GraphTransf
         activation: str = "GELU",
         num_heads: int = 16,
         mlp_hidden_ratio: int = 4,
+        initialise_data_extractor_zero: bool = False,
         sub_graph: Optional[HeteroData] = None,
         sub_graph_edge_attributes: Optional[list[str]] = None,
         src_grid_size: int = 0,
@@ -393,6 +394,8 @@ class GraphTransformerBackwardMapper(BackwardMapperPostProcessMixin, GraphTransf
             Number of heads to use, default 16
         mlp_hidden_ratio: int
             ratio of mlp hidden dimension to embedding dimension, default 4
+        initialise_data_extractor_zero : bool, default False:
+            Whether to initialise the data extractor to zero
         activation : str, optional
             Activation function, by default "GELU"
         cpu_offload : bool, optional
@@ -424,7 +427,13 @@ class GraphTransformerBackwardMapper(BackwardMapperPostProcessMixin, GraphTransf
         self.node_data_extractor = nn.Sequential(
             nn.LayerNorm(self.hidden_dim), nn.Linear(self.hidden_dim, self.out_channels_dst)
         )
-
+        if initialise_data_extractor_zero:
+            for module in self.node_data_extractor.modules():
+                if isinstance(module, nn.Linear):
+                    nn.init.constant_(module.weight, 0.0)
+                    if module.bias is not None:
+                        nn.init.constant_(module.bias, 0.0)
+    
     def pre_process(self, x, shard_shapes, model_comm_group=None):
         x_src, x_dst, shapes_src, shapes_dst = super().pre_process(x, shard_shapes, model_comm_group)
         shapes_src = change_channels_in_shape(shapes_src, self.hidden_dim)
