@@ -22,7 +22,7 @@ sample_idx: 0
 # Precipitation and related fields
 precip_and_related_fields: [tp, cp]
 
-# select sepcial colormap for precip fields
+# select special colormap for precip fields
 colormaps:
   precip:
     _target_: anemoi.training.utils.custom_colormaps.MatplotlibColormapClevels
