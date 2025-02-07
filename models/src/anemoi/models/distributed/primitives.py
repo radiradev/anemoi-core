@@ -91,7 +91,9 @@ def _gather(
     # Size and dimension.
     comm_rank = dist.get_rank(group=group)
 
-    input_ = input_.contiguous(memory_format=input_format).to("cuda")
+    orig_device=input_.device
+    #input_ = input_.contiguous(memory_format=input_format).to("cuda")
+    input_ = input_.contiguous(memory_format=input_format)
     tensor_list = [
         torch.empty(
             shapes[rank], dtype=input_.dtype, layout=input_.layout, device=input_.device, memory_format=input_format
@@ -104,7 +106,9 @@ def _gather(
         dist.all_gather(tensor_list, input_, group=group)
 
     # Note: torch.cat already creates a contiguous tensor.
-    output = torch.cat(tensor_list, dim=dim_).contiguous(memory_format=input_format).to("cpu")
+    #output = torch.cat(tensor_list, dim=dim_).contiguous(memory_format=input_format).to("cpu")
+    #output = torch.cat(tensor_list, dim=dim_).contiguous(memory_format=input_format).to(orig_device)
+    output = torch.cat(tensor_list, dim=dim_).contiguous(memory_format=input_format)
 
     return output
 

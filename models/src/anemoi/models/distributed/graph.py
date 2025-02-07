@@ -226,22 +226,33 @@ class _ShardParallelSection(torch.autograd.Function):
         ctx.comm_group = mgroup_
         ctx.shapes = shapes_
         ctx.gather_in_backward = gather_in_backward_
+        if input_.device == "cpu":
+            raise AttributeError("why are you sharding on cpu??")
         if mgroup_:
             return _split(input_, dim_, shapes_, group=mgroup_)
         return input_
 
     @staticmethod
     def backward(ctx, grad_output):
+        print(f"_ShardParallelSection BW {grad_output.device=}")
         if ctx.comm_group:
+            orig_device=grad_output.device
+            dest="cuda"
+            #if orig_device == "cpu":
+                #raise AttributeError("why is grad on cpu??")
+                #grad_output = grad_output.to("cuda")
             return (
                 _gather(
                     grad_output, ctx.dim, ctx.shapes, gather_in_backward=ctx.gather_in_backward, group=ctx.comm_group
+                    #grad_output, ctx.dim, ctx.shapes, gather_in_backward=ctx.gather_in_backward, group=ctx.comm_group
                 ),
                 None,
                 None,
                 None,
                 None,
             )
+         #RuntimeError: Function _ShardParallelSectionBackward returned an invalid gradient at index 0 - expected device cpu but got cuda:0
+        #return grad_output.to("cpu"), None, None, None, None
         return grad_output, None, None, None, None
 
 
@@ -274,8 +285,10 @@ class _GatherParallelSection(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
+        print(f"_GatherParallelSection BW {grad_output.device=}")
         if ctx.comm_group:
             return (
+                #_split(grad_output.to("cuda"), ctx.dim, ctx.shapes, group=ctx.comm_group),
                 _split(grad_output, ctx.dim, ctx.shapes, group=ctx.comm_group),
                 None,
                 None,
