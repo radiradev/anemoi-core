@@ -90,7 +90,7 @@ class TransformerProcessorBlock(BaseBlock):
             num_heads=num_heads,
             embed_dim=num_channels,
             window_size=window_size,
-            bias=False,
+            qkv_bias=False,
             is_causal=False,
             dropout_p=dropout_p,
             layer_kernels=layer_kernels,

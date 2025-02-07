@@ -23,6 +23,7 @@ from torch.distributed.distributed_c10d import ProcessGroup
 
 from anemoi.models.distributed.transformer import shard_heads
 from anemoi.models.distributed.transformer import shard_sequence
+from anemoi.models.layers.normalization import AutocastLayerNorm
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -41,7 +42,8 @@ class MultiHeadSelfAttention(nn.Module):
         num_heads: int,
         embed_dim: int,
         layer_kernels: DotDict,
-        bias: bool = False,
+        qkv_bias: bool = False,
+        qk_norm: bool = False,
         is_causal: bool = False,
         window_size: Optional[int] = None,
         dropout_p: float = 0.0,
@@ -64,8 +66,10 @@ class MultiHeadSelfAttention(nn.Module):
             number of heads
         embed_dim : int
             embedding dimension
-        bias : bool, optional
-            bias, by default False
+        qkv_bias : bool, optional
+            bias for querys, keys and values, by default False
+        qk_norm : bool, optional
+            normalize q and k, by default False
         is_causal : bool, optional
             apply causal attention mask, by default False
         window_size : Optional[int], optional
@@ -95,6 +99,7 @@ class MultiHeadSelfAttention(nn.Module):
         self.window_size = window_size
         self.dropout_p = dropout_p
         self.is_causal = is_causal
+        self.qk_norm = qk_norm
         self.softcap = softcap
 
         self.set_attention_function()
@@ -106,9 +111,13 @@ class MultiHeadSelfAttention(nn.Module):
             self.alibi_slopes = None
 
         linear = layer_kernels["Linear"]
-        self.lin_qkv = linear(embed_dim, 3 * embed_dim, bias=bias)
+        self.lin_qkv = linear(embed_dim, 3 * embed_dim, bias=qkv_bias)
 
         self.projection = linear(embed_dim, embed_dim, bias=True)
+
+        if self.qk_norm: # todo -> make configurable?
+            self.q_norm = AutocastLayerNorm(self.head_dim)
+            self.k_norm = AutocastLayerNorm(self.head_dim)
 
     def set_attention_function(self):
         attn_funcs = {
@@ -149,6 +158,10 @@ class MultiHeadSelfAttention(nn.Module):
         key = shard_heads(key, shapes=shapes, mgroup=model_comm_group)
         value = shard_heads(value, shapes=shapes, mgroup=model_comm_group)
         dropout_p = self.dropout_p if self.training else 0.0
+
+        if self.qk_norm:
+            query = self.q_norm(query)
+            key = self.k_norm(key)
 
         out = self.attention(
             query,
