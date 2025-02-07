@@ -35,6 +35,15 @@ from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
 
+class SaveToCpu(nn.Module):
+    def __init__(self, module):
+        super().__init__()
+        self.module = module
+
+    def forward(self, *args, **kwargs):
+        with torch.autograd.graph.save_on_cpu(pin_memory=True, offload_with_streams=True):
+            return self.module(*args, **kwargs)
+
 
 class BaseMapper(nn.Module, ABC):
     """Base Mapper from souce dimension to destination dimension."""
@@ -64,7 +73,9 @@ class BaseMapper(nn.Module, ABC):
 
     def offload_layers(self, cpu_offload):
         if cpu_offload:
-            self.proc = nn.ModuleList([offload_wrapper(x) for x in self.proc])
+            #self.proc = nn.ModuleList([offload_wrapper(x) for x in self.proc])
+            #self.proc = offload_wrapper(self.proc)
+            self.proc = SaveToCpu(self.proc)
 
     def pre_process(self, x, shard_shapes, model_comm_group=None) -> tuple[Tensor, Tensor, tuple[int], tuple[int]]:
         """Pre-processing for the Mappers.
@@ -110,7 +121,7 @@ class ForwardMapperPreProcessMixin:
         x_src, x_dst, shapes_src, shapes_dst = super().pre_process(x, shard_shapes, model_comm_group)
         x_src = shard_tensor(x_src, 0, shapes_src, model_comm_group)
         x_dst = shard_tensor(x_dst, 0, shapes_dst, model_comm_group)
-        x_src = self.emb_nodes_src(x_src)
+        x_src = self.emb_nodes_src(x_src.to(x_dst.device))
         x_dst = self.emb_nodes_dst(x_dst)
         shapes_src = change_channels_in_shape(shapes_src, self.hidden_dim)
         shapes_dst = change_channels_in_shape(shapes_dst, self.hidden_dim)

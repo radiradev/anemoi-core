@@ -444,7 +444,7 @@ class GraphForecaster(pl.LightningModule):
             0 : self.multi_step,
             ...,
             self.data_indices.internal_data.input.full,
-        ]  # (bs, multi_step, latlon, nvar)
+        ].to("cpu")  # (bs, multi_step, latlon, nvar)
         msg = (
             "Batch length not sufficient for requested multi_step length!"
             f", {batch.shape[1]} !>= {rollout + self.multi_step}"
@@ -456,10 +456,13 @@ class GraphForecaster(pl.LightningModule):
             y_pred = self(x)
 
             y = batch[:, self.multi_step + rollout_step, ..., self.data_indices.internal_data.output.full]
+            #y_pred is on cuda:0 when running on single gpu, and cpu when running multi(gpu) (all-gather)
             # y includes the auxiliary variables, so we must leave those out when computing the loss
             loss = checkpoint(self.loss, y_pred, y, use_reentrant=False) if training_mode else None
 
-            x = self.advance_input(x, y_pred, batch, rollout_step)
+            #print(f"{x.device=} {y_pred.device=}, {batch.device=}")
+            #x = self.advance_input(x.to(y_pred.device), y_pred, batch, rollout_step) #works on 1 gpu
+            x = self.advance_input(x.to(batch.device), y_pred.to(batch.device), batch, rollout_step) #ypred move might be unnesecary
 
             metrics_next = {}
             if validation_mode:

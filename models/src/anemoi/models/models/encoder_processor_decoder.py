@@ -24,6 +24,7 @@ from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.layers.graph import NamedNodesAttributes
 from anemoi.models.layers.utils import load_layer_kernels
 from anemoi.utils.config import DotDict
+import os
 
 LOGGER = logging.getLogger(__name__)
 
@@ -71,6 +72,13 @@ class AnemoiModelEncProcDec(nn.Module):
         # read config.model.layer_kernels to get the implementation for certain layers
         self.layer_kernels = load_layer_kernels(model_config.get("model.layer_kernels", {}))
 
+        offload_mapper=False
+        if os.getenv("OFFLOAD_M", "0") != "0":
+            offload_mapper=True
+        offload_proc=False
+        if os.getenv("OFFLOAD", "0") != "0":
+            offload_proc=True
+
         # Encoder data -> hidden
         self.encoder = instantiate(
             model_config.model.encoder,
@@ -81,6 +89,7 @@ class AnemoiModelEncProcDec(nn.Module):
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             layer_kernels=self.layer_kernels,
+            cpu_offload=offload_mapper,
         )
 
         # Processor hidden -> hidden
@@ -91,6 +100,7 @@ class AnemoiModelEncProcDec(nn.Module):
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             layer_kernels=self.layer_kernels,
+            cpu_offload=offload_proc,
         )
 
         # Decoder hidden -> data
@@ -104,6 +114,7 @@ class AnemoiModelEncProcDec(nn.Module):
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
             layer_kernels=self.layer_kernels,
+            cpu_offload=offload_mapper,
         )
 
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
@@ -187,7 +198,7 @@ class AnemoiModelEncProcDec(nn.Module):
         x_data_latent = torch.cat(
             (
                 einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
-                self.node_attributes(self._graph_name_data, batch_size=batch_size),
+                self.node_attributes(self._graph_name_data, batch_size=batch_size).to("cpu"),
             ),
             dim=-1,  # feature dimension
         )
@@ -206,6 +217,7 @@ class AnemoiModelEncProcDec(nn.Module):
             shard_shapes=(shard_shapes_data, shard_shapes_hidden),
             model_comm_group=model_comm_group,
         )
+        x_data_latent = x_data_latent.to("cpu")
 
         x_latent_proc = self.processor(
             x_latent,
@@ -220,7 +232,7 @@ class AnemoiModelEncProcDec(nn.Module):
         # Run decoder
         x_out = self._run_mapper(
             self.decoder,
-            (x_latent_proc, x_data_latent),
+            (x_latent_proc, x_data_latent.to(x_latent_proc.device)),
             batch_size=batch_size,
             shard_shapes=(shard_shapes_hidden, shard_shapes_data),
             model_comm_group=model_comm_group,
@@ -238,7 +250,7 @@ class AnemoiModelEncProcDec(nn.Module):
         )
 
         # residual connection (just for the prognostic variables)
-        x_out[..., self._internal_output_idx] += x[:, -1, :, :, self._internal_input_idx]
+        x_out[..., self._internal_output_idx] += x.to(x_out.device)[:, -1, :, :, self._internal_input_idx]
 
         for bounding in self.boundings:
             # bounding performed in the order specified in the config file

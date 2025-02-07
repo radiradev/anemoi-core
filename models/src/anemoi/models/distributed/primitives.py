@@ -49,7 +49,7 @@ def _split(input_: Tensor, dim_: int, shapes_: tuple, group: Optional[ProcessGro
     input_list = torch.split(input_, [x[dim_] for x in shapes_], dim=dim_)
 
     rank = dist.get_rank(group=group)
-    output = input_list[rank].contiguous(memory_format=input_format)
+    output = input_list[rank].contiguous(memory_format=input_format) #.to("cpu")
 
     return output
 
@@ -91,7 +91,7 @@ def _gather(
     # Size and dimension.
     comm_rank = dist.get_rank(group=group)
 
-    input_ = input_.contiguous(memory_format=input_format)
+    input_ = input_.contiguous(memory_format=input_format).to("cuda")
     tensor_list = [
         torch.empty(
             shapes[rank], dtype=input_.dtype, layout=input_.layout, device=input_.device, memory_format=input_format
@@ -104,7 +104,7 @@ def _gather(
         dist.all_gather(tensor_list, input_, group=group)
 
     # Note: torch.cat already creates a contiguous tensor.
-    output = torch.cat(tensor_list, dim=dim_).contiguous(memory_format=input_format)
+    output = torch.cat(tensor_list, dim=dim_).contiguous(memory_format=input_format).to("cpu")
 
     return output
 
