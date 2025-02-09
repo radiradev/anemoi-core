@@ -84,7 +84,7 @@ class PinnedTensor(object):
 
         processed=[]
         for arg in args:
-            processed.append(arg.to("cuda")) #assuming this does nothing if 'arg' is already on 'cuda'
+            processed.append(arg.to("cuda", non_blocking=True)) #assuming this does nothing if 'arg' is already on 'cuda'
         return func(*processed, **kwargs)
 
 def demo():
