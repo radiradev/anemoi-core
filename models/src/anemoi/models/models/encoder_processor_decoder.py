@@ -198,7 +198,7 @@ class AnemoiModelEncProcDec(nn.Module):
         x_data_latent = torch.cat(
             (
                 einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
-                self.node_attributes(self._graph_name_data, batch_size=batch_size).to("cpu"),
+                self.node_attributes(self._graph_name_data, batch_size=batch_size).to("cpu", non_blocking=True),
             ),
             dim=-1,  # feature dimension
         )
@@ -217,7 +217,7 @@ class AnemoiModelEncProcDec(nn.Module):
             shard_shapes=(shard_shapes_data, shard_shapes_hidden),
             model_comm_group=model_comm_group,
         )
-        x_data_latent = x_data_latent.to("cpu")
+        x_data_latent = x_data_latent.to("cpu", non_blocking=True)
 
         x_latent_proc = self.processor(
             x_latent,
@@ -232,7 +232,7 @@ class AnemoiModelEncProcDec(nn.Module):
         # Run decoder
         x_out = self._run_mapper(
             self.decoder,
-            (x_latent_proc, x_data_latent.to(x_latent_proc.device)),
+            (x_latent_proc, x_data_latent.to(x_latent_proc.device, non_blocking=True)),
             batch_size=batch_size,
             shard_shapes=(shard_shapes_hidden, shard_shapes_data),
             model_comm_group=model_comm_group,
@@ -250,7 +250,7 @@ class AnemoiModelEncProcDec(nn.Module):
         )
 
         # residual connection (just for the prognostic variables)
-        x_out[..., self._internal_output_idx] += x.to(x_out.device)[:, -1, :, :, self._internal_input_idx]
+        x_out[..., self._internal_output_idx] += x.to(x_out.device, non_blocking=True)[:, -1, :, :, self._internal_input_idx]
 
         for bounding in self.boundings:
             # bounding performed in the order specified in the config file

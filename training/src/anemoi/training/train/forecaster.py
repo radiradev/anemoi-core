@@ -72,7 +72,7 @@ class GraphForecaster(pl.LightningModule):
         """
         super().__init__()
 
-        graph_data = graph_data.to(self.device)
+        graph_data = graph_data.to(self.device, non_blocking=True)
 
         if config.model.get("output_mask", None) is not None:
             self.output_mask = Boolean1DMask(graph_data[config.graph.data][config.model.output_mask])
@@ -444,7 +444,7 @@ class GraphForecaster(pl.LightningModule):
             0 : self.multi_step,
             ...,
             self.data_indices.internal_data.input.full,
-        ].to("cpu")  # (bs, multi_step, latlon, nvar)
+        ].to("cpu", non_blocking=True)  # (bs, multi_step, latlon, nvar)
         msg = (
             "Batch length not sufficient for requested multi_step length!"
             f", {batch.shape[1]} !>= {rollout + self.multi_step}"
@@ -461,8 +461,8 @@ class GraphForecaster(pl.LightningModule):
             loss = checkpoint(self.loss, y_pred, y, use_reentrant=False) if training_mode else None
 
             #print(f"{x.device=} {y_pred.device=}, {batch.device=}")
-            #x = self.advance_input(x.to(y_pred.device), y_pred, batch, rollout_step) #works on 1 gpu
-            x = self.advance_input(x.to(batch.device), y_pred.to(batch.device), batch, rollout_step) #ypred move might be unnesecary
+            #x = self.advance_input(x.to(y_pred.device, non_blocking=True), y_pred, batch, rollout_step) #works on 1 gpu
+            x = self.advance_input(x.to(batch.device, non_blocking=True), y_pred.to(batch.device, non_blocking=True), batch, rollout_step) #ypred move might be unnesecary
 
             metrics_next = {}
             if validation_mode:

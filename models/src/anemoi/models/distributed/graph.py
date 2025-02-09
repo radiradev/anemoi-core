@@ -234,7 +234,7 @@ class _ShardParallelSection(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        print(f"_ShardParallelSection BW {grad_output.device=}")
+        #print(f"_ShardParallelSection BW {grad_output.device=}")
         if ctx.comm_group:
             orig_device=grad_output.device
             dest="cuda"
@@ -285,7 +285,7 @@ class _GatherParallelSection(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        print(f"_GatherParallelSection BW {grad_output.device=}")
+        #print(f"_GatherParallelSection BW {grad_output.device=}")
         if ctx.comm_group:
             return (
                 #_split(grad_output.to("cuda"), ctx.dim, ctx.shapes, group=ctx.comm_group),

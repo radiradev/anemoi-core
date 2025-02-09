@@ -119,10 +119,10 @@ class ForwardMapperPreProcessMixin:
 
     def pre_process(self, x, shard_shapes, model_comm_group=None):
         x_src, x_dst, shapes_src, shapes_dst = super().pre_process(x, shard_shapes, model_comm_group)
-        print(f"{x_src.device=} {x_dst.device=}")
-        x_src = shard_tensor(x_src.to(x_dst.device), 0, shapes_src, model_comm_group)
+        #print(f"{x_src.device=} {x_dst.device=}")
+        x_src = shard_tensor(x_src.to(x_dst.device, non_blocking=True), 0, shapes_src, model_comm_group)
         x_dst = shard_tensor(x_dst, 0, shapes_dst, model_comm_group)
-        x_src = self.emb_nodes_src(x_src.to(x_dst.device))
+        x_src = self.emb_nodes_src(x_src.to(x_dst.device, non_blocking=True))
         x_dst = self.emb_nodes_dst(x_dst)
         shapes_src = change_channels_in_shape(shapes_src, self.hidden_dim)
         shapes_dst = change_channels_in_shape(shapes_dst, self.hidden_dim)

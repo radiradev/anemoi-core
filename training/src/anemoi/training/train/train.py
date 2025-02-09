@@ -38,6 +38,7 @@ from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.seeding import get_base_seed
 from anemoi.utils.config import DotDict
 from anemoi.utils.provenance import gather_provenance_info
+import os
 
 if TYPE_CHECKING:
     from torch_geometric.data import HeteroData
@@ -439,4 +440,11 @@ def main(config: DictConfig) -> None:
 
 
 if __name__ == "__main__":
+    if os.getenv("MAN_MEM", "0") != "0":
+        # Load the allocator
+        new_alloc = torch.cuda.memory.CUDAPluggableAllocator('/p/home/jusers/obrien2/jedi/pytorch-mem/alloc.so', 'my_man_malloc', 'my_free')
+        #'alloc.so', 'my_malloc', 'my_free')
+        # Swap the current allocator
+        torch.cuda.memory.change_current_allocator(new_alloc)
+
     main()
