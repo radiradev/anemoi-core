@@ -67,8 +67,12 @@ class PinnedTensor(torch.Tensor):
     @staticmethod
     def __new__(cls, data, pinned=False, *args, **kwargs):
         if pinned:
-            data = data.to("cpu").pin_memory()  # Allocate in pinned memory
-        return super().__new__(cls, data, *args, **kwargs)
+            cpu_data = data.to("cpu").pin_memory()  # Allocate in pinned memory
+            data = None #try free whatever the source was
+            del data
+            return super().__new__(cls, cpu_data, *args, **kwargs)
+        else:
+            return super().__new__(cls, data, *args, **kwargs)
 
     def __init__(self, data, pinned=True, **kwargs):
         self._pinned = pinned
@@ -84,6 +88,12 @@ class PinnedTensor(torch.Tensor):
 
     #def __repr__(self):
     #    return f"PinnedTensor({self._t})"
+
+    #need this for one of the profiling outputs
+    @classmethod
+    def new_empty(self, input):
+        return PinnedTensor(torch.Tensor(input), pinned=True)
+
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
@@ -115,6 +125,8 @@ def demo():
     data = torch.randn(5, 5)  # Random tensor
     pinned_tensor = PinnedTensor(data, pinned=True)
     print(pinned_tensor.shape) #demonstrates that tensor attributes are passed off to the underlying tensor
+
+    pinned_tensor.new_empty([])
 
     gpu_data=torch.randn(5, 5, device="cuda")
     result = pinned_tensor + gpu_data

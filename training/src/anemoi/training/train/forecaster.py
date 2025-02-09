@@ -34,9 +34,16 @@ from anemoi.training.losses.weightedloss import BaseWeightedLoss
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.masks import Boolean1DMask
 from anemoi.training.utils.masks import NoOutputMask
+from anemoi.training.utils import PinnedTensor
 from anemoi.utils.config import DotDict
 
+import os
+
 LOGGER = logging.getLogger(__name__)
+
+use_pinned_tensor=False
+if os.getenv("PTENSOR", "0") != "0":
+    use_pinned_tensor=True
 
 
 class GraphForecaster(pl.LightningModule):
@@ -72,7 +79,8 @@ class GraphForecaster(pl.LightningModule):
         """
         super().__init__()
 
-        graph_data = graph_data.to(self.device, non_blocking=True)
+        #graph_data = graph_data.to(self.device, non_blocking=True)
+        graph_data = graph_data
 
         if config.model.get("output_mask", None) is not None:
             self.output_mask = Boolean1DMask(graph_data[config.graph.data][config.model.output_mask])
@@ -439,12 +447,22 @@ class GraphForecaster(pl.LightningModule):
             self.training_weights_for_imputed_variables(batch)
 
         # start rollout of preprocessed batch
-        x = batch[
+        if use_pinned_tensor:
+            #[rank0]: RuntimeError: cannot pin 'torch.cuda.FloatTensor' only dense CPU tensors can be pinned
+            x = PinnedTensor(batch[
             :,
             0 : self.multi_step,
             ...,
             self.data_indices.internal_data.input.full,
-        ].to("cpu", non_blocking=True)  # (bs, multi_step, latlon, nvar)
+            ])
+        else:
+            x = batch[
+            :,
+            0 : self.multi_step,
+            ...,
+            self.data_indices.internal_data.input.full,
+            ] # (bs, multi_step, latlon, nvar)
+            #].to("cpu", non_blocking=True)  # (bs, multi_step, latlon, nvar)
         msg = (
             "Batch length not sufficient for requested multi_step length!"
             f", {batch.shape[1]} !>= {rollout + self.multi_step}"
@@ -462,7 +480,8 @@ class GraphForecaster(pl.LightningModule):
 
             #print(f"{x.device=} {y_pred.device=}, {batch.device=}")
             #x = self.advance_input(x.to(y_pred.device, non_blocking=True), y_pred, batch, rollout_step) #works on 1 gpu
-            x = self.advance_input(x.to(batch.device, non_blocking=True), y_pred.to(batch.device, non_blocking=True), batch, rollout_step) #ypred move might be unnesecary
+            #x = self.advance_input(x.to(batch.device, non_blocking=True), y_pred.to(batch.device, non_blocking=True), batch, rollout_step) #ypred move might be unnesecary
+            x = self.advance_input(x, y_pred, batch, rollout_step) #pinned_tensor
 
             metrics_next = {}
             if validation_mode:

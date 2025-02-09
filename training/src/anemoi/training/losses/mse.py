@@ -76,6 +76,7 @@ class WeightedMSELoss(BaseWeightedLoss):
             Weighted MSE loss
         """
         #print(f"{pred.device=}, {target.device=}")
-        out = torch.square(pred.to(target.device, non_blocking=True) - target)
+        #out = torch.square(pred.to(target.device, non_blocking=True) - target)
+        out = torch.square(pred - target)
         out = self.scale(out, scalar_indices, without_scalars=without_scalars)
         return self.scale_by_node_weights(out, squash)
