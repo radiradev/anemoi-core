@@ -1,0 +1,58 @@
+defaults:
+- data: zarr
+- dataloader: native_grid
+- diagnostics: evaluation
+- hardware: example
+- graph: multi_scale #encoder_decoder_only
+- model: transformer_ens.yaml
+- training: default
+- _self_
+
+# - graph: encoder_decoder_only
+# - model: transformer
+
+
+data:
+  resolution: o96
+
+hardware:
+  paths:
+    inter_mat: /ec/res4/hpcperm/nesl/inter_mat
+    data: /home/mlx/ai-ml/datasets/
+    grids: /home/mlx/ai-ml/grids/
+    output: ${oc.env:SCRATCH}/aifs/${data.resolution}/
+  files:
+    interp_down: O96-O32-linear.mat.npz
+    interp_up: O32-O96-linear.mat.npz
+    graph: graph_anemoi_new_${data.resolution}.pt
+    dataset: aifs-ea-an-oper-0001-mars-${data.resolution}-1979-2022-6h-v6.zarr
+  accelerator: auto
+  num_gpus_per_node: 1
+  num_nodes: 1
+  num_gpus_per_model: 1
+
+model:
+  num_channels: 128
+
+dataloader:
+  limit_batches:
+    training: 8
+    validation: 8
+
+training:
+  max_epochs: 1
+
+diagnostics:
+  plot:
+    callbacks: []
+  log:
+    interval: 4
+    mlflow:
+      enabled: True
+      offline: True
+      experiment_name: 'zdebug112'
+      authentication: True
+      tracking_uri: 'https://mlflow.ecmwf.int'
+      run_name: 'debug12343'
+  profiler: False
+  enable_progress_bar: True
