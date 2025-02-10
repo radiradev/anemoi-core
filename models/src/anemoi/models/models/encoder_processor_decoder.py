@@ -12,6 +12,7 @@ import logging
 from typing import Optional
 
 import einops
+import numpy as np
 import torch
 from hydra.utils import instantiate
 from torch import Tensor

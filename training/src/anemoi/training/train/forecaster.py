@@ -86,6 +86,7 @@ class GraphForecaster(pl.LightningModule):
             metadata=metadata,
             supporting_arrays=supporting_arrays | self.output_mask.supporting_arrays,
             graph_data=graph_data,
+            interp_data=interp_data,
             config=DotDict(map_config_to_primitives(OmegaConf.to_container(config, resolve=True))),
         )
         self.config = config
