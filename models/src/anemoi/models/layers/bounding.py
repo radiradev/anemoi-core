@@ -249,3 +249,38 @@ class FractionBounding(HardtanhBounding):
         # Calculate the fraction of the total variable
         x[..., self.data_index] *= x[..., self.total_variable]
         return x
+
+
+class VariableDependentMasking(BaseBounding):
+    """Initializes the VariableDependentMasking with specified parameters.
+
+    Where the masking_var is zero, the data_index variables are masked with zero.
+
+    Parameters
+    ----------
+    variables : list[str]
+        A list of strings representing the variables that will be masked.
+    name_to_index : dict
+        A dictionary mapping the variable names to their corresponding indices.
+    masking_var : str
+        A string representing a variable from which a zero-nonzero mask is derived.
+    """
+
+    def __init__(
+        self,
+        *,
+        variables: list[str],
+        name_to_index: dict,
+        masking_var: str,
+        statistics: Optional[dict] = None,
+        name_to_index_stats: Optional[dict] = None,
+    ) -> None:
+        del statistics, name_to_index_stats
+        super().__init__(variables=variables, name_to_index=name_to_index)
+        self.masking_var = self._create_index(variables=[masking_var])
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Mask the data_index variables where the masking_var is zero
+        zero_nonzero_mask = (x[..., self.masking_var] != 0).int()
+        x[..., self.data_index] *= zero_nonzero_mask
+        return x
