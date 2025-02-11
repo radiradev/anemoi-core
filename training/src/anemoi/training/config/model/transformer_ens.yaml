@@ -2,7 +2,7 @@ activation: GELU
 num_channels: 1024
 
 model:
-  _target_: anemoi.models.models.AnemoiModelEncProcDec
+  _target_: anemoi.models.models.AnemoiEnsModelEncProcDec #AnemoiModelEncProcDec
 
 layer_kernels:
     LayerNorm:
@@ -13,6 +13,14 @@ layer_kernels:
       _target_: torch.nn.Linear
       _partial_: True
       #Any arguments to your chosen function go here e.g.
+
+noise_injector:
+  _target_: anemoi.models.layers.ensemble.NoiseConditioning
+  _convert_: all
+  noise_std: 1
+  noise_channels_dim: 4
+  noise_mlp_hidden_dim: 32
+  inject_noise: True
 
 processor:
   _target_: anemoi.models.layers.processor.TransformerProcessor

@@ -91,7 +91,8 @@ def main() -> None:
         error = "This entrypoint should not be called directly. Use `anemoi-training train` instead."
         raise RuntimeError(error)
 
-    from anemoi.training.train.train import main as anemoi_train
+    # from anemoi.training.train.train import main as anemoi_train
+    from anemoi.training.train.train_ens import ensemble as anemoi_train
 
     anemoi_train()
 

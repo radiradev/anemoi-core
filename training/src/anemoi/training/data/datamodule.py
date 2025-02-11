@@ -23,6 +23,7 @@ from torch.utils.data import DataLoader
 from anemoi.datasets.data import open_dataset
 from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.training.data.dataset import NativeGridDataset
+from anemoi.training.data.dataset import EnsNativeGridDataset
 from anemoi.training.data.dataset import worker_init_func
 from anemoi.utils.dates import frequency_to_seconds
 
@@ -214,3 +215,41 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
 
     def test_dataloader(self) -> DataLoader:
         return self._get_dataloader(self.ds_test, "test")
+
+
+class AnemoiEnsDataModule(AnemoiDatasetsDataModule):
+    """Anemoi Ensemble data module for PyTorch Lightning."""
+
+    def _get_dataset(
+        self,
+        data_reader,
+        shuffle: bool = True,
+        rollout: int = 1,
+        label: str = "generic",
+    ) -> EnsNativeGridDataset:
+
+        r = max(rollout, self.rollout)
+
+        # Compute effective batch size
+        effective_bs = (
+            self.config.dataloader.batch_size["training"]
+            * self.config.hardware.num_gpus_per_node
+            * self.config.hardware.num_nodes
+            // self.config.hardware.num_gpus_per_model
+        )
+
+        data = EnsNativeGridDataset(
+            data_reader=data_reader,
+            rollout=r,
+            multistep=self.config.training.multistep_input,
+            timeincrement=self.timeincrement,
+            shuffle=shuffle,
+            grid_indices=self.grid_indices,
+            label=label,
+            effective_bs=effective_bs,
+            ens_members_per_device=self.config.training.ensemble_size_per_device,
+            num_gpus_per_ens=self.config.hardware.num_gpus_per_ensemble,
+            num_gpus_per_model=self.config.hardware.num_gpus_per_model,
+        )
+
+        return data
