@@ -75,7 +75,7 @@ optional-dependencies.docs = [
   "sphinx-rtd-theme",
 ]
 optional-dependencies.plotting = [
-  "distinctpy>=1",
+  "distinctipy>=1",
 ]
 optional-dependencies.profile = [
   "holistictraceanalysis>=0.2",
