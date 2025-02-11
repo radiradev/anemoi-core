@@ -881,6 +881,7 @@ class PlotSample(BasePerBatchPlotCallback):
         colormaps: dict | None = None,
         per_sample: int = 6,
         every_n_batches: int | None = None,
+        **kwargs: Any,
     ) -> None:
         """Initialise the PlotSample callback.
 
@@ -901,6 +902,7 @@ class PlotSample(BasePerBatchPlotCallback):
         every_n_batches : int, optional
             Batch frequency to plot at, by default None
         """
+        del kwargs
         super().__init__(config, every_n_batches=every_n_batches)
         self.sample_idx = sample_idx
         self.parameters = parameters
