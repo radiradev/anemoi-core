@@ -362,7 +362,7 @@ def plot_predicted_multilevel_flat_sample(
     y_pred: np.ndarray,
     datashader: bool = False,
     precip_and_related_fields: list | None = None,
-    colormaps: dict | None = None,
+    colormaps: dict[str, str] | None = None,
 ) -> Figure:
     """Plots data for one multilevel latlon-"flat" sample.
 
@@ -389,6 +389,8 @@ def plot_predicted_multilevel_flat_sample(
         Scatter plot, by default False
     precip_and_related_fields : list, optional
         List of precipitation-like variables, by default []
+    colormaps : dict[str, str], optional
+        Dictionary of colormaps, by default None
 
     Returns
     -------
