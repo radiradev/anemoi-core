@@ -34,6 +34,7 @@ from anemoi.training.losses.weightedloss import BaseWeightedLoss
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.masks import Boolean1DMask
 from anemoi.training.utils.masks import NoOutputMask
+from anemoi.training.utils.usable_indices import try_get_slice
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -89,6 +90,7 @@ class GraphForecaster(pl.LightningModule):
         )
         self.config = config
         self.data_indices = data_indices
+        self.indices_internal_data_input_full = try_get_slice(self.data_indices.internal_data.input.full)
 
         self.save_hyperparameters()
 
@@ -443,7 +445,7 @@ class GraphForecaster(pl.LightningModule):
             :,
             0 : self.multi_step,
             ...,
-            self.data_indices.internal_data.input.full,
+            self.indices_internal_data_input_full,
         ]  # (bs, multi_step, latlon, nvar)
         msg = (
             "Batch length not sufficient for requested multi_step length!"

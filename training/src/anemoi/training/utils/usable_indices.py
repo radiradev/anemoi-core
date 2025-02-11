@@ -9,8 +9,10 @@
 
 
 from __future__ import annotations
+from typing import Union
 
 import numpy as np
+import torch
 
 
 def get_usable_indices(
@@ -57,3 +59,22 @@ def get_usable_indices(
         ]
 
     return usable_indices
+
+def try_get_slice(indices: torch.Tensor) -> Union[slice, torch.Tensor]:
+    """Try to convert a tensor of indices into a slice.
+
+    Parameters
+    ----------
+    indices: torch.Tensor
+        Tensor of indices.
+    
+    Returns
+    -------
+    out: slice | torch.Tensor
+        Slice if the indices are contiguous, otherwise the unmodified indices.
+    """
+    # could be done faster, assume performance is not an issue here
+    min_index, max_index = indices.min().item(), indices.max().item()
+    if indices.tolist() == list(range(min_index, max_index + 1)):
+        return slice(min_index, max_index + 1)
+    return indices
