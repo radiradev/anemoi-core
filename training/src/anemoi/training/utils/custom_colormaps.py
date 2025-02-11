@@ -18,18 +18,30 @@ from matplotlib.colors import ListedColormap
 
 
 class CustomColormap(ABC):
+    """Abstract base class for custom colormaps."""
 
     def __init__(self, variables: list | None = None) -> None:
+        """Initializes the custom colormap.
+
+        Parameters
+        ----------
+        variables : list, optional
+            A list of strings representing the variables for which the colormap is used.
+        """
         super().__init__()
         if variables is None:
             variables = []
         self.variables = variables
 
     @abstractmethod
-    def get_cmap(self) -> Colormap: ...
+    def get_cmap(self) -> Colormap:
+        """Returns the custom colormap."""
+        ...
 
 
 class MatplotlibColormap(CustomColormap):
+    """Class for Matplotlib colormaps."""
+
     def __init__(self, name: str, variables: list | None = None) -> None:
         super().__init__(variables)
         self.name = name
@@ -40,7 +52,18 @@ class MatplotlibColormap(CustomColormap):
 
 
 class MatplotlibColormapClevels(CustomColormap):
+    """Class for Matplotlib colormaps with custom levels."""
+
     def __init__(self, clevels: float, variables: list | None = None) -> None:
+        """Initializes the custom colormap with custom levels.
+
+        Parameters
+        ----------
+        clevels : float
+            The custom levels for the colormap.
+        variables : list, optional
+            A list of strings representing the variables for which the colormap is used.
+        """
         super().__init__(variables)
         self.clevels = clevels
         self.colormap = ListedColormap(self.clevels)
@@ -51,6 +74,17 @@ class MatplotlibColormapClevels(CustomColormap):
 
 class DistinctpyColormap(CustomColormap):
     def __init__(self, n_colors: int, variables: list | None = None, colorblind_type: str | None = None) -> None:
+        """Initializes the custom colormap with distinctipy.
+
+        Parameters
+        ----------
+        n_colors : int
+            The number of colors in the colormap.
+        variables : list, optional
+            A list of strings representing the variables for which the colormap is used.
+        colorblind_type : str, optional
+            The type of colorblindness to simulate. If None, the default colorblindness from distinctipy is applied.
+        """
         try:
             from distinctipy import distinctipy
         except ImportError:
