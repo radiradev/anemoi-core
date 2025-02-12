@@ -53,7 +53,7 @@ class ConditionalLayerNorm(nn.Module):
         self.autocast = autocast
 
         if w_one_bias_zero_init:
-            nn.init.ones_(self.scale.weight)
+            nn.init.ones_(self.scale.weight) # todo -> fix this
             nn.init.zeros_(self.scale.bias)
             nn.init.zeros_(self.bias.weight)
             nn.init.zeros_(self.bias.bias)
