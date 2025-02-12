@@ -24,6 +24,7 @@ from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.layers.graph import NamedNodesAttributes
 from anemoi.models.layers.embedder import VerticalInformationEmbedder
 from anemoi.models.layers.attention import MultiHeadSelfAttention
+from anemoi.models.layers.block import TransformerProcessorBlock
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -136,23 +137,7 @@ class AnemoiModelEncProcDec(nn.Module):
             ]
         )
 
-        act_func = nn.ReLU()
-        self.mlp_mc = nn.Sequential(nn.Linear(self.embedder.num_levels, self.embedder.hidden_dim), act_func)
-        self.mlp_mc.append(nn.Linear(self.embedder.hidden_dim, self.embedder.num_levels))
-        self.mlp_mc.append(act_func)   
-
-        self.mlp_mc = self.mlp_mc.cuda()   
-
-        self.mc_attention_layer = MultiHeadSelfAttention(
-            num_heads=13, # when 1 this is self attention - 8 heads is a balanced choice for most tasks.
-            embed_dim= self.embedder.num_levels,
-            window_size=26,
-            bias=False,
-            is_causal=False,
-            dropout_p=0,
-        ).cuda()          
-        self.mc_layer_norm1 = nn.LayerNorm(self.embedder.num_levels).cuda()
-        self.mc_layer_norm2 = nn.LayerNorm(self.embedder.num_levels).cuda()        
+        self.pressure_level_block = TransformerProcessorBlock(num_channels = self.embedder.num_levels, hidden_dim = self.embedder.hidden_dim, num_heads = 13, activation = 'ReLU', window_size = 26, dropout_p = 0.0)
 
     def _calculate_shapes_and_indices(self, data_indices: dict) -> None:
         self.num_input_channels = len(data_indices.internal_model.input)
@@ -245,9 +230,7 @@ class AnemoiModelEncProcDec(nn.Module):
                 x_reshaped, "batch ensemble grid vars time levels -> (batch ensemble grid vars time) (levels)"
             )
 
-
-        x_att = x_att + self.mc_attention_layer(self.mc_layer_norm1(x_att), shapes=[[x_att.shape[0], x_att.shape[1]]], batch_size=240)
-        x_att = x_att + self.mlp_mc(self.mc_layer_norm2(x_att))
+        x_att = self.pressure_level_block(x_att, shapes=[[x_att.shape[0], x_att.shape[1]]], batch_size=240)
 
         x_data_vertical_latent = x_att.reshape(int(x_att.shape[0]/(2*6)), (6*2*self.embedder.num_levels))
 

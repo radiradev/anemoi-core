@@ -35,7 +35,7 @@ class VerticalInformationEmbedder(nn.Module):
         self.mlp = self._define_mlp()
 
 
-    def _get_levels_tensor(self,data_indices)->torch.Tensor:
+    def _get_levels_tensor(self)->torch.Tensor:
         level_list = []
         for var_str in self.data_indices.name_to_index:
 
