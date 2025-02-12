@@ -12,7 +12,7 @@ import pytest
 import torch
 from torch_geometric.data import HeteroData
 
-from anemoi.models.layers.mapper import BaseMapper
+from anemoi.models.layers.mapper.base import BaseMapper
 
 
 class TestBaseMapper:
