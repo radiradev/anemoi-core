@@ -8,33 +8,30 @@ from anemoi.models.layers.fourier import levels_expansion
 import einops
 
 class VerticalInformationEmbedder(nn.Module):
-    def __init__(self, config:dict,data_indices) -> None:
+    def __init__(self, level_shuffle, method, fourier_dim, hidden_dim, encoded_dim, num_levels, data_indices) -> None:
         """Initialise.
         """
         super().__init__()
-        self.level_shuffle = config.level_shuffle 
-        self.method = config.method
+        self.level_shuffle = level_shuffle 
         self.data_indices = data_indices
-        self.vertical_embeddings_method = config.method
+        self.vertical_embeddings_method = method
+        self.fourier_dim = fourier_dim
+        self.hidden_dim = hidden_dim
+        self.encoded_dim = encoded_dim
+        self.num_levels = num_levels
 
-        if self.vertical_embeddings_method not in ['concat', 'addition']:
-            raise ValueError(f"Unknown vertical embeddings method: {self.vertical_embeddings_method}")
+        #if self.vertical_embeddings_method not in ['concat', 'addition']:
+        #    raise ValueError(f"Unknown vertical embeddings method: {self.vertical_embeddings_method}")
 
         if self.vertical_embeddings_method == 'addition':
-            assert config.encoded_dim == 1 , "For addition method, encoded_dim must be equal to 1"
-
-        #! FOURIER AND ENCODED DIMENSIONS FOR PRESSURE LEVELS
-        self.fourier_dim = config.fourier_dim # small otherwise CUDA OOM
-        self.hidden_dim = config.hidden_dim
-        self.encoded_dim =config.encoded_dim # small otherwise CUDA OOM
-        self.num_levels = config.num_levels
+            assert encoded_dim == 1 , "For addition method, encoded_dim must be equal to 1"
 
         self.mlp = self._define_mlp()
 
 
     def _get_levels_tensor(self)->torch.Tensor:
         level_list = []
-        for var_str in self.data_indices:
+        for var_str in self.data_indices.name_to_index:
             parts = var_str[0].split("_")
             # extract pressure level. If not pressure level, assume surface and assign 1000
             # TODO: make this dependent on new variable groups
@@ -72,7 +69,6 @@ class VerticalInformationEmbedder(nn.Module):
         return mapped_vertical_features
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        
         batch_size = x.shape[0]
         n_times = x.shape[1]
         ensemble_size = x.shape[2]
@@ -86,7 +82,6 @@ class VerticalInformationEmbedder(nn.Module):
             x_rand = x_reshaped
     
         mapped_vertical_features= self._encode_vertical_levels(self._get_levels_tensor())
-
         if self.vertical_embeddings_method == 'concat':
             mapped_vertical_features = mapped_vertical_features.view(1, 1, 1, 1, mapped_vertical_features.shape[0])
             mapped_vertical_features= mapped_vertical_features.reshape(1,1,1,1,self.num_variables,self.num_levels,self.encoded_dim)
@@ -107,6 +102,14 @@ class VerticalInformationEmbedder(nn.Module):
             return einops.rearrange(
                     x_data_vertical_latent, "batch time ensemble grid vars levels -> (batch ensemble grid) (time vars levels)"
                 )
+        
+        elif self.vertical_embeddings_method == 'attention':
+            mapped_vertical_features = mapped_vertical_features.view(1, 1, 1, 1, self.num_variables, self.num_levels).expand(
+                batch_size, n_times, 1, num_grid_points, self.num_variables, self.num_levels
+            ) # ([4, 2, 1, 40320, 6, 13]
+            return mapped_vertical_features
         else:
-            raise ValueError(f"Unknown vertical embeddings method: {self.vertical_embeddings_method}")
+            return einops.rearrange(
+                x_data_vertical_latent, "batch time ensemble grid vars levels -> (batch ensemble grid) (time vars levels)"
+            )
 
