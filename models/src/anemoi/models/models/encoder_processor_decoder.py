@@ -68,8 +68,13 @@ class AnemoiModelEncProcDec(nn.Module):
 
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
 
-        # input_dim = self.multi_step * self.num_input_channels + self.node_attributes.attr_ndims[self._graph_name_data]
-        input_dim = self.multi_step * self.num_input_channels + self.node_attributes.attr_ndims[self._graph_name_data] + self.num_input_channels_prognostic + 1
+        input_dim = self.multi_step * self.num_input_channels + self.node_attributes.attr_ndims[self._graph_name_data]
+
+        # todo, this should be done better
+        if model_config.training.fcstep_to_input:
+            input_dim += 1
+        if model_config.training.interp_fields_to_input:
+            input_dim += self.num_input_channels_prognostic
 
         self._interp_data = interp_data
 
@@ -83,9 +88,6 @@ class AnemoiModelEncProcDec(nn.Module):
             self.A_up = self._make_interpolation_matrix(self._interp_data["up"])
             LOGGER.info("A_up %s", self.A_up.shape)
 
-        # read config.model.layer_kernels to get the implementation for certain layers
-        self.layer_kernels = load_layer_kernels(model_config.get("model.layer_kernels", {}))
-
         # Encoder data -> hidden
         self.encoder = instantiate(
             model_config.model.encoder,
@@ -95,7 +97,7 @@ class AnemoiModelEncProcDec(nn.Module):
             sub_graph=self._graph_data[(self._graph_name_data, "to", self._graph_name_hidden)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-            layer_kernels=self.layer_kernels,
+            layer_kernels=load_layer_kernels(model_config.get("model.layer_kernels.encoder", {})),
         )
 
         # Processor hidden -> hidden
@@ -105,7 +107,7 @@ class AnemoiModelEncProcDec(nn.Module):
             sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_hidden)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-            layer_kernels=self.layer_kernels,
+            layer_kernels=load_layer_kernels(model_config.get("model.layer_kernels.processor", {})),
         )
 
         # Decoder hidden -> data
@@ -118,7 +120,7 @@ class AnemoiModelEncProcDec(nn.Module):
             sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_data)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
-            layer_kernels=self.layer_kernels,
+            layer_kernels=load_layer_kernels(model_config.get("model.layer_kernels.decoder", {})),
         )
 
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
@@ -301,7 +303,13 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
 
         super().__init__(model_config=model_config, data_indices=data_indices, statistics=statistics, graph_data=graph_data, interp_data=interp_data)
 
-        self.noise_injector = instantiate(model_config.model.noise_injector, num_channels=self.num_channels, layer_kernels=self.layer_kernels)
+        self.noise_injector = instantiate(
+            model_config.model.noise_injector,
+            num_channels=self.num_channels,
+            layer_kernels=load_layer_kernels(
+                model_config.get("model.layer_kernels.noise_injector", {})
+            ),
+        )
 
     def forward(self, x: torch.Tensor, fcstep: int, model_comm_group: Optional[ProcessGroup] = None) -> torch.Tensor:
         """Forward operator.

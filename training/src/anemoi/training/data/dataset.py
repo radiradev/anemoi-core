@@ -413,7 +413,7 @@ class EnsNativeGridDataset(NativeGridDataset):
 
         assert tot_ens <= num_eda_members, f"Can't generate an ensemble of size {tot_ens} from {num_eda_members} EDA perturbations"
 
-        eda_member_gen_idx = self.rng.choice(range(num_eda_members), size=tot_ens, replace=False)
+        eda_member_gen_idx = self.rng_inicond_sampling.choice(range(num_eda_members), size=tot_ens, replace=False)
         offset = 1  # index=0 analysis, index=1 EDA recentred
         eda_member_gen_idx += offset
 
@@ -500,6 +500,49 @@ class EnsNativeGridDataset(NativeGridDataset):
             ens_comm_group_rank,
             ens_comm_num_groups,
             reader_group_rank,
+        )
+
+    def per_worker_init(self, n_workers: int, worker_id: int) -> None:
+        """Called by worker_init_func on each copy of dataset.
+
+        This initialises after the worker process has been spawned.
+
+        Parameters
+        ----------
+        n_workers : int
+            Number of workers
+        worker_id : int
+            Worker ID
+
+        """
+        super().per_worker_init(n_workers, worker_id)
+
+        base_seed = get_base_seed()
+        seed = (
+            base_seed * (self.seed_comm_group_id + 1) - worker_id
+        )  # note that test, validation etc. datasets get same seed
+        self.rng_inicond_sampling = np.random.default_rng(seed=seed)
+        sanity_rnd = self.rng.random(1)
+        sanity_rnd_ini = self.rng_inicond_sampling.random(1)
+
+        LOGGER.info(
+            (
+                "Worker %d (%s, pid %d, glob. rank %d, model comm group %d, "
+                "model comm group rank %d, ens comm group %d, ens comm group rank %d, "
+                " seed group id %d, seed %d, sanity rnd %f, sanity rnd ini %f)"
+            ),
+            worker_id,
+            self.label,
+            os.getpid(),
+            self.global_rank,
+            self.model_comm_group_id,
+            self.model_comm_group_rank,
+            self.ens_comm_group_id,
+            self.ens_comm_group_rank,
+            self.seed_comm_group_id,
+            seed,
+            sanity_rnd,
+            sanity_rnd_ini
         )
 
     def __iter__(self):

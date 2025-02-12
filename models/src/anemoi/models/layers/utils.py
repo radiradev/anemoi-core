@@ -32,7 +32,7 @@ class CheckpointWrapper(nn.Module):
         return checkpoint(self.module, *args, **kwargs, use_reentrant=False)
 
 
-def load_layer_kernels(kernel_config: Optional[DotDict] = {}) -> DotDict:
+def load_layer_kernels(kernel_config: Optional[DotDict] = None) -> DotDict:
     """Load layer kernels from the config.
 
     Args:

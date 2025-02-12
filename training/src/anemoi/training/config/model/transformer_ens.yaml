@@ -5,6 +5,25 @@ model:
   _target_: anemoi.models.models.AnemoiEnsModelEncProcDec #AnemoiModelEncProcDec
 
 layer_kernels:
+  processor:
+    LayerNorm:
+      _target_: anemoi.models.layers/normalization.ConditionalLayerNorm
+      _partial_: True
+      #Any arguments to your chosen function go here e.g.
+    Linear:
+      _target_: torch.nn.Linear
+      _partial_: True
+      #Any arguments to your chosen function go here e.g.
+  encoder:
+    LayerNorm:
+      _target_: torch.nn.LayerNorm
+      _partial_: True
+      #Any arguments to your chosen function go here e.g.
+    Linear:
+      _target_: torch.nn.Linear
+      _partial_: True
+      #Any arguments to your chosen function go here e.g.
+  decoder:
     LayerNorm:
       _target_: torch.nn.LayerNorm
       _partial_: True
