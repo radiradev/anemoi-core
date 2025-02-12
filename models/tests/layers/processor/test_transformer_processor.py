@@ -12,7 +12,7 @@ import pytest
 import torch
 from hydra.utils import instantiate
 
-from anemoi.models.layers.processor import TransformerProcessor
+from anemoi.models.layers.processor.static import TransformerProcessor
 from anemoi.models.layers.utils import load_layer_kernels
 
 

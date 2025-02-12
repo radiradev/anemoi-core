@@ -10,7 +10,7 @@
 
 import pytest
 
-from anemoi.models.layers.processor import BaseProcessor
+from anemoi.models.layers.processor.base import BaseProcessor
 
 
 @pytest.fixture
