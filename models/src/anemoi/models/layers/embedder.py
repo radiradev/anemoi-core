@@ -3,12 +3,14 @@ import math
 
 import numpy as np
 import torch
+from abc import ABC
 import torch.nn as nn
 from anemoi.models.layers.fourier import levels_expansion
 import einops
 
 class VerticalInformationEmbedder(nn.Module):
     def __init__(self, level_shuffle, method, fourier_dim, hidden_dim, encoded_dim, num_levels, data_indices) -> None:
+
         """Initialise.
         """
         super().__init__()
@@ -26,12 +28,17 @@ class VerticalInformationEmbedder(nn.Module):
         if self.vertical_embeddings_method == 'addition':
             assert encoded_dim == 1 , "For addition method, encoded_dim must be equal to 1"
 
+        #! FOURIER AND ENCODED DIMENSIONS FOR PRESSURE LEVELS
+        self.fourier_dim = fourier_dim # small otherwise CUDA OOM
+        self.hidden_dim = hidden_dim
+        self.encoded_dim = encoded_dim # small otherwise CUDA OOM
         self.mlp = self._define_mlp()
 
 
-    def _get_levels_tensor(self)->torch.Tensor:
+    def _get_levels_tensor(self,data_indices)->torch.Tensor:
         level_list = []
         for var_str in self.data_indices.name_to_index:
+
             parts = var_str[0].split("_")
             # extract pressure level. If not pressure level, assume surface and assign 1000
             # TODO: make this dependent on new variable groups
@@ -42,12 +49,15 @@ class VerticalInformationEmbedder(nn.Module):
             level_tensor= level_tensor.reshape((self.num_variables,self.num_levels))[...,self.rand_idx].ravel()
         return level_tensor
 
-    def _shuffle_input(self,x_reshaped):
+
+    def _generate_shuffle_index(self):
         self.rand_idx = torch.randperm(self.num_levels)
         num_list = torch.Tensor([i for i in range(self.num_levels)])
         comb_list = torch.cat([self.rand_idx.view(self.num_levels, 1), num_list.view(self.num_levels, 1)], axis = 1)
         sorted_comb_list = comb_list[comb_list[:, 0].sort()[1]]
         self.rand_rev = [int(i) for i in sorted_comb_list[:, 1]]
+
+    def _shuffle_input(self,x_reshaped):
         x_rand = x_reshaped[..., self.rand_idx]
         return x_rand
 
@@ -86,8 +96,6 @@ class VerticalInformationEmbedder(nn.Module):
             mapped_vertical_features = mapped_vertical_features.view(1, 1, 1, 1, mapped_vertical_features.shape[0])
             mapped_vertical_features= mapped_vertical_features.reshape(1,1,1,1,self.num_variables,self.num_levels,self.encoded_dim)
             mapped_vertical_features=mapped_vertical_features.expand(batch_size, n_times, ensemble_size, num_grid_points, self.num_variables, self.num_levels,self.encoded_dim)
-            # MIGHT NEED CONCAT DIM 
-            # CHECK OTHER BRANHC FOR HOW I DID IT THE OTHER DAY
             x_data_vertical_latent = torch.cat((x_rand.unsqueeze(-1), mapped_vertical_features), dim=-1)
             return einops.rearrange(
                     x_data_vertical_latent, "batch time ensemble grid vars levels concatdim -> (batch ensemble grid) (time vars levels concatdim)"

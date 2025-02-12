@@ -173,6 +173,16 @@ class AnemoiModelEncProcDec(nn.Module):
             self._internal_output_idx,
         ), f"Internal model indices must match {self._internal_input_idx} != {self._internal_output_idx}"
 
+    def get_levels(self):
+        level_list = []
+        for var_str in self.data_indices:
+            parts = var_str[0].split("_")
+            # extract pressure level. If not pressure level, assume surface and assign 1000
+            # TODO: make this dependent on new variable groups
+            numeric_part = float(parts[-1]) if len(parts) > 1 and parts[-1].isdigit() else 1000
+            level_list.append(numeric_part)
+        return level_list
+
     def _run_mapper(
         self,
         mapper: nn.Module,
