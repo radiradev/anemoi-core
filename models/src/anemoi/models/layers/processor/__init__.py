@@ -9,13 +9,8 @@
 
 
 from anemoi.models.layers.processor.dynamic import DynamicGraphTransformerProcessor
+from anemoi.models.layers.processor.static import GNNProcessor
 from anemoi.models.layers.processor.static import GraphTransformerProcessor
 from anemoi.models.layers.processor.static import TransformerProcessor
-from anemoi.models.layers.processor.static import GNNProcessor
 
-__all__ = [
-    "TransformerProcessor",
-    "GNNProcessor",
-    "GraphTransformerProcessor",
-    "DynamicGraphTransformerProcessor"
-]
+__all__ = ["TransformerProcessor", "GNNProcessor", "GraphTransformerProcessor", "DynamicGraphTransformerProcessor"]

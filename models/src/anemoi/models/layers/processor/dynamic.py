@@ -10,8 +10,8 @@
 
 from typing import Optional
 
-from torch import Tensor
 import torch
+from torch import Tensor
 from torch.distributed.distributed_c10d import ProcessGroup
 from torch_geometric.data import HeteroData
 
@@ -20,7 +20,8 @@ from anemoi.models.distributed.shapes import change_channels_in_shape
 from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.layers.chunk import GraphTransformerProcessorChunk
 from anemoi.models.layers.graph import TrainableTensor
-from anemoi.models.layers.mapper import GraphEdgeMixin
+from anemoi.models.layers.mapper.base import GraphEdgeMixin
+from anemoi.models.layers.processor.base import BaseProcessor
 from anemoi.utils.config import DotDict
 
 

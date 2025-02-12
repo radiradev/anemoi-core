@@ -9,25 +9,11 @@
 
 
 from abc import ABC
-from typing import Optional
 
 from torch import Tensor
 from torch import nn
 from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import offload_wrapper
-from torch.distributed.distributed_c10d import ProcessGroup
 from torch.utils.checkpoint import checkpoint
-from torch_geometric.data import HeteroData
-
-from anemoi.models.distributed.graph import shard_tensor
-from anemoi.models.distributed.khop_edges import sort_edges_1hop_sharding
-from anemoi.models.distributed.shapes import change_channels_in_shape
-from anemoi.models.distributed.shapes import get_shape_shards
-from anemoi.models.layers.chunk import GNNProcessorChunk
-from anemoi.models.layers.chunk import GraphTransformerProcessorChunk
-from anemoi.models.layers.chunk import TransformerProcessorChunk
-from anemoi.models.layers.graph import TrainableTensor
-from anemoi.models.layers.mapper import GraphEdgeMixin
-from anemoi.utils.config import DotDict
 
 
 class BaseProcessor(nn.Module, ABC):
