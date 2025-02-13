@@ -56,6 +56,7 @@ class BaseBlock(nn.Module, ABC):
         batch_size: int,
         size: Optional[Size] = None,
         model_comm_group: Optional[ProcessGroup] = None,
+        **layer_kwargs,
     ) -> tuple[torch.Tensor, torch.Tensor]: ...
 
 
@@ -106,11 +107,10 @@ class TransformerProcessorBlock(BaseBlock):
         )
 
     def forward(
-        self, x: Tensor, shapes: list, batch_size: int, model_comm_group: Optional[ProcessGroup] = None
+        self, x: Tensor, shapes: list, batch_size: int, model_comm_group: Optional[ProcessGroup] = None, **layer_kwargs,
     ) -> Tensor:
-        # Need to be out of place for gradient propagation
-        x = x + self.attention(self.layer_norm_attention(x), shapes, batch_size, model_comm_group=model_comm_group)
-        x = x + self.mlp(self.layer_norm_mlp(x))
+        x = x + self.attention(self.layer_norm_attention(x, **layer_kwargs), shapes, batch_size, model_comm_group=model_comm_group)
+        x = x + self.mlp(self.layer_norm_mlp(x, **layer_kwargs,))
         return x
 
 

@@ -58,7 +58,7 @@ class ConditionalLayerNorm(nn.Module):
             nn.init.zeros_(self.bias.weight)
             nn.init.zeros_(self.bias.bias)
 
-    def forward(self, input: List[Tensor, Tensor]) -> Tensor:
+    def forward(self, x: Tensor, cond: Tensor) -> Tensor:
         """Conditional Layer Normalization.
 
         Parameters
@@ -73,7 +73,6 @@ class ConditionalLayerNorm(nn.Module):
         Tensor
             The output tensor.
         """
-        x, cond = input
         scale = self.scale(cond)
         bias = self.bias(cond)
         out = self.norm(x)

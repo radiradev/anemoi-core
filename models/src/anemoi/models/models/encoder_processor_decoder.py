@@ -97,7 +97,7 @@ class AnemoiModelEncProcDec(nn.Module):
             sub_graph=self._graph_data[(self._graph_name_data, "to", self._graph_name_hidden)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-            layer_kernels=load_layer_kernels(model_config.get("model.layer_kernels.encoder", {})),
+            layer_kernels=load_layer_kernels(model_config.model.layer_kernels.get("encoder", {})),
         )
 
         # Processor hidden -> hidden
@@ -107,7 +107,7 @@ class AnemoiModelEncProcDec(nn.Module):
             sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_hidden)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-            layer_kernels=load_layer_kernels(model_config.get("model.layer_kernels.processor", {})),
+            layer_kernels=load_layer_kernels(model_config.model.layer_kernels.get("processor", {})),
         )
 
         # Decoder hidden -> data
@@ -120,7 +120,7 @@ class AnemoiModelEncProcDec(nn.Module):
             sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_data)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
-            layer_kernels=load_layer_kernels(model_config.get("model.layer_kernels.decoder", {})),
+            layer_kernels=load_layer_kernels(model_config.model.layer_kernels.get("decoder", {})),
         )
 
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
@@ -307,7 +307,7 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
             model_config.model.noise_injector,
             num_channels=self.num_channels,
             layer_kernels=load_layer_kernels(
-                model_config.get("model.layer_kernels.noise_injector", {})
+                model_config.model.layer_kernels.get("noise_injector", {})
             ),
         )
 

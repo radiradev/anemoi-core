@@ -7,8 +7,12 @@ model:
 layer_kernels:
   processor:
     LayerNorm:
-      _target_: anemoi.models.layers/normalization.ConditionalLayerNorm
+      _target_: anemoi.models.layers.normalization.ConditionalLayerNorm
       _partial_: True
+      normalized_shape: ${model.num_channels}
+      condition_shape: ${model.noise_injector.noise_channels_dim}
+      w_one_bias_zero_init: True
+      autocast: false
       #Any arguments to your chosen function go here e.g.
     Linear:
       _target_: torch.nn.Linear
@@ -76,6 +80,7 @@ decoder:
   num_chunks: 1
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
+  initialise_data_extractor_zero: True
 
 trainable_parameters:
   data: 8
