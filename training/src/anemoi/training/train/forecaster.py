@@ -849,8 +849,13 @@ class GraphEnsForecaster(GraphForecaster):
             y_pred_ens:
                 Predictions if validation mode
         """
+
+        if ens_comm_group_size > 1 or model_comm_group.size() > 1:
+            y_pred_ens = y_pred.clone() # for bwd
+        # gather ensemble members, 
+        # full ensemble is only materialised on GPU in checkpointed region    
         y_pred_ens = gather_ensemble_members(
-            y_pred,
+            y_pred_ens,
             dim=1,
             shapes=[y_pred.shape] * ens_comm_group_size,
             nens=nens_per_device,
@@ -859,13 +864,10 @@ class GraphEnsForecaster(GraphForecaster):
             mgroup=ens_comm_group,
             scale_gradients=True,
         )
-
         # compute the loss
         loss_inc = loss(y_pred_ens, y, squash=True)
 
-        # during validation, we also return the pruned ensemble (from step 2) so we can run diagnostics
-        # an explicit cast is needed when running in mixed precision (i.e. with y_pred_ens.dtype == torch.(b)float16)
-        return loss_inc, y_pred_ens.to(dtype=y.dtype) if return_pred_ens else None
+        return loss_inc, y_pred_ens if return_pred_ens else None
 
     def rollout_step(
         self,
