@@ -582,7 +582,6 @@ class EnsNativeGridDataset(NativeGridDataset):
             end_eda = i + self.timeincrement
 
             if self.eda_flag:
-                assert 1 > 2, "random stream is needed here for eda member sampling"
                 eda_member_gen_idx, eda_member_idx = self.sample_eda_members(self.num_eda_members)
             else:
                 eda_member_gen_idx = None
