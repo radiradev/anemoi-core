@@ -850,12 +850,10 @@ class GraphEnsForecaster(GraphForecaster):
                 Predictions if validation mode
         """
 
-        if ens_comm_group_size > 1 or model_comm_group.size() > 1:
-            y_pred_ens = y_pred.clone() # for bwd
         # gather ensemble members, 
         # full ensemble is only materialised on GPU in checkpointed region    
         y_pred_ens = gather_ensemble_members(
-            y_pred_ens,
+            y_pred.clone(), # for bwd because we checkpoint this region
             dim=1,
             shapes=[y_pred.shape] * ens_comm_group_size,
             nens=nens_per_device,
