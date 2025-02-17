@@ -113,15 +113,9 @@ class BaseImputer(BasePreprocessor, ABC):
 
             LOGGER.debug(f"Imputer: replacing NaNs in {name} with value {self.replacement[-1]}")
 
-    def _expand_subset_mask(
-        self, x: torch.Tensor, idx_src: int, nan_locations: torch.Tensor | None = None
-    ) -> torch.Tensor:
+    def _expand_subset_mask(self, x: torch.Tensor, idx_src: int, nan_locations: torch.Tensor) -> torch.Tensor:
         """Expand the subset of the mask to the correct shape."""
-        if nan_locations is None:
-            # If no mask is provided, use the cached one
-            return self.nan_locations[:, idx_src].expand(*x.shape[:-2], -1)
-        else:
-            return nan_locations[:, idx_src].expand(*x.shape[:-2], -1)
+        return nan_locations[:, idx_src].expand(*x.shape[:-2], -1)
 
     def get_nans(self, x: torch.Tensor) -> torch.Tensor:
         """get NaN mask from data"""
@@ -199,7 +193,7 @@ class BaseImputer(BasePreprocessor, ABC):
         # Replace values
         for idx_src, idx_dst in zip(self.index_training_input, index):
             if idx_dst is not None:
-                x[..., idx_dst][self._expand_subset_mask(x, idx_src)] = torch.nan
+                x[..., idx_dst][self._expand_subset_mask(x, idx_src, self.nan_locations)] = torch.nan
         return x
 
 
@@ -327,11 +321,13 @@ class CopyImputer(BaseImputer):
         for idx_src, (idx_dst, value) in zip(self.index_training_input, zip(index, self.replacement)):
             if idx_dst is not None:
                 assert not torch.isnan(
-                    x[..., self.data_indices.data.input.name_to_index[value]][self._expand_subset_mask(x, idx_src)]
+                    x[..., self.data_indices.data.input.name_to_index[value]][
+                        self._expand_subset_mask(x, idx_src, self.nan_locations)
+                    ]
                 ).any(), f"NaNs found in {value}."
-                x[..., idx_dst][self._expand_subset_mask(x, idx_src)] = x[
+                x[..., idx_dst][self._expand_subset_mask(x, idx_src, self.nan_locations)] = x[
                     ..., self.data_indices.data.input.name_to_index[value]
-                ][self._expand_subset_mask(x, idx_src)]
+                ][self._expand_subset_mask(x, idx_src, self.nan_locations)]
         return x
 
     def transform(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
