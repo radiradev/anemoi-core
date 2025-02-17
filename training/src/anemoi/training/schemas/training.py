@@ -27,8 +27,7 @@ from anemoi.training.schemas.utils import allowed_values
 
 from .utils import BaseModel
 
-if TYPE_CHECKING:
-    from .schedulers import RolloutSchemas
+from .schedulers import RolloutSchemas
 
 
 class GradientClip(BaseModel):
@@ -213,7 +212,7 @@ class TrainingSchema(BaseModel):
     "List of validation metrics configurations. These metrics "
     scale_validation_metrics: ScaleValidationMetrics
     """Configuration for scaling validation metrics."""
-    rollout: RolloutSchemas  # = Field(discriminator='_target_')
+    rollout: RolloutSchemas
     "Rollout configuration."
     max_epochs: Union[PositiveInt, None] = None
     "Maximum number of epochs, stops earlier if max_steps is reached first."

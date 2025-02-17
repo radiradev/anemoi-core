@@ -19,9 +19,8 @@ from pydantic import PositiveInt
 
 from .utils import BaseModel
 
-if TYPE_CHECKING:
-    from anemoi.training.schedulers.schedulers import VALID_INCREMENT_TYPE
-    from anemoi.training.schedulers.schedulers import VALID_STEP_TYPES
+from anemoi.training.schedulers.schedulers import VALID_INCREMENT_TYPE
+from anemoi.training.schedulers.schedulers import VALID_STEP_TYPES
 
 
 class ImplementedRollout(str, Enum):
