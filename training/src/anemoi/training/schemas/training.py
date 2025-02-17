@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from enum import Enum
 from functools import partial
-from typing import TYPE_CHECKING
 from typing import Annotated
 from typing import Literal
 from typing import Union
@@ -27,7 +26,7 @@ from anemoi.training.schemas.utils import allowed_values
 
 from .utils import BaseModel
 
-from .schedulers import RolloutSchemas
+from .schedulers import RolloutSchemas # noqa: TC003
 
 
 class GradientClip(BaseModel):
