@@ -572,7 +572,7 @@ class GraphForecaster(pl.LightningModule):
         loss *= 1.0 / self.rollout
         return loss, metrics, y_preds
 
-    def allgather_batch(self, batch: torch.Tensor, grid_shard_shapes: list) -> torch.Tensor:
+    def allgather_batch(self, batch: torch.Tensor, grid_shard_shapes: list = None) -> torch.Tensor:
         """Allgather the batch-shards across the reader group.
 
         Parameters
@@ -585,6 +585,9 @@ class GraphForecaster(pl.LightningModule):
         torch.Tensor
             Allgathered (full) batch
         """
+        if grid_shard_shapes is None: # backward compatibility
+            grid_shard_shapes = self.grid_indices.get_shard_shapes()
+
         grid_size = self.grid_indices.grid_size  # number of points
 
         if grid_size == batch.shape[-2]:
