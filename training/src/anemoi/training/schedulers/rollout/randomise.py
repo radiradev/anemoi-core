@@ -136,16 +136,16 @@ class RandomList(BaseRandom):
 class RandomRange(RandomList):
     """`RandomRange` is a rollout scheduler that randomly selects a rollout from a range of values."""
 
-    def __init__(self, minimum: int = 1, maximum: int = 1, step: int = 1):
+    def __init__(self, minimum: int, maximum: int, step: int = 1):
         """
         RandomRange is a rollout scheduler that randomly selects a rollout from a range of values.
 
         Parameters
         ----------
-        minimum : int, optional
-            Minimum rollout to choose from, by default 1
-        maximum : int, optional
-            Maximum rollout to choose from, inclusive., by default 1
+        minimum : int,
+            Minimum rollout to choose from.
+        maximum : int,
+            Maximum rollout to choose from, inclusive.
         step : int, optional
             Step size for the range, by default 1
 
@@ -175,8 +175,8 @@ class IncreasingRandom(IncrementMixin, BaseRandom):
 
     def __init__(
         self,
-        minimum: int = 1,
-        maximum: int = 1,
+        minimum: int,
+        maximum: int,
         range_step: int = 1,
         every_n: int = 1,
         increment: VALID_INCREMENT_TYPE = 1,
@@ -189,12 +189,11 @@ class IncreasingRandom(IncrementMixin, BaseRandom):
 
         Parameters
         ----------
-        minimum : int, optional
-            Minimum rollout to choose from, by default 1
-        maximum : int, optional
+        minimum : int,
+            Minimum rollout to choose from,
+        maximum : int,
             Maximum rollout to choose from,
             Can be -1 for no maximum,
-            by default 1.
         range_step : int, optional
             Step size for the range, by default 1
         every_n : int, optional
