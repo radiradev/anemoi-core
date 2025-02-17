@@ -17,8 +17,8 @@ from typing import Union
 from pydantic import Field
 from pydantic import PositiveInt
 
-from anemoi.training.schedulers.schedulers import VALID_INCREMENT_TYPE # noqa: TC001
-from anemoi.training.schedulers.schedulers import VALID_STEP_TYPES # noqa: TC001
+from anemoi.training.schedulers.schedulers import VALID_INCREMENT_TYPE  # noqa: TC001
+from anemoi.training.schedulers.schedulers import VALID_STEP_TYPES  # noqa: TC001
 
 from .utils import BaseModel
 
