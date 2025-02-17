@@ -486,9 +486,11 @@ class GraphForecaster(pl.LightningModule):
         metrics = {}
         y_preds = []
 
+        rollout_value = int(self.rollout)
+
         for loss_next, metrics_next, y_preds_next in self.rollout_step(
             batch,
-            rollout=int(self.rollout),
+            rollout=rollout_value,
             training_mode=True,
             validation_mode=validation_mode,
         ):
@@ -496,7 +498,7 @@ class GraphForecaster(pl.LightningModule):
             metrics.update(metrics_next)
             y_preds.extend(y_preds_next)
 
-        loss *= 1.0 / int(self.rollout)
+        loss *= 1.0 / rollout_value
         return loss, metrics, y_preds
 
     def allgather_batch(self, batch: torch.Tensor) -> torch.Tensor:

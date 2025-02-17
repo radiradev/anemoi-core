@@ -140,6 +140,12 @@ class RolloutScheduler(Scheduler):
     def __rsub__(self, other: int) -> int:
         return other - self.rollout
 
+    def __rdiv__(self, other: int | float) -> int | float:
+        return other / self.rollout
+
+    def __rfloordiv__(self, other: int | float) -> int:
+        return other // self.rollout
+
 
 class Static(RolloutScheduler):
     """`Static` is a rollout scheduler that always returns the same rollout value."""
