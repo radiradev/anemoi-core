@@ -163,7 +163,7 @@ class BaseWeightedLoss(nn.Module, ABC):
         global_weight_sum = local_weight_sum if grid_shard_slice is None else reduce_tensor(local_weight_sum, group)
         x /= global_weight_sum
 
-        return out if grid_shard_slice is None else reduce_tensor(out, group)
+        return x if grid_shard_slice is None else reduce_tensor(x, group)
 
     @abstractmethod
     def forward(
