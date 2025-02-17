@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from enum import Enum
 from functools import partial
+from typing import TYPE_CHECKING
 from typing import Annotated
 from typing import Literal
 from typing import Union
@@ -25,6 +26,9 @@ from pydantic import model_validator
 from anemoi.training.schemas.utils import allowed_values
 
 from .utils import BaseModel
+
+if TYPE_CHECKING:
+    from .schedulers import RolloutSchemas
 
 
 class GradientClip(BaseModel):
@@ -48,17 +52,6 @@ class SWA(BaseModel):
     "Enable stochastic weight averaging."
     lr: NonNegativeFloat = Field(example=1.0e-4)
     "Learning rate for SWA."
-
-
-class Rollout(BaseModel):
-    """Rollout configuration."""
-
-    start: PositiveInt = Field(example=1)
-    "Number of rollouts to start with."
-    epoch_increment: NonNegativeInt = Field(example=0)
-    "Number of epochs to increment the rollout."
-    max: PositiveInt = Field(example=1)
-    "Maximum number of rollouts."
 
 
 class LR(BaseModel):
@@ -220,7 +213,7 @@ class TrainingSchema(BaseModel):
     "List of validation metrics configurations. These metrics "
     scale_validation_metrics: ScaleValidationMetrics
     """Configuration for scaling validation metrics."""
-    rollout: Rollout = Field(default_factory=Rollout)
+    rollout: RolloutSchemas  # = Field(discriminator='_target_')
     "Rollout configuration."
     max_epochs: Union[PositiveInt, None] = None
     "Maximum number of epochs, stops earlier if max_steps is reached first."
