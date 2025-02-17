@@ -628,8 +628,9 @@ class GraphForecaster(pl.LightningModule):
         return metrics
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
-        train_loss, _, _ = self._step(batch, batch_idx)
-        self.log(
+        with torch.autocast(device_type="cuda", cache_enabled=False):
+            train_loss, _, _ = self._step(batch, batch_idx)
+            self.log(
             f"train_{getattr(self.loss, 'name', self.loss.__class__.__name__.lower())}",
             train_loss,
             on_epoch=True,
@@ -638,16 +639,16 @@ class GraphForecaster(pl.LightningModule):
             logger=self.logger_enabled,
             batch_size=batch.shape[0],
             sync_dist=True,
-        )
-        self.log(
+            )
+            self.log(
             "rollout",
             float(self.rollout),
             on_step=True,
             logger=self.logger_enabled,
             rank_zero_only=True,
             sync_dist=False,
-        )
-        return train_loss
+            )
+            return train_loss
 
     def lr_scheduler_step(self, scheduler: CosineLRScheduler, metric: None = None) -> None:
         """Step the learning rate scheduler by Pytorch Lightning.

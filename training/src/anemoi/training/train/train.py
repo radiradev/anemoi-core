@@ -58,6 +58,14 @@ class AnemoiTrainer:
             Config object from Hydra.
 
         """
+        if os.getenv("MAN_MEM", "0") != "0":
+            # Load the allocator
+            #new_alloc = torch.cuda.memory.CUDAPluggableAllocator('/p/home/jusers/obrien2/jedi/pytorch-mem/alloc.so', 'my_man_malloc', 'my_free')
+            new_alloc = torch.cuda.memory.CUDAPluggableAllocator('/p/home/jusers/obrien2/jedi/gh_memory/alloc.so', 'numa_malloc', 'my_free')
+            #'alloc.so', 'my_malloc', 'my_free')
+            # Swap the current allocator
+            torch.cuda.memory.change_current_allocator(new_alloc)
+
         # Allow for lower internal precision of float32 matrix multiplications.
         # This can increase performance (and TensorCore usage, where available).
         torch.set_float32_matmul_precision("high")
@@ -440,11 +448,4 @@ def main(config: DictConfig) -> None:
 
 
 if __name__ == "__main__":
-    if os.getenv("MAN_MEM", "0") != "0":
-        # Load the allocator
-        new_alloc = torch.cuda.memory.CUDAPluggableAllocator('/p/home/jusers/obrien2/jedi/pytorch-mem/alloc.so', 'my_man_malloc', 'my_free')
-        #'alloc.so', 'my_malloc', 'my_free')
-        # Swap the current allocator
-        torch.cuda.memory.change_current_allocator(new_alloc)
-
     main()

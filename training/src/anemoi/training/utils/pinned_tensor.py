@@ -18,43 +18,7 @@ import torch._C as _C
 
 LOGGER = logging.getLogger(__name__)
 
-#class SmartTensor(torch.Tensor):
-  #  @staticmethod
-  #  def __new__(cls, data, pinned=False, *args, **kwargs):
-  #      if pinned:
-  #          data = data.pin_memory()  # Allocate in pinned memory
-  #      return super().__new__(cls, data, *args, **kwargs)
-
-    #def __init__(self, data, pinned=False, **kwargs):
-    #    self._pinned=pinned
-
-    #@classmethod
-    #def __torch_function__(cls, func, types, args=(), kwargs=None):
-        # NOTE: Logging calls Tensor.__repr__, so we can't log __repr__ without infinite recursion
-        #if func is not torch.Tensor.__repr__:
-            #logging.info(f"func: {func.__name__}, args: {args!r}, kwargs: {kwargs!r}")
-        #if func is not torch.Tensor.__repr__:
-        #    print(f"func: {func.__name__}, args: {args!r}, kwargs: {kwargs!r}")
-        #device_args=()
-        #for arg in args:
-         #   if hasattr(arg, '_pinned') and arg._pinned:
-         #       gpu_temp=arg.to("cuda")
-         #       #result = super().__torch_function__(func, types, args, kwargs)
-         #       device_args.push(gpu_temp)
-         #       #gpu_temp=None
-         #       #del gpu_temp 
-         #   else:
-         #       device_args.push(args)
-
-        #if kwargs is None:
-        #    kwargs = {}
-        #result = super().__torch_function__(func, types, device_args, kwargs)
-        #for darg in device_args:
-        #    darg = None
-        #return result
-
 #https://pytorch.org/docs/stable/notes/extending.html#extending-torch-with-a-tensor-wrapper-type
-#class PinnedTensor(object):
 class PinnedTensor(torch.Tensor):
     '''
     Extension of the default torch.Tensor
@@ -76,18 +40,6 @@ class PinnedTensor(torch.Tensor):
 
     def __init__(self, data, pinned=True, **kwargs):
         self._pinned = pinned
-        #if self._pinned:
-        #    #self._t = torch.tensor(data.pin_memory(), device="cpu", pin_memory=True, **kwargs)
-        #    self._t = torch.as_tensor(data.to("cpu").pin_memory(), **kwargs)
-        #else:
-        #    self._t = torch.tensor(data, **kwargs)
-
-    #def __getattr__(self, name):
-    #    """Delegate attribute access to the underlying tensor."""
-    #    return getattr(self._t, name)
-
-    #def __repr__(self):
-    #    return f"PinnedTensor({self._t})"
 
     #need this for one of the profiling outputs
     @classmethod

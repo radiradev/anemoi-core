@@ -35,14 +35,14 @@ from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
 
-class SaveToCpu(nn.Module):
-    def __init__(self, module):
-        super().__init__()
-        self.module = module
-
-    def forward(self, *args, **kwargs):
-        with torch.autograd.graph.save_on_cpu(pin_memory=True, offload_with_streams=True):
-            return self.module(*args, **kwargs)
+#class SaveToCpu(nn.Module):
+#    def __init__(self, module):
+#        super().__init__()
+#        self.module = module
+#
+#    def forward(self, *args, **kwargs):
+#        with torch.autograd.graph.save_on_cpu(pin_memory=True, offload_with_streams=True):
+#            return self.module(*args, **kwargs)
 
 
 class BaseMapper(nn.Module, ABC):
@@ -74,8 +74,8 @@ class BaseMapper(nn.Module, ABC):
     def offload_layers(self, cpu_offload):
         if cpu_offload:
             #self.proc = nn.ModuleList([offload_wrapper(x) for x in self.proc])
-            #self.proc = offload_wrapper(self.proc)
-            self.proc = SaveToCpu(self.proc)
+            self.proc = offload_wrapper(self.proc)
+            #self.proc = SaveToCpu(self.proc)
 
     def pre_process(self, x, shard_shapes, model_comm_group=None) -> tuple[Tensor, Tensor, tuple[int], tuple[int]]:
         """Pre-processing for the Mappers.

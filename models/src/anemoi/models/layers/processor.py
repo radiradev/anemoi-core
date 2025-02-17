@@ -29,14 +29,14 @@ from anemoi.models.layers.graph import TrainableTensor
 from anemoi.models.layers.mapper import GraphEdgeMixin
 from anemoi.utils.config import DotDict
 
-class SaveToCpu(nn.Module):
-    def __init__(self, module):
-        super().__init__()
-        self.module = module
+#class SaveToCpu(nn.Module):
+    #def __init__(self, module):
+    #    super().__init__()
+    #    self.module = module
 
-    def forward(self, *args, **kwargs):
-        with torch.autograd.graph.save_on_cpu(pin_memory=True, offload_with_streams=True):
-            return self.module(*args, **kwargs)
+    #def forward(self, *args, **kwargs):
+        #with torch.autograd.graph.save_on_cpu(pin_memory=True, offload_with_streams=True):
+        #    return self.module(*args, **kwargs)
 
 class BaseProcessor(nn.Module, ABC):
     """Base Processor."""
@@ -65,8 +65,8 @@ class BaseProcessor(nn.Module, ABC):
 
     def offload_layers(self, cpu_offload):
         if cpu_offload:
-            #self.proc = nn.ModuleList([offload_wrapper(x) for x in self.proc])
-            self.proc = nn.ModuleList([SaveToCpu(x) for x in self.proc])
+            self.proc = nn.ModuleList([offload_wrapper(x) for x in self.proc])
+            #self.proc = nn.ModuleList([SaveToCpu(x) for x in self.proc])
 
     def build_layers(self, processor_chunk_class, *args, **kwargs) -> None:
         """Build Layers."""

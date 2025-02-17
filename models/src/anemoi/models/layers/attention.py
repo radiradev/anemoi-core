@@ -113,6 +113,7 @@ class MultiHeadSelfAttention(nn.Module):
     def set_attention_function(self):
         attn_funcs = {
             "flash_attention": FlashAttentionWrapper,
+            "flash_attention_v3": FlashAttentionV3Wrapper,
             "scaled_dot_product_attention": SDPAAttentionWrapper,
         }
         assert (
@@ -229,6 +230,44 @@ class SDPAAttentionWrapper(nn.Module):
 
         return out
 
+
+class FlashAttentionV3Wrapper(nn.Module):
+    """Wrapper for Flash attention V3. This is optimised for Hopper GPUs"""
+
+    def __init__(self):
+        super().__init__()
+        try:
+            import flash_attn_interface as flash_attn
+        except ImportError:
+            raise ImportError("Error: Flash-attn not installed. Please install flash-attn to use Flash Attention")
+
+        self.attention = flash_attn.flash_attn_func
+
+    def forward(
+        self,
+        query,
+        key,
+        value,
+        batch_size: int,
+        causal: bool = False,
+        window_size: int = None,
+        dropout_p: float = 0.0,
+        softcap: Optional[float] = None,
+        alibi_slopes: torch.Tensor = None,
+    ):
+        query, key, value = (
+            einops.rearrange(t, "batch heads grid vars -> batch grid heads vars") for t in (query, key, value)
+        )
+
+        out = self.attention(
+            query,
+            key,
+            value,
+            causal=False,
+            window_size=(window_size, window_size),
+        )[0]
+        out = einops.rearrange(out, "batch grid heads vars -> batch heads grid vars")
+        return out
 
 class FlashAttentionWrapper(nn.Module):
     """Wrapper for Flash attention."""
