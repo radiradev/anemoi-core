@@ -24,9 +24,8 @@ from pydantic import model_validator
 
 from anemoi.training.schemas.utils import allowed_values
 
+from .schedulers import RolloutSchemas # noqa: TC001
 from .utils import BaseModel
-
-from .schedulers import RolloutSchemas # noqa: TC003
 
 
 class GradientClip(BaseModel):
