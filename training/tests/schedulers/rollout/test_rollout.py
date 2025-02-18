@@ -7,6 +7,9 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
+import pytest
+
+from anemoi.training.schedulers.rollout import InterEpochRolloutMixin
 from anemoi.training.schedulers.rollout import RolloutScheduler
 from anemoi.training.schedulers.rollout import Static
 
@@ -59,3 +62,44 @@ def test_int_conversion() -> None:
     sched = DebugScheduler()
     with sched.at(epoch=10):
         assert int(sched) == 10
+
+
+class DebugInterEpochScheduler(DebugScheduler, InterEpochRolloutMixin):
+    pass
+
+
+def test_adjust_maximum_simple() -> None:
+    sched = DebugInterEpochScheduler(adjust_maximum=1)
+    with sched.at(epoch=10):
+        assert sched.current_maximum == 11
+
+
+@pytest.mark.parametrize(
+    ("epoch", "step", "expected_maximum"),
+    [
+        (None, 5, 1),
+        (None, 10, 2),
+        (10, None, 11),
+        (10, 10, 12),
+        (10, 100, 12),
+    ],
+)
+def test_adjust_maximum_dictionary(epoch: int, step: int, expected_maximum: int) -> None:
+    sched = DebugInterEpochScheduler(adjust_maximum={0: 1, 10: 2})
+
+    with sched.at(epoch=epoch, step=step):
+        assert sched.current_maximum == expected_maximum
+
+
+@pytest.mark.parametrize(
+    ("epoch", "step", "expected_maximum"),
+    [
+        (5, None, 6),
+        (10, None, 12),
+    ],
+)
+def test_adjust_maximum_dictionary_epoch(epoch: int, step: int, expected_maximum: int) -> None:
+    sched = DebugInterEpochScheduler(adjust_maximum={"epoch": {0: 1, 10: 2}})
+
+    with sched.at(epoch=epoch, step=step):
+        assert sched.current_maximum == expected_maximum

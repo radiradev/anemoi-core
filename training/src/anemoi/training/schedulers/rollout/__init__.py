@@ -10,8 +10,13 @@
 from __future__ import annotations
 
 from abc import abstractmethod
+from typing import TYPE_CHECKING
 
+from anemoi.training.schedulers.schedulers import IncrementMixin as IncrementMixin
 from anemoi.training.schedulers.schedulers import Scheduler
+
+if TYPE_CHECKING:
+    from anemoi.training.schedulers.schedulers import VALID_INCREMENT_TYPE
 
 
 class RolloutScheduler(Scheduler):
@@ -149,7 +154,7 @@ class RolloutScheduler(Scheduler):
 class Static(RolloutScheduler):
     """`Static` is a rollout scheduler that always returns the same rollout value."""
 
-    def __init__(self, rollout_value: int):
+    def __init__(self, rollout_value: int, **kwargs):
         """
         `Static` is a rollout scheduler that always returns the same rollout value.
 
@@ -167,6 +172,7 @@ class Static(RolloutScheduler):
             RollSched.rollout_at(epoch = 5)
             # 5
         """
+        super().__init__(**kwargs)
         self._rollout_value = rollout_value
 
     @property
@@ -184,7 +190,7 @@ class Static(RolloutScheduler):
 class InterEpochRolloutMixin(RolloutScheduler):
     """Mixin to enable inter epoch rollout changes."""
 
-    def __init__(self, adjust_maximum: int, **kwargs):
+    def __init__(self, adjust_maximum: VALID_INCREMENT_TYPE, **kwargs):
         """
         Mixin to enable inter epoch rollout changes.
 
@@ -192,12 +198,46 @@ class InterEpochRolloutMixin(RolloutScheduler):
 
         Parameters
         ----------
-        adjust_maximum : int
+        adjust_maximum : VALID_INCREMENT_TYPE
             Value to adjust `current_maximum` by
+            Can be int, dict[int, int], or dict[Literal["step", "epoch"], dict[int, int]].
+            If dictionary, resolved instantaneously in the same way increments are for stepped based rollouts.
+            So, maximum's will not accumulate over time.
+
+            If a dict[int, int], the default step_type is 'step'.
+
+        Example:
+
+            from anemoi.training.schedulers.rollout import InterEpochRolloutMixin, Static
+            class InterEpochRollout(InterEpochRolloutMixin, Static):
+                pass
+            InterEpochRollout(rollout_value = 1, adjust_maximum = 1).current_maximum
+            # 2
+            InterEpochRollout(rollout_value = 1, adjust_maximum = {0: 0, 10: 1}).current_maximum
+            # 1
+            RollSched = InterEpochRollout(rollout_value = 1, adjust_maximum = {0: 0, 10: 1})
+            RollSched.rollout_at(step = 10)
+            # 2
+            RollSched.rollout_at(step = 100)
+            # 2
+            RollSched = InterEpochRollout(rollout_value = 1, adjust_maximum = {'epoch': {0: 0, 10: 1}})
+            RollSched.rollout_at(epoch = 10)
+            # 2
+            RollSched.rollout_at(epoch = 100)
+            # 2
+
+
         """
         super().__init__(**kwargs)
         self._adjust_maximum = adjust_maximum
 
     @property
     def current_maximum(self) -> int:
-        return super().current_maximum + self._adjust_maximum
+        from anemoi.training.schedulers.schedulers import resolve_increment_value
+
+        return super().current_maximum + resolve_increment_value(
+            self._adjust_maximum,
+            self._step,
+            self._epoch,
+            default_step_type="step",
+        )

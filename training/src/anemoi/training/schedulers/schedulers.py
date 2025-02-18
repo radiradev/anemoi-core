@@ -162,6 +162,77 @@ class Scheduler(ABC):
         return self
 
 
+def resolve_increment_value(
+    increment: VALID_INCREMENT_TYPE,
+    step: int | None,
+    epoch: int | None = None,
+    *,
+    default_step_type: VALID_STEP_TYPES = STEPTYPE.epoch,
+) -> int:
+    """
+    Resolve value from an increment dictionary based on the step and epoch.
+
+    Parameters
+    ----------
+    increment : VALID_INCREMENT_TYPE
+        Increment dictionary to resolve.
+        Can be an int, a dictionary of ints, or a dictionary of dictionaries.
+    step : int | None, optional
+        Step to resolve at
+        by default None
+    epoch : int | optional
+        Epoch to resolve at
+        by default None
+    default_step_type : VALID_STEP_TYPES, optional
+        Value of either step or epoch to resolve at,
+        The associated key must be provided.
+        by default STEPTYPE.epoch
+
+    Returns
+    -------
+    int
+        Resolved increment value
+
+    Raises
+    ------
+    ValueError
+        If a step or epoch is not provided when increment dictionary keys are int, or str.
+    TypeError
+        If increment dictionary cannot be resolved.
+    """
+    if isinstance(increment, int):
+        return increment
+
+    if isinstance(next(iter(increment.keys())), int):
+        search_val = step if default_step_type == STEPTYPE.step else epoch
+        if search_val is None:
+            error_msg = (
+                f"As `step_type` was set to {default_step_type}, "
+                f"{default_step_type} must be provided when increment dictionary keys are int."
+            )
+            raise ValueError(error_msg)
+        return increment.get(get_closest_key(increment, search_val), 0)
+
+    if isinstance(next(iter(increment.keys())), str):
+        increment_step_type = next(iter(increment.keys()))
+        if increment_step_type not in STEPTYPE.__members__.values():
+            error_msg = "Increment dictionary keys must be either 'step' or 'epoch'."
+            raise ValueError(error_msg)
+
+        increment_dict = increment[increment_step_type]
+        inc_search_val = step if increment_step_type == STEPTYPE.step else epoch
+        if inc_search_val is None:
+            error_msg = (
+                f"As the increment dictionary uses {increment_step_type}, {increment_step_type} must be provided."
+            )
+            raise ValueError(error_msg)
+
+        return increment_dict.get(get_closest_key(increment_dict, inc_search_val), 0)
+
+    error_msg = "Increment dictionary keys must be either int or a single str."
+    raise TypeError(error_msg)
+
+
 class IncrementMixin(Scheduler):
     """Mixin class for schedulers that have an incrementing value based on the steps and epochs."""
 
@@ -203,27 +274,7 @@ class IncrementMixin(Scheduler):
         int
             Instantaneous increment
         """
-        search_val = step if self._step_type == STEPTYPE.step else epoch
-
-        if isinstance(self._increment, int):
-            return self._increment
-
-        if isinstance(next(iter(self._increment.keys())), int):
-            return self._increment.get(get_closest_key(self._increment, search_val), 0)
-
-        if isinstance(next(iter(self._increment.keys())), str):
-            increment_step_type = next(iter(self._increment.keys()))
-            if increment_step_type not in STEPTYPE.__members__.values():
-                error_msg = "Increment dictionary keys must be either 'step' or 'epoch'."
-                raise ValueError(error_msg)
-
-            increment_dict = self._increment[increment_step_type]
-            inc_search_val = step if increment_step_type == STEPTYPE.step else epoch
-
-            return increment_dict.get(get_closest_key(increment_dict, inc_search_val), 0)
-
-        error_msg = "Increment dictionary keys must be either int or a single str."
-        raise TypeError(error_msg)
+        return resolve_increment_value(self._increment, step, epoch, default_step_type=self._step_type)
 
     def get_total_increment(
         self,
