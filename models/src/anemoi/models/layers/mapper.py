@@ -440,9 +440,6 @@ class GraphTransformerBackwardMapper(BackwardMapperPostProcessMixin, GraphTransf
         return x_src, x_dst, shapes_src, shapes_dst
 
 
-# TODO add in_out_sharded support for GNNMapper
-
-
 class GNNBaseMapper(GraphEdgeMixin, BaseMapper):
     """Base for Graph Neural Network Mapper from hidden -> data or data -> hidden."""
 
