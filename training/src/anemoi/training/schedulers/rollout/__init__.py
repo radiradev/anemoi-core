@@ -162,14 +162,14 @@ class Static(RolloutScheduler):
         rollout_value : int
             Rollout value to return.
 
-        Example:
-
-            from anemoi.training.schedulers.rollout import Static
-            RollSched = Static(rollout_value = 5)
-            RollSched.rollout_at(epoch = 1)
-            # 5
-            RollSched.rollout_at(epoch = 5)
-            # 5
+        Example
+        --------
+        >>> from anemoi.training.schedulers.rollout import Static
+        >>> RollSched = Static(rollout_value = 5)
+        >>> RollSched.rollout_at(epoch = 1)
+        5
+        >>> RollSched.rollout_at(epoch = 5)
+        5
         """
         super().__init__(**kwargs)
         self._rollout_value = rollout_value
@@ -205,27 +205,25 @@ class InterEpochRolloutMixin(RolloutScheduler):
 
             If a dict[int, int], the default step_type is 'step'.
 
-        Example:
-
-            from anemoi.training.schedulers.rollout import InterEpochRolloutMixin, Static
-            class InterEpochRollout(InterEpochRolloutMixin, Static):
-                pass
-            InterEpochRollout(rollout_value = 1, adjust_maximum = 1).current_maximum
-            # 2
-            InterEpochRollout(rollout_value = 1, adjust_maximum = {0: 0, 10: 1}).current_maximum
-            # 1
-            RollSched = InterEpochRollout(rollout_value = 1, adjust_maximum = {0: 0, 10: 1})
-            RollSched.rollout_at(step = 10)
-            # 2
-            RollSched.rollout_at(step = 100)
-            # 2
-            RollSched = InterEpochRollout(rollout_value = 1, adjust_maximum = {'epoch': {0: 0, 10: 1}})
-            RollSched.rollout_at(epoch = 10)
-            # 2
-            RollSched.rollout_at(epoch = 100)
-            # 2
-
-
+        Example
+        --------
+        >>> from anemoi.training.schedulers.rollout import InterEpochRolloutMixin, Static
+        >>> class InterEpochRollout(InterEpochRolloutMixin, Static):
+        >>>     pass
+        >>> InterEpochRollout(rollout_value = 1, adjust_maximum = 1).current_maximum
+        2
+        >>> InterEpochRollout(rollout_value = 1, adjust_maximum = {0: 0, 10: 1}).current_maximum
+        1
+        >>> RollSched = InterEpochRollout(rollout_value = 1, adjust_maximum = {0: 0, 10: 1})
+        >>> RollSched.rollout_at(step = 10)
+        2
+        >>> RollSched.rollout_at(step = 100)
+        2
+        >>> RollSched = InterEpochRollout(rollout_value = 1, adjust_maximum = {'epoch': {0: 0, 10: 1}})
+        >>> RollSched.rollout_at(epoch = 10)
+        2
+        >>> RollSched.rollout_at(epoch = 100)
+        2
         """
         super().__init__(**kwargs)
         self._adjust_maximum = adjust_maximum

@@ -54,21 +54,21 @@ class Stepped(RolloutScheduler, IncrementMixin):
             Type of step, either 'epoch' or 'step'.
             by default 'epoch'.
 
-        Example:
-
-            from anemoi.training.schedulers.rollout.stepped import Stepped
-
-            RollSched = Stepped(minimum = 1, maximum = 10, every_n = 5, increment = 1, step_type = "epoch")
-            RollSched.rollout
-            # 1
-            RollSched.at(epoch = 5, epoch_record = {})
-            # 2
-
-            RollSched = Stepped(minimum = 1, maximum = 10, every_n = 1, increment = {0: 0, 10: 1}, step_type = "epoch")
-            RollSched.at(epoch = 2, epoch_record = {}).rollout
-            # 1
-            RollSched.at(epoch = 10, epoch_record = {}).rollout
-            # 2, and then increments of 1
+        Example
+        --------
+        >>> from anemoi.training.schedulers.rollout.stepped import Stepped
+        >>> RollSched = Stepped(minimum = 1, maximum = 10, every_n = 5, increment = 1, step_type = "epoch")
+        >>> RollSched.rollout
+        1
+        >>> RollSched.at(epoch = 5, epoch_record = {})
+        2
+        >>> RollSched = Stepped(minimum = 1, maximum = 10, every_n = 1, increment = {0: 0, 10: 1}, step_type = "epoch")
+        >>> RollSched.at(epoch = 2, epoch_record = {}).rollout
+        1
+        >>> RollSched.at(epoch = 10, epoch_record = {}).rollout
+        2
+        >>> RollSched.at(epoch = 11, epoch_record = {}).rollout
+        3
         """
         super().__init__(every_n=every_n, step_type=step_type, increment=increment)
 

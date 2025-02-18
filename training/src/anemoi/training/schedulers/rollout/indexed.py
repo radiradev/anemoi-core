@@ -44,17 +44,16 @@ class PositionalIndexed(RolloutScheduler):
             Type of step, either 'epoch' or 'step'.
             by default 'epoch'.
 
-        Example:
-
-            from anemoi.training.schedulers.rollout.indexed import PositionalIndexed
-
-            RollSched = PositionalIndexed(rollouts = [1, 2, 3, 4], num_times_per_element = 2, step_type = 'epoch')
-            RollSched.at(epoch = 1).rollout
-            # 1
-            RollSched.at(epoch = 2).rollout
-            # 1
-            RollSched.at(epoch = 3).rollout
-            # 2
+        Example
+        --------
+        >>> from anemoi.training.schedulers.rollout.indexed import PositionalIndexed
+        >>> RollSched = PositionalIndexed(rollouts = [1, 2, 3, 4], num_times_per_element = 2, step_type = 'epoch')
+        >>> RollSched.at(epoch = 1).rollout
+        1
+        >>> RollSched.at(epoch = 2).rollout
+        1
+        >>> RollSched.at(epoch = 3).rollout
+        2
         """
         super().__init__()
         if step_type not in STEPTYPE.__members__.values():
@@ -126,15 +125,14 @@ class Lookup(RolloutScheduler):
             Type of step, either 'epoch' or 'step'.
             by default 'epoch'
 
-        Example:
-
-            from anemoi.training.schedulers.rollout.indexed import Lookup
-
-            RollSched = Lookup(rollouts = {0: 1, 5: 2, 10: 3}, step_type = 'epoch')
-            RollSched.at(epoch = 1).rollout
-            # 1
-            RollSched.at(epoch = 5).rollout
-            # 2
+        Example
+        --------
+        >>> from anemoi.training.schedulers.rollout.indexed import Lookup
+        >>> RollSched = Lookup(rollouts = {0: 1, 5: 2, 10: 3}, step_type = 'epoch')
+        >>> RollSched.at(epoch = 1).rollout
+        1
+        >>> RollSched.at(epoch = 5).rollout
+        2
         """
         super().__init__(**kwargs)
         self._rollouts = rollouts

@@ -74,16 +74,15 @@ class Scheduler(ABC):
             was updated. by default None
 
 
-        Example:
-
-            from anemoi.training.schedulers.schedulers import Scheduler
-
-            scheduler = Scheduler()
-            with scheduler.at(step = 10, epoch = 1):
-                print(scheduler._step)
-                # 10
-            print(scheduler._step)
-            # 0
+        Example
+        --------
+        >>> from anemoi.training.schedulers.schedulers import Scheduler
+        >>> scheduler = Scheduler()
+        >>> with scheduler.at(step = 10, epoch = 1):
+        >>>     print(scheduler._step)
+        10
+        >>> print(scheduler._step)
+        0
 
         Returns
         -------
