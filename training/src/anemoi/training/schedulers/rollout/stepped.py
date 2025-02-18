@@ -55,7 +55,7 @@ class Stepped(RolloutScheduler, IncrementMixin):
             by default 'epoch'.
 
         Example
-        --------
+        -------
         >>> from anemoi.training.schedulers.rollout.stepped import Stepped
         >>> RollSched = Stepped(minimum = 1, maximum = 10, every_n = 5, increment = 1, step_type = "epoch")
         >>> RollSched.rollout

@@ -26,7 +26,7 @@ class RolloutScheduler(Scheduler):
     A rollout scheduler is an object that manages the rollout of a training loop.
 
     Example
-    --------
+    -------
     >>> RollSched = RolloutScheduler()
     >>> for epoch in range(20):
     >>>    for step in range(100):
@@ -163,7 +163,7 @@ class Static(RolloutScheduler):
             Rollout value to return.
 
         Example
-        --------
+        -------
         >>> from anemoi.training.schedulers.rollout import Static
         >>> RollSched = Static(rollout_value = 5)
         >>> RollSched.rollout_at(epoch = 1)
@@ -206,7 +206,7 @@ class InterEpochRolloutMixin(RolloutScheduler):
             If a dict[int, int], the default step_type is 'step'.
 
         Example
-        --------
+        -------
         >>> from anemoi.training.schedulers.rollout import InterEpochRolloutMixin, Static
         >>> class InterEpochRollout(InterEpochRolloutMixin, Static):
         >>>     pass

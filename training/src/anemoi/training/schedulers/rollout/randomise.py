@@ -103,7 +103,7 @@ class RandomList(BaseRandom):
             List of rollouts to choose from.
 
         Example
-        --------
+        -------
         >>> from anemoi.training.schedulers.rollout import RandomList
         >>> RollSched = RandomList(rollouts = [1, 2, 3, 4, 5])
         >>> RollSched.at(epoch = 1).rollout
@@ -147,7 +147,7 @@ class RandomRange(RandomList):
             Step size for the range, by default 1
 
         Example
-        --------
+        -------
         >>> from anemoi.training.schedulers.rollout import RandomRange
         >>> RollSched = RandomRange(minimum = 1, maximum = 5)
         >>> RollSched.at(epoch = 1).rollout
@@ -200,7 +200,7 @@ class IncreasingRandom(IncrementMixin, BaseRandom):
             by default 'epoch'.
 
         Example
-        --------
+        -------
         >>> from anemoi.training.schedulers.rollout import IncreasingRandom
         >>> RollSched = IncreasingRandom(minimum = 1, maximum = 10, step = 1, every_n_epochs = 1)
         >>> RollSched.at(epoch = 1)
