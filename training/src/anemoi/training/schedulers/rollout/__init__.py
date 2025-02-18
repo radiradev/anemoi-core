@@ -20,16 +20,15 @@ class RolloutScheduler(Scheduler):
 
     A rollout scheduler is an object that manages the rollout of a training loop.
 
-    ```python
-    RollSched = RolloutScheduler()
+    Example:
 
-    for epoch in range(20):
-        for step in range(100):
-            y = model(x, rollout = RollSched.rollout)
+        RollSched = RolloutScheduler()
+        for epoch in range(20):
+            for step in range(100):
+                y = model(x, rollout = RollSched.rollout)
 
-            RollSched.step()
-        RollSched.step_epoch()
-    ```
+                RollSched.step()
+            RollSched.step_epoch()
 
     Override the `rollout` property to implement the rollout calculation,
     and the `maximum_rollout` property to provide the maximum rollout possible.
@@ -159,16 +158,14 @@ class Static(RolloutScheduler):
         rollout_value : int
             Rollout value to return.
 
-        Example
-        -------
-        ```python
-        from anemoi.training.schedulers.rollout import Static
-        RollSched = Static(rollout_value = 5)
-        RollSched.rollout_at(epoch = 1)
-        # 5
-        RollSched.rollout_at(epoch = 5)
-        # 5
-        ```
+        Example:
+
+            from anemoi.training.schedulers.rollout import Static
+            RollSched = Static(rollout_value = 5)
+            RollSched.rollout_at(epoch = 1)
+            # 5
+            RollSched.rollout_at(epoch = 5)
+            # 5
         """
         self._rollout_value = rollout_value
 

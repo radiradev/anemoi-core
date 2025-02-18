@@ -102,17 +102,15 @@ class RandomList(BaseRandom):
         rollouts : list[int]
             List of rollouts to choose from.
 
-        Example
-        -------
-        ```python
-        from anemoi.training.schedulers.rollout import RandomList
+        Example:
 
-        RollSched = RandomList(rollouts = [1, 2, 3, 4, 5])
-        RollSched.at(epoch = 1).rollout
-        # any value in the list
-        RollSched.at(epoch = 2).rollout
-        # any value in the list
-        ```
+            from anemoi.training.schedulers.rollout import RandomList
+
+            RollSched = RandomList(rollouts = [1, 2, 3, 4, 5])
+            RollSched.at(epoch = 1).rollout
+            # any value in the list
+            RollSched.at(epoch = 2).rollout
+            # any value in the list
         """
         super().__init__()
         self._rollouts = rollouts
@@ -149,17 +147,15 @@ class RandomRange(RandomList):
         step : int, optional
             Step size for the range, by default 1
 
-        Example
-        -------
-        ```python
-        from anemoi.training.schedulers.rollout import RandomRange
+        Example:
 
-        RollSched = RandomRange(minimum = 1, maximum = 5)
-        RollSched.at(epoch = 1).rollout
-        # any value between 1 and 5
-        RollSched.at(epoch = 2).rollout
-        # any value between 1 and 5
-        ```
+            from anemoi.training.schedulers.rollout import RandomRange
+
+            RollSched = RandomRange(minimum = 1, maximum = 5)
+            RollSched.at(epoch = 1).rollout
+            # any value between 1 and 5
+            RollSched.at(epoch = 2).rollout
+            # any value between 1 and 5
         """
         super().__init__(range(minimum, maximum + 1, step))
 
@@ -205,17 +201,15 @@ class IncreasingRandom(IncrementMixin, BaseRandom):
             Type of step, either 'epoch' or 'batch'.
             by default 'epoch'.
 
-        Example
-        -------
-        ```python
-        from anemoi.training.schedulers.rollout import IncreasingRandom
+        Example:
 
-        RollSched = IncreasingRandom(minimum = 1, maximum = 10, step = 1, every_n_epochs = 1)
-        RollSched.at(epoch = 1)
-        # any value between 1 and 1
-        RollSched.at(epoch = 2)
-        # any value between 1 and 2
-        ```
+            from anemoi.training.schedulers.rollout import IncreasingRandom
+
+            RollSched = IncreasingRandom(minimum = 1, maximum = 10, step = 1, every_n_epochs = 1)
+            RollSched.at(epoch = 1)
+            # any value between 1 and 1
+            RollSched.at(epoch = 2)
+            # any value between 1 and 2
         """
         super().__init__(every_n=every_n, increment=increment, step_type=step_type, **kwargs)
 
