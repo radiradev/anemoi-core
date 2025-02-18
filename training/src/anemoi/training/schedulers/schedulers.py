@@ -20,14 +20,12 @@ from anemoi.training.schedulers.utils import get_closest_key
 from anemoi.training.schedulers.utils import get_value_from_closest_key
 
 VALID_STEP_TYPES = Literal["step", "epoch"]
+VALID_INCREMENT_TYPE = Union[int, dict[int, int], dict[VALID_STEP_TYPES, dict[int, int]]]
 
 
 class STEPTYPE(str, enum.Enum):
     step: str = "step"
     epoch: str = "epoch"
-
-
-VALID_INCREMENT_TYPE = Union[int, dict[int, int], dict[VALID_STEP_TYPES, dict[int, int]]]
 
 
 class Scheduler(ABC):
