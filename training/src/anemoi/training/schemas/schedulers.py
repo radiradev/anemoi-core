@@ -17,9 +17,6 @@ from typing import Union
 from pydantic import Field
 from pydantic import PositiveInt
 
-from anemoi.training.schedulers.schedulers import VALID_INCREMENT_TYPE  # noqa: TC001
-from anemoi.training.schedulers.schedulers import VALID_STEP_TYPES  # noqa: TC001
-
 from .utils import BaseModel
 
 
@@ -62,7 +59,7 @@ class PositionalIndexedSchema(BaseRolloutSchema):
     "List of rollout values."
     num_times_per_element: PositiveInt = Field(example=1)
     "Number of times to remain at an element."
-    step_type: VALID_STEP_TYPES = Field(example="epoch")
+    step_type: Literal["step", "epoch"] = Field(example="epoch")
     "Type of step, either 'epoch' or 'step'."
 
 
@@ -86,7 +83,7 @@ class LookupSchema(BaseRolloutSchema):
     target_: Literal[ImplementedRollout.lookup] = Field(..., alias="_target_")
     table: dict[PositiveInt, PositiveInt] = Field(example={1: 1, 2: 2, 3: 3})
     "Lookup dictionary to from `step_type` to rollout value."
-    step_type: VALID_STEP_TYPES = Field(example="epoch")
+    step_type: Literal["step", "epoch"] = Field(example="epoch")
     "Type of step, either 'epoch' or 'step'."
 
 
@@ -136,9 +133,9 @@ class IncreasingRandomSchema(BaseRolloutSchema):
     "Step of range."
     every_n: PositiveInt = Field(example=5)
     "Number of steps or epochs to step the rollout value."
-    increment: VALID_INCREMENT_TYPE = Field(1, example=1)
+    increment: int | dict[int, int] | dict[Literal["step", "epoch"], dict[int, int]] = Field(1, example=1)
     "Value to increment the rollout by."
-    step_type: VALID_STEP_TYPES = Field(example="epoch")
+    step_type: Literal["step", "epoch"] = Field(example="epoch")
     "Type of step, either 'epoch' or 'step'."
 
 
@@ -170,9 +167,9 @@ class SteppedSchema(BaseRolloutSchema):
     "Maximum rollout value."
     every_n: PositiveInt = Field(example=5)
     "Number of steps or epochs to step the rollout value."
-    increment: VALID_INCREMENT_TYPE = Field(1, example=1)
+    increment: int | dict[int, int] | dict[Literal["step", "epoch"], dict[int, int]] = Field(1, example=1)
     "Value to increment the rollout by."
-    step_type: VALID_STEP_TYPES = Field(example="epoch")
+    step_type: Literal["step", "epoch"] = Field(example="epoch")
     "Type of step, either 'epoch' or 'step'."
 
 
