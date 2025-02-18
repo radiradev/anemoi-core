@@ -31,6 +31,7 @@ from anemoi.models.layers.block import GraphConvMapperBlock
 from anemoi.models.layers.block import GraphTransformerMapperBlock
 from anemoi.models.layers.graph import TrainableTensor
 from anemoi.models.layers.mlp import MLP
+from anemoi.models.layers.utils import CheckpointWrapper
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -74,7 +75,8 @@ class BaseMapper(nn.Module, ABC):
     def offload_layers(self, cpu_offload):
         if cpu_offload:
             #self.proc = nn.ModuleList([offload_wrapper(x) for x in self.proc])
-            self.proc = offload_wrapper(self.proc)
+            #self.proc = offload_wrapper(self.proc)
+            self.proc = CheckpointWrapper(self.proc)
             #self.proc = SaveToCpu(self.proc)
 
     def pre_process(self, x, shard_shapes, model_comm_group=None) -> tuple[Tensor, Tensor, tuple[int], tuple[int]]:

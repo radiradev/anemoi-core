@@ -27,6 +27,7 @@ from anemoi.models.layers.chunk import GraphTransformerProcessorChunk
 from anemoi.models.layers.chunk import TransformerProcessorChunk
 from anemoi.models.layers.graph import TrainableTensor
 from anemoi.models.layers.mapper import GraphEdgeMixin
+from anemoi.models.layers.utils import CheckpointWrapper
 from anemoi.utils.config import DotDict
 
 #class SaveToCpu(nn.Module):
@@ -65,7 +66,8 @@ class BaseProcessor(nn.Module, ABC):
 
     def offload_layers(self, cpu_offload):
         if cpu_offload:
-            self.proc = nn.ModuleList([offload_wrapper(x) for x in self.proc])
+            self.proc = CheckpointWrapper(self.proc, num_layers=self.num_layers) #give num_layers so we know not to offload the final layer
+            #self.proc = nn.ModuleList([offload_wrapper(x) for x in self.proc])
             #self.proc = nn.ModuleList([SaveToCpu(x) for x in self.proc])
 
     def build_layers(self, processor_chunk_class, *args, **kwargs) -> None:
