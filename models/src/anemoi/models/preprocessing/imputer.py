@@ -125,8 +125,8 @@ class BaseImputer(BasePreprocessor, ABC):
             x = x.clone()
 
         # Reset NaN locations outside of training for validation and inference.
-        if not self.training:
-            self.nan_locations = None
+        # if not self.training:
+        #     self.nan_locations = None
 
         # Initialise mask if not cached.
         if self.nan_locations is None:
@@ -236,6 +236,130 @@ class ConstantImputer(BaseImputer):
         self._create_imputation_indices()
 
         self._validate_indices()
+
+
+class PhysicalConsequenceImputer(BaseImputer):
+    """Imputes values where another variable is zero.
+
+    Expects the config to have keys corresponding to available statistics
+    and values as lists of variables to impute.:
+    ```
+    default: "none"
+    remap: "x"
+    0:
+        - y
+    5.0:
+        - x
+    3.14:
+        - q
+    ```
+
+    If "x" is zero, "y" will be imputed with 0, "x" with 5.0 and "q" with 3.14.
+    """
+
+    def __init__(
+        self,
+        config=None,
+        data_indices: Optional[IndexCollection] = None,
+        statistics: Optional[dict] = None,
+    ) -> None:
+        super().__init__(config, data_indices, statistics)
+
+        self._create_imputation_indices()
+
+        self._validate_indices()
+
+    def _validate_indices(self):
+        assert len(self.index_training_output) == len(self.index_inference_output) <= len(self.replacement), (
+            f"Error creating imputation indices {len(self.index_training_output)}, "
+            f"{len(self.index_inference_output)}, {len(self.replacement)}"
+        )
+
+    def _create_imputation_indices(
+        self,
+        statistics=None,
+    ):
+        """Create the indices for imputation."""
+        name_to_index_training_output = self.data_indices.data.output.name_to_index
+        name_to_index_inference_output = self.data_indices.model.output.name_to_index
+
+        self.num_training_output_vars = len(name_to_index_training_output)
+        self.num_inference_output_vars = len(name_to_index_inference_output)
+
+        self.masking_variable = self.remap
+        self.masking_variable_training_output = name_to_index_training_output.get(self.masking_variable, None)
+        self.masking_variable_inference_output = name_to_index_inference_output.get(self.masking_variable, None)
+
+        (
+            self.index_training_output,
+            self.index_inference_output,
+            self.replacement,
+        ) = ([], [], [])
+
+        # Create indices for imputation
+        for name in name_to_index_training_output:
+
+            method = self.methods.get(name, self.default)
+            if method == "none":
+                LOGGER.debug(f"Imputer: skipping {name} as no imputation method is specified")
+                continue
+
+            self.index_training_output.append(name_to_index_training_output.get(name, None))
+            self.index_inference_output.append(name_to_index_inference_output.get(name, None))
+
+            self.replacement.append(method)
+
+            LOGGER.debug(
+                f"Imputer: replacing valus in {name} with value {self.replacement[-1]} if {self.masking_variable} is zero"
+            )
+
+    def _expand_subset_mask(self, x: torch.Tensor, mask: torch.tensor) -> torch.Tensor:
+        """Expand the subset of the mask to the correct shape."""
+        return mask.expand(*x.shape[:-2], -1)
+
+    def get_zeros(self, x: torch.Tensor) -> torch.Tensor:
+        """get zero mask from data"""
+        # The mask is only saved for the last dimension (grid)
+        idx = [slice(0, 1)] * (x.ndim - 2) + [slice(None), slice(None)]
+        return (x[idx] == 0).squeeze()
+
+    def fill_with_value(self, x, index, fill_mask):
+        for idx_dst, value in zip(index, self.replacement):
+            if idx_dst is not None:
+                x[..., idx_dst][self._expand_subset_mask(x, fill_mask)] = value
+        return x
+
+    def transform(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
+        if self.loss_mask_training is None:
+            # Initialize training loss mask to weigh imputed values with zeroes once
+            self.loss_mask_training = torch.ones(
+                (x.shape[-2], len(self.data_indices.model.output.name_to_index)), device=x.device
+            )  # shape (grid, n_outputs)
+
+        return x
+
+    def inverse_transform(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
+        """Set values in the output tensor."""
+        if not in_place:
+            x = x.clone()
+
+        # Replace original nans with nan again
+        if x.shape[-1] == self.num_training_output_vars:
+            index = self.index_training_output
+            masking_variable = self.masking_variable_training_output
+        elif x.shape[-1] == self.num_inference_output_vars:
+            index = self.index_inference_output
+            masking_variable = self.masking_variable_inference_output
+        else:
+            raise ValueError(
+                f"Output tensor ({x.shape[-1]}) does not match the training "
+                f"({self.num_training_output_vars}) or inference shape ({self.num_inference_output_vars})",
+            )
+
+        zero_mask = self.get_zeros(x[..., masking_variable])
+
+        # Replace values
+        return self.fill_with_value(x, index, zero_mask)
 
 
 class CopyImputer(BaseImputer):
