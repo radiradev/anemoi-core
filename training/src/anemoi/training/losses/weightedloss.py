@@ -161,9 +161,8 @@ class BaseWeightedLoss(nn.Module, ABC):
         # keep last dimension (variables) when summing weights
         local_weight_sum = self.sum_function(node_weights[..., None].expand_as(x), dim=(0, 1, 2))
         global_weight_sum = local_weight_sum if grid_shard_slice is None else reduce_tensor(local_weight_sum, group)
-        x /= global_weight_sum
-
-        return x if grid_shard_slice is None else reduce_tensor(x, group)
+        out = x / global_weight_sum
+        return out if grid_shard_slice is None else reduce_tensor(out, group)
 
     @abstractmethod
     def forward(
