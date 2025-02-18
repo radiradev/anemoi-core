@@ -133,7 +133,7 @@ class IncreasingRandomSchema(BaseRolloutSchema):
     "Step of range."
     every_n: PositiveInt = Field(example=5)
     "Number of steps or epochs to step the rollout value."
-    increment: int | dict[int, int] | dict[Literal["step", "epoch"], dict[int, int]] = Field(1, example=1)
+    increment: Union[int, dict[int, int], dict[Literal["step", "epoch"], dict[int, int]]] = Field(1, example=1)
     "Value to increment the rollout by."
     step_type: Literal["step", "epoch"] = Field(example="epoch")
     "Type of step, either 'epoch' or 'step'."
@@ -167,7 +167,7 @@ class SteppedSchema(BaseRolloutSchema):
     "Maximum rollout value."
     every_n: PositiveInt = Field(example=5)
     "Number of steps or epochs to step the rollout value."
-    increment: int | dict[int, int] | dict[Literal["step", "epoch"], dict[int, int]] = Field(1, example=1)
+    increment: Union[int, dict[int, int], dict[Literal["step", "epoch"], dict[int, int]]] = Field(1, example=1)
     "Value to increment the rollout by."
     step_type: Literal["step", "epoch"] = Field(example="epoch")
     "Type of step, either 'epoch' or 'step'."
