@@ -45,15 +45,24 @@ The following rollout schedulers are also available:
    :no-undoc-members:
    :show-inheritance:
 
+Indexed
+=======
+
 .. automodule:: anemoi.training.schedulers.rollout.indexed
    :members:
    :no-undoc-members:
    :show-inheritance:
 
+Randomised
+==========
+
 .. automodule:: anemoi.training.schedulers.rollout.randomise
    :members:
    :no-undoc-members:
    :show-inheritance:
+
+Stepped
+=======
 
 .. automodule:: anemoi.training.schedulers.rollout.stepped
    :members:
