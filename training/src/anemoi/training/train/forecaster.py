@@ -93,14 +93,6 @@ class GraphForecaster(pl.LightningModule):
         self.config = config
         self.data_indices = data_indices
 
-        self.keep_batch_sharded = self.config.model.get("keep_batch_sharded", False)
-        model_supports_sharding = getattr(self.model.model, "supports_sharded_input", False)
-        sharding_config_valid = model_supports_sharding or not self.keep_batch_sharded
-        assert sharding_config_valid, (
-            f"Model {self.model.model} does not support sharded inputs, but `model.keep_batch_sharded=True` was set. ",
-            "Please set `model.keep_batch_sharded=False` or ensure that the model supports sharded inputs.",
-        ) # TODO: make sure this is correct, i.e. sharded loss supported iff BaseWeightedLoss (currently only MSE)
-
         self.save_hyperparameters()
 
         self.latlons_data = graph_data[config.graph.data].x
@@ -144,7 +136,7 @@ class GraphForecaster(pl.LightningModule):
         if not isinstance(self.metrics, torch.nn.ModuleList):
             self.metrics = torch.nn.ModuleList([self.metrics])
 
-        # set flag if loss and metrics support sharding (isinstance(BaseWeightedLoss)),
+        # set flag if loss and metrics support sharding
         self.metrics_support_sharding = all(isinstance(metric, BaseWeightedLoss) for metric in self.metrics)
 
         if config.training.loss_gradient_scaling:
@@ -172,6 +164,19 @@ class GraphForecaster(pl.LightningModule):
         reader_group_size = self.config.dataloader.get("read_group_size", self.config.hardware.num_gpus_per_model)
         self.grid_indices = instantiate(self.config.dataloader.grid_indices, reader_group_size=reader_group_size)
         self.grid_indices.setup(graph_data)
+
+        self.keep_batch_sharded = self.config.model.get("keep_batch_sharded", False)
+        read_group_supports_sharding = reader_group_size == self.config.hardware.num_gpus_per_model
+        assert read_group_supports_sharding or not self.keep_batch_sharded, (
+            f"Reader group size {reader_group_size} does not match the number of GPUs per model "
+            f"{self.config.hardware.num_gpus_per_model}, but `model.keep_batch_sharded=True` was set. ",
+            "Please set `model.keep_batch_sharded=False` or set `dataloader.read_group_size` = `hardware.num_gpus_per_model`.",
+        )
+        model_supports_sharding = getattr(self.model.model, "supports_sharded_input", False)
+        assert model_supports_sharding or not self.keep_batch_sharded, (
+            f"Model {self.model.model} does not support sharded inputs, but `model.keep_batch_sharded=True` was set. ",
+            "Please set `model.keep_batch_sharded=False` or ensure that the model supports sharded inputs.",
+        )
 
         LOGGER.debug("Rollout window length: %d", self.rollout)
         LOGGER.debug("Rollout increase every : %d epochs", self.rollout_epoch_increment)
@@ -545,13 +550,12 @@ class GraphForecaster(pl.LightningModule):
         validation_mode: bool = False,
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
         del batch_idx
-        grid_shard_shapes = self.grid_indices.get_shard_shapes()
-        if self.config.model.get("keep_batch_sharded", True):
+        if self.keep_batch_sharded:
+            grid_shard_shapes = self.grid_indices.shard_shapes
             grid_shard_slice = self.grid_indices.get_shard_indices(self.reader_group_rank)
         else:
-            batch = self.allgather_batch(batch, grid_shard_shapes)
-            grid_shard_slice = None
-            grid_shard_shapes = None
+            batch = self.allgather_batch(batch)
+            grid_shard_shapes, grid_shard_slice = None, None
 
         loss = torch.zeros(1, dtype=batch.dtype, device=self.device, requires_grad=False)
         metrics = {}
@@ -572,7 +576,7 @@ class GraphForecaster(pl.LightningModule):
         loss *= 1.0 / self.rollout
         return loss, metrics, y_preds
 
-    def allgather_batch(self, batch: torch.Tensor, grid_shard_shapes: list = None) -> torch.Tensor:
+    def allgather_batch(self, batch: torch.Tensor) -> torch.Tensor:
         """Allgather the batch-shards across the reader group.
 
         Parameters
@@ -585,23 +589,15 @@ class GraphForecaster(pl.LightningModule):
         torch.Tensor
             Allgathered (full) batch
         """
-        if grid_shard_shapes is None: # backward compatibility
-            grid_shard_shapes = self.grid_indices.get_shard_shapes()
+        grid_shard_shapes = self.grid_indices.shard_shapes
+        grid_size = self.grid_indices.grid_size
+        grid_dim = -2
 
-        grid_size = self.grid_indices.grid_size  # number of points
-
-        if grid_size == batch.shape[-2]:
+        if grid_size == batch.shape[grid_dim]:
             return batch  # already have the full grid
 
-        # prepare tensor list with correct shapes for all_gather
-        shard_shape = list(batch.shape)
-        shard_shape[-2] = grid_shard_shapes[0]
-        last_shard_shape = list(batch.shape)
-        last_shard_shape[-2] = grid_shard_shapes[-1]
-
-        tensor_list = [
-            torch.empty(tuple(shard_shape), device=self.device) for _ in range(self.reader_group_size - 1)
-        ] + [torch.empty(last_shard_shape, device=self.device)]
+        shard_shapes = apply_shard_shapes(batch, grid_dim, grid_shard_shapes)
+        tensor_list = [torch.empty(shard_shape, device=batch.device, dtype=batch.dtype) for shard_shape in shard_shapes]
 
         torch.distributed.all_gather(
             tensor_list,
@@ -609,7 +605,7 @@ class GraphForecaster(pl.LightningModule):
             group=self.reader_groups[self.reader_group_id],
         )
 
-        return torch.cat(tensor_list, dim=-2)
+        return torch.cat(tensor_list, dim=grid_dim)
 
     def calculate_val_metrics(
         self,

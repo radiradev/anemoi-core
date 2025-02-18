@@ -200,7 +200,7 @@ class AnemoiModelEncProcDec(nn.Module):
             Slice of the grid if x comes sharded, by default None
         grid_shard_shapes : list, optional
             Shard shapes of the grid, by default None
-        
+
         Returns
         -------
         Tensor
@@ -227,7 +227,7 @@ class AnemoiModelEncProcDec(nn.Module):
 
         if grid_shard_shapes is None:
             shard_shapes_data = get_shard_shapes(x_data_latent, 0, model_comm_group)
-        else: # use the provided shard shapes to generalize to all dimensions
+        else:  # use the provided shard shapes to generalize to all dimensions
             shard_shapes_data = apply_shard_shapes(x_data_latent, 0, grid_shard_shapes)
         shard_shapes_hidden = get_shard_shapes(x_hidden_latent, 0, model_comm_group)
 
@@ -238,7 +238,7 @@ class AnemoiModelEncProcDec(nn.Module):
             batch_size=batch_size,
             shard_shapes=(shard_shapes_data, shard_shapes_hidden),
             model_comm_group=model_comm_group,
-            x_src_is_sharded=in_out_sharded, # x_data_latent comes sharded iff in_out_sharded
+            x_src_is_sharded=in_out_sharded,  # x_data_latent comes sharded iff in_out_sharded
             x_dst_is_sharded=False,  # x_latent does not come sharded
             keep_x_dst_sharded=True,  # always keep x_latent sharded for the processor
         )
@@ -262,7 +262,7 @@ class AnemoiModelEncProcDec(nn.Module):
             model_comm_group=model_comm_group,
             x_src_is_sharded=True,  # x_latent always comes sharded
             x_dst_is_sharded=in_out_sharded,  # x_data_latent comes sharded iff in_out_sharded
-            keep_x_dst_sharded=in_out_sharded, # keep x_out sharded iff in_out_sharded 
+            keep_x_dst_sharded=in_out_sharded,  # keep x_out sharded iff in_out_sharded
         )
 
         x_out = (

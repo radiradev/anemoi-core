@@ -1,6 +1,8 @@
 activation: GELU
 num_channels: 512
 
+keep_batch_sharded: True
+
 model:
   _target_: anemoi.models.models.AnemoiModelEncProcDec
 
