@@ -25,15 +25,14 @@ class RolloutScheduler(Scheduler):
 
     A rollout scheduler is an object that manages the rollout of a training loop.
 
-    Example:
-
-        RollSched = RolloutScheduler()
-        for epoch in range(20):
-            for step in range(100):
-                y = model(x, rollout = RollSched.rollout)
-
-                RollSched.step()
-            RollSched.step_epoch()
+    Example
+    --------
+    >>> RollSched = RolloutScheduler()
+    >>> for epoch in range(20):
+    >>>    for step in range(100):
+    >>>        y = model(x, rollout = RollSched.rollout)
+    >>>        RollSched.step()
+    >>>     RollSched.step_epoch()
 
     Override the `rollout` property to implement the rollout calculation,
     and the `maximum_rollout` property to provide the maximum rollout possible.
