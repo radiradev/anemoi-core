@@ -21,7 +21,7 @@ from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 
 from anemoi.models.distributed.shapes import apply_shard_shapes
-from anemoi.models.distributed.shapes import get_shape_shards
+from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.layers.graph import NamedNodesAttributes
 from anemoi.utils.config import DotDict
 
@@ -209,10 +209,10 @@ class AnemoiModelEncProcDec(nn.Module):
 
         # get shard shapes
         if grid_shard_shapes is None:
-            shard_shapes_data = get_shape_shards(x_data_latent, 0, model_comm_group)
+            shard_shapes_data = get_shard_shapes(x_data_latent, 0, model_comm_group)
         else:
             shard_shapes_data = apply_shard_shapes(x_data_latent, 0, grid_shard_shapes)
-        shard_shapes_hidden = get_shape_shards(x_hidden_latent, 0, model_comm_group)
+        shard_shapes_hidden = get_shard_shapes(x_hidden_latent, 0, model_comm_group)
 
         # Run encoder
         x_data_latent, x_latent = self._run_mapper(
