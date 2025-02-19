@@ -7,13 +7,16 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
-import warnings
+import logging
 
 from anemoi.training.schedulers.rollout import InterEpochRolloutMixin
 from anemoi.training.schedulers.rollout import RolloutScheduler
 from anemoi.training.schedulers.schedulers import STEPTYPE
+from anemoi.training.schedulers.schedulers import VALID_INCREMENT_TYPE
 from anemoi.training.schedulers.schedulers import VALID_STEP_TYPES
 from anemoi.training.schedulers.utils import get_closest_key
+
+LOG = logging.getLogger(__name__)
 
 
 class PositionalIndexed(RolloutScheduler):
@@ -28,6 +31,7 @@ class PositionalIndexed(RolloutScheduler):
         rollouts: list[int],
         num_times_per_element: int = 1,
         step_type: VALID_STEP_TYPES = "epoch",
+        **kwargs,
     ):
         """
         `PositionalIndexed` retrieves the rollout value from a list of rollouts based on the current epoch or step.
@@ -55,7 +59,7 @@ class PositionalIndexed(RolloutScheduler):
         >>> RollSched.at(epoch = 3).rollout
         2
         """
-        super().__init__()
+        super().__init__(**kwargs)
         if step_type not in STEPTYPE.__members__.values():
             error_msg = "Invalid step_type. Must be 'epoch' or 'step'."
             raise ValueError(error_msg)
@@ -90,16 +94,17 @@ class EpochPositionalIndexed(PositionalIndexed):
         super().__init__(rollouts, step_type=STEPTYPE.epoch)
 
 
-class StepPositionalIndexed(PositionalIndexed):
+class StepPositionalIndexed(PositionalIndexed, InterEpochRolloutMixin):
     """Step based PositionalIndexed."""
 
-    def __init__(self, rollouts: list[int]):
-        warnings.warn(
-            "Pytorch Lightning datamodules can only be refreshed at the end of an epoch, "
-            "adjusting the rollout during an epoch will likely fail.",
-            UserWarning,
+    def __init__(self, rollouts: list[int], adjust_maximum: VALID_INCREMENT_TYPE = 0):
+        LOG.warning(
+            "Changing the rollout value within an epoch can cause issues with prefetched "
+            "data, and will likely fail with out of index errors."
+            "\nIf you wish to enable this ensure that `adjust_maximum` covers the change"
+            "in rollout within any epoch.",
         )
-        super().__init__(rollouts, step_type=STEPTYPE.step)
+        super().__init__(rollouts, step_type=STEPTYPE.step, adjust_maximum=adjust_maximum)
 
 
 class Lookup(RolloutScheduler):
@@ -166,12 +171,11 @@ class EpochLookup(Lookup):
 class StepLookup(Lookup, InterEpochRolloutMixin):
     """Step based Lookup."""
 
-    def __init__(self, rollouts: dict[int, int], adjust_maximum: int = 0):
-        warnings.warn(
-            "Changing the rollout value within an epoch, can cause issues with prefetched "
+    def __init__(self, rollouts: dict[int, int], adjust_maximum: VALID_INCREMENT_TYPE = 0):
+        LOG.warning(
+            "Changing the rollout value within an epoch can cause issues with prefetched "
             "data, and will likely fail with out of index errors."
             "\nIf you wish to enable this ensure that `adjust_maximum` covers the change"
             "in rollout within any epoch.",
-            UserWarning,
         )
         super().__init__(rollouts, step_type=STEPTYPE.step, adjust_maximum=adjust_maximum)

@@ -11,7 +11,7 @@
 
 from __future__ import annotations
 
-import warnings
+import logging
 
 import numpy as np
 import pytorch_lightning as pl
@@ -25,6 +25,8 @@ from anemoi.training.schedulers.schedulers import VALID_INCREMENT_TYPE
 from anemoi.training.schedulers.schedulers import VALID_STEP_TYPES
 from anemoi.training.schedulers.schedulers import IncrementMixin
 from anemoi.training.utils.seeding import get_base_seed
+
+LOG = logging.getLogger(__name__)
 
 
 class BaseRandom(RolloutScheduler):
@@ -346,12 +348,11 @@ class StepIncreasingRandom(IncreasingRandom, InterEpochRolloutMixin):
         RollSched = StepIncreasingRandom(minimum = 1, maximum = 10, range_step = 1, every_n_steps = 1, increment = 1)
         ```
         """
-        warnings.warn(
-            "Changing the rollout value within an epoch, can cause issues with prefetched "
+        LOG.warning(
+            "Changing the rollout value within an epoch can cause issues with prefetched "
             "data, and will likely fail with out of index errors."
             "\nIf you wish to enable this ensure that `adjust_maximum` covers the change"
             "in rollout within any epoch.",
-            UserWarning,
         )
 
         super().__init__(

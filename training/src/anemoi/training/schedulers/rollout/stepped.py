@@ -8,7 +8,7 @@
 # nor does it submit to any jurisdiction.
 from __future__ import annotations
 
-import warnings
+import logging
 
 from anemoi.training.schedulers.rollout import InterEpochRolloutMixin
 from anemoi.training.schedulers.rollout import RolloutScheduler
@@ -16,6 +16,8 @@ from anemoi.training.schedulers.schedulers import STEPTYPE
 from anemoi.training.schedulers.schedulers import VALID_INCREMENT_TYPE
 from anemoi.training.schedulers.schedulers import VALID_STEP_TYPES
 from anemoi.training.schedulers.schedulers import IncrementMixin
+
+LOG = logging.getLogger(__name__)
 
 
 class Stepped(RolloutScheduler, IncrementMixin):
@@ -161,12 +163,11 @@ class StepStepped(Stepped, InterEpochRolloutMixin):
         adjust_maximum : VALID_INCREMENT_TYPE, optional
             Value to adjust current maximum by, by default 0
         """
-        warnings.warn(
-            "Changing the rollout value within an epoch, can cause issues with prefetched "
+        LOG.warning(
+            "Changing the rollout value within an epoch can cause issues with prefetched "
             "data, and will likely fail with out of index errors."
             "\nIf you wish to enable this ensure that `adjust_maximum` covers the change"
             "in rollout within any epoch.",
-            UserWarning,
         )
         super().__init__(
             minimum,

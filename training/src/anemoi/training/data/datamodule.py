@@ -166,22 +166,26 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
     @property
     def rollout(self) -> RolloutScheduler:
         if self._rollout is None:
-            raise AttributeError("Rollout scheduler not set.")
+            error_msg = "Rollout scheduler not set."
+            raise AttributeError(error_msg)
         return self._rollout
 
     @rollout.setter
     def rollout(self, rollout: RolloutScheduler) -> None:
         self._rollout = rollout
+
         self._rollout_shared_value.value = self.rollout.current_maximum
         self._rollout_shared_value_validation.value = max(
-            rollout.current_maximum, self.config.dataloader.validation_rollout,
+            rollout.current_maximum,
+            self.config.dataloader.validation_rollout,
         )
 
     def update_rollout(self) -> None:
         """Update the rollout values in the underlying datasets from the scheduler."""
         self._rollout_shared_value.value = self.rollout.current_maximum
         self._rollout_shared_value_validation.value = max(
-            self.rollout.current_maximum, self.config.dataloader.validation_rollout,
+            self.rollout.current_maximum,
+            self.config.dataloader.validation_rollout,
         )
 
     def _get_dataset(

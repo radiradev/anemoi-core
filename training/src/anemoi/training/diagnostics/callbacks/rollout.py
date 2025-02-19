@@ -39,7 +39,7 @@ class UpdateRollout(pl.callbacks.Callback):
         trainer.datamodule.rollout = pl_module.rollout
         trainer.datamodule.update_rollout()
 
-    def on_train_epoch_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule, *_) -> None:
+    def on_train_epoch_end(self, trainer: pl.Trainer, *_) -> None:
         """
         Update the rollout values in the datamodule every training epoch.
 
@@ -47,11 +47,16 @@ class UpdateRollout(pl.callbacks.Callback):
         ----------
         trainer : pl.Trainer
             Pytorch Lightning trainer
-        pl_module : pl.LightningModule
-            Model
         """
-        _ = pl_module
-        if trainer.sanity_checking:
-            return
+        trainer.datamodule.update_rollout()
 
+    def on_train_batch_start(self, trainer: pl.Trainer, *_) -> None:
+        """
+        Update the rollout values in the datamodule every training batch.
+
+        Parameters
+        ----------
+        trainer : pl.Trainer
+            Pytorch Lightning trainer
+        """
         trainer.datamodule.update_rollout()

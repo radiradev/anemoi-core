@@ -636,20 +636,25 @@ class GraphForecaster(pl.LightningModule):
 
     def on_load_checkpoint(self, checkpoint: dict) -> None:
         if "rollout" in checkpoint:
+            # Allow rollout scheduler to change but state be conserved.
             self.rollout = instantiate(self.config.training.rollout).get_state_from(checkpoint["rollout"])
 
     def on_save_checkpoint(self, checkpoint: dict) -> None:
+        # Save rollout state in checkpoint
         checkpoint["rollout"] = self.rollout
 
     def on_train_batch_end(self, *_) -> None:
+        # Step rollout scheduler
         self.rollout.step()
 
     def on_train_epoch_end(self, *_) -> None:
+        # Step rollout epoch on training epoch end if no validation batches are to be run.
         if self.trainer.limit_val_batches == 0:
             self.rollout.step_epoch()
             LOGGER.info("Stepping Rollout on training epoch end, rollout: %i.", int(self.rollout))
 
     def on_validation_epoch_end(self, *_) -> None:
+        # Step rollout epoch on validation epoch end if not in sanity checking mode.
         if not self.trainer.sanity_checking:
             self.rollout.step_epoch()
             LOGGER.info("Stepping Rollout on validation epoch end, rollout: %i.", int(self.rollout))
