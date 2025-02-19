@@ -168,8 +168,8 @@ class StepLookup(Lookup, InterEpochRolloutMixin):
 
     def __init__(self, rollouts: dict[int, int], adjust_maximum: int = 0):
         warnings.warn(
-            "Pytorch Lightning datamodules can only be refreshed at the end of an epoch, "
-            "adjusting the rollout during an epoch will likely fail."
+            "Changing the rollout value within an epoch, can cause issues with prefetched "
+            "data, and will likely fail with out of index errors."
             "\nIf you wish to enable this ensure that `adjust_maximum` covers the change"
             "in rollout within any epoch.",
             UserWarning,
