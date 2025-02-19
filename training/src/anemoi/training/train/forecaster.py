@@ -184,13 +184,16 @@ class GraphForecaster(pl.LightningModule):
         self.model_comm_group = None
         self.reader_groups = None
 
-        reader_group_size = self.config.dataloader.get("read_group_size", self.config.hardware.num_gpus_per_model)
-        self.grid_indices = instantiate(self.config.dataloader.grid_indices, reader_group_size=reader_group_size)
+        reader_group_size = self.config.dataloader.read_group_size
+        self.grid_indices = instantiate(
+            self.config.model_dump(by_alias=True).dataloader.grid_indices,
+            reader_group_size=reader_group_size,
+        )
         self.grid_indices.setup(graph_data)
         self.grid_dim = -2
 
-        self.keep_batch_sharded = self.config.model.get("keep_batch_sharded", False)
-        read_group_supports_sharding = reader_group_size == self.config.hardware.num_gpus_per_model
+        self.keep_batch_sharded = self.config.model.keep_batch_sharded
+        read_group_supports_sharding = (reader_group_size == self.config.hardware.num_gpus_per_model)
         assert read_group_supports_sharding or not self.keep_batch_sharded, (
             f"Reader group size {reader_group_size} does not match the number of GPUs per model "
             f"{self.config.hardware.num_gpus_per_model}, but `model.keep_batch_sharded=True` was set. ",
