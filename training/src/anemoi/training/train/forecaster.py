@@ -164,6 +164,7 @@ class GraphForecaster(pl.LightningModule):
         reader_group_size = self.config.dataloader.get("read_group_size", self.config.hardware.num_gpus_per_model)
         self.grid_indices = instantiate(self.config.dataloader.grid_indices, reader_group_size=reader_group_size)
         self.grid_indices.setup(graph_data)
+        self.grid_dim = -2
 
         self.keep_batch_sharded = self.config.model.get("keep_batch_sharded", False)
         read_group_supports_sharding = reader_group_size == self.config.hardware.num_gpus_per_model
@@ -194,8 +195,8 @@ class GraphForecaster(pl.LightningModule):
     def forward(
         self,
         x: torch.Tensor,
-        grid_shard_slice: slice | None = None,
-        grid_shard_shapes: list | None = None,
+        grid_shard_slice: Optional[slice] = None,
+        grid_shard_shapes: Optional[list] = None,
     ) -> torch.Tensor:
         return self.model(x, self.model_comm_group, grid_shard_slice, grid_shard_shapes)
 
@@ -203,9 +204,9 @@ class GraphForecaster(pl.LightningModule):
     @staticmethod
     def get_loss_function(
         config: DictConfig,
-        scalars: Union[dict[str, tuple[Union[int, tuple[int, ...], torch.Tensor]]], None] = None,
+        scalars: Union[dict[str, tuple[Union[int, tuple[int, ...], torch.Tensor]]], None] = None,  # noqa: FA100
         **kwargs,
-    ) -> Union[BaseWeightedLoss, torch.nn.ModuleList]:
+    ) -> Union[BaseWeightedLoss, torch.nn.ModuleList]:  # noqa: FA100
         """Get loss functions from config.
 
         Can be ModuleList if multiple losses are specified.
@@ -430,15 +431,15 @@ class GraphForecaster(pl.LightningModule):
         y: torch.Tensor,
         rollout_step: int,
         validation_mode: bool = False,
-        grid_shard_slice: slice | None = None,
-        grid_shard_shapes: list | None = None,
+        grid_shard_slice: Optional[slice] = None,
+        grid_shard_shapes: Optional[list] = None,
     ) -> torch.Tensor:
         is_sharded = grid_shard_slice is not None
-        sharding_supported = self.metrics_support_sharding or not validation_mode
+        sharding_supported = self.metrics_support_sharding or not validation_mode # loss always supports sharding
         if is_sharded and not sharding_supported:  # gather tensors if loss and metrics do not support sharding
-            shard_shapes = apply_shard_shapes(y_pred, -2, grid_shard_shapes)
-            y_pred_full = gather_tensor(torch.clone(y_pred), -2, shard_shapes, self.model_comm_group)
-            y_full = gather_tensor(torch.clone(y), -2, shard_shapes, self.model_comm_group)
+            shard_shapes = apply_shard_shapes(y_pred, self.grid_dim, grid_shard_shapes)
+            y_pred_full = gather_tensor(torch.clone(y_pred), self.grid_dim, shard_shapes, self.model_comm_group)
+            y_full = gather_tensor(torch.clone(y), self.grid_dim, shard_shapes, self.model_comm_group)
             grid_shard_slice, grid_shard_shapes = None, None
         else:
             y_pred_full, y_full = y_pred, y
@@ -464,12 +465,12 @@ class GraphForecaster(pl.LightningModule):
     def rollout_step(
         self,
         batch: torch.Tensor,
-        rollout: Optional[int] = None,
+        rollout: Optional[int] = None,  # noqa: FA100
         training_mode: bool = True,
         validation_mode: bool = False,
-        grid_shard_slice: slice | None = None,
-        grid_shard_shapes: list | None = None,
-    ) -> Generator[tuple[Union[torch.Tensor, None], dict, list], None, None]:
+        grid_shard_slice: Optional[slice] = None,
+        grid_shard_shapes: Optional[list] = None,
+    ) -> Generator[tuple[Union[torch.Tensor, None], dict, list], None, None]:  # noqa: FA100
         """Rollout step for the forecaster.
 
         Will run pre_processors on batch, but not post_processors on predictions.
@@ -499,7 +500,7 @@ class GraphForecaster(pl.LightningModule):
             None
         """
         # for validation not normalized in-place because remappers cannot be applied in-place
-        batch = self.model.pre_processors(batch, in_place=True)  # temporary 9km fix (disable remapper for this)
+        batch = self.model.pre_processors(batch, in_place=not validation_mode)
 
         if not self.updated_loss_mask:
             # update loss scalar after first application and initialization of preprocessors
@@ -591,12 +592,11 @@ class GraphForecaster(pl.LightningModule):
         """
         grid_shard_shapes = self.grid_indices.shard_shapes
         grid_size = self.grid_indices.grid_size
-        grid_dim = -2
 
-        if grid_size == batch.shape[grid_dim]:
+        if grid_size == batch.shape[self.grid_dim]:
             return batch  # already have the full grid
 
-        shard_shapes = apply_shard_shapes(batch, grid_dim, grid_shard_shapes)
+        shard_shapes = apply_shard_shapes(batch, self.grid_dim, grid_shard_shapes)
         tensor_list = [torch.empty(shard_shape, device=batch.device, dtype=batch.dtype) for shard_shape in shard_shapes]
 
         torch.distributed.all_gather(
@@ -605,14 +605,14 @@ class GraphForecaster(pl.LightningModule):
             group=self.reader_groups[self.reader_group_id],
         )
 
-        return torch.cat(tensor_list, dim=grid_dim)
+        return torch.cat(tensor_list, dim=self.grid_dim)
 
     def calculate_val_metrics(
         self,
         y_pred: torch.Tensor,
         y: torch.Tensor,
         rollout_step: int,
-        grid_shard_slice: slice | None = None,
+        grid_shard_slice: Optional[slice] = None,
     ) -> tuple[dict, list[torch.Tensor]]:
         """Calculate metrics on the validation output.
 
@@ -631,8 +631,8 @@ class GraphForecaster(pl.LightningModule):
                 validation metrics and predictions
         """
         metrics = {}
-        y_postprocessed = self.model.post_processors(y, in_place=True)  # temporary 9km fix
-        y_pred_postprocessed = self.model.post_processors(y_pred, in_place=True)  # temporary 9km fix
+        y_postprocessed = self.model.post_processors(y, in_place=False)
+        y_pred_postprocessed = self.model.post_processors(y_pred, in_place=False)
 
         for metric in self.metrics:
             metric_name = getattr(metric, "name", metric.__class__.__name__.lower())

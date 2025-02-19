@@ -54,8 +54,8 @@ class WeightedMSELoss(BaseWeightedLoss):
         squash: bool = True,
         scalar_indices: tuple[int, ...] | None = None,
         without_scalars: list[str] | list[int] | None = None,
-        grid_shard_slice: slice = None,
-        group: ProcessGroup = None,
+        grid_shard_slice: slice | None = None,
+        group: ProcessGroup | None = None,
     ) -> torch.Tensor:
         """Calculates the lat-weighted MSE loss.
 
@@ -84,4 +84,4 @@ class WeightedMSELoss(BaseWeightedLoss):
         """
         out = torch.square(pred - target)
         out = self.scale(out, scalar_indices, without_scalars=without_scalars)
-        return self.scale_by_node_weights(out, squash, grid_shard_slice=grid_shard_slice, group=group)
+        return self.scale_by_node_weights(out, squash, grid_shard_slice, group)

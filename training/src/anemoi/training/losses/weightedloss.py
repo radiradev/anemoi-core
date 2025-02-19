@@ -118,8 +118,8 @@ class BaseWeightedLoss(nn.Module, ABC):
         self,
         x: torch.Tensor,
         squash: bool = True,
-        grid_shard_slice: Optional[slice] = None,
-        group: ProcessGroup = None,
+        grid_shard_slice: slice | None = None,
+        group: ProcessGroup | None = None,
     ) -> torch.Tensor:
         """Scale a tensor by the node_weights.
 
@@ -143,26 +143,28 @@ class BaseWeightedLoss(nn.Module, ABC):
         torch.Tensor
             Scaled error tensor
         """
-        node_weights = self.node_weights if grid_shard_slice is None else self.node_weights[grid_shard_slice]
+        is_sharded = grid_shard_slice is not None
+        node_weights = self.node_weights[grid_shard_slice] if is_sharded else self.node_weights
 
         if squash:
             x = self.avg_function(x, dim=-1)
             # Weight by area,
             x *= node_weights.expand_as(x)
             local_weight_sum = self.sum_function(node_weights.expand_as(x))
-            global_weight_sum = local_weight_sum if grid_shard_slice is None else reduce_tensor(local_weight_sum, group)
+            global_weight_sum = reduce_tensor(local_weight_sum, group) if is_sharded else local_weight_sum
             x /= global_weight_sum
             out = self.sum_function(x)
 
-            return out if grid_shard_slice is None else reduce_tensor(out, group)
+            return reduce_tensor(out, group) if is_sharded else out
 
         # Weight by area, due to weighting construction is analagous to a mean
         x *= node_weights[..., None].expand_as(x)
         # keep last dimension (variables) when summing weights
         local_weight_sum = self.sum_function(node_weights[..., None].expand_as(x), dim=(0, 1, 2))
-        global_weight_sum = local_weight_sum if grid_shard_slice is None else reduce_tensor(local_weight_sum, group)
+        global_weight_sum = reduce_tensor(local_weight_sum, group) if is_sharded else local_weight_sum
         out = x / global_weight_sum
-        return out if grid_shard_slice is None else reduce_tensor(out, group)
+
+        return reduce_tensor(out, group) if is_sharded else out
 
     @abstractmethod
     def forward(
@@ -173,8 +175,8 @@ class BaseWeightedLoss(nn.Module, ABC):
         *,
         scalar_indices: tuple[int, ...] | None = None,
         without_scalars: list[str] | list[int] | None = None,
-        grid_shard_slice: Optional[slice] = None,
-        group: ProcessGroup = None,
+        grid_shard_slice: slice | None = None,
+        group: ProcessGroup | None = None,
     ) -> torch.Tensor:
         """Calculates the lat-weighted scaled loss.
 
@@ -191,6 +193,10 @@ class BaseWeightedLoss(nn.Module, ABC):
         without_scalars: list[str] | list[int] | None, optional
             list of scalars to exclude from scaling. Can be list of names or dimensions to exclude.
             By default None
+        grid_shard_slice: slice, optional
+            Slice of this gpus grid shard if sharded, by default None
+        group: ProcessGroup, optional
+            Distributed group, by default None
 
         Returns
         -------
@@ -201,7 +207,7 @@ class BaseWeightedLoss(nn.Module, ABC):
 
         out = self.scale(out, scalar_indices, without_scalars=without_scalars)
 
-        return self.scale_by_node_weights(out, squash)
+        return self.scale_by_node_weights(out, squash, grid_shard_slice, group)
 
     @property
     def name(self) -> str:
@@ -243,6 +249,8 @@ class FunctionalWeightedLoss(BaseWeightedLoss):
         *,
         scalar_indices: tuple[int, ...] | None = None,
         without_scalars: list[str] | list[int] | None = None,
+        grid_shard_slice: slice | None = None,
+        group: ProcessGroup | None = None,
     ) -> torch.Tensor:
         """Calculates the lat-weighted scaled loss.
 
@@ -259,7 +267,10 @@ class FunctionalWeightedLoss(BaseWeightedLoss):
         without_scalars: list[str] | list[int] | None, optional
             list of scalars to exclude from scaling. Can be list of names or dimensions to exclude.
             By default None
-
+        grid_shard_slice: slice, optional
+            Slice of this gpus grid shard if sharded, by default None
+        group: ProcessGroup, optional
+            Distributed group, by default None
 
         Returns
         -------
@@ -269,4 +280,4 @@ class FunctionalWeightedLoss(BaseWeightedLoss):
         out = self.calculate_difference(pred, target)
 
         out = self.scale(out, scalar_indices, without_scalars=without_scalars)
-        return self.scale_by_node_weights(out, squash)
+        return self.scale_by_node_weights(out, squash, grid_shard_slice, group)
