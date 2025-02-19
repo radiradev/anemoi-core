@@ -174,14 +174,16 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         self._rollout = rollout
         self._rollout_shared_value.value = self.rollout.current_maximum
         self._rollout_shared_value_validation.value = max(
-            rollout.current_maximum, self.config.dataloader.validation_rollout,
+            rollout.current_maximum,
+            self.config.dataloader.validation_rollout,
         )
 
     def update_rollout(self) -> None:
         """Update the rollout values in the underlying datasets from the scheduler."""
         self._rollout_shared_value.value = self.rollout.current_maximum
         self._rollout_shared_value_validation.value = max(
-            self.rollout.current_maximum, self.config.dataloader.validation_rollout,
+            self.rollout.current_maximum,
+            self.config.dataloader.validation_rollout,
         )
 
     def _get_dataset(
