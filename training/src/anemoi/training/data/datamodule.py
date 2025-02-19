@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 from functools import cached_property
+from multiprocessing import Value
 from typing import TYPE_CHECKING
 
 import pytorch_lightning as pl
@@ -53,8 +54,9 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         self.config = config
         self.graph_data = graph_data
 
-        # Set the maximum rollout to be expected
-        self._rollout: RolloutScheduler = instantiate(self.config.training.rollout)
+        self._rollout: RolloutScheduler | None = None
+        self._rollout_shared_value = Value("i", 1)
+        self._rollout_shared_value_validation = Value("i", 1)
 
         # Set the training end date if not specified
         if self.config.dataloader.training.end is None:
@@ -131,7 +133,6 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
 
     @cached_property
     def ds_valid(self) -> NativeGridDataset:
-        r = max(self.rollout.current_maximum, self.config.dataloader.validation_rollout)
 
         if not self.config.dataloader.training.end < self.config.dataloader.validation.start:
             LOGGER.warning(
@@ -142,7 +143,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         return self._get_dataset(
             open_dataset(self.config.model_dump().dataloader.validation),
             shuffle=False,
-            rollout=r,
+            rollout=self._rollout_shared_value_validation,
             label="validation",
         )
 
@@ -164,20 +165,24 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
 
     @property
     def rollout(self) -> RolloutScheduler:
+        if self._rollout is None:
+            raise AttributeError("Rollout scheduler not set.")
         return self._rollout
 
     @rollout.setter
     def rollout(self, rollout: RolloutScheduler) -> None:
         self._rollout = rollout
+        self._rollout_shared_value.value = self.rollout.current_maximum
+        self._rollout_shared_value_validation.value = max(
+            rollout.current_maximum, self.config.dataloader.validation_rollout,
+        )
 
     def update_rollout(self) -> None:
         """Update the rollout values in the underlying datasets from the scheduler."""
-        current_max = self.rollout.current_maximum
-
-        for ds in [self.ds_train, self.ds_test]:
-            ds.update_rollout(current_max)
-
-        self.ds_valid.update_rollout(max(current_max, self.config.dataloader.get("validation_rollout", 1)))
+        self._rollout_shared_value.value = self.rollout.current_maximum
+        self._rollout_shared_value_validation.value = max(
+            self.rollout.current_maximum, self.config.dataloader.validation_rollout,
+        )
 
     def _get_dataset(
         self,
@@ -206,7 +211,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         NativeGridDataset
             Configured Dataset
         """
-        r = rollout if rollout is not None else self.rollout.current_maximum
+        r = rollout if rollout is not None else self._rollout_shared_value
 
         # Compute effective batch size
         effective_bs = (
