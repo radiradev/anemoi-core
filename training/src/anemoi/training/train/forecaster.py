@@ -204,9 +204,9 @@ class GraphForecaster(pl.LightningModule):
     @staticmethod
     def get_loss_function(
         config: DictConfig,
-        scalars: Union[dict[str, tuple[Union[int, tuple[int, ...], torch.Tensor]]], None] = None,  # noqa: FA100
+        scalars: Union[dict[str, tuple[Union[int, tuple[int, ...], torch.Tensor]]], None] = None,
         **kwargs,
-    ) -> Union[BaseWeightedLoss, torch.nn.ModuleList]:  # noqa: FA100
+    ) -> Union[BaseWeightedLoss, torch.nn.ModuleList]:
         """Get loss functions from config.
 
         Can be ModuleList if multiple losses are specified.
@@ -435,7 +435,7 @@ class GraphForecaster(pl.LightningModule):
         grid_shard_shapes: Optional[list] = None,
     ) -> torch.Tensor:
         is_sharded = grid_shard_slice is not None
-        sharding_supported = self.metrics_support_sharding or not validation_mode # loss always supports sharding
+        sharding_supported = self.metrics_support_sharding or not validation_mode  # loss always supports sharding
         if is_sharded and not sharding_supported:  # gather tensors if loss and metrics do not support sharding
             shard_shapes = apply_shard_shapes(y_pred, self.grid_dim, grid_shard_shapes)
             y_pred_full = gather_tensor(torch.clone(y_pred), self.grid_dim, shard_shapes, self.model_comm_group)
@@ -465,12 +465,12 @@ class GraphForecaster(pl.LightningModule):
     def rollout_step(
         self,
         batch: torch.Tensor,
-        rollout: Optional[int] = None,  # noqa: FA100
+        rollout: Optional[int] = None,
         training_mode: bool = True,
         validation_mode: bool = False,
         grid_shard_slice: Optional[slice] = None,
         grid_shard_shapes: Optional[list] = None,
-    ) -> Generator[tuple[Union[torch.Tensor, None], dict, list], None, None]:  # noqa: FA100
+    ) -> Generator[tuple[Union[torch.Tensor, None], dict, list], None, None]:
         """Rollout step for the forecaster.
 
         Will run pre_processors on batch, but not post_processors on predictions.
