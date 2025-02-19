@@ -43,6 +43,11 @@ class BaseRolloutSchema(BaseModel):
     "target rollout schema from anemoi.training.schedulers.rollout."
 
 
+class InterEpochMixinSchema(BaseModel):
+    adjust_maximum: Union[int, dict[int, int], dict[Literal["step", "epoch"], dict[int, int]]] = Field(example=1)
+    "Adjust current maximum of rollout scheduler for inter epoch changes."
+
+
 class StaticRolloutSchema(BaseRolloutSchema):
     """Static rollout configuration."""
 
@@ -148,7 +153,7 @@ class EpochIncreasingRandomSchema(IncreasingRandomSchema):
     "Number of epochs for when to step the rollout."
 
 
-class StepIncreasingRandomSchema(IncreasingRandomSchema):
+class StepIncreasingRandomSchema(IncreasingRandomSchema, InterEpochMixinSchema):
     """Increasing random range sample based rollout on step."""
 
     target_: Literal[ImplementedRollout.increasing_random_step] = Field(..., alias="_target_")
@@ -182,7 +187,7 @@ class EpochSteppedSchema(SteppedSchema):
     "Number of epochs for when to step the rollout."
 
 
-class StepSteppedSchema(SteppedSchema):
+class StepSteppedSchema(SteppedSchema, InterEpochMixinSchema):
     """Increasing random range sample based rollout on step."""
 
     target_: Literal[ImplementedRollout.stepped_step] = Field(..., alias="_target_")

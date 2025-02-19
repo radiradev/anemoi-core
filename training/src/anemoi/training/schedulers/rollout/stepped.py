@@ -29,6 +29,7 @@ class Stepped(RolloutScheduler, IncrementMixin):
         increment: VALID_INCREMENT_TYPE = 1,
         *,
         step_type: VALID_STEP_TYPES = STEPTYPE.epoch,
+        **kwargs,
     ):
         """
         `SteppedRollout` is a base rollout scheduler that steps the rollout value at the end of each n steps or epochs.
@@ -70,7 +71,7 @@ class Stepped(RolloutScheduler, IncrementMixin):
         >>> RollSched.at(epoch = 11, epoch_record = {}).rollout
         3
         """
-        super().__init__(every_n=every_n, step_type=step_type, increment=increment)
+        super().__init__(every_n=every_n, step_type=step_type, increment=increment, **kwargs)
 
         if maximum == -1:
             maximum = float("inf")
@@ -137,7 +138,7 @@ class StepStepped(Stepped, InterEpochRolloutMixin):
         every_n_steps: int = 1000,
         increment: VALID_INCREMENT_TYPE = 1,
         *,
-        adjust_maximum: int = 0,
+        adjust_maximum: VALID_INCREMENT_TYPE = 0,
     ):
         """
         `StepStepped` is a rollout scheduler that steps the rollout value at the end of each n steps.
@@ -157,7 +158,7 @@ class StepStepped(Stepped, InterEpochRolloutMixin):
             Will round down to the closest key.
             i.e. {0: 1, 10: 2} will increment by 1 until 10, then by 2.
             by default 1.
-        adjust_maximum : int, optional
+        adjust_maximum : VALID_INCREMENT_TYPE, optional
             Value to adjust current maximum by, by default 0
         """
         warnings.warn(

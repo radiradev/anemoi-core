@@ -100,13 +100,13 @@ class NativeGridDataset(IterableDataset):
         assert self.multi_step > 0, "Multistep value must be greater than zero."
         self.ensemble_dim: int = 2
         self.ensemble_size = self.data.shape[self.ensemble_dim]
-    
+
     @property
     def rollout(self) -> int:
         """Get rollout value"""
         if isinstance(self._rollout, int):
             return self._rollout
-        elif hasattr(self._rollout, 'value'):
+        if hasattr(self._rollout, "value"):
             return self._rollout.value
         error_msg = f"Cannot parse rollout of type: {type(self._rollout)}"
         raise TypeError(error_msg)
@@ -149,7 +149,6 @@ class NativeGridDataset(IterableDataset):
         (if time_increment is 1).
         """
         return get_usable_indices(self.data.missing, len(self.data), self.rollout, self.multi_step, self.timeincrement)
-
 
     def set_comm_group_info(
         self,

@@ -313,7 +313,7 @@ class StepIncreasingRandom(IncreasingRandom, InterEpochRolloutMixin):
         every_n_steps: int = 1,
         increment: int | dict[int, int] = 1,
         *,
-        adjust_maximum: int = 0,
+        adjust_maximum: VALID_INCREMENT_TYPE = 0,
     ):
         """
         StepIncreasingRandom` is a rollout scheduler that randomly selects a rollout from an increasing range of values.
@@ -334,7 +334,7 @@ class StepIncreasingRandom(IncreasingRandom, InterEpochRolloutMixin):
             If `every_n_steps` is 0, the rollout will stay at `minimum`.
         increment : int | dict[int, int], optional
             Value to increment the rollout by `every_n_epochs`, by default 1
-        adjust_maximum : int, optional
+        adjust_maximum : VALID_INCREMENT_TYPE, optional
             Value to adjust current maximum by, by default 0
 
 
