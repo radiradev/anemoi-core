@@ -1,10 +1,23 @@
 activation: GELU
 num_channels: 1024
+cpu_offload: False
+output_mask: null
 
 keep_batch_sharded: True
 
 model:
-  _target_: anemoi.models.models.AnemoiModelEncProcDec
+  _target_: anemoi.models.models.encoder_processor_decoder.AnemoiModelEncProcDec
+
+
+layer_kernels:
+    LayerNorm:
+      _target_: torch.nn.LayerNorm
+      _partial_: True
+      #Any arguments to your chosen function go here e.g.
+    Linear:
+      _target_: torch.nn.Linear
+      _partial_: True
+      #Any arguments to your chosen function go here e.g.
 
 processor:
   _target_: anemoi.models.layers.processor.GraphTransformerProcessor
@@ -16,7 +29,7 @@ processor:
   num_chunks: 2
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
-  dropout_p: 0.0 # GraphTransformer or Transformer only
+  cpu_offload: ${model.cpu_offload}
 
 encoder:
   _target_: anemoi.models.layers.mapper.GraphTransformerForwardMapper
@@ -27,6 +40,7 @@ encoder:
   num_chunks: 1
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
+  cpu_offload: ${model.cpu_offload}
 
 decoder:
   _target_: anemoi.models.layers.mapper.GraphTransformerBackwardMapper
@@ -37,6 +51,7 @@ decoder:
   num_chunks: 1
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
+  cpu_offload: ${model.cpu_offload}
 
 trainable_parameters:
   data: 8
