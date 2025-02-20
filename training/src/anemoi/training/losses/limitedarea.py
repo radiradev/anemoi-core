@@ -11,11 +11,14 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 import torch
-from torch.distributed.distributed_c10d import ProcessGroup
 
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
+
+if TYPE_CHECKING:
+    from torch.distributed.distributed_c10d import ProcessGroup
 
 LOGGER = logging.getLogger(__name__)
 
@@ -74,7 +77,7 @@ class WeightedMSELossLimitedArea(BaseWeightedLoss):
         target: torch.Tensor,
         squash: bool = True,
         scalar_indices: torch.Tensor | None = None,
-        grid_shard_slice: slice = None,
+        grid_shard_slice: slice | None = None,
         group: ProcessGroup = None,
     ) -> torch.Tensor:
         """Calculates the lat-weighted MSE loss.

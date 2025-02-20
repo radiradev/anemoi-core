@@ -197,7 +197,8 @@ class GraphForecaster(pl.LightningModule):
         assert read_group_supports_sharding or not self.keep_batch_sharded, (
             f"Reader group size {reader_group_size} does not match the number of GPUs per model "
             f"{self.config.hardware.num_gpus_per_model}, but `model.keep_batch_sharded=True` was set. ",
-            "Please set `model.keep_batch_sharded=False` or set `dataloader.read_group_size` = `hardware.num_gpus_per_model`.",
+            "Please set `model.keep_batch_sharded=False` or set `dataloader.read_group_size` ="
+            "`hardware.num_gpus_per_model`.",
         )
         model_supports_sharding = getattr(self.model.model, "supports_sharded_input", False)
         assert model_supports_sharding or not self.keep_batch_sharded, (

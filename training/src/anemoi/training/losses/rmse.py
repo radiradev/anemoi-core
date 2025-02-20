@@ -11,11 +11,14 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 import torch
-from torch.distributed.distributed_c10d import ProcessGroup
 
 from anemoi.training.losses.mse import BaseWeightedLoss
+
+if TYPE_CHECKING:
+    from torch.distributed.distributed_c10d import ProcessGroup
 
 LOGGER = logging.getLogger(__name__)
 

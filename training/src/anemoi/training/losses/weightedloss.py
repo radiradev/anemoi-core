@@ -14,13 +14,16 @@ import functools
 import logging
 from abc import ABC
 from abc import abstractmethod
+from typing import TYPE_CHECKING
 
 import torch
 from torch import nn
-from torch.distributed.distributed_c10d import ProcessGroup
 
 from anemoi.models.distributed.graph import reduce_tensor
 from anemoi.training.losses.utils import ScaleTensor
+
+if TYPE_CHECKING:
+    from torch.distributed.distributed_c10d import ProcessGroup
 
 LOGGER = logging.getLogger(__name__)
 
