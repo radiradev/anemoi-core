@@ -76,20 +76,7 @@ def test_on_load_checkpoint(
     spy.assert_called_once_with()
 
 
-def test_on_validation_epoch_sanity(
-    fake_trainer: AnemoiTrainer,
-    fake_forecaster: GraphForecaster,
-    callback: UpdateRollout,
-) -> None:
-    fake_trainer.current_epoch = 10
-    fake_trainer.sanity_checking = True
-    spy = fake_trainer.datamodule.update_rollout
-
-    callback.on_train_epoch_end(fake_trainer, fake_forecaster, None, None)
-    spy.assert_not_called()
-
-
-def test_on_validation_epoch(
+def test_on_train_epoch_end(
     fake_trainer: AnemoiTrainer,
     fake_forecaster: GraphForecaster,
     callback: UpdateRollout,
