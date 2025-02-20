@@ -309,7 +309,7 @@ class PhysicalConsequenceImputer(BaseImputer):
 
             self.replacement.append(method)
 
-            LOGGER.debug(
+            LOGGER.info(
                 f"Imputer: replacing valus in {name} with value {self.replacement[-1]} if {self.masking_variable} is zero"
             )
 
