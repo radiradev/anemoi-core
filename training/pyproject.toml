@@ -72,9 +72,12 @@ optional-dependencies.docs = [
   "autodoc-pydantic",
   "nbsphinx",
   "pandoc",
-  "sphinx",
+  "sphinx<8.2",       # Fixed until nbsphinx updates
   "sphinx-argparse",
   "sphinx-rtd-theme",
+]
+optional-dependencies.plotting = [
+  "distinctipy>=1",
 ]
 optional-dependencies.profile = [
   "holistictraceanalysis>=0.2",
