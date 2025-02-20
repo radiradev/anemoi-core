@@ -103,7 +103,7 @@ class NativeGridDataset(IterableDataset):
 
     @property
     def rollout(self) -> int:
-        """Get rollout value"""
+        """Get rollout value."""
         if isinstance(self._rollout, int):
             return self._rollout
         if hasattr(self._rollout, "value"):
