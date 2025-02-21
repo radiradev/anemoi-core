@@ -226,7 +226,6 @@ class IncreasingRandom(IncrementMixin, BaseRandom):
             return self._minimum
 
         rollouts = range(self._minimum, self.current_maximum + 1, self._range_step)
-
         return self._randomly_pick(rollouts)
 
     @property
@@ -243,7 +242,7 @@ class IncreasingRandom(IncrementMixin, BaseRandom):
             self._epoch_record,
             maximum_value=self._maximum - self._minimum,
         )
-        return min(self._maximum, self._minimum + increment)
+        return max(min(self._maximum, self._minimum + increment), self._minimum)
 
     def description(self) -> str:
         return (
