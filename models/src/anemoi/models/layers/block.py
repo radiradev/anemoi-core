@@ -75,6 +75,8 @@ class TransformerProcessorBlock(BaseBlock):
         attention_implementation: str = "flash_attention",
         softcap: float = None,
         use_alibi_slopes: bool = None,
+        use_qk_norm: bool = False,
+        use_rotary_embeddings: bool = False,
     ):
         super().__init__()
 
@@ -98,6 +100,8 @@ class TransformerProcessorBlock(BaseBlock):
             attention_implementation=attention_implementation,
             softcap=softcap,
             use_alibi_slopes=use_alibi_slopes,
+            qk_norm=use_qk_norm,
+            rotary_embeddings=use_rotary_embeddings,
         )
 
         self.mlp = nn.Sequential(
@@ -125,7 +129,13 @@ class TransformerMapperBlock(TransformerProcessorBlock):
         num_heads: int,
         activation: str,
         window_size: int,
+        layer_kernels: DotDict,
         dropout_p: float = 0.0,
+        attention_implementation: str = "flash_attention",
+        softcap: float = None,
+        use_alibi_slopes: bool = None,
+        use_qk_norm: bool = False,
+        use_rotary_embeddings: bool = False,
     ):
         super().__init__(
             num_channels=num_channels,
@@ -133,7 +143,13 @@ class TransformerMapperBlock(TransformerProcessorBlock):
             num_heads=num_heads,
             activation=activation,
             window_size=window_size,
+            layer_kernels=layer_kernels,
             dropout_p=dropout_p,
+            attention_implementation=attention_implementation,
+            softcap=softcap,
+            use_alibi_slopes=use_alibi_slopes,
+            use_qk_norm=use_qk_norm,
+            use_rotary_embeddings=use_rotary_embeddings,
         )
 
         self.attention = MultiHeadCrossAttention(
@@ -143,6 +159,12 @@ class TransformerMapperBlock(TransformerProcessorBlock):
             bias=False,
             is_causal=False,
             dropout_p=dropout_p,
+            ayer_kernels=layer_kernels,
+            attention_implementation=attention_implementation,
+            softcap=softcap,
+            use_alibi_slopes=use_alibi_slopes,
+            qk_norm=use_qk_norm,
+            rotary_embeddings=use_rotary_embeddings,
         )
 
         self.layer_norm_src = nn.LayerNorm(num_channels)

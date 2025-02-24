@@ -747,17 +747,23 @@ class TransformerBaseMapper(BaseMapper):
 
     def __init__(
         self,
-        in_channels_src: int = 0,
-        in_channels_dst: int = 0,
-        hidden_dim: int = 128,
-        out_channels_dst: Optional[int] = None,
-        num_chunks: int = 1,
-        cpu_offload: bool = False,
-        activation: str = "GELU",
-        num_heads: int = 16,
-        mlp_hidden_ratio: int = 4,
-        window_size: Optional[int] = None,
+        in_channels_src: int,
+        in_channels_dst: int,
+        hidden_dim: int,
+        out_channels_dst: Optional[int],
+        num_chunks: int,
+        cpu_offload: bool,
+        activation: str,
+        num_heads: int,
+        mlp_hidden_ratio: int,
+        window_size: Optional[int],
+        layer_kernels: DotDict,
         dropout_p: float = 0.0,
+        attention_implementation: str = "flash_attention",
+        softcap: float = None,
+        use_alibi_slopes: bool = None,
+        use_qk_norm: bool = False,
+        use_rotary_embeddings: bool = False,
     ) -> None:
         """Initialize TransformerBaseMapper.
 
@@ -798,7 +804,13 @@ class TransformerBaseMapper(BaseMapper):
             num_heads=num_heads,
             activation=activation,
             window_size=window_size,
+            layer_kernel=layer_kernels,
             dropout_p=dropout_p,
+            attention_implementation=attention_implementation,
+            softcap=softcap,
+            use_alibi_slopes=use_alibi_slopes,
+            use_qk_norm=use_qk_norm,
+            use_rotary_embeddings=use_rotary_embeddings,
         )
 
         self.offload_layers(cpu_offload)
@@ -832,17 +844,23 @@ class TransformerForwardMapper(ForwardMapperPreProcessMixin, TransformerBaseMapp
 
     def __init__(
         self,
-        in_channels_src: int = 0,
-        in_channels_dst: int = 0,
-        hidden_dim: int = 128,
-        out_channels_dst: Optional[int] = None,
-        num_chunks: int = 1,
-        cpu_offload: bool = False,
-        activation: str = "GELU",
-        num_heads: int = 16,
-        mlp_hidden_ratio: int = 4,
-        window_size: Optional[int] = None,
+        in_channels_src: int,
+        in_channels_dst: int,
+        hidden_dim: int,
+        out_channels_dst: Optional[int],
+        num_chunks: int,
+        cpu_offload: bool,
+        activation: str,
+        num_heads: int,
+        mlp_hidden_ratio: int,
+        window_size: Optional[int],
+        layer_kernels: DotDict,
         dropout_p: float = 0.0,
+        attention_implementation: str = "flash_attention",
+        softcap: float = None,
+        use_alibi_slopes: bool = None,
+        use_qk_norm: bool = False,
+        use_rotary_embeddings: bool = False,
         **kwargs,  # accept not needed extra arguments like subgraph etc.
     ) -> None:
         """Initialize TransformerForwardMapper.
@@ -879,7 +897,13 @@ class TransformerForwardMapper(ForwardMapperPreProcessMixin, TransformerBaseMapp
             num_heads=num_heads,
             mlp_hidden_ratio=mlp_hidden_ratio,
             window_size=window_size,
+            layer_kernel=layer_kernels,
             dropout_p=dropout_p,
+            attention_implementation=attention_implementation,
+            softcap=softcap,
+            use_alibi_slopes=use_alibi_slopes,
+            use_qk_norm=use_qk_norm,
+            use_rotary_embeddings=use_rotary_embeddings,
         )
 
         self.emb_nodes_src = nn.Linear(self.in_channels_src, self.hidden_dim)
@@ -900,17 +924,23 @@ class TransformerBackwardMapper(BackwardMapperPostProcessMixin, TransformerBaseM
 
     def __init__(
         self,
-        in_channels_src: int = 0,
-        in_channels_dst: int = 0,
-        hidden_dim: int = 128,
-        out_channels_dst: Optional[int] = None,
-        num_chunks: int = 1,
-        cpu_offload: bool = False,
-        activation: str = "GELU",
-        num_heads: int = 16,
-        mlp_hidden_ratio: int = 4,
-        window_size: Optional[int] = None,
+        in_channels_src: int,
+        in_channels_dst: int,
+        hidden_dim: int,
+        out_channels_dst: Optional[int],
+        num_chunks: int,
+        cpu_offload: bool,
+        activation: str,
+        num_heads: int,
+        mlp_hidden_ratio: int,
+        window_size: Optional[int],
+        layer_kernels: DotDict,
         dropout_p: float = 0.0,
+        attention_implementation: str = "flash_attention",
+        softcap: float = None,
+        use_alibi_slopes: bool = None,
+        use_qk_norm: bool = False,
+        use_rotary_embeddings: bool = False,
         **kwargs,  # accept not needed extra arguments like subgraph etc.
     ) -> None:
         """Initialize TransformerBackwardMapper.
@@ -947,7 +977,13 @@ class TransformerBackwardMapper(BackwardMapperPostProcessMixin, TransformerBaseM
             num_heads=num_heads,
             mlp_hidden_ratio=mlp_hidden_ratio,
             window_size=window_size,
+            layer_kernel=layer_kernels,
             dropout_p=dropout_p,
+            attention_implementation=attention_implementation,
+            softcap=softcap,
+            use_alibi_slopes=use_alibi_slopes,
+            use_qk_norm=use_qk_norm,
+            use_rotary_embeddings=use_rotary_embeddings,
         )
 
         self.node_data_extractor = nn.Sequential(
