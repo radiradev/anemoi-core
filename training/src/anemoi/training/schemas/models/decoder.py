@@ -10,6 +10,7 @@
 from typing import Literal
 
 from pydantic import Field
+from pydantic import NonNegativeFloat
 from pydantic import NonNegativeInt
 
 from .common_components import GNNModelComponent
@@ -28,3 +29,22 @@ class GraphTransformerDecoderSchema(TransformerModelComponent):
     "Size of trainable parameters vector. Default to 8."
     sub_graph_edge_attributes: list[str] = Field(example=["edge_length", "edge_dirs"])
     "Edge attributes to consider in the decoder features. Default to [edge_length, edge_dirs]"
+
+
+class TransformerDecoderSchema(TransformerModelComponent):
+    target_: Literal["anemoi.models.layers.mapper.TransformerForwardMapper"] = Field(..., alias="_target_")
+    "Transformer Encoder object from anemoi.models.layers.mapper."
+    num_layers: NonNegativeInt = Field(example=16)
+    "Number of layers of Transformer encoder."
+    window_size: NonNegativeInt = Field(example=512)
+    "Attention window size along the longitude axis. Default to 512."
+    dropout_p: NonNegativeFloat = Field(example=0.0)
+    "Dropout probability used for multi-head self attention, default 0.0"
+    attention_implementation: str = Field(example="flash_attention")
+    "Attention implementation to use. Default to 'flash_attention'."
+    softcap: NonNegativeFloat = Field(example=0.0)
+    "Softcap value for attention. Default to 0.0."
+    use_alibi_slopes: bool = Field(example=False)
+    "Use alibi slopes for attention implementation. Default to False."
+    use_qk_norm: bool = Field(example=False)
+    use_rotary_embeddings: bool = Field(example=False)

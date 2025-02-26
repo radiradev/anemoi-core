@@ -56,3 +56,5 @@ class TransformerProcessorSchema(TransformerModelComponent):
     "Softcap value for attention. Default to 0.0."
     use_alibi_slopes: bool = Field(example=False)
     "Use alibi slopes for attention implementation. Default to False."
+    use_qk_norm: bool = (Field(example=False),)
+    use_rotary_embeddings: bool = (Field(example=False),)

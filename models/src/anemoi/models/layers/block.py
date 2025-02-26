@@ -168,6 +168,8 @@ class TransformerMapperBlock(TransformerProcessorBlock):
         )
 
         self.layer_norm_src = nn.LayerNorm(num_channels)
+        self.layer_norm1 = nn.LayerNorm(num_channels)
+        self.layer_norm2 = nn.LayerNorm(num_channels)
 
     def forward(
         self,

@@ -760,10 +760,10 @@ class TransformerBaseMapper(BaseMapper):
         layer_kernels: DotDict,
         dropout_p: float = 0.0,
         attention_implementation: str = "flash_attention",
-        softcap: float = None,
-        use_alibi_slopes: bool = None,
-        use_qk_norm: bool = False,
-        use_rotary_embeddings: bool = False,
+        softcap: Optional[float] = None,
+        use_alibi_slopes: Optional[bool] = None,
+        use_qk_norm: Optional[bool] = False,
+        use_rotary_embeddings: Optional[bool] = False,
     ) -> None:
         """Initialize TransformerBaseMapper.
 

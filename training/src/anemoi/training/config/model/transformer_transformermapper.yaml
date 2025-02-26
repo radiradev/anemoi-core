@@ -14,24 +14,44 @@ processor:
   num_heads: 16 # GraphTransformer or Transformer only
   window_size: 512
   dropout_p: 0.0 # GraphTransformer
+  attention_implementation: flash_attention # flash_attention, scaled_dot_product_attention
+  softcap: 0.0 # Transformer only
+  use_alibi_slopes: False # Transformer only
+  cpu_offload: ${model.cpu_offload}
+  use_qk_norm: False
+  use_rotary_embeddings: False
 
 encoder:
   _target_: anemoi.models.layers.mapper.TransformerForwardMapper
   _convert_: all
+  cpu_offload: ${model.cpu_offload}
   activation: ${model.activation}
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
   window_size: -1
   dropout_p: 0.0
+  attention_implementation: flash_attention # flash_attention, scaled_dot_product_attention
+  softcap: 0.0 # Transformer only
+  use_alibi_slopes: False # Transformer only
+  use_qk_norm: False
+  use_rotary_embeddings: False
+
 
 decoder:
   _target_: anemoi.models.layers.mapper.TransformerBackwardMapper
   _convert_: all
+  cpu_offload: ${model.cpu_offload}
   activation: ${model.activation}
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
   window_size: -1
   dropout_p: 0.0
+  attention_implementation: flash_attention # flash_attention, scaled_dot_product_attention
+  softcap: 0.0 # Transformer only
+  use_alibi_slopes: False # Transformer only
+  use_qk_norm: False
+  use_rotary_embeddings: False
+
 
 
 trainable_parameters:
