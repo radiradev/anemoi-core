@@ -253,6 +253,8 @@ class GraphForecaster(pl.LightningModule):
         ValueError
             If scaler is not found in valid scalers
         """
+        scalars = scalars or {}
+
         if isinstance(config, ListConfig):
             return torch.nn.ModuleList(
                 [
@@ -272,10 +274,11 @@ class GraphForecaster(pl.LightningModule):
             scalers_to_include = [s for s in list(scalers.keys()) if f"!{s}" not in scalers_to_include]
 
         # Instantiate the loss function with the loss_init_config
+        kwargs["_recursive_"] = kwargs.get("_recursive_", False)
         loss_function = instantiate(loss_config, **kwargs)
 
         if not isinstance(loss_function, BaseWeightedLoss):
-            error_msg = f"Loss must be a subclass of 'BaseWeightedLoss', not {type(loss_function)}"
+            error_msg = f"Loss must be a subclass of `BaseWeightedLoss`, not {type(loss_function)}"
             raise TypeError(error_msg)
 
         for key in scalers_to_include:
