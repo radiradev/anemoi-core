@@ -195,7 +195,11 @@ class DynamicGraphTransformerForwardMapper(ForwardMapperPreProcessMixin, Dynamic
             edge_dim=edge_dim,
         )
 
-        self.emb_nodes_src = nn.Identity()
+        self.emb_nodes_src = (
+            nn.Linear(self.in_channels_src, self.hidden_dim)
+            if self.in_channels_src != self.hidden_dim
+            else nn.Identity()
+        )
 
     def forward(
         self,

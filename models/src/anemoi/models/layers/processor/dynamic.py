@@ -20,12 +20,11 @@ from anemoi.models.distributed.shapes import change_channels_in_shape
 from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.layers.chunk import GraphTransformerProcessorChunk
 from anemoi.models.layers.graph import TrainableTensor
-from anemoi.models.layers.mapper.base import GraphEdgeMixin
 from anemoi.models.layers.processor.base import BaseProcessor
 from anemoi.utils.config import DotDict
 
 
-class DynamicGraphTransformerProcessor(GraphEdgeMixin, BaseProcessor):
+class DynamicGraphTransformerProcessor(BaseProcessor):
     """Processor."""
 
     def __init__(
