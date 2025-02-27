@@ -19,7 +19,7 @@ from anemoi.training.losses.weightedloss import BaseWeightedLoss
 LOGGER = logging.getLogger(__name__)
 
 
-class WeightedMSELoss(BaseWeightedLoss):
+class WeightedMSLELoss(BaseWeightedLoss):
     """Node-weighted MSE loss."""
 
     name = "wmse"
@@ -73,7 +73,7 @@ class WeightedMSELoss(BaseWeightedLoss):
         Returns
         -------
         torch.Tensor
-            Weighted MSE loss
+            Weighted MSLE loss
         """
         out = torch.square(torch.log(pred + 1) - torch.log(target + 1))
         out = self.scale(out, scalar_indices, without_scalars=without_scalars)

@@ -17,7 +17,7 @@ from anemoi.training.losses.msle import WeightedMSLELoss
 @pytest.fixture
 def basic_inputs() -> tuple:
     pred = torch.tensor([[[[1.0, 2.0], [3.0, 4.0]]]])
-    target = torch.tensor([[[[1.0, 3.0], [4.0, 5.0]]]])
+    target = torch.tensor([[[[1.0, 2.0], [3.0, 4.0]]]])
     node_weights = torch.ones(2)
     return pred, target, node_weights
 
