@@ -146,19 +146,19 @@ class AnemoiTrainer:
         )
 
     @cached_property
-    def interp_data(self) -> dict:
+    def truncation_data(self) -> dict:
         """Interpolation data.
 
         Loads interpolation data.
         """
-        interp_data = {}  
+        truncation_data = {}  
         if self.config.hardware.files.interp_up:
-            interp_data["up"] = load_npz(Path(self.config.hardware.paths.inter_mat, self.config.hardware.files.interp_up))
+            truncation_data["up"] = load_npz(Path(self.config.hardware.paths.inter_mat, self.config.hardware.files.interp_up))
 
         if self.config.hardware.files.interp_down:
-            interp_data["down"] = load_npz(Path(self.config.hardware.paths.inter_mat, self.config.hardware.files.interp_down))
+            truncation_data["down"] = load_npz(Path(self.config.hardware.paths.inter_mat, self.config.hardware.files.interp_down))
 
-        return interp_data
+        return truncation_data
 
     @cached_property
     def model(self) -> Any: # another wrapper class required? -> GraphEnsForecaster:
@@ -167,7 +167,7 @@ class AnemoiTrainer:
             "config": self.config,
             "data_indices": self.data_indices,
             "graph_data": self.graph_data,
-            "interp_data": self.interp_data,
+            "truncation_data": self.truncation_data,
             "metadata": self.metadata,
             "statistics": self.datamodule.statistics,
             "supporting_arrays": self.supporting_arrays,

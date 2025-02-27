@@ -39,7 +39,7 @@ class AnemoiModelEncProcDec(nn.Module):
         data_indices: dict,
         statistics: dict,
         graph_data: HeteroData,
-        interp_data: dict,
+        truncation_data: dict,
     ) -> None:
         """Initializes the graph neural network.
 
@@ -68,18 +68,18 @@ class AnemoiModelEncProcDec(nn.Module):
 
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
 
-        self._interp_data = interp_data
+        self._truncation_data = truncation_data
 
         input_dim = self._calculate_input_dim(model_config)
 
         # we can't register these as buffers because DDP does not support sparse tensors
         # these will be moved to the GPU when first used via sefl.interpolate_down/interpolate_up
         self.A_down, self.A_up = None, None
-        if "down" in self._interp_data:
-            self.A_down = self._make_interpolation_matrix(self._interp_data["down"])
+        if "down" in self._truncation_data:
+            self.A_down = self._make_interpolation_matrix(self._truncation_data["down"])
             LOGGER.info("A_down %s", self.A_down.shape)
-        if "up" in self._interp_data:
-            self.A_up = self._make_interpolation_matrix(self._interp_data["up"])
+        if "up" in self._truncation_data:
+            self.A_up = self._make_interpolation_matrix(self._truncation_data["up"])
             LOGGER.info("A_up %s", self.A_up.shape)
 
         # Encoder data -> hidden
@@ -295,10 +295,10 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
         data_indices: dict,
         statistics: dict,
         graph_data: HeteroData,
-        interp_data: dict,
+        truncation_data: dict,
     ) -> None:
 
-        super().__init__(model_config=model_config, data_indices=data_indices, statistics=statistics, graph_data=graph_data, interp_data=interp_data)
+        super().__init__(model_config=model_config, data_indices=data_indices, statistics=statistics, graph_data=graph_data, truncation_data=truncation_data)
 
         self.noise_injector = instantiate(
             model_config.model.noise_injector,

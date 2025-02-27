@@ -51,7 +51,7 @@ class GraphForecaster(pl.LightningModule):
         *,
         config: DictConfig,
         graph_data: HeteroData,
-        interp_data: dict,
+        truncation_data: dict,
         statistics: dict,
         data_indices: IndexCollection,
         metadata: dict,
@@ -90,7 +90,7 @@ class GraphForecaster(pl.LightningModule):
             metadata=metadata,
             supporting_arrays=supporting_arrays | self.output_mask.supporting_arrays,
             graph_data=graph_data,
-            interp_data=interp_data,
+            truncation_data=truncation_data,
             config=DotDict(map_config_to_primitives(OmegaConf.to_container(config, resolve=True))),
         )
         self.config = config
@@ -728,7 +728,7 @@ class GraphEnsForecaster(GraphForecaster):
         *,
         config: DictConfig,
         graph_data: HeteroData,
-        interp_data: dict,
+        truncation_data: dict,
         statistics: dict,
         data_indices: dict,
         metadata: dict,
@@ -750,7 +750,7 @@ class GraphEnsForecaster(GraphForecaster):
         super().__init__(
             config=config,
             graph_data=graph_data,
-            interp_data=interp_data,
+            truncation_data=truncation_data,
             statistics=statistics,
             data_indices=data_indices,
             metadata=metadata,
