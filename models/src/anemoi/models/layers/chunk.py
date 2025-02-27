@@ -76,6 +76,7 @@ class TransformerProcessorChunk(BaseProcessorChunk):
         num_heads: int = 16,
         mlp_hidden_ratio: int = 4,
         activation: str = "GELU",
+        qk_norm: bool = False,
         dropout_p: float = 0.0,
         attention_implementation: str = "flash_attention",
         softcap: float = None,
@@ -100,6 +101,8 @@ class TransformerProcessorChunk(BaseProcessorChunk):
             ratio of mlp hidden dimension to embedding dimension, default 4
         activation : str, optional
             Activation function, by default "GELU"
+        qk_norm: bool, optional
+            Normalize query and key, by default False
         dropout_p: float
             Dropout probability used for multi-head self attention, default 0.0
         attention_implementation: str, optional
@@ -118,6 +121,7 @@ class TransformerProcessorChunk(BaseProcessorChunk):
             hidden_dim=(mlp_hidden_ratio * num_channels),
             num_heads=num_heads,
             activation=activation,
+            qk_norm=qk_norm,
             window_size=window_size,
             layer_kernels=layer_kernels,
             dropout_p=dropout_p,
@@ -224,6 +228,7 @@ class GraphTransformerProcessorChunk(BaseProcessorChunk):
         num_heads: int = 16,
         mlp_hidden_ratio: int = 4,
         activation: str = "GELU",
+        qk_norm: bool = False,
         edge_dim: Optional[int] = None,
     ) -> None:
         """Initialize GraphTransformerProcessorChunk.
@@ -243,6 +248,8 @@ class GraphTransformerProcessorChunk(BaseProcessorChunk):
             ratio of mlp hidden dimension to embedding dimension, default 4
         activation : str, optional
             Activation function, by default "GELU"
+        qk_norm: bool, optional
+            Normalize query and key, by default False
         edge_dim: int, by default None
             Embed edges with input dimension edge_dim
         """
@@ -257,6 +264,7 @@ class GraphTransformerProcessorChunk(BaseProcessorChunk):
             num_heads=num_heads,
             layer_kernels=layer_kernels,
             activation=activation,
+            qk_norm=qk_norm,
         )
 
     def forward(

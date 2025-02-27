@@ -98,6 +98,7 @@ class TransformerProcessor(BaseProcessor):
         cpu_offload: bool = False,
         num_heads: int = 16,
         mlp_hidden_ratio: int = 4,
+        qk_norm=False,
         dropout_p: float = 0.1,
         attention_implementation: str = "flash_attention",
         softcap: float = 0.0,
@@ -121,6 +122,8 @@ class TransformerProcessor(BaseProcessor):
             Number of heads to use, default 16
         mlp_hidden_ratio: int
             ratio of mlp hidden dimension to embedding dimension, default 4
+        qk_norm: bool, optional
+            Normalize query and key, by default False
         activation : str, optional
             Activation function, by default "GELU"
         dropout_p: float, optional
@@ -153,6 +156,7 @@ class TransformerProcessor(BaseProcessor):
             num_heads=num_heads,
             window_size=window_size,
             activation=activation,
+            qk_norm=qk_norm,
             dropout_p=dropout_p,
             attention_implementation=attention_implementation,
             softcap=softcap,
@@ -282,6 +286,7 @@ class GraphTransformerProcessor(GraphEdgeMixin, BaseProcessor):
         num_heads: int = 16,
         mlp_hidden_ratio: int = 4,
         activation: str = "GELU",
+        qk_norm: bool = False,
         cpu_offload: bool = False,
         sub_graph: Optional[HeteroData] = None,
         sub_graph_edge_attributes: Optional[list[str]] = None,
@@ -305,6 +310,8 @@ class GraphTransformerProcessor(GraphEdgeMixin, BaseProcessor):
             ratio of mlp hidden dimension to embedding dimension, default 4
         activation : str, optional
             Activation function, by default "GELU"
+        qk_norm: bool, optional
+            Normalize query and key, by default False
         cpu_offload : bool, optional
             Whether to offload processing to CPU, by default False
         """
@@ -330,6 +337,7 @@ class GraphTransformerProcessor(GraphEdgeMixin, BaseProcessor):
             num_heads=num_heads,
             mlp_hidden_ratio=mlp_hidden_ratio,
             activation=activation,
+            qk_norm=qk_norm,
             edge_dim=self.edge_dim,
         )
 

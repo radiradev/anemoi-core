@@ -72,6 +72,7 @@ class TransformerProcessorBlock(BaseBlock):
         window_size: int,
         layer_kernels: DotDict,
         dropout_p: float = 0.0,
+        qk_norm: bool = False,
         attention_implementation: str = "flash_attention",
         softcap: float = None,
         use_alibi_slopes: bool = None,
@@ -93,6 +94,7 @@ class TransformerProcessorBlock(BaseBlock):
             window_size=window_size,
             qkv_bias=False,
             is_causal=False,
+            qk_norm=qk_norm,
             dropout_p=dropout_p,
             layer_kernels=layer_kernels,
             attention_implementation=attention_implementation,
@@ -473,6 +475,7 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
         num_heads: int = 16,
         bias: bool = True,
         activation: str = "GELU",
+        qk_norm: bool = False,
         num_chunks: int = 1,
         update_src_nodes: bool = False,
         **kwargs,
@@ -496,6 +499,8 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
             Add bias or not
         activation : str, optional
             Activation function, by default "GELU"
+        qk_norm: bool, optional
+            Normalize query and key, by default False
         update_src_nodes: bool, by default False
             Update src if src and dst nodes are given
         """
@@ -509,6 +514,7 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
             bias=bias,
             activation=activation,
             num_chunks=num_chunks,
+            qk_norm=qk_norm,
             update_src_nodes=update_src_nodes,
             **kwargs,
         )
@@ -608,6 +614,7 @@ class GraphTransformerProcessorBlock(GraphTransformerBaseBlock):
         num_heads: int = 16,
         bias: bool = True,
         activation: str = "GELU",
+        qk_norm: bool = False,
         num_chunks: int = 1,
         update_src_nodes: bool = False,
         **kwargs,
@@ -631,6 +638,8 @@ class GraphTransformerProcessorBlock(GraphTransformerBaseBlock):
             Add bias or not
         activation : str, optional
             Activation function, by default "GELU"
+        qk_norm: bool, optional
+            Normalize query and key, by default False
         update_src_nodes: bool, by default False
             Update src if src and dst nodes are given
         """
@@ -644,6 +653,7 @@ class GraphTransformerProcessorBlock(GraphTransformerBaseBlock):
             num_heads=num_heads,
             bias=bias,
             activation=activation,
+            qk_norm=qk_norm,
             num_chunks=num_chunks,
             update_src_nodes=update_src_nodes,
             **kwargs,
