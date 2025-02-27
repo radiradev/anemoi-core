@@ -217,7 +217,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         return self._get_dataloader(self.ds_test, "test")
 
 
-class AnemoiEnsDataModule(AnemoiDatasetsDataModule):
+class AnemoiEnsDatasetsDataModule(AnemoiDatasetsDataModule):
     """Anemoi Ensemble data module for PyTorch Lightning."""
 
     def _get_dataset(

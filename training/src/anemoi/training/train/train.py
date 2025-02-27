@@ -15,6 +15,7 @@ import logging
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
+from typing import Any
 
 import hydra
 import numpy as np
@@ -25,15 +26,15 @@ from omegaconf import OmegaConf
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
+from hydra.utils import instantiate
+from hydra.utils import get_class
+
 from scipy.sparse import load_npz
 
-from anemoi.training.data.datamodule import AnemoiDatasetsDataModule
 from anemoi.training.diagnostics.callbacks import get_callbacks
 from anemoi.training.diagnostics.logger import get_mlflow_logger
 from anemoi.training.diagnostics.logger import get_tensorboard_logger
 from anemoi.training.diagnostics.logger import get_wandb_logger
-from anemoi.training.distributed.strategy import DDPGroupStrategy
-from anemoi.training.train.forecaster import GraphForecaster
 from anemoi.training.utils.checkpoint import freeze_submodule_by_name
 from anemoi.training.utils.checkpoint import transfer_learning_loading
 from anemoi.training.utils.jsonify import map_config_to_primitives
@@ -82,9 +83,9 @@ class AnemoiTrainer:
         self._log_information()
 
     @cached_property
-    def datamodule(self) -> AnemoiDatasetsDataModule:
+    def datamodule(self) -> Any: # I think we need a wrapper class here .... -> AnemoiDatasetsDataModule:
         """DataModule instance and DataSets."""
-        datamodule = AnemoiDatasetsDataModule(self.config, self.graph_data)
+        datamodule = instantiate(self.config.datamodule, self.config, self.graph_data)
         self.config.data.num_features = len(datamodule.ds_train.data.variables)
         LOGGER.info("Number of data variables: %s", str(len(datamodule.ds_train.data.variables)))
         LOGGER.debug("Variables: %s", str(datamodule.ds_train.data.variables))
@@ -160,7 +161,7 @@ class AnemoiTrainer:
         return interp_data
 
     @cached_property
-    def model(self) -> GraphForecaster:
+    def model(self) -> Any: # another wrapper class required? -> GraphEnsForecaster:
         """Provide the model instance."""
         kwargs = {
             "config": self.config,
@@ -172,7 +173,8 @@ class AnemoiTrainer:
             "supporting_arrays": self.supporting_arrays,
         }
 
-        model = GraphForecaster(**kwargs)
+        forecaster = get_class(self.config.training.forecaster)
+        model = forecaster(**kwargs)
 
         # Load the model weights
         if self.load_weights_only:
@@ -183,11 +185,11 @@ class AnemoiTrainer:
                     model = transfer_learning_loading(model, self.last_checkpoint)
                 else:
                     LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
-                    model = GraphForecaster.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
+                    model = forecaster.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
 
             else:
                 LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
-                model = GraphForecaster.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
+                model = forecaster.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
 
         if hasattr(self.config.training, "submodules_to_freeze"):
             # Freeze the chosen model weights
@@ -399,11 +401,10 @@ class AnemoiTrainer:
         LOGGER.info("Plots path: %s", self.config.hardware.paths.plots)
 
     @cached_property
-    def strategy(self) -> DDPGroupStrategy:
-        """Training strategy."""
-        return DDPGroupStrategy(
-            self.config.hardware.num_gpus_per_model,
-            self.config.dataloader.get("read_group_size", self.config.hardware.num_gpus_per_model),
+    def strategy(self) -> Any:
+        return instantiate(
+            self.config.training.strategy, 
+            read_group_size=self.config.dataloader.get("read_group_size", self.config.hardware.num_gpus_per_model), # was ... self.config.hardware.num_gpus_per_ensemble
             static_graph=not self.config.training.accum_grad_batches > 1,
         )
 

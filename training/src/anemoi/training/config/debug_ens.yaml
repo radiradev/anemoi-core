@@ -1,6 +1,7 @@
 defaults:
 - data: zarr
 - dataloader: native_grid
+- datamodule: single
 - diagnostics: evaluation
 - hardware: example
 - graph: multi_scale #encoder_decoder_only
@@ -13,6 +14,9 @@ defaults:
 
 data:
   resolution: o96
+
+datamodule:
+  _target_: anemoi.training.data.datamodule.AnemoiEnsDatasetsDataModule
 
 hardware:
   paths:
@@ -58,8 +62,11 @@ dataloader:
     validation: 8
 
 training:
-  fcstep_to_input: True
-  interp_fields_to_input: True
+  forecaster: anemoi.training.train.forecaster.GraphEnsForecaster # refactor to use _target_ etc?
+  strategy:
+    _target_: anemoi.training.distributed.strategy.DDPEnsGroupStrategy
+    num_gpus_per_ensemble: ${hardware.num_gpus_per_ensemble}
+    num_gpus_per_model: ${hardware.num_gpus_per_model}
   ensemble_size_per_device: 2
   max_epochs: 1
 

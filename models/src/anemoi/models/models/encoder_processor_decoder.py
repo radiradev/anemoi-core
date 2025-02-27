@@ -68,15 +68,9 @@ class AnemoiModelEncProcDec(nn.Module):
 
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
 
-        input_dim = self.multi_step * self.num_input_channels + self.node_attributes.attr_ndims[self._graph_name_data]
-
-        # todo, this should be done better
-        if model_config.training.fcstep_to_input:
-            input_dim += 1
-        if model_config.training.interp_fields_to_input:
-            input_dim += self.num_input_channels_prognostic
-
         self._interp_data = interp_data
+
+        input_dim = self._calculate_input_dim(model_config)
 
         # we can't register these as buffers because DDP does not support sparse tensors
         # these will be moved to the GPU when first used via sefl.interpolate_down/interpolate_up
@@ -158,6 +152,9 @@ class AnemoiModelEncProcDec(nn.Module):
                 else:
                     out.append(self._multiply_sparse(x[i, ...], A))
         return torch.stack(out)
+
+    def _calculate_input_dim(self, model_config):
+        return self.multi_step * self.num_input_channels + self.node_attributes.attr_ndims[self._graph_name_data]
 
     def _calculate_shapes_and_indices(self, data_indices: dict) -> None:
         self.num_input_channels = len(data_indices.internal_model.input)
@@ -310,6 +307,12 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
                 model_config.model.layer_kernels.get("noise_injector", {})
             ),
         )
+
+    def _calculate_input_dim(self, model_config):
+        input_dim = self.multi_step * self.num_input_channels + self.node_attributes.attr_ndims[self._graph_name_data]
+        input_dim += self.num_input_channels_prognostic
+        input_dim += 1
+        return input_dim
 
     def forward(self, x: torch.Tensor, fcstep: int, model_comm_group: Optional[ProcessGroup] = None) -> torch.Tensor:
         """Forward operator.
