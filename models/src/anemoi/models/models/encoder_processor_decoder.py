@@ -153,6 +153,37 @@ class AnemoiModelEncProcDec(nn.Module):
                     out.append(self._multiply_sparse(x[i, ...], A))
         return torch.stack(out)
 
+    def _assemble_input(self, x, batch_size):
+        # normalize and add data positional info (lat/lon)
+        x_data_latent = torch.cat(
+            (
+                einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
+                self.node_attributes(self._graph_name_data, batch_size=batch_size),
+            ),
+            dim=-1,  # feature dimension
+        )
+        return x_data_latent
+
+    def _assemble_output(self, x_out, x, batch_size, ensemble_size, dtype):
+        x_out = (
+            einops.rearrange(
+                x_out,
+                "(batch ensemble grid) vars -> batch ensemble grid vars",
+                batch=batch_size,
+                ensemble=ensemble_size,
+            )
+            .to(dtype=dtype)
+            .clone()
+        )
+
+        # residual connection (just for the prognostic variables)
+        x_out[..., self._internal_output_idx] += x[:, -1, :, :, self._internal_input_idx]
+
+        for bounding in self.boundings:
+            # bounding performed in the order specified in the config file
+            x_out = bounding(x_out)
+        return x_out
+
     def _calculate_input_dim(self, model_config):
         return self.multi_step * self.num_input_channels + self.node_attributes.attr_ndims[self._graph_name_data]
 
@@ -221,22 +252,12 @@ class AnemoiModelEncProcDec(nn.Module):
         batch_size = x.shape[0]
         ensemble_size = x.shape[2]
 
-        # add data positional info (lat/lon)
-        x_data_latent = torch.cat(
-            (
-                einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
-                self.node_attributes(self._graph_name_data, batch_size=batch_size),
-            ),
-            dim=-1,  # feature dimension
-        )
-
+        x_data_latent = self._assemble_input(x, batch_size)
         x_hidden_latent = self.node_attributes(self._graph_name_hidden, batch_size=batch_size)
 
-        # get shard shapes
         shard_shapes_data = get_shape_shards(x_data_latent, 0, model_comm_group)
         shard_shapes_hidden = get_shape_shards(x_hidden_latent, 0, model_comm_group)
 
-        # Run encoder
         x_data_latent, x_latent = self._run_mapper(
             self.encoder,
             (x_data_latent, x_hidden_latent),
@@ -252,10 +273,8 @@ class AnemoiModelEncProcDec(nn.Module):
             model_comm_group=model_comm_group,
         )
 
-        # add skip connection (hidden -> hidden)
         x_latent_proc = x_latent_proc + x_latent
 
-        # Run decoder
         x_out = self._run_mapper(
             self.decoder,
             (x_latent_proc, x_data_latent),
@@ -264,23 +283,7 @@ class AnemoiModelEncProcDec(nn.Module):
             model_comm_group=model_comm_group,
         )
 
-        x_out = (
-            einops.rearrange(
-                x_out,
-                "(batch ensemble grid) vars -> batch ensemble grid vars",
-                batch=batch_size,
-                ensemble=ensemble_size,
-            )
-            .to(dtype=x.dtype)
-            .clone()
-        )
-
-        # residual connection (just for the prognostic variables)
-        x_out[..., self._internal_output_idx] += x[:, -1, :, :, self._internal_input_idx]
-
-        for bounding in self.boundings:
-            # bounding performed in the order specified in the config file
-            x_out = bounding(x_out)
+        x_out = self._assemble_output(x_out, x, batch_size, ensemble_size, x.dtype)
 
         return x_out
 
@@ -314,25 +317,7 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
         input_dim += 1
         return input_dim
 
-    def forward(self, x: torch.Tensor, fcstep: int, model_comm_group: Optional[ProcessGroup] = None) -> torch.Tensor:
-        """Forward operator.
-
-        Args:
-            x: torch.Tensor
-                Input tensor, shape (bs, m, e, n, f)
-            fcstep: int
-                Forecast step
-            model_comm_group: Optional[ProcessGroup], optional
-                Model communication group
-        Returns:
-            Output tensor
-        """
-        batch_size, ensemble_size = x.shape[0], x.shape[2]
-        bse = batch_size * ensemble_size  # merge the batch and ensemble dimensions
-
-        fcstep = min(1, fcstep)
-
-        # interpolate here ... etc
+    def _assemble_input(self, x, fcstep, bse):
         x_truncated = x[:, -1, :, :, self._internal_input_idx]
         x_truncated = einops.rearrange(x_truncated, "batch ensemble grid vars -> (batch ensemble) grid vars")
 
@@ -360,13 +345,48 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
             dim=-1,
         )
 
+        return x_data_latent, x_truncated
+
+    def _assemble_output(self, x_out, x_truncated, batch_size, bse, dtype):
+        x_out = einops.rearrange(x_out, "(bse n) f -> bse n f", bse=bse)
+        x_out = einops.rearrange(x_out, "(bs e) n f -> bs e n f", bs=batch_size).to(dtype=dtype).clone()
+
+        # residual connection (just for the prognostic variables)
+        x_out[..., self._internal_output_idx] += einops.rearrange(
+            x_truncated,
+            "(batch ensemble) grid var -> batch ensemble grid var",
+            batch=batch_size,
+        ).to(dtype=dtype)
+
+        for bounding in self.boundings:
+            # bounding performed in the order specified in the config file
+            x_out = bounding(x_out)
+        return x_out
+
+    def forward(self, x: torch.Tensor, fcstep: int, model_comm_group: Optional[ProcessGroup] = None) -> torch.Tensor:
+        """Forward operator.
+
+        Args:
+            x: torch.Tensor
+                Input tensor, shape (bs, m, e, n, f)
+            fcstep: int
+                Forecast step
+            model_comm_group: Optional[ProcessGroup], optional
+                Model communication group
+        Returns:
+            Output tensor
+        """
+        batch_size, ensemble_size = x.shape[0], x.shape[2]
+        bse = batch_size * ensemble_size  # batch and ensemble dimensions are merged
+
+        fcstep = min(1, fcstep)
+
+        x_data_latent, x_truncated = self._assemble_input(x, fcstep, bse)
         x_hidden_latent = self.node_attributes(self._graph_name_hidden, batch_size=bse)
 
-        # get shard shape
         shard_shapes_data = get_shape_shards(x_data_latent, 0, model_comm_group)
         shard_shapes_hidden = get_shape_shards(x_hidden_latent, 0, model_comm_group)
 
-        # Run encoder
         x_data_latent, x_latent = self._run_mapper(
             self.encoder,
             (x_data_latent, x_hidden_latent),
@@ -392,10 +412,8 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
             **processor_kwargs,
         )
 
-        # add skip connection (hidden -> hidden)
         x_latent_proc = x_latent_proc + x_latent
 
-        # Run decoder
         x_out = self._run_mapper(
             self.decoder,
             (x_latent_proc, x_data_latent),
@@ -404,18 +422,7 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
             model_comm_group=model_comm_group,
         )
 
-        x_out = einops.rearrange(x_out, "(bse n) f -> bse n f", bse=bse)
-        x_out = einops.rearrange(x_out, "(bs e) n f -> bs e n f", bs=batch_size).to(dtype=x.dtype).clone()
-
-        # residual connection (just for the prognostic variables)
-        x_out[..., self._internal_output_idx] += einops.rearrange(
-            x_truncated,
-            "(batch ensemble) grid var -> batch ensemble grid var",
-            batch=batch_size,
-        ).to(dtype=x.dtype)
-
-        for bounding in self.boundings:
-            # bounding performed in the order specified in the config file
-            x_out = bounding(x_out)
+        x_out = self._assemble_output(x_out, x_truncated, batch_size, bse, x.dtype)
 
         return x_out
+
