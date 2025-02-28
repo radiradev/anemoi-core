@@ -152,10 +152,10 @@ class AnemoiTrainer:
         Loads interpolation data.
         """
         truncation_data = {}  
-        if self.config.hardware.files.interp_up:
+        if self.config.training.field_truncation and self.config.hardware.files.interp_up:
             truncation_data["up"] = load_npz(Path(self.config.hardware.paths.inter_mat, self.config.hardware.files.interp_up))
 
-        if self.config.hardware.files.interp_down:
+        if self.config.training.field_truncation and self.config.hardware.files.interp_down:
             truncation_data["down"] = load_npz(Path(self.config.hardware.paths.inter_mat, self.config.hardware.files.interp_down))
 
         return truncation_data

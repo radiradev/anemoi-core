@@ -153,3 +153,6 @@ node_loss_weights:
   node_attribute: area_weight
 
 submodules_to_freeze: []
+
+# Truncation of the input field by hardware.files.interp_up and hardware.files.interp_down
+field_truncation: False 
