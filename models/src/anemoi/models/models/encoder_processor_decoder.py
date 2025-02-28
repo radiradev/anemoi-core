@@ -162,9 +162,23 @@ class AnemoiModelEncProcDec(nn.Module):
             ),
             dim=-1,  # feature dimension
         )
-        return x_data_latent
 
-    def _assemble_output(self, x_out, x, batch_size, ensemble_size, dtype):
+        x_skip = x[:, -1, ...]
+        if self.A_down is not None or self.A_up is not None:
+            x_skip = einops.rearrange(x_skip, "batch ensemble grid vars -> (batch ensemble) grid vars")
+            # these can't be registered as buffers because ddp does not like to broadcast sparse tensors
+            # hence we check that they are on the correct device ; copy should only happen in the first forward run
+            if self.A_down is not None:
+                self.A_down = self.A_down.to(x_skip.device)
+                x_skip = self._interploate_fields(x_skip, self.A_down)  # to coarse resolution
+            if self.A_up is not None:
+                self.A_up = self.A_up.to(x_skip.device)
+                x_skip = self._interploate_fields(x_skip, self.A_up)  # back to high resolution
+            x_skip = einops.rearrange(x_skip, "(batch ensemble) grid vars -> batch ensemble grid vars", batch=batch_size)
+
+        return x_data_latent, x_skip
+
+    def _assemble_output(self, x_out, x_skip, batch_size, ensemble_size, dtype):
         x_out = (
             einops.rearrange(
                 x_out,
@@ -177,7 +191,7 @@ class AnemoiModelEncProcDec(nn.Module):
         )
 
         # residual connection (just for the prognostic variables)
-        x_out[..., self._internal_output_idx] += x[:, -1, :, :, self._internal_input_idx]
+        x_out[..., self._internal_output_idx] += x_skip[..., self._internal_input_idx]
 
         for bounding in self.boundings:
             # bounding performed in the order specified in the config file
@@ -252,7 +266,7 @@ class AnemoiModelEncProcDec(nn.Module):
         batch_size = x.shape[0]
         ensemble_size = x.shape[2]
 
-        x_data_latent = self._assemble_input(x, batch_size)
+        x_data_latent, x_skip = self._assemble_input(x, batch_size)
         x_hidden_latent = self.node_attributes(self._graph_name_hidden, batch_size=batch_size)
 
         shard_shapes_data = get_shape_shards(x_data_latent, 0, model_comm_group)
@@ -283,7 +297,7 @@ class AnemoiModelEncProcDec(nn.Module):
             model_comm_group=model_comm_group,
         )
 
-        x_out = self._assemble_output(x_out, x, batch_size, ensemble_size, x.dtype)
+        x_out = self._assemble_output(x_out, x_skip, batch_size, ensemble_size, x.dtype)
 
         return x_out
 
@@ -318,24 +332,24 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
         return input_dim
 
     def _assemble_input(self, x, fcstep, bse):
-        x_truncated = x[:, -1, :, :, self._internal_input_idx]
-        x_truncated = einops.rearrange(x_truncated, "batch ensemble grid vars -> (batch ensemble) grid vars")
+        x_skip = x[:, -1, :, :, self._internal_input_idx]
+        x_skip = einops.rearrange(x_skip, "batch ensemble grid vars -> (batch ensemble) grid vars")
 
         # these can't be registered as buffers because ddp does not like to broadcast sparse tensors
         # hence we check that they are on the correct device ; copy should only happen in the first forward run
         # todo -> parallelize this
         if self.A_down is not None:
             self.A_down = self.A_down.to(x.device)
-            x_truncated = self._interploate_fields(x_truncated, self.A_down)  # to coarse resolution
+            x_skip = self._interploate_fields(x_skip, self.A_down)  # to coarse resolution
         if self.A_up is not None:
             self.A_up = self.A_up.to(x.device)
-            x_truncated = self._interploate_fields(x_truncated, self.A_up)  # back to high resolution
+            x_skip = self._interploate_fields(x_skip, self.A_up)  # back to high resolution
 
         # add data positional info (lat/lon)
         x_data_latent = torch.cat(
             (
                 einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
-                einops.rearrange(x_truncated, "bse grid vars -> (bse grid) vars"),
+                einops.rearrange(x_skip, "bse grid vars -> (bse grid) vars"),
                 self.node_attributes(self._graph_name_data, batch_size=bse),
             ),
             dim=-1,  # feature dimension
@@ -345,15 +359,15 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
             dim=-1,
         )
 
-        return x_data_latent, x_truncated
+        return x_data_latent, x_skip
 
-    def _assemble_output(self, x_out, x_truncated, batch_size, bse, dtype):
+    def _assemble_output(self, x_out, x_skip, batch_size, bse, dtype):
         x_out = einops.rearrange(x_out, "(bse n) f -> bse n f", bse=bse)
         x_out = einops.rearrange(x_out, "(bs e) n f -> bs e n f", bs=batch_size).to(dtype=dtype).clone()
 
         # residual connection (just for the prognostic variables)
         x_out[..., self._internal_output_idx] += einops.rearrange(
-            x_truncated,
+            x_skip,
             "(batch ensemble) grid var -> batch ensemble grid var",
             batch=batch_size,
         ).to(dtype=dtype)
@@ -381,7 +395,7 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
 
         fcstep = min(1, fcstep)
 
-        x_data_latent, x_truncated = self._assemble_input(x, fcstep, bse)
+        x_data_latent, x_skip = self._assemble_input(x, fcstep, bse)
         x_hidden_latent = self.node_attributes(self._graph_name_hidden, batch_size=bse)
 
         shard_shapes_data = get_shape_shards(x_data_latent, 0, model_comm_group)
@@ -422,7 +436,7 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
             model_comm_group=model_comm_group,
         )
 
-        x_out = self._assemble_output(x_out, x_truncated, batch_size, bse, x.dtype)
+        x_out = self._assemble_output(x_out, x_skip, batch_size, bse, x.dtype)
 
         return x_out
 
