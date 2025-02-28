@@ -28,6 +28,7 @@ encoder:
   _convert_: all
   cpu_offload: ${model.cpu_offload}
   activation: ${model.activation}
+  num_chunks: 2
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
   window_size: -1
@@ -44,6 +45,7 @@ decoder:
   _convert_: all
   cpu_offload: ${model.cpu_offload}
   activation: ${model.activation}
+  num_chunks: 2
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
   window_size: -1

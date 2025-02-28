@@ -8,6 +8,7 @@
 #
 
 from typing import Literal
+from typing import Union
 
 from pydantic import Field
 from pydantic import NonNegativeFloat
@@ -34,9 +35,7 @@ class GraphTransformerEncoderSchema(TransformerModelComponent):
 class TransformerEncoderSchema(TransformerModelComponent):
     target_: Literal["anemoi.models.layers.mapper.TransformerForwardMapper"] = Field(..., alias="_target_")
     "Transformer Encoder object from anemoi.models.layers.mapper."
-    num_layers: NonNegativeInt = Field(example=16)
-    "Number of layers of Transformer encoder."
-    window_size: NonNegativeInt = Field(example=512)
+    window_size: Union[NonNegativeInt, None] = Field(example=512)
     "Attention window size along the longitude axis. Default to 512."
     dropout_p: NonNegativeFloat = Field(example=0.0)
     "Dropout probability used for multi-head self attention, default 0.0"
