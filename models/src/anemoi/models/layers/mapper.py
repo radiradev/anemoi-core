@@ -185,6 +185,7 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
         num_chunks: int = 1,
         cpu_offload: bool = False,
         activation: str = "GELU",
+        qk_norm: bool = False,
         num_heads: int = 16,
         mlp_hidden_ratio: int = 4,
         sub_graph: Optional[HeteroData] = None,
@@ -211,6 +212,8 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
             ratio of mlp hidden dimension to embedding dimension, default 4
         activation : str, optional
             Activation function, by default "GELU"
+        qk_norm : bool, optional
+            Whether to use query and key normalization, default False
         cpu_offload : bool, optional
             Whether to offload processing to CPU, by default False
         out_channels_dst : Optional[int], optional
@@ -243,6 +246,7 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
             num_heads=num_heads,
             edge_dim=self.edge_dim,
             activation=activation,
+            qk_norm=qk_norm,
             num_chunks=num_chunks,
             layer_kernels=layer_kernels,
         )
@@ -294,6 +298,7 @@ class GraphTransformerForwardMapper(ForwardMapperPreProcessMixin, GraphTransform
         num_chunks: int = 1,
         cpu_offload: bool = False,
         activation: str = "GELU",
+        qk_norm: bool = False,
         num_heads: int = 16,
         mlp_hidden_ratio: int = 4,
         sub_graph: Optional[HeteroData] = None,
@@ -320,6 +325,8 @@ class GraphTransformerForwardMapper(ForwardMapperPreProcessMixin, GraphTransform
             ratio of mlp hidden dimension to embedding dimension, default 4
         activation : str, optional
             Activation function, by default "GELU"
+        qk_norm : bool, optional
+            Whether to use query and key normalization, default False
         cpu_offload : bool, optional
             Whether to offload processing to CPU, by default False
         out_channels_dst : Optional[int], optional
@@ -334,6 +341,7 @@ class GraphTransformerForwardMapper(ForwardMapperPreProcessMixin, GraphTransform
             num_chunks=num_chunks,
             cpu_offload=cpu_offload,
             activation=activation,
+            qk_norm=qk_norm,
             num_heads=num_heads,
             mlp_hidden_ratio=mlp_hidden_ratio,
             sub_graph=sub_graph,
@@ -369,6 +377,7 @@ class GraphTransformerBackwardMapper(BackwardMapperPostProcessMixin, GraphTransf
         num_chunks: int = 1,
         cpu_offload: bool = False,
         activation: str = "GELU",
+        qk_norm: bool = False,
         num_heads: int = 16,
         mlp_hidden_ratio: int = 4,
         initialise_data_extractor_zero: bool = False,
@@ -398,6 +407,8 @@ class GraphTransformerBackwardMapper(BackwardMapperPostProcessMixin, GraphTransf
             Whether to initialise the data extractor to zero
         activation : str, optional
             Activation function, by default "GELU"
+        qk_norm : bool, optional
+            Whether to use query and key normalization, default False
         cpu_offload : bool, optional
             Whether to offload processing to CPU, by default False
         out_channels_dst : Optional[int], optional
@@ -415,6 +426,7 @@ class GraphTransformerBackwardMapper(BackwardMapperPostProcessMixin, GraphTransf
             num_chunks=num_chunks,
             cpu_offload=cpu_offload,
             activation=activation,
+            qk_norm=qk_norm,
             num_heads=num_heads,
             mlp_hidden_ratio=mlp_hidden_ratio,
             sub_graph=sub_graph,

@@ -32,7 +32,6 @@ from anemoi.models.layers.attention import MultiHeadSelfAttention
 from anemoi.models.layers.conv import GraphConv
 from anemoi.models.layers.conv import GraphTransformerConv
 from anemoi.models.layers.mlp import MLP
-from anemoi.models.layers.normalization import AutocastLayerNorm
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -375,8 +374,8 @@ class GraphTransformerBaseBlock(BaseBlock, ABC):
         self.projection = linear(out_channels, out_channels)
 
         if self.qk_norm:
-            self.q_norm = AutocastLayerNorm(self.out_channels_conv, bias=False)
-            self.k_norm = AutocastLayerNorm(self.out_channels_conv, bias=False)
+            self.q_norm = layer_kernels["QueryNorm"](self.out_channels_conv)
+            self.k_norm = layer_kernels["KeyNorm"](self.out_channels_conv)
 
         try:
             self.act_func = getattr(nn, activation)

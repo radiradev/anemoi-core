@@ -13,29 +13,39 @@ layer_kernels:
       condition_shape: ${model.noise_injector.noise_channels_dim}
       w_one_bias_zero_init: True
       autocast: false
-      #Any arguments to your chosen function go here e.g.
+      #Any arguments to your chosen function go here
     Linear:
       _target_: torch.nn.Linear
       _partial_: True
-      #Any arguments to your chosen function go here e.g.
+      #Any arguments to your chosen function go here
+    QueryNorm:
+      _target_: anemoi.models.layers.normalization.AutocastLayerNorm
+      _partial_: True
+      bias: False
+      #Any arguments to your chosen function go here
+    KeyNorm:
+      _target_: anemoi.models.layers.normalization.AutocastLayerNorm
+      _partial_: True
+      bias: False
+      #Any arguments to your chosen function go here
   encoder:
     LayerNorm:
       _target_: torch.nn.LayerNorm
       _partial_: True
-      #Any arguments to your chosen function go here e.g.
+      #Any arguments to your chosen function go here
     Linear:
       _target_: torch.nn.Linear
       _partial_: True
-      #Any arguments to your chosen function go here e.g.
+      #Any arguments to your chosen function go here
   decoder:
     LayerNorm:
       _target_: torch.nn.LayerNorm
       _partial_: True
-      #Any arguments to your chosen function go here e.g.
+      #Any arguments to your chosen function go here
     Linear:
       _target_: torch.nn.Linear
       _partial_: True
-      #Any arguments to your chosen function go here e.g.
+      #Any arguments to your chosen function go here
 
 noise_injector:
   _target_: anemoi.models.layers.ensemble.NoiseConditioning
@@ -70,6 +80,7 @@ encoder:
   num_chunks: 1
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
+  qk_norm: False # Transformer and GraphTransformer only
 
 decoder:
   _target_: anemoi.models.layers.mapper.GraphTransformerBackwardMapper
@@ -81,6 +92,7 @@ decoder:
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
   initialise_data_extractor_zero: True
+  qk_norm: False # Transformer and GraphTransformer only
 
 trainable_parameters:
   data: 8

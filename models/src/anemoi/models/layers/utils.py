@@ -46,6 +46,8 @@ def load_layer_kernels(kernel_config: Optional[DotDict] = None) -> DotDict:
     default_kernels = {
         "Linear": {"_target_": "torch.nn.Linear", "_partial_": True},
         "LayerNorm": {"_target_": "torch.nn.LayerNorm", "_partial_": True},
+        "QueryNorm": {"_target_": "anemoi.models.layers.normalization.AutocastLayerNorm", "_partial_": True, "bias": False},
+        "KeyNorm": {"_target_": "anemoi.models.layers.normalization.AutocastLayerNorm", "_partial_": True, "bias": False},
     }
     layer_kernels = {**default_kernels, **kernel_config}
 
