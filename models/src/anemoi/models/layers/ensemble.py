@@ -9,6 +9,7 @@ from anemoi.utils.config import DotDict
 from torch import Tensor
 from torch import nn
 from torch.distributed.distributed_c10d import ProcessGroup
+from torch.utils.checkpoint import checkpoint
 
 LOGGER = logging.getLogger(__name__)
 
@@ -47,7 +48,6 @@ class NoiseInjector(nn.Module):
             activation="GELU",
             final_activation=False,
             layer_norm=True,
-            checkpoints=True,
         )
 
         self.projection = nn.Linear(num_channels + self.noise_channels, num_channels)  # Fold noise into the channels
@@ -74,7 +74,7 @@ class NoiseInjector(nn.Module):
 
         shapes_sharding = change_channels_in_shape(shard_shapes, self.noise_channels)
         noise = shard_tensor(noise, 0, shapes_sharding, model_comm_group)
-        noise = self.noise_mlp(noise)
+        noise = checkpoint(self.noise_mlp, noise, use_reentrant=False)
 
         LOGGER.debug("Noise noise.shape = %s, noise.norm: %.9e", noise.shape, torch.linalg.norm(noise))
 
@@ -125,6 +125,6 @@ class NoiseConditioning(NoiseInjector):
 
         shapes_sharding = change_channels_in_shape(shard_shapes, self.noise_channels)
         noise = shard_tensor(noise, 0, shapes_sharding, model_comm_group)
-        noise = self.noise_mlp(noise)
+        noise = checkpoint(self.noise_mlp, noise, use_reentrant=False)
 
         return x, noise

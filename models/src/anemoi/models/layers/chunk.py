@@ -206,13 +206,14 @@ class GNNProcessorChunk(BaseProcessorChunk):
         shapes: tuple,
         model_comm_group: Optional[ProcessGroup] = None,
         size: Optional[Size] = None,
+        **kwargs,
     ) -> OptPairTensor:
         x_out = x * 1.0  # required for pytorch >= 2.1
         if self.emb_edges:
             edge_attr = self.emb_edges(edge_attr)
 
         for i in range(self.num_layers):
-            x_out, edge_attr = self.blocks[i](x_out, edge_attr, edge_index, shapes, model_comm_group, size=size)
+            x_out, edge_attr = self.blocks[i](x_out, edge_attr, edge_index, shapes, model_comm_group=model_comm_group, size=size, **kwargs)
 
         return x_out, edge_attr
 
@@ -276,8 +277,9 @@ class GraphTransformerProcessorChunk(BaseProcessorChunk):
         batch_size: int,
         model_comm_group: Optional[ProcessGroup] = None,
         size: Optional[Size] = None,
+        **kwargs,
     ) -> OptPairTensor:
         for i in range(self.num_layers):
-            x, edge_attr = self.blocks[i](x, edge_attr, edge_index, shapes, batch_size, model_comm_group, size=size)
+            x, edge_attr = self.blocks[i](x, edge_attr, edge_index, shapes, batch_size, model_comm_group=model_comm_group, size=size, **kwargs)
 
         return x, edge_attr
