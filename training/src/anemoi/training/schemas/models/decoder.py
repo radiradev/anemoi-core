@@ -32,7 +32,7 @@ class GraphTransformerDecoderSchema(TransformerModelComponent):
 
 
 class TransformerDecoderSchema(TransformerModelComponent):
-    target_: Literal["anemoi.models.layers.mapper.TransformerForwardMapper"] = Field(..., alias="_target_")
+    target_: Literal["anemoi.models.layers.mapper.TransformerBackwardMapper"] = Field(..., alias="_target_")
     "Transformer Encoder object from anemoi.models.layers.mapper."
     num_layers: NonNegativeInt = Field(example=16)
     "Number of layers of Transformer encoder."
