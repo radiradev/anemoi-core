@@ -30,6 +30,7 @@ def transformer_processor_init():
     layer_kernels = instantiate(load_layer_kernels())
     softcap = 0.5
     attention_implementation = "scaled_dot_product_attention"
+    qk_norm = True
 
     return (
         num_layers,
@@ -44,6 +45,7 @@ def transformer_processor_init():
         dropout_p,
         softcap,
         attention_implementation,
+        qk_norm,
     )
 
 
@@ -62,6 +64,7 @@ def transformer_processor(transformer_processor_init):
         dropout_p,
         softcap,
         attention_implementation,
+        qk_norm,
     ) = transformer_processor_init
     return TransformerProcessor(
         num_layers=num_layers,
@@ -76,6 +79,7 @@ def transformer_processor(transformer_processor_init):
         dropout_p=dropout_p,
         attention_implementation=attention_implementation,
         softcap=softcap,
+        qk_norm=qk_norm,
     )
 
 
@@ -93,11 +97,13 @@ def test_transformer_processor_init(transformer_processor, transformer_processor
         _dropout_p,
         _attention_implementation,
         _softcap,
+        _qk_norm,
     ) = transformer_processor_init
     assert isinstance(transformer_processor, TransformerProcessor)
     assert transformer_processor.num_chunks == num_chunks
     assert transformer_processor.num_channels == num_channels
     assert transformer_processor.chunk_size == num_layers // num_chunks
+    assert transformer_processor.qk_norm == _qk_norm
 
 
 def test_transformer_processor_forward(transformer_processor, transformer_processor_init):
@@ -114,6 +120,7 @@ def test_transformer_processor_forward(transformer_processor, transformer_proces
         _dropout_p,
         _attention_implementation,
         _softcap,
+        _qk_norm,
     ) = transformer_processor_init
     gridsize = 100
     batch_size = 1
