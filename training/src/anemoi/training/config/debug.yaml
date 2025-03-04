@@ -39,6 +39,7 @@ dataloader:
 
 training:
   max_epochs: 1
+  field_truncation: False
 
 diagnostics:
   plot:

@@ -20,7 +20,7 @@ datamodule:
 
 hardware:
   paths:
-    tuncation_matrices: /ec/res4/hpcperm/nesl/inter_mat
+    truncation_matrices: /ec/res4/hpcperm/nesl/inter_mat
     data: /home/mlx/ai-ml/datasets/
     grids: /home/mlx/ai-ml/grids/
     output: ${oc.env:SCRATCH}/aifs/${data.resolution}/
@@ -62,6 +62,7 @@ dataloader:
     validation: 8
 
 training:
+  field_truncation: True
   forecaster: anemoi.training.train.forecaster.GraphEnsForecaster # refactor to use _target_ etc?
   strategy:
     _target_: anemoi.training.distributed.strategy.DDPEnsGroupStrategy
