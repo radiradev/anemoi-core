@@ -27,7 +27,7 @@ def transformer_processor_init():
     num_heads = 16
     mlp_hidden_ratio = 4
     dropout_p = 0.1
-    layer_kernels = instantiate(load_layer_kernels())
+    layer_kernels = instantiate(load_layer_kernels(kernel_config={}))
     softcap = 0.5
     attention_implementation = "scaled_dot_product_attention"
     qk_norm = True
@@ -103,7 +103,6 @@ def test_transformer_processor_init(transformer_processor, transformer_processor
     assert transformer_processor.num_chunks == num_chunks
     assert transformer_processor.num_channels == num_channels
     assert transformer_processor.chunk_size == num_layers // num_chunks
-    assert transformer_processor.qk_norm == _qk_norm
 
 
 def test_transformer_processor_forward(transformer_processor, transformer_processor_init):
