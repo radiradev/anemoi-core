@@ -109,10 +109,22 @@ class TransformerProcessorBlock(BaseBlock):
         )
 
     def forward(
-        self, x: Tensor, shapes: list, batch_size: int, model_comm_group: Optional[ProcessGroup] = None, **layer_kwargs,
+        self,
+        x: Tensor,
+        shapes: list,
+        batch_size: int,
+        model_comm_group: Optional[ProcessGroup] = None,
+        **layer_kwargs,
     ) -> Tensor:
-        x = x + self.attention(self.layer_norm_attention(x, **layer_kwargs), shapes, batch_size, model_comm_group=model_comm_group)
-        x = x + self.mlp(self.layer_norm_mlp(x, **layer_kwargs,))
+        x = x + self.attention(
+            self.layer_norm_attention(x, **layer_kwargs), shapes, batch_size, model_comm_group=model_comm_group
+        )
+        x = x + self.mlp(
+            self.layer_norm_mlp(
+                x,
+                **layer_kwargs,
+            )
+        )
         return x
 
 
@@ -599,13 +611,18 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
 
         # compute nodes_new_dst = self.run_node_dst_mlp(out) + out in chunks:
         nodes_new_dst = torch.cat(
-            [self.run_node_dst_mlp(chunk, **layer_kwargs) + chunk for chunk in out.tensor_split(num_chunks, dim=0)], dim=0
+            [self.run_node_dst_mlp(chunk, **layer_kwargs) + chunk for chunk in out.tensor_split(num_chunks, dim=0)],
+            dim=0,
         )
 
         if self.update_src_nodes:
             # compute nodes_new_src = self.run_node_src_mlp(out) + out in chunks:
             nodes_new_src = torch.cat(
-                [self.run_node_src_mlp(chunk, **layer_kwargs) + chunk for chunk in x_skip[0].tensor_split(num_chunks, dim=0)], dim=0
+                [
+                    self.run_node_src_mlp(chunk, **layer_kwargs) + chunk
+                    for chunk in x_skip[0].tensor_split(num_chunks, dim=0)
+                ],
+                dim=0,
             )
         else:
             nodes_new_src = x_skip[0]

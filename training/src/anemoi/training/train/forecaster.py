@@ -7,13 +7,11 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
+from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from collections.abc import Generator
-from collections.abc import Mapping
-from typing import Optional
-from typing import Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytorch_lightning as pl
@@ -22,23 +20,28 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
 from timm.scheduler import CosineLRScheduler
-from torch.distributed.distributed_c10d import ProcessGroup
 from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.utils.checkpoint import checkpoint
-from torch_geometric.data import HeteroData
 
-from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.models.interface import AnemoiModelInterface
+from anemoi.training.distributed.ensemble import gather_ensemble_members
 from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
+from anemoi.training.utils.inicond import EnsembleInitialConditions
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.masks import Boolean1DMask
 from anemoi.training.utils.masks import NoOutputMask
 from anemoi.utils.config import DotDict
 
-from torch.utils.checkpoint import checkpoint
-from anemoi.training.distributed.ensemble import gather_ensemble_members
-from anemoi.training.utils.inicond import EnsembleInitialConditions
+if TYPE_CHECKING:
+    from collections.abc import Generator
+    from collections.abc import Mapping
+
+    from torch.distributed.distributed_c10d import ProcessGroup
+    from torch_geometric.data import HeteroData
+
+    from anemoi.models.data_indices.collection import IndexCollection
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -181,9 +184,9 @@ class GraphForecaster(pl.LightningModule):
     @staticmethod
     def get_loss_function(
         config: DictConfig,
-        scalars: Union[dict[str, tuple[Union[int, tuple[int, ...], torch.Tensor]]], None] = None,  # noqa: FA100
+        scalars: dict[str, tuple[int | tuple[int, ...] | torch.Tensor]] | None = None,
         **kwargs,
-    ) -> Union[BaseWeightedLoss, torch.nn.ModuleList]:  # noqa: FA100
+    ) -> BaseWeightedLoss | torch.nn.ModuleList:
         """Get loss functions from config.
 
         Can be ModuleList if multiple losses are specified.
@@ -405,10 +408,10 @@ class GraphForecaster(pl.LightningModule):
     def rollout_step(
         self,
         batch: torch.Tensor,
-        rollout: Optional[int] = None,  # noqa: FA100
+        rollout: int | None = None,
         training_mode: bool = True,
         validation_mode: bool = False,
-    ) -> Generator[tuple[Union[torch.Tensor, None], dict, list], None, None]:  # noqa: FA100
+    ) -> Generator[tuple[torch.Tensor | None, dict, list], None, None]:
         """Rollout step for the forecaster.
 
         Will run pre_processors on batch, but not post_processors on predictions.
@@ -819,7 +822,7 @@ class GraphEnsForecaster(GraphForecaster):
         ens_comm_group: ProcessGroup,
         model_comm_group: ProcessGroup,
         return_pred_ens: bool = False,
-    ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
         """Gather the ensemble members from all devices in my group.
 
         Eliminate duplicates (if any) and compute the loss.
@@ -849,11 +852,10 @@ class GraphEnsForecaster(GraphForecaster):
             y_pred_ens:
                 Predictions if validation mode
         """
-
-        # gather ensemble members, 
-        # full ensemble is only materialised on GPU in checkpointed region    
+        # gather ensemble members,
+        # full ensemble is only materialised on GPU in checkpointed region
         y_pred_ens = gather_ensemble_members(
-            y_pred.clone(), # for bwd because we checkpoint this region
+            y_pred.clone(),  # for bwd because we checkpoint this region
             dim=1,
             shapes=[y_pred.shape] * ens_comm_group_size,
             nens=nens_per_device,
@@ -870,10 +872,10 @@ class GraphEnsForecaster(GraphForecaster):
     def rollout_step(
         self,
         batch: torch.Tensor,
-        rollout: Optional[int] = None,  # noqa: FA100
+        rollout: int | None = None,
         training_mode: bool = True,
         validation_mode: bool = False,
-    ) -> Generator[tuple[Union[torch.Tensor, None], dict, list], None, None]:  # noqa: FA100
+    ) -> Generator[tuple[torch.Tensor | None, dict, list], None, None]:
         """Rollout step for the forecaster.
 
         Will run pre_processors on batch, but not post_processors on predictions.
@@ -909,12 +911,17 @@ class GraphEnsForecaster(GraphForecaster):
         LOGGER.debug("Shapes: batch[0][0].shape = %s, ens_ic.shape = %s", list(batch[0][0].shape), list(ens_ic.shape))
 
         batch[0] = self.model.pre_processors(batch[0], in_place=not validation_mode)
-        x = self.model.pre_processors(ens_ic, in_place=not validation_mode) # not in place required here??? ; shape = (bs, multistep, nens_per_device, latlon, input.full) 
+        x = self.model.pre_processors(
+            ens_ic,
+            in_place=not validation_mode,
+        )  # not in place required here??? ; shape = (bs, multistep, nens_per_device, latlon, input.full)
 
         assert len(x.shape) == 5, f"Expected a 5-dimensional tensor and got {len(x.shape)} dimensions, shape {x.shape}!"
-        assert (x.shape[1] == self.multi_step) and (
-            x.shape[2] == self.nens_per_device
-        ), f"Shape mismatch in x! Expected ({self.multi_step}, {self.nens_per_device}), got ({x.shape[1]}, {x.shape[2]})!"
+        assert (x.shape[1] == self.multi_step) and (x.shape[2] == self.nens_per_device), (
+            "Shape mismatch in x! "
+            f"Expected ({self.multi_step}, {self.nens_per_device}), "
+            f"got ({x.shape[1]}, {x.shape[2]})!"
+        )
 
         msg = (
             "Batch length not sufficient for requested multi_step length!"
@@ -929,22 +936,32 @@ class GraphEnsForecaster(GraphForecaster):
         for rollout_step in range(rollout or self.rollout):
             # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
             y_pred = self(x, rollout_step)
-            y = batch[0][:, self.multi_step + rollout_step, 0, :, self.data_indices.internal_data.output.full] # self.data_indices.data.output.full
+            y = batch[0][
+                :,
+                self.multi_step + rollout_step,
+                0,
+                :,
+                self.data_indices.internal_data.output.full,
+            ]  # self.data_indices.data.output.full
             LOGGER.debug("SHAPE: y.shape = %s", list(y.shape))
 
             # y includes the auxiliary variables, so we must leave those out when computing the loss
-            loss, y_pred_ens_group = checkpoint(
-                self.gather_and_compute_loss,
-                y_pred,
-                y,
-                self.loss,
-                self.nens_per_device,
-                self.ens_comm_group_size,
-                self.ens_comm_group,
-                self.model_comm_group,
-                True if validation_mode else False,
-                use_reentrant=False,
-            ) if training_mode else None
+            loss, y_pred_ens_group = (
+                checkpoint(
+                    self.gather_and_compute_loss,
+                    y_pred,
+                    y,
+                    self.loss,
+                    self.nens_per_device,
+                    self.ens_comm_group_size,
+                    self.ens_comm_group,
+                    self.model_comm_group,
+                    validation_mode,
+                    use_reentrant=False,
+                )
+                if training_mode
+                else None
+            )
 
             x = self.advance_input(x, y_pred, batch[0], rollout_step)
 
@@ -980,7 +997,7 @@ class GraphEnsForecaster(GraphForecaster):
         metrics = {}
         y_preds = []
 
-        for loss_next, metrics_next, y_preds_next, ens_ic in self.rollout_step(
+        for loss_next, metrics_next, y_preds_next, _ens_ic in self.rollout_step(
             batch,
             rollout=self.rollout,
             training_mode=True,
@@ -991,7 +1008,7 @@ class GraphEnsForecaster(GraphForecaster):
             y_preds.extend(y_preds_next)
 
         loss *= 1.0 / self.rollout
-        return loss, metrics, y_preds, ens_ic
+        return loss, metrics, y_preds, _ens_ic
 
     def training_step(self, batch: tuple[torch.Tensor, ...], batch_idx: int) -> torch.Tensor | dict:
         """Run one training step.
@@ -1009,7 +1026,7 @@ class GraphEnsForecaster(GraphForecaster):
             train_loss:
                 Training loss
         """
-        train_loss, _, y_preds, _ = self._step(batch, batch_idx)
+        train_loss, _, _, _ = self._step(batch, batch_idx)
 
         self.log(
             "train_" + self.loss.name,

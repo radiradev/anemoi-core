@@ -270,7 +270,9 @@ class GNNProcessor(GraphEdgeMixin, BaseProcessor):
         edge_index = shard_tensor(edge_index, 1, shapes_edge_idx, model_comm_group)
         edge_attr = shard_tensor(edge_attr, 0, shapes_edge_attr, model_comm_group)
 
-        x, edge_attr = self.run_layers((x, edge_attr), edge_index, (shape_nodes, shape_nodes), model_comm_group, **kwargs)
+        x, edge_attr = self.run_layers(
+            (x, edge_attr), edge_index, (shape_nodes, shape_nodes), model_comm_group, **kwargs
+        )
 
         return x
 

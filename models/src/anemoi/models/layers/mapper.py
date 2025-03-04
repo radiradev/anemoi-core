@@ -445,7 +445,7 @@ class GraphTransformerBackwardMapper(BackwardMapperPostProcessMixin, GraphTransf
                     nn.init.constant_(module.weight, 0.0)
                     if module.bias is not None:
                         nn.init.constant_(module.bias, 0.0)
-    
+
     def pre_process(self, x, shard_shapes, model_comm_group=None):
         x_src, x_dst, shapes_src, shapes_dst = super().pre_process(x, shard_shapes, model_comm_group)
         shapes_src = change_channels_in_shape(shapes_src, self.hidden_dim)

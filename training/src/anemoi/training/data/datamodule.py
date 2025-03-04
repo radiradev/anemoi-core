@@ -22,8 +22,8 @@ from torch.utils.data import DataLoader
 
 from anemoi.datasets.data import open_dataset
 from anemoi.models.data_indices.collection import IndexCollection
-from anemoi.training.data.dataset import NativeGridDataset
 from anemoi.training.data.dataset import EnsNativeGridDataset
+from anemoi.training.data.dataset import NativeGridDataset
 from anemoi.training.data.dataset import worker_init_func
 from anemoi.utils.dates import frequency_to_seconds
 
@@ -222,7 +222,7 @@ class AnemoiEnsDatasetsDataModule(AnemoiDatasetsDataModule):
 
     def _get_dataset(
         self,
-        data_reader,
+        data_reader: Callable,
         shuffle: bool = True,
         rollout: int = 1,
         label: str = "generic",
@@ -238,7 +238,7 @@ class AnemoiEnsDatasetsDataModule(AnemoiDatasetsDataModule):
             // self.config.hardware.num_gpus_per_model
         )
 
-        data = EnsNativeGridDataset(
+        return EnsNativeGridDataset(
             data_reader=data_reader,
             rollout=r,
             multistep=self.config.training.multistep_input,
@@ -251,5 +251,3 @@ class AnemoiEnsDatasetsDataModule(AnemoiDatasetsDataModule):
             num_gpus_per_ens=self.config.hardware.num_gpus_per_ensemble,
             num_gpus_per_model=self.config.hardware.num_gpus_per_model,
         )
-
-        return data

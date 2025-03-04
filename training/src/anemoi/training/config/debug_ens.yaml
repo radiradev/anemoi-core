@@ -123,4 +123,3 @@ diagnostics:
       run_name: 'debug12343'
   profiler: False
   enable_progress_bar: True
-

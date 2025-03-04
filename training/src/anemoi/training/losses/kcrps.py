@@ -1,8 +1,19 @@
+# (C) Copyright 2024 Anemoi contributors.
+#
+# This software is licensed under the terms of the Apache Licence Version 2.0
+# which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
+#
+# In applying this licence, ECMWF does not waive the privileges and immunities
+# granted to it by virtue of its status as an intergovernmental organisation
+# nor does it submit to any jurisdiction.
+
+from __future__ import annotations
+
 import logging
-from typing import Optional
 
 import einops
 import torch
+
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
 
 LOGGER = logging.getLogger(__name__)
@@ -15,7 +26,7 @@ class KernelCRPS(BaseWeightedLoss):
         self,
         node_weights: torch.Tensor,
         fair: bool = True,
-        ignore_nans: Optional[bool] = False,
+        ignore_nans: bool = False,
         **kwargs,
     ) -> None:
         """Latitude- and (inverse-)variance-weighted kernel CRPS loss.
@@ -87,17 +98,14 @@ class KernelCRPS(BaseWeightedLoss):
             return kcrps_.sum() / (npoints * bs_)
         # sum only across the batch dimension; enable this to generate per-variable CRPS "maps"
         loss = kcrps_.sum(dim=0) / bs_
-        loss = loss.sum(dim=0) / self.node_weights.sum()
-
-        return loss
+        return loss.sum(dim=0) / self.node_weights.sum()
 
     @property
     def name(self) -> str:
 
         f_str = "f" if self.fair else ""
 
-        name = f"{f_str}kcrps"
-        return name
+        return f"{f_str}kcrps"
 
 
 class AlmostFairKernelCRPS(BaseWeightedLoss):
@@ -107,8 +115,8 @@ class AlmostFairKernelCRPS(BaseWeightedLoss):
         self,
         node_weights: torch.Tensor,
         alpha: float = 1.0,
-        no_autocast=True,
-        ignore_nans: Optional[bool] = False,
+        no_autocast: bool = True,
+        ignore_nans: bool = False,
         **kwargs,
     ) -> None:
         """Latitude- and (inverse-)variance-weighted kernel CRPS loss.
@@ -133,7 +141,8 @@ class AlmostFairKernelCRPS(BaseWeightedLoss):
         Args:
             preds: predicted ensemble, shape (batch_size, n_vars, latlon, ens_size)
             targets: ground truth, shape (batch_size, n_vars, latlon)
-            alpha: factor for linear combination of fair (unbiased, ensemble variance component weighted by (ens-size-1)^-1)
+            alpha: factor for linear combination of fair
+                (unbiased, ensemble variance component weighted by (ens-size-1)^-1)
                 and standard CRPS (1.0 = fully fair, 0.0 = fully unfair)
 
         Returns
@@ -159,9 +168,7 @@ class AlmostFairKernelCRPS(BaseWeightedLoss):
         assert ens_size > 1, "Ensemble size must be greater than 1."
 
         coef = 1.0 / (2.0 * ens_size * (ens_size - 1))
-        afcrps = coef * torch.sum(mem_err + mem_err_transpose - (1 - epsilon) * var, dim=(-1, -2))
-
-        return afcrps
+        return coef * torch.sum(mem_err + mem_err_transpose - (1 - epsilon) * var, dim=(-1, -2))
 
     def forward(
         self,
@@ -195,12 +202,8 @@ class AlmostFairKernelCRPS(BaseWeightedLoss):
 
         # sum only across the batch dimension; enable this to generate per-variable CRPS "maps"
         loss = kcrps_.sum(dim=0) / bs_
-        loss = loss.sum(dim=0) / self.node_weights.sum()
-
-        return loss
+        return loss.sum(dim=0) / self.node_weights.sum()
 
     @property
     def name(self) -> str:
-
-        name = f"afkcrps{self.alpha:.2f}"
-        return name
+        return f"afkcrps{self.alpha:.2f}"

@@ -11,11 +11,11 @@
 import torch
 from omegaconf import DictConfig
 
+from anemoi.training.losses.kcrps import AlmostFairKernelCRPS
+from anemoi.training.losses.kcrps import KernelCRPS
 from anemoi.training.losses.mse import WeightedMSELoss
-from anemoi.training.losses.kcrps import KernelCRPS, AlmostFairKernelCRPS
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
 from anemoi.training.train.forecaster import GraphForecaster
-from anemoi.training.train.forecaster import GraphEnsForecaster
 
 
 def test_manual_init() -> None:
@@ -65,6 +65,7 @@ def test_dynamic_init_scalar_not_add() -> None:
     torch.testing.assert_close(loss.node_weights, torch.ones(1))
     assert "test" not in loss.scalar
 
+
 # KernelCRPS tests
 def test_kcrps_manual_init() -> None:
     """Test manual initialization of KernelCRPS."""
@@ -81,7 +82,7 @@ def test_kcrps_dynamic_init() -> None:
             {
                 "_target_": "anemoi.training.losses.kcrps.KernelCRPS",
                 "fair": True,
-            }
+            },
         ),
         node_weights=torch.ones(1),
     )
@@ -105,7 +106,7 @@ def test_almost_fair_kcrps_dynamic_init() -> None:
             {
                 "_target_": "anemoi.training.losses.kcrps.AlmostFairKernelCRPS",
                 "alpha": 0.95,
-            }
+            },
         ),
         node_weights=torch.ones(1),
     )
@@ -122,7 +123,7 @@ def test_kcrps_with_scalars() -> None:
                 "_target_": "anemoi.training.losses.kcrps.KernelCRPS",
                 "scalars": ["test"],
                 "fair": True,
-            }
+            },
         ),
         node_weights=torch.ones(1),
         scalars={"test": ((0, 1), torch.ones((1, 2)))},
@@ -140,7 +141,7 @@ def test_almost_fair_kcrps_with_scalars() -> None:
                 "_target_": "anemoi.training.losses.kcrps.AlmostFairKernelCRPS",
                 "scalars": ["test"],
                 "alpha": 0.95,
-            }
+            },
         ),
         node_weights=torch.ones(1),
         scalars={"test": ((0, 1), torch.ones((1, 2)))},

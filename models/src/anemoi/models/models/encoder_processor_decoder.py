@@ -174,7 +174,9 @@ class AnemoiModelEncProcDec(nn.Module):
             if self.A_up is not None:
                 self.A_up = self.A_up.to(x_skip.device)
                 x_skip = self._interploate_fields(x_skip, self.A_up)  # back to high resolution
-            x_skip = einops.rearrange(x_skip, "(batch ensemble) grid vars -> batch ensemble grid vars", batch=batch_size)
+            x_skip = einops.rearrange(
+                x_skip, "(batch ensemble) grid vars -> batch ensemble grid vars", batch=batch_size
+            )
 
         return x_data_latent, x_skip
 
@@ -315,14 +317,18 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
         truncation_data: dict,
     ) -> None:
 
-        super().__init__(model_config=model_config, data_indices=data_indices, statistics=statistics, graph_data=graph_data, truncation_data=truncation_data)
+        super().__init__(
+            model_config=model_config,
+            data_indices=data_indices,
+            statistics=statistics,
+            graph_data=graph_data,
+            truncation_data=truncation_data,
+        )
 
         self.noise_injector = instantiate(
             model_config.model.noise_injector,
             num_channels=self.num_channels,
-            layer_kernels=load_layer_kernels(
-                model_config.model.layer_kernels.get("noise_injector", {})
-            ),
+            layer_kernels=load_layer_kernels(model_config.model.layer_kernels.get("noise_injector", {})),
         )
 
     def _calculate_input_dim(self, model_config):
@@ -439,4 +445,3 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
         x_out = self._assemble_output(x_out, x_skip, batch_size, bse, x.dtype)
 
         return x_out
-

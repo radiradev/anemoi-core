@@ -60,7 +60,12 @@ class BaseProcessorChunk(nn.Module, ABC):
 
     @abstractmethod
     def forward(
-        self, x: Tensor, shapes: list, batch_size: int, model_comm_group: Optional[ProcessGroup] = None, **kwargs,
+        self,
+        x: Tensor,
+        shapes: list,
+        batch_size: int,
+        model_comm_group: Optional[ProcessGroup] = None,
+        **kwargs,
     ) -> Tensor: ...
 
 
@@ -213,7 +218,9 @@ class GNNProcessorChunk(BaseProcessorChunk):
             edge_attr = self.emb_edges(edge_attr)
 
         for i in range(self.num_layers):
-            x_out, edge_attr = self.blocks[i](x_out, edge_attr, edge_index, shapes, model_comm_group=model_comm_group, size=size, **kwargs)
+            x_out, edge_attr = self.blocks[i](
+                x_out, edge_attr, edge_index, shapes, model_comm_group=model_comm_group, size=size, **kwargs
+            )
 
         return x_out, edge_attr
 
@@ -280,6 +287,8 @@ class GraphTransformerProcessorChunk(BaseProcessorChunk):
         **kwargs,
     ) -> OptPairTensor:
         for i in range(self.num_layers):
-            x, edge_attr = self.blocks[i](x, edge_attr, edge_index, shapes, batch_size, model_comm_group=model_comm_group, size=size, **kwargs)
+            x, edge_attr = self.blocks[i](
+                x, edge_attr, edge_index, shapes, batch_size, model_comm_group=model_comm_group, size=size, **kwargs
+            )
 
         return x, edge_attr

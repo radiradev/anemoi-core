@@ -5,7 +5,7 @@ defaults:
 - diagnostics: evaluation
 - hardware: example
 - graph: multi_scale #encoder_decoder_only #multi_scale
-- model: graphtransformer 
+- model: graphtransformer
 - training: default
 - _self_
 

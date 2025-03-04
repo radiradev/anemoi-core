@@ -2,14 +2,15 @@ import logging
 from typing import Optional
 
 import torch
-from anemoi.models.distributed.graph import shard_tensor
-from anemoi.models.distributed.shapes import change_channels_in_shape
-from anemoi.models.layers.mlp import MLP
-from anemoi.utils.config import DotDict
 from torch import Tensor
 from torch import nn
 from torch.distributed.distributed_c10d import ProcessGroup
 from torch.utils.checkpoint import checkpoint
+
+from anemoi.models.distributed.graph import shard_tensor
+from anemoi.models.distributed.shapes import change_channels_in_shape
+from anemoi.models.layers.mlp import MLP
+from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
 
@@ -58,7 +59,9 @@ class NoiseInjector(nn.Module):
         tensor_shape = (*noise_ref.shape[:-1], self.noise_channels)
         # _tensor_generator = torch.randn if self.inject_noise else torch.zeros
         # noise = _tensor_generator(tensor_shape).type_as(noise_ref)
-        noise = torch.normal(mean=0, std=self.noise_std, size=tensor_shape, dtype=noise_ref.dtype, device=noise_ref.device)
+        noise = torch.normal(
+            mean=0, std=self.noise_std, size=tensor_shape, dtype=noise_ref.dtype, device=noise_ref.device
+        )
         noise.requires_grad = False
         return noise
 

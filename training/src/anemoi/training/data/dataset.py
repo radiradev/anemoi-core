@@ -176,7 +176,7 @@ class NativeGridDataset(IterableDataset):
 
         self.seed_comm_group_id = model_comm_group_id
         self.seed_comm_num_groups = model_comm_num_groups
-        
+
         assert self.reader_group_size >= 1, "reader_group_size must be positive"
 
         LOGGER.debug(
@@ -217,8 +217,7 @@ class NativeGridDataset(IterableDataset):
         self.chunk_index_range = np.arange(low, high, dtype=np.uint32)
 
         LOGGER.info(
-            "Worker %d (pid %d, global_rank %d, model comm group %d) "
-            " has low/high range %d / %d",
+            "Worker %d (pid %d, global_rank %d, model comm group %d)  has low/high range %d / %d",
             worker_id,
             os.getpid(),
             self.global_rank,
@@ -411,7 +410,9 @@ class EnsNativeGridDataset(NativeGridDataset):
         """Subselect EDA ensemble members assigned to the current device."""
         tot_ens = self.ens_members_per_device * self.num_gpus_per_ens // self.num_gpus_per_model
 
-        assert tot_ens <= num_eda_members, f"Can't generate an ensemble of size {tot_ens} from {num_eda_members} EDA perturbations"
+        assert (
+            tot_ens <= num_eda_members
+        ), f"Can't generate an ensemble of size {tot_ens} from {num_eda_members} EDA perturbations"
 
         eda_member_gen_idx = self.rng_inicond_sampling.choice(range(num_eda_members), size=tot_ens, replace=False)
         offset = 1  # index=0 analysis, index=1 EDA recentred
@@ -419,7 +420,9 @@ class EnsNativeGridDataset(NativeGridDataset):
 
         effective_rank = self.ens_comm_group_rank // self.num_gpus_per_model
         eda_member_idx = np.sort(
-            eda_member_gen_idx[effective_rank * self.ens_members_per_device : self.ens_members_per_device * (1 + effective_rank)],
+            eda_member_gen_idx[
+                effective_rank * self.ens_members_per_device : self.ens_members_per_device * (1 + effective_rank)
+            ],
         )
 
         LOGGER.debug(
@@ -542,7 +545,7 @@ class EnsNativeGridDataset(NativeGridDataset):
             self.seed_comm_group_id,
             seed,
             sanity_rnd,
-            sanity_rnd_ini
+            sanity_rnd_ini,
         )
 
     def __iter__(self):
@@ -582,9 +585,8 @@ class EnsNativeGridDataset(NativeGridDataset):
             end_eda = i + self.timeincrement
 
             if self.eda_flag:
-                eda_member_gen_idx, eda_member_idx = self.sample_eda_members(self.num_eda_members)
+                _, eda_member_idx = self.sample_eda_members(self.num_eda_members)
             else:
-                eda_member_gen_idx = None
                 eda_member_idx = None
 
             grid_shard_indices = self.grid_indices.get_shard_indices(self.reader_group_rank)
@@ -599,7 +601,7 @@ class EnsNativeGridDataset(NativeGridDataset):
                 x_an = x_an[..., grid_shard_indices]  # select the grid shard
             x_an = rearrange(x_an, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
 
-            x_pert: Optional[torch.Tensor] = None
+            x_pert: torch.Tensor | None = None
             if self.eda_flag:
                 if isinstance(grid_shard_indices, slice):
                     x_pert = self.data[start : end_eda : self.timeincrement, ..., grid_shard_indices]
@@ -607,12 +609,15 @@ class EnsNativeGridDataset(NativeGridDataset):
                     x_pert = self.data[start : end_eda : self.timeincrement, ...]
                     x_pert = x_pert[..., grid_shard_indices]  # select the grid shard
                 x_pert = rearrange(
-                        x_pert[:, :, eda_member_idx, ...],
-                        "dates variables ensemble gridpoints -> dates ensemble gridpoints variables",
-                    )
+                    x_pert[:, :, eda_member_idx, ...],
+                    "dates variables ensemble gridpoints -> dates ensemble gridpoints variables",
+                )
 
             if x_pert is not None:
-                sample = (torch.from_numpy(x_an), torch.from_numpy(x_pert),)
+                sample = (
+                    torch.from_numpy(x_an),
+                    torch.from_numpy(x_pert),
+                )
             else:
                 sample = (torch.from_numpy(x_an),)
 
