@@ -154,5 +154,5 @@ node_loss_weights:
 
 submodules_to_freeze: []
 
-# Truncation of the input field by hardware.files.interp_up and hardware.files.interp_down
+# Truncation of the input field by hardware.files.truncation and hardware.files.truncation_inv
 field_truncation: False

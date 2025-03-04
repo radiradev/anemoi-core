@@ -145,19 +145,19 @@ class AnemoiTrainer:
 
     @cached_property
     def truncation_data(self) -> dict:
-        """Interpolation data.
+        """Truncation data.
 
-        Loads interpolation data.
+        Loads truncation data.
         """
         truncation_data = {}
-        if self.config.training.field_truncation and self.config.hardware.files.interp_up:
-            truncation_data["up"] = load_npz(
-                Path(self.config.hardware.paths.inter_mat, self.config.hardware.files.interp_up),
+        if self.config.training.field_truncation and self.config.hardware.files.truncation:
+            truncation_data["down"] = load_npz(
+                Path(self.config.hardware.paths.truncation_matrices, self.config.hardware.files.truncation),
             )
 
-        if self.config.training.field_truncation and self.config.hardware.files.interp_down:
-            truncation_data["down"] = load_npz(
-                Path(self.config.hardware.paths.inter_mat, self.config.hardware.files.interp_down),
+        if self.config.training.field_truncation and self.config.hardware.files.truncation_inv:
+            truncation_data["up"] = load_npz(
+                Path(self.config.hardware.paths.truncation_matrices, self.config.hardware.files.truncation_inv),
             )
 
         return truncation_data

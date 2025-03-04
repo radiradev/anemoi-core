@@ -76,10 +76,10 @@ class AnemoiModelEncProcDec(nn.Module):
         # these will be moved to the GPU when first used via sefl.interpolate_down/interpolate_up
         self.A_down, self.A_up = None, None
         if "down" in self._truncation_data:
-            self.A_down = self._make_interpolation_matrix(self._truncation_data["down"])
+            self.A_down = self._make_truncation_matrix(self._truncation_data["down"])
             LOGGER.info("A_down %s", self.A_down.shape)
         if "up" in self._truncation_data:
-            self.A_up = self._make_interpolation_matrix(self._truncation_data["up"])
+            self.A_up = self._make_truncation_matrix(self._truncation_data["up"])
             LOGGER.info("A_up %s", self.A_up.shape)
 
         # Encoder data -> hidden
@@ -130,7 +130,7 @@ class AnemoiModelEncProcDec(nn.Module):
             ]
         )
 
-    def _make_interpolation_matrix(self, A, data_type=torch.float32):
+    def _make_truncation_matrix(self, A, data_type=torch.float32):
         A_ = torch.sparse_coo_tensor(
             torch.tensor(np.vstack(A.nonzero()), dtype=torch.long),
             torch.tensor(A.data, dtype=data_type),
@@ -141,7 +141,7 @@ class AnemoiModelEncProcDec(nn.Module):
     def _multiply_sparse(self, x, A):
         return torch.sparse.mm(A, x)
 
-    def _interploate_fields(self, x, A, batch_size=None, grad_checkpoint=False):
+    def _truncate_fields(self, x, A, batch_size=None, grad_checkpoint=False):
         if not batch_size:
             batch_size = x.shape[0]
         out = []
@@ -170,10 +170,10 @@ class AnemoiModelEncProcDec(nn.Module):
             # hence we check that they are on the correct device ; copy should only happen in the first forward run
             if self.A_down is not None:
                 self.A_down = self.A_down.to(x_skip.device)
-                x_skip = self._interploate_fields(x_skip, self.A_down)  # to coarse resolution
+                x_skip = self._truncate_fields(x_skip, self.A_down)  # to coarse resolution
             if self.A_up is not None:
                 self.A_up = self.A_up.to(x_skip.device)
-                x_skip = self._interploate_fields(x_skip, self.A_up)  # back to high resolution
+                x_skip = self._truncate_fields(x_skip, self.A_up)  # back to high resolution
             x_skip = einops.rearrange(
                 x_skip, "(batch ensemble) grid vars -> batch ensemble grid vars", batch=batch_size
             )
@@ -346,10 +346,10 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
         # todo -> parallelize this
         if self.A_down is not None:
             self.A_down = self.A_down.to(x.device)
-            x_skip = self._interploate_fields(x_skip, self.A_down)  # to coarse resolution
+            x_skip = self._truncate_fields(x_skip, self.A_down)  # to coarse resolution
         if self.A_up is not None:
             self.A_up = self.A_up.to(x.device)
-            x_skip = self._interploate_fields(x_skip, self.A_up)  # back to high resolution
+            x_skip = self._truncate_fields(x_skip, self.A_up)  # back to high resolution
 
         # add data positional info (lat/lon)
         x_data_latent = torch.cat(
