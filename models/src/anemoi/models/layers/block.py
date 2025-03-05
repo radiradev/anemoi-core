@@ -100,8 +100,8 @@ class TransformerProcessorBlock(BaseBlock):
             attention_implementation=attention_implementation,
             softcap=softcap,
             use_alibi_slopes=use_alibi_slopes,
-            qk_norm=use_qk_norm,
-            rotary_embeddings=use_rotary_embeddings,
+            use_qk_norm=use_qk_norm,
+            use_rotary_embeddings=use_rotary_embeddings,
         )
 
         self.mlp = nn.Sequential(
@@ -159,12 +159,12 @@ class TransformerMapperBlock(TransformerProcessorBlock):
             bias=False,
             is_causal=False,
             dropout_p=dropout_p,
-            ayer_kernels=layer_kernels,
+            layer_kernels=layer_kernels,
             attention_implementation=attention_implementation,
             softcap=softcap,
             use_alibi_slopes=use_alibi_slopes,
-            qk_norm=use_qk_norm,
-            rotary_embeddings=use_rotary_embeddings,
+            use_qk_norm=use_qk_norm,
+            use_rotary_embeddings=use_rotary_embeddings,
         )
 
         self.layer_norm_src = nn.LayerNorm(num_channels)

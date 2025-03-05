@@ -24,7 +24,7 @@ from torch_geometric.typing import PairTensor
 
 from anemoi.models.distributed.transformer import shard_heads
 from anemoi.models.distributed.transformer import shard_sequence
-from anemoi.models.layers.utils import AutocastLayerNorm
+from anemoi.models.layers.normalization import AutocastLayerNorm
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -100,8 +100,8 @@ class MultiHeadSelfAttention(nn.Module):
         self.dropout_p = dropout_p
         self.is_causal = is_causal
         self.softcap = softcap
-        self.qk_norm = use_qk_norm
-        self.rotary_embeddings = use_rotary_embeddings
+        self.use_qk_norm = use_qk_norm
+        self.use_rotary_embeddings = use_rotary_embeddings
 
         self.set_attention_function()
 
@@ -118,7 +118,7 @@ class MultiHeadSelfAttention(nn.Module):
         self.lin_v = nn.Linear(embed_dim, embed_dim, bias=bias)
 
         self.projection = linear(embed_dim, embed_dim, bias=True)
-        if self.qk_norm:
+        if self.use_qk_norm:
             self.q_norm = AutocastLayerNorm(self.head_dim, bias=False)
             self.k_norm = AutocastLayerNorm(self.head_dim, bias=False)
 
@@ -134,7 +134,12 @@ class MultiHeadSelfAttention(nn.Module):
         LOGGER.info(f"Using {self.attention_implementation}")
 
         # initalise the attn func here
-        self.attention = attn_funcs[self.attention_implementation]()
+        if self.attention_implementation == "flash_attention":
+            self.attention = attn_funcs[self.attention_implementation](
+                use_rotary_embeddings=self.use_rotary_embeddings, head_dim=self.head_dim
+            )
+        else:
+            self.attention = attn_funcs[self.attention_implementation]()
 
     def attention_computation(
         self,
@@ -165,7 +170,7 @@ class MultiHeadSelfAttention(nn.Module):
         value = shard_heads(value, shapes=shapes, mgroup=model_comm_group)
         dropout_p = self.dropout_p if self.training else 0.0
 
-        if self.qk_norm:
+        if self.use_qk_norm:
             query = self.q_norm(query)
             key = self.k_norm(key)
 
@@ -179,7 +184,6 @@ class MultiHeadSelfAttention(nn.Module):
             dropout_p=dropout_p,
             softcap=self.softcap,
             alibi_slopes=self.alibi_slopes,
-            rotary_embeddings=self.rotary_embeddings,
         )
 
         out = shard_sequence(out, shapes=shapes, mgroup=model_comm_group)
@@ -263,7 +267,7 @@ class SDPAAttentionWrapper(nn.Module):
 class FlashAttentionWrapper(nn.Module):
     """Wrapper for Flash attention."""
 
-    def __init__(self):
+    def __init__(self, use_rotary_embeddings: bool = False, head_dim: int = None):
         super().__init__()
         try:
             import flash_attn
@@ -277,8 +281,10 @@ class FlashAttentionWrapper(nn.Module):
 
             self.attention = flash_attn.flash_attn_func
 
-        if self.rotary_embeddings:  # find alternative implementation
-            self.rotary_emb = RotaryEmbedding(dim=self.head_dim)
+        self.use_rotary_embeddings = use_rotary_embeddings
+
+        if self.use_rotary_embeddings:  # find alternative implementation
+            self.rotary_emb = RotaryEmbedding(dim=head_dim)
 
     def forward(
         self,
@@ -291,7 +297,6 @@ class FlashAttentionWrapper(nn.Module):
         dropout_p: float = 0.0,
         softcap: Optional[float] = None,
         alibi_slopes: torch.Tensor = None,
-        rotary_embeddings: bool = False,
     ):
         query, key, value = (
             einops.rearrange(t, "batch heads grid vars -> batch grid heads vars") for t in (query, key, value)
@@ -299,7 +304,7 @@ class FlashAttentionWrapper(nn.Module):
 
         alibi_slopes = alibi_slopes.repeat(batch_size, 1).to(query.device) if alibi_slopes is not None else None
 
-        if rotary_embeddings:  # can this be done in a better way?
+        if self.use_rotary_embeddings:  # can this be done in a better way?
             key = key.unsqueeze(-3)
             value = value.unsqueeze(-3)
             keyvalue = torch.cat((key, value), dim=-3)
@@ -314,7 +319,7 @@ class FlashAttentionWrapper(nn.Module):
             key,
             value,
             causal=False,
-            window_size=(window_size, window_size),
+            window_size=(window_size, window_size) if window_size is not None else (-1, -1),
             dropout_p=dropout_p,
             softcap=softcap,
             alibi_slopes=alibi_slopes,
