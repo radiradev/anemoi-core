@@ -1,6 +1,7 @@
 data: ???
 grids: ???
 output: ???
+truncation: ??? # Only needed if training.field_truncation is True
 logs:
   base: ${hardware.paths.output}logs/
   wandb: ${hardware.paths.logs.base}

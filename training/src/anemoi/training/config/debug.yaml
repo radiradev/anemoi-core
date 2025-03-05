@@ -15,13 +15,13 @@ data:
 
 hardware:
   paths:
-    truncation_matrices: /ec/res4/hpcperm/nesl/inter_mat
+    truncation: /ec/res4/hpcperm/nesl/inter_mat
     data: /home/mlx/ai-ml/datasets/
     grids: /home/mlx/ai-ml/grids/
     output: ${oc.env:SCRATCH}/aifs/${data.resolution}/
   files:
-    truncation: O96-O32-linear.mat.npz
-    truncation_inv: O32-O96-linear.mat.npz
+    truncation: ${hardware.paths.truncation}/O96-O32-linear.mat.npz
+    truncation_inv: ${hardware.paths.truncation}/O32-O96-linear.mat.npz
     graph: graph_anemoi_new_${data.resolution}.pt
     dataset: aifs-ea-an-oper-0001-mars-${data.resolution}-1979-2022-6h-v6.zarr
   accelerator: auto
