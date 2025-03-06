@@ -55,13 +55,11 @@ dataloader:
 
 training:
   multistep_input: 1
-  max_steps: 265000
-  lr:
-    rate: 3.125e-5 # tests
-    #rate: 2.5e-4
-    #rate: 1.5625e-5 # tests
-    iterations: 260000
-    min: 3e-7 #Not scaled by #GPU
+  max_steps: 150000
+lr:
+  rate: 0.625e-4 #local_lr
+  iterations: ${training.max_steps} # NOTE: When max_epochs < max_steps, scheduler will run for max_steps
+  min: 3e-7 #Not scaled by #GPU
   # fork_run_id: 4fba9f2c35694dc9be9e72a3a5276d25
   # rollout:
   #   epoch_increment: 1
@@ -83,7 +81,7 @@ training:
     10v: 1
     2d: 1
     tp: 1
-    # cp: 1
+    cp: 1
     # swvl2: 0.2
     # swvl1: 0.05
   additional_scalars:

@@ -65,7 +65,7 @@ training:
     end: 2022
     frequency: ${data.frequency}
     #drop:  [stl3, swvl3, tsn, rsn, sd,  tvh, tvl, cvh, cvl, cl, slt, lai_lv, lai_hv]
-    select: [sd_no_glacier, sd_glacier_only, snowc,]
+    select: [sd_no_glacier, sd_glacier_only, snowc, sf]
   start: null
   end: 2022
   drop: []
@@ -82,7 +82,7 @@ validation:
     end: 2023
     frequency: ${data.frequency}
     #drop:  [stl3, swvl3, tsn, rsn, sd,  tvh, tvl, cvh, cvl, cl, slt, lai_lv, lai_hv]
-    select: [sd_no_glacier, sd_glacier_only, snowc,]
+    select: [sd_no_glacier, sd_glacier_only, snowc, sf]
   start: 2023
   end: 2023
   drop: []
@@ -99,7 +99,7 @@ test:
     end: null
     frequency: ${data.frequency}
     # drop:  [stl3, swvl3, tsn, rsn, sd,  tvh, tvl, cvh, cvl, cl, slt, lai_lv, lai_hv]
-    select: [sd_no_glacier, sd_glacier_only, snowc,]
+    select: [sd_no_glacier, sd_glacier_only, snowc, sf]
   start: 2023
   end: null
   drop: []

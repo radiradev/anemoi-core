@@ -72,13 +72,13 @@ bounding: #These are applied in order
     - snowc
     min_val: 0
     max_val: 1
-  # - _target_: anemoi.models.layers.bounding.FractionBounding # fraction of tp
-  #   variables:
-  #   - cp
-  #   - sf
-  #   min_val: 0
-  #   max_val: 1
-  #   total_var: tp
+  - _target_: anemoi.models.layers.bounding.FractionBounding # fraction of tp
+    variables:
+    - cp
+    - sf
+    min_val: 0
+    max_val: 1
+    total_var: tp
   # - _target_: anemoi.models.layers.bounding.FractionBounding # fraction of tp
   #   variables:
   #   - lcc
