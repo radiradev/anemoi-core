@@ -1,14 +1,13 @@
 #!/bin/bash
-
-#SBATCH -A EUHPC_E04_053
-#SBATCH -p boost_usr_prod
+#SBATCH --qos=ng
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
 #SBATCH --gpus-per-node=4
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=0G
-#SBATCH --time=24:00:00
-#SBATCH --output=slurm/aifs-o96-std-tendency.out.%j
+#SBATCH --mem=120G
+#SBATCH --time=47:00:00
+#SBATCH --output=slurm/output-%j.out
+#set -x
 
 # debugging flags (optional)
 # export NCCL_DEBUG=INFO
@@ -26,11 +25,18 @@
 # generic settings
 
 
-GITDIR=/leonardo/home/userexternal/epinning/aifs/anemoi-core/feature-snow/training/configs-snow
+GITDIR=/perm/daep/projects/anemoi-core/feature-snow/training/configs-snow
 WORKDIR=$GITDIR
-
 cd $WORKDIR
-source /leonardo/home/userexternal/epinning/aifs/anemoi-core/feature-scaler-split/training/venv/bin/activate
 
-#srun anemoi-training train training=default_tendency training.run_id=393d5866510e46a8a1c74cf6012c1ab2 hardware=leonardo diagnostics.log.mlflow.run_name='16 scaling' --config-name=debug_tendency --cfg all
-srun anemoi-training train hardware=leonardo --config-name=debug_o96-std-tendency
+export CUDA_LAUNCH_BLOCKING=1
+
+# generic settings
+#VENV=/home/daep/PERM/projects/anemoi-core/feature-scaler-split/training/venv
+VENV=/home/daep/PERM/projects/anemoi-core/feature-snow/training/venv
+
+module load python3
+source ${VENV}/bin/activate
+# export PATH="$HOME/.local/bin:$PATH"
+
+srun anemoi-training train --config-name=debug_o96-std-tendency hardware=slurm

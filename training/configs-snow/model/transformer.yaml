@@ -41,14 +41,14 @@ trainable_parameters:
   hidden: 8
   data2hidden: 8
   hidden2data: 8
-  
+
 bounding: #These are applied in order
   - _target_: anemoi.models.layers.bounding.ReluBounding #[0, infinity)
     variables:
     - tp
-    - ro
+    # - ro
     - tcw
-    - ssrd
+    # - ssrd
     - q_50
     - q_100
     - q_150
@@ -62,35 +62,38 @@ bounding: #These are applied in order
     - q_850
     - q_925
     - q_1000
+    - sd_no_glacier
+    - sd_glacier_only
   - _target_: anemoi.models.layers.bounding.HardtanhBounding #[0, 1)
     variables:
-    - tcc
-    - swvl1
-    - swvl2
+    # - tcc
+    # - swvl1
+    # - swvl2
+    - snowc
     min_val: 0
     max_val: 1
-  - _target_: anemoi.models.layers.bounding.FractionBounding # fraction of tp
-    variables:
-    - cp
-    - sf
-    min_val: 0
-    max_val: 1
-    total_var: tp
-  - _target_: anemoi.models.layers.bounding.FractionBounding # fraction of tp
-    variables:
-    - lcc
-    - mcc
-    - hcc
-    min_val: 0
-    max_val: 1
-    total_var: tcc
+  # - _target_: anemoi.models.layers.bounding.FractionBounding # fraction of tp
+  #   variables:
+  #   - cp
+  #   - sf
+  #   min_val: 0
+  #   max_val: 1
+  #   total_var: tp
+  # - _target_: anemoi.models.layers.bounding.FractionBounding # fraction of tp
+  #   variables:
+  #   - lcc
+  #   - mcc
+  #   - hcc
+  #   min_val: 0
+  #   max_val: 1
+  #   total_var: tcc
 
   # - _target_: anemoi.models.layers.bounding.ClampBounding #[0, infinity)
   #   variables:
   #   - q_500
   #   - q_100
   #   - q_1000
-  
+
 attributes:
   edges:
   - edge_length
@@ -98,4 +101,3 @@ attributes:
   nodes: []
 
 node_loss_weight: area_weight
-

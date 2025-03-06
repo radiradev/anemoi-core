@@ -16,7 +16,12 @@ nodes:
     node_builder:
       _target_: anemoi.graphs.nodes.NPZFileNodes # options: ZarrDatasetNodes, NPZFileNodes
       grid_definition_path: ${hardware.paths.grids}
-      resolution: o96 # grid resolution for npz (o32, o48, ...)
+      resolution: o48 # grid resolution for npz (o32, o48, ...)
+  # Hidden nodes
+  # hidden:
+  #   node_builder:
+  #     _target_: anemoi.graphs.nodes.ReducedGaussianGridNodes # options: ZarrDatasetNodes, NPZFileNodes
+  #     grid: o48 # o32, o48, ...
 
 edges:
 # Encoder configuration
@@ -38,8 +43,9 @@ edges:
 attributes:
   nodes:
     area_weight:
-      _target_: anemoi.graphs.nodes.attributes.AreaWeights # options: Area, Uniform
+      _target_: anemoi.graphs.nodes.attributes.SphericalAreaWeights # options: Area, Uniform
       norm: unit-max # options: l1, l2, unit-max, unit-sum, unit-std
+      fill_value: 0
   edges:
     edge_length:
       _target_: anemoi.graphs.edges.attributes.EdgeLength
@@ -47,3 +53,18 @@ attributes:
     edge_dirs:
       _target_: anemoi.graphs.edges.attributes.EdgeDirection
       norm: unit-std
+
+post_processors: []
+
+# attributes:
+#   nodes:
+#     area_weight:
+#       _target_: anemoi.graphs.nodes.attributes.AreaWeights # options: Area, Uniform
+#       norm: unit-max # options: l1, l2, unit-max, unit-sum, unit-std
+#   edges:
+#     edge_length:
+#       _target_: anemoi.graphs.edges.attributes.EdgeLength
+#       norm: unit-std
+#     edge_dirs:
+#       _target_: anemoi.graphs.edges.attributes.EdgeDirection
+#       norm: unit-std

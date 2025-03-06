@@ -1,4 +1,5 @@
 data: /home/mlx/ai-ml/datasets/
+dataset_land: /home/mlx/ai-ml/datasets/
 grids: /home/mlx/ai-ml/grids/
 #output: ${oc.env:HPCPERM}/aifs/${data.resolution}/
 output: ${oc.env:SCRATCH}/aifs/${data.resolution}/

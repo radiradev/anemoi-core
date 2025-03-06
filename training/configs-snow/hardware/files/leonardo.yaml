@@ -1,7 +1,7 @@
 dataset: aifs-ea-an-oper-0001-mars-${data.resolution}-1979-2023-6h-v8.zarr
 #dataset: aifs-od-an-oper-0001-mars-n320-2019-2023-6h-v6.zarr
-dataset_land: aifs-ea-an-oper-0001-mars-${data.resolution}-1979-2023-6h-v1-land.zarr
-#dataset_land: dataset_land: aifs-ea-an-oper-0001-mars-o96-1979-2023-6h-v1-land-reduced-snow.zarr
+#dataset_land: aifs-ea-an-oper-0001-mars-${data.resolution}-1979-2023-6h-v1-land.zarr
+dataset_land: aifs-ea-an-oper-0001-mars-o96-1979-2023-6h-v1-land-reduced-snow.zarr
 #dataset_land: aifs-od-an-oper-0001-mars-n320-2016-2023-6h-v1-land.zarr
 
 dataset_precip: aifs-od-an-oper-0001-mars-n320-2016-2023-6h-v2-precipitations.zarr

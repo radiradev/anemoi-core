@@ -1,6 +1,6 @@
 ---
 defaults:
-  - plot: none
+  - plot: detailed
   - callbacks: pretraining
   - benchmark_profiler: simple
 
@@ -43,8 +43,8 @@ log:
     offline: False
     authentication: False
     log_model: False
-    tracking_uri: ???
-    experiment_name: 'aifs-model-level-2'
+    tracking_uri: 'https://mlflow.ecmwf.int'
+    experiment_name: 'anemoi-debug'
     project_name: 'Anemoi'
     system: True
     terminal: True

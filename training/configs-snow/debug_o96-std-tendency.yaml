@@ -26,9 +26,10 @@ diagnostics:
   log:
     mlflow:
       enabled: True
-      offline: True
-      experiment_name: 'o96-std-tendency-loss'
+      offline: False
+      run_name: 'o96-std-tendency-loss'
       terminal: True
+      authentication: True
   plot:
     enabled: True
     scatter: False
@@ -47,10 +48,10 @@ dataloader:
     validation: 1
   limit_batches:
     training: null
-    validation: 500
+    validation: null
 
-hardware:
-  num_gpus_per_node: 1
+# hardware:
+#   num_gpus_per_node: 1
 
 training:
   multistep_input: 1
@@ -82,9 +83,9 @@ training:
     10v: 1
     2d: 1
     tp: 1
-    cp: 1
-    swvl2: 0.2
-    swvl1: 0.05
+    # cp: 1
+    # swvl2: 0.2
+    # swvl1: 0.05
   additional_scalars:
     # pressure level scalar
     - _target_: anemoi.training.train.scaling.ReluVariableLevelScaler
@@ -109,7 +110,7 @@ training:
 # loss function for the model
 training_loss:
   # loss class to initialise
-  _target_: anemoi.training.losses.mse.NoNodeWeightedMSELoss
+  _target_: anemoi.training.losses.mse.WeightedMSELoss
   # Scalars to include in loss calculation
   # Available scalars include:
   # - 'variable': See `variable_loss_scaling` for more information
@@ -117,6 +118,7 @@ training_loss:
   # - 'tendency': See `additional_scalars` for more information
   #scalars: ['tendency']
   scalars: ['variable', 'variable_pressure_level', 'loss_weights_mask', 'tendency']
+  ignore_nans: True
 
 # hardware:
 #   files:
