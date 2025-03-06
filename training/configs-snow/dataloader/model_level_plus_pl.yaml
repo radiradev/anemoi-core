@@ -1,0 +1,115 @@
+prefetch_factor: 2
+pin_memory: True
+
+# ============
+# read_group_size:
+#   Form subgroups of model comm groups that read data together.
+#   Each reader in the group only reads 1/read_group_size of the data
+#   which is then all-gathered between the group.
+#   This can reduce CPU memory usage as well as increase dataloader throughput.
+#   The number of GPUs per model must be divisible by read_group_size.
+#   To disable, set to 1.
+# ============
+read_group_size: ${hardware.num_gpus_per_model}
+
+validation_rollout: 2 # number of rollouts to use for validation, must be equal or greater than rollout expected by callbacks
+
+num_workers:
+  training: 4
+  validation: 4
+  test: 8
+  predict: 8
+batch_size:
+  training: 2
+  validation: 1
+  test: 4
+  predict: 4
+# runs only N training batches [N = integer | null]
+# if null then we run through all the batches
+limit_batches:
+  training: null
+  validation: 500
+  test: 20
+  predict: 20
+
+# ============
+# Dataloader definitions
+# These follow the anemoi-datasets patterns
+# You can make these as complicated for merging as you like
+# See https://anemoi-datasets.readthedocs.io
+# ============
+
+dataset: ${hardware.paths.data}/${hardware.files.dataset}
+dataset_pl: ${hardware.paths.data}/${hardware.files.dataset_pl}
+
+#  set a custom mask for grid points.
+# Useful for LAM (dropping unconnected nodes from forcing dataset)
+grid_indices:
+  _target_: anemoi.training.data.grid_indices.FullGrid
+  nodes_name: ${graph.data}
+
+model_level_drop: [ "vo_1", "vo_2", "vo_3", "vo_4", "vo_5", "vo_6", "vo_7", "vo_8", "vo_9", "vo_10",
+    "vo_11", "vo_12", "vo_13", "vo_14", "vo_15", "vo_16", "vo_17", "vo_18", "vo_19", "vo_20",
+    "vo_21", "vo_22", "vo_23", "vo_24", "vo_25", "vo_26", "vo_27", "vo_28", "vo_29", "vo_30",
+    "vo_31", "vo_32", "vo_33", "vo_34", "vo_35", "vo_36", "vo_37", "vo_38", "vo_39", "vo_40",
+    "vo_41", "vo_42", "vo_43", "vo_44", "vo_45", "vo_46", "vo_47", "vo_48", "vo_49", "vo_50",
+    "vo_51", "vo_52", "vo_53", "vo_54", "vo_55", "vo_56", "vo_57", "vo_58", "vo_59", "vo_60",
+    "vo_61", "vo_62", "vo_63", "vo_64", "vo_65", "vo_66", "vo_67", "vo_68", "vo_69", "vo_70",
+    "vo_71", "vo_72", "vo_73", "vo_74", "vo_75", "vo_76", "vo_77", "vo_78", "vo_79", "vo_80",
+    "vo_81", "vo_82", "vo_83", "vo_84", "vo_85", "vo_86", "vo_87", "vo_88", "vo_89", "vo_90",
+    "vo_91", "vo_92", "vo_93", "vo_94", "vo_95", "vo_96", "vo_97", "vo_98", "vo_99", "vo_100",
+    "vo_101", "vo_102", "vo_103", "vo_104", "vo_105", "vo_106", "vo_107", "vo_108", "vo_109", "vo_110",
+    "vo_111", "vo_112", "vo_113", "vo_114", "vo_115", "vo_116", "vo_117", "vo_118", "vo_119", "vo_120",
+    "vo_121", "vo_122", "vo_123", "vo_124", "vo_125", "vo_126", "vo_127", "vo_128", "vo_129", "vo_130",
+    "vo_131", "vo_132", "vo_133", "vo_134", "vo_135", "vo_136", "vo_137",
+    "d_1", "d_2", "d_3", "d_4", "d_5", "d_6", "d_7", "d_8", "d_9", "d_10",
+    "d_11", "d_12", "d_13", "d_14", "d_15", "d_16", "d_17", "d_18", "d_19", "d_20",
+    "d_21", "d_22", "d_23", "d_24", "d_25", "d_26", "d_27", "d_28", "d_29", "d_30",
+    "d_31", "d_32", "d_33", "d_34", "d_35", "d_36", "d_37", "d_38", "d_39", "d_40",
+    "d_41", "d_42", "d_43", "d_44", "d_45", "d_46", "d_47", "d_48", "d_49", "d_50",
+    "d_51", "d_52", "d_53", "d_54", "d_55", "d_56", "d_57", "d_58", "d_59", "d_60",
+    "d_61", "d_62", "d_63", "d_64", "d_65", "d_66", "d_67", "d_68", "d_69", "d_70",
+    "d_71", "d_72", "d_73", "d_74", "d_75", "d_76", "d_77", "d_78", "d_79", "d_80",
+    "d_81", "d_82", "d_83", "d_84", "d_85", "d_86", "d_87", "d_88", "d_89", "d_90",
+    "d_91", "d_92", "d_93", "d_94", "d_95", "d_96", "d_97", "d_98", "d_99", "d_100",
+    "d_101", "d_102", "d_103", "d_104", "d_105", "d_106", "d_107", "d_108", "d_109", "d_110",
+    "d_111", "d_112", "d_113", "d_114", "d_115", "d_116", "d_117", "d_118", "d_119", "d_120",
+    "d_121", "d_122", "d_123", "d_124", "d_125", "d_126", "d_127", "d_128", "d_129", "d_130",
+    "d_131", "d_132", "d_133", "d_134", "d_135", "d_136", "d_137","cos_local_time","sin_local_time"]
+
+training:
+  dataset:
+  - dataset: ${dataloader.dataset}
+    start: null
+    end: 2020
+    frequency: ${data.frequency}
+    drop:  ${dataloader.model_level_drop}
+  - dataset: ${dataloader.dataset_pl}
+    start: null
+    end: 2020
+    frequency: ${data.frequency}
+    select: ['z_500','t_850','u_850','v_850',"cos_local_time","sin_local_time"]
+  start: null
+  end: 2020
+
+
+validation:
+  dataset:
+  - dataset: ${dataloader.dataset}
+    start: 2021
+    end: 2021
+    frequency: ${data.frequency}
+    drop:  ${dataloader.model_level_drop}
+  - dataset: ${dataloader.dataset_pl}
+    start: 2021
+    end: 2021
+    frequency: ${data.frequency}
+    select: ['z_500','t_850','u_850','v_850',"cos_local_time","sin_local_time"]
+  start: 2021
+  end: 2021
+
+test:
+  dataset: ${dataloader.dataset}
+  start: 2022
+  end: null
+  frequency: ${data.frequency}

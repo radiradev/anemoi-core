@@ -1,0 +1,66 @@
+prefetch_factor: 2
+pin_memory: True
+
+# ============
+# read_group_size:
+#   Form subgroups of model comm groups that read data together.
+#   Each reader in the group only reads 1/read_group_size of the data
+#   which is then all-gathered between the group.
+#   This can reduce CPU memory usage as well as increase dataloader throughput.
+#   The number of GPUs per model must be divisible by read_group_size.
+#   To disable, set to 1.
+# ============
+read_group_size: ${hardware.num_gpus_per_model}
+
+num_workers:
+  training: 4
+  validation: 4
+  test: 8
+  predict: 8
+batch_size:
+  training: 2
+  validation: 2
+  test: 4
+  predict: 4
+# runs only N training batches [N = integer | null]
+# if null then we run through all the batches
+limit_batches:
+  training: null
+  validation: 500
+  test: 20
+  predict: 20
+
+# ============
+# Dataloader definitions
+# These follow the anemoi-datasets patterns
+# You can make these as complicated for merging as you like
+# See https://anemoi-datasets.readthedocs.io
+# ============
+
+dataset: ${hardware.paths.data}/${hardware.files.dataset}
+
+training:
+  dataset:
+  - dataset: ${dataloader.dataset}
+    start: null
+    end: 2020
+    frequency: ${data.frequency}
+  start: null
+  end: 2020
+
+
+validation:
+  dataset:
+  - dataset: ${dataloader.dataset}
+    start: 2021
+    end: 2021
+    frequency: ${data.frequency}
+  start: 2021
+  end: 2021
+
+test:
+  dataset: ${dataloader.dataset}
+  start: 2022
+  end: null
+  frequency: ${data.frequency}
+
