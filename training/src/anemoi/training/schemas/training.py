@@ -127,8 +127,8 @@ class VariableLevelScalerSchema(BaseModel):
     "Group of variables to scale."
     slope: float = Field(example=1.0)
     "Slope of scaling function."
-    #minimum: float = Field(example=0.2) #TODO(Mariana,Sara): check if this is still needed
-    #"Minimum value of the scaling function."
+    # minimum: float = Field(example=0.2) #TODO(Mariana,Sara): check if this is still needed
+    # "Minimum value of the scaling function."
     y_intercept: float = Field(example=0.001)
     "Y-axis shift of scaling function."
 
