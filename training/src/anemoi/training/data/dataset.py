@@ -125,12 +125,15 @@ class NativeGridDataset(IterableDataset):
             custom_statistics = yaml.safe_load(file)
 
         out_dict = {}
-        for stype in custom_statistics.keys():
+        for stype, stats in custom_statistics.items():
+            if stype not in self.data.statistics:
+                continue
             n = self.data.statistics[stype].size
-            out_dict[stype] = np.zeros(n)
-            # if stype != "mean":  # hack, we zero out mean because we only want to normalize with stdev
-            for name, index in self.data.name_to_index.items():
-                out_dict[stype][index] = custom_statistics[stype][name]
+            out_dict[stype] = np.copy(self.data.statistics[stype])
+            for name, value in stats.items():
+                if name in self.data.name_to_index:
+                    index = self.data.name_to_index[name]
+                    out_dict[stype][index] = value
         return out_dict
 
     @cached_property
