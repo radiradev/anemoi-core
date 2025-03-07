@@ -99,6 +99,16 @@ scale_validation_metrics:
     - 'all'
     # - "*"
 
+variable_groups:
+  default: sfc
+  pl: [q, t, u, v, w, z]
+
+metrics:
+- z_500
+- t_850
+- u_850
+- v_850
+
 
 # length of the "rollout" window (see Keisler's paper)
 rollout:
@@ -121,9 +131,3 @@ lr:
 # Changes in per-gpu batch_size should come with a rescaling of the local_lr
 # in order to keep a constant global_lr
 # global_lr = local_lr * num_gpus_per_node * num_nodes / gpus_per_model
-
-metrics:
-- z_500
-- t_850
-- u_850
-- v_850

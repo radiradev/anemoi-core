@@ -24,7 +24,6 @@ from anemoi.training.losses.loss import get_loss_function
 from anemoi.training.losses.loss import get_metric_ranges
 from anemoi.training.losses.scaler_tensor import grad_scaler
 from anemoi.training.losses.scalers.scaling import create_scalers
-from anemoi.training.losses.utils import print_variable_scaling
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.schemas.base_schema import convert_to_omegaconf
 
@@ -100,7 +99,7 @@ class GraphForecaster(pl.LightningModule):
         # Instantiate all scalers with the training configuration
         self.scalers, self.delayed_scaler_builders = create_scalers(
             config.training.scalers,
-            group_config=config.training.variable_groups,
+            group_config=config.model_dump(by_alias=True).training.variable_groups,
             data_indices=data_indices,
             graph_data=graph_data,
             statistics=statistics,
@@ -115,13 +114,15 @@ class GraphForecaster(pl.LightningModule):
             metadata["dataset"].get("variables_metadata"),
         )
 
-        self.loss = get_loss_function(config.training.training_loss, scalers=self.scalers)
-        print_variable_scaling(self.loss, data_indices)
+        self.loss = get_loss_function(config.model_dump(by_alias=True).training.training_loss, scalers=self.scalers)
+        # print_variable_scaling(self.loss, data_indices)
 
         self.metrics = torch.nn.ModuleDict(
             {
                 metric_name: get_loss_function(val_metric_config, scalers=self.scalers)
-                for metric_name, val_metric_config in config.training.validation_metrics.items()
+                for metric_name, val_metric_config in config.model_dump(
+                    by_alias=True,
+                ).training.validation_metrics.items()
             },
         )
 

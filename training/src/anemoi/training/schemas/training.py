@@ -96,7 +96,7 @@ class GeneralVariableLossScalerSchema(BaseModel):
 
 
 class NaNMaskScalerSchema(BaseModel):
-    target_: Literal["anemoi.training.losses.scalers.NaNMaskScalerSchema"] = Field(..., alias="_target_")
+    target_: Literal["anemoi.training.losses.scalers.NaNMaskScaler"] = Field(..., alias="_target_")
 
 
 class TendencyScalerTargets(str, Enum):
@@ -111,23 +111,25 @@ class TendencyScalerSchema(BaseModel):
     )
 
 
-class PressureLevelScalerTargets(str, Enum):
-    relu_scaler = "anemoi.training.losses.scalers.ReluPressureLevelScaler"
-    linear_scaler = "anemoi.training.losses.scalers.LinearPressureLevelScaler"
-    polynomial_sclaer = "anemoi.training.losses.scalers.PolynomialPressureLevelScaler"
-    no_scaler = "anemoi.training.losses.scalers.NoPressureLevelScaler"
+class VariableLevelScalerTargets(str, Enum):
+    relu_scaler = "anemoi.training.losses.scalers.ReluVariableLevelScaler"
+    linear_scaler = "anemoi.training.losses.scalers.LinearVariableLevelScaler"
+    polynomial_sclaer = "anemoi.training.losses.scalers.PolynomialVariableLevelScaler"
+    no_scaler = "anemoi.training.losses.scalers.NoVariableLevelScaler"
 
 
-class PressureLevelScalerSchema(BaseModel):
-    target_: PressureLevelScalerTargets = Field(
-        example="anemoi.training.losses.scalers.ReluPressureLevelScaler",
+class VariableLevelScalerSchema(BaseModel):
+    target_: VariableLevelScalerTargets = Field(
+        example="anemoi.training.losses.scalers.ReluVariableLevelScaler",
         alias="_target_",
     )
     group: str = Field(example="pl")
     "Group of variables to scale."
-    minimum: float = Field(example=0.2)
-    "Minimum value of the scaling function."
-    y_intercept: float = 0.001
+    slope: float = Field(example=1.0)
+    "Slope of scaling function."
+    #minimum: float = Field(example=0.2) #TODO(Mariana,Sara): check if this is still needed
+    #"Minimum value of the scaling function."
+    y_intercept: float = Field(example=0.001)
     "Y-axis shift of scaling function."
 
 
@@ -137,8 +139,6 @@ class GraphNodeAttributeScalerSchema(BaseModel):
     "Name of the nodes to take the attribute from."
     nodes_attribute_name: str = Field(example="area_weight")
     "Name of the node attribute to return."
-    apply_output_mask: bool = Field(example=False)
-    "Whether to apply the output mask to the node attribute values."
     norm: Literal["unit-max", "unit-sum"] = Field(example="unit-sum")
     "Normalisation method applied to the node attribute."
 
@@ -157,15 +157,13 @@ class ReweightedGraphNodeAttributeScalerSchema(BaseModel):
     weight_frac_of_total: float = Field(example=0.5)
     "Fraction of total weight to assign to nodes within the scaling mask. The remaining weight is distributed among "
     "nodes outside the mask."
-    apply_output_mask: bool = Field(example=False)
-    "Whether to apply the output mask to the node attribute values."
     norm: Literal["unit-max", "unit-sum"] = Field(example="unit-sum")
     "Normalisation method applied to the node attribute."
 
 
 ScalerSchema = Union[
     GeneralVariableLossScalerSchema,
-    PressureLevelScalerSchema,
+    VariableLevelScalerSchema,
     TendencyScalerSchema,
     NaNMaskScalerSchema,
     GraphNodeAttributeScalerSchema,
