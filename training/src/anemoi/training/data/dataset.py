@@ -13,8 +13,10 @@ import logging
 import os
 import random
 from functools import cached_property
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict
 
+import json
+import yaml
 import numpy as np
 import torch
 from einops import rearrange
@@ -45,6 +47,7 @@ class NativeGridDataset(IterableDataset):
         shuffle: bool = True,
         label: str = "generic",
         effective_bs: int = 1,
+        custom_statistics_file: str = None,  # Add parameter for custom statistics file
     ) -> None:
         """Initialize (part of) the dataset state.
 
@@ -65,7 +68,9 @@ class NativeGridDataset(IterableDataset):
         label : str, optional
             label for the dataset, by default "generic"
         effective_bs : int, default 1
-            effective batch size useful to compute the lenght of the dataset
+            effective batch size useful to compute the length of the dataset
+        custom_statistics_file : str, optional
+            Path to the custom statistics file, by default None
         """
         self.label = label
         self.effective_bs = effective_bs
@@ -100,10 +105,49 @@ class NativeGridDataset(IterableDataset):
         self.ensemble_dim: int = 2
         self.ensemble_size = self.data.shape[self.ensemble_dim]
 
+        # Store the path to the custom statistics file
+        self.custom_statistics_file = custom_statistics_file
+
+    def _get_custom_statistics(self, path: str) -> Dict:
+        """Load custom statistics from a YAML file.
+
+        Parameters
+        ----------
+        path : str
+            Path to the custom statistics file.
+
+        Returns
+        -------
+        Dict
+            Custom statistics dictionary.
+        """
+        with open(path, 'r') as file:
+            custom_statistics = yaml.safe_load(file)
+
+        out_dict = {}
+        for stype in custom_statistics.keys():
+            n = self.data.statistics[stype].size
+            out_dict[stype] = np.zeros(n)
+            # if stype != "mean":  # hack, we zero out mean because we only want to normalize with stdev
+            for name, index in self.data.name_to_index.items():
+                out_dict[stype][index] = custom_statistics[stype][name]
+        return out_dict
+
+    @cached_property
+    def custom_statistics(self) -> Dict:
+        """Return custom statistics."""
+        if self.custom_statistics_file:
+            return self._get_custom_statistics(self.custom_statistics_file)
+        return {}
+
     @cached_property
     def statistics(self) -> dict:
         """Return dataset statistics."""
-        return self.data.statistics
+        default_statistics = self.data.statistics
+        # Merge custom statistics with default statistics
+        merged_statistics = {**default_statistics, **self.custom_statistics}
+        breakpoint()
+        return merged_statistics
 
     @cached_property
     def metadata(self) -> dict:
