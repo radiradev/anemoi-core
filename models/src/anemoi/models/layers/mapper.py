@@ -757,7 +757,7 @@ class TransformerBaseMapper(BaseMapper):
         activation: str,
         num_heads: int,
         mlp_hidden_ratio: int,
-        window_size: Optional[int],
+        window_size: Optional[int] = None,
         dropout_p: float = 0.0,
         attention_implementation: str = "flash_attention",
         softcap: Optional[float] = None,
