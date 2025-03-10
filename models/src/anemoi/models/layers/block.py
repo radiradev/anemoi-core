@@ -167,9 +167,9 @@ class TransformerMapperBlock(TransformerProcessorBlock):
             use_rotary_embeddings=use_rotary_embeddings,
         )
 
-        self.layer_norm_src = nn.LayerNorm(num_channels)
-        self.layer_norm1 = nn.LayerNorm(num_channels)
-        self.layer_norm2 = nn.LayerNorm(num_channels)
+        self.layer_norm_attention_src = nn.LayerNorm(num_channels)
+        self.layer_norm_attention_dst = nn.LayerNorm(num_channels)
+        self.layer_norm_mpl = nn.LayerNorm(num_channels)
 
     def forward(
         self,
@@ -179,10 +179,10 @@ class TransformerMapperBlock(TransformerProcessorBlock):
         model_comm_group: Optional[ProcessGroup] = None,
     ) -> Tensor:
         # Need to be out of place for gradient propagation
-        x_src = self.layer_norm_src(x[0])
-        x_dst = self.layer_norm1(x[1])
+        x_src = self.layer_norm_attention_src(x[0])
+        x_dst = self.layer_norm_attention_dst(x[1])
         x_dst = x_dst + self.attention((x_src, x_dst), shapes, batch_size, model_comm_group=model_comm_group)
-        x_dst = x_dst + self.mlp(self.layer_norm2(x_dst))
+        x_dst = x_dst + self.mlp(self.layer_norm_mpl(x_dst))
         return (x_src, x_dst), None  # logic expects return of edge_attr
 
 
