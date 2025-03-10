@@ -21,8 +21,8 @@ from torch_geometric.typing import Size
 from torch_geometric.utils import scatter
 from torch_geometric.utils import softmax
 
-from anemoi.models.layers.mlp import MLP
 from anemoi.models.compile.decorators import torch_compile
+from anemoi.models.layers.mlp import MLP
 from anemoi.utils.config import DotDict
 
 
@@ -81,6 +81,7 @@ class GraphConv(MessagePassing):
         out = scatter(edges_new, edge_index[1], dim=0, dim_size=dim_size, reduce="sum")
 
         return out, edges_new
+
 
 @torch_compile()
 class GraphTransformerConv(MessagePassing):

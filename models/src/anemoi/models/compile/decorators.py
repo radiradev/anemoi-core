@@ -12,9 +12,11 @@ def torch_compile():
     def decorator(func):
         import torch
         import torch_geometric
+
         req = torch.__version__ >= "2.6" and torch_geometric.__version__ >= "2.6"
         if req:
             compile_func = torch.compile(dynamic=True)
             return compile_func(func)
         return func
+
     return decorator
