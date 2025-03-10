@@ -1,9 +1,22 @@
+# (C) Copyright 2024 Anemoi contributors.
+#
+# This software is licensed under the terms of the Apache Licence Version 2.0
+# which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
+#
+# In applying this licence, ECMWF does not waive the privileges and immunities
+# granted to it by virtue of its status as an intergovernmental organisation
+# nor does it submit to any jurisdiction.
+
+from __future__ import annotations
+
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import torch
-from omegaconf import DictConfig
 from torch import nn
+
+if TYPE_CHECKING:
+    from omegaconf import DictConfig
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +43,7 @@ class EnsembleInitialConditions(nn.Module):
         self.nens_per_device = config.training.ensemble_size_per_device
         self._q_indices = self._compute_q_indices()
 
-    def _compute_q_indices(self) -> Optional[torch.Tensor]:
+    def _compute_q_indices(self) -> torch.Tensor | None:
         """Returns indices of humidity variables in input tensors.
 
         This step will later be included in the zarr building process.
@@ -42,7 +55,7 @@ class EnsembleInitialConditions(nn.Module):
         LOGGER.debug("q_* indices in the input tensor: %s", 'q_idx if q_idx else "n/a"')
         return torch.IntTensor(q_idx) if q_idx else None
 
-    def forward(self, x_an: torch.Tensor, x_eda: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, x_an: torch.Tensor, x_eda: torch.Tensor | None = None) -> torch.Tensor:
         """Generate initial conditions for the ensemble based on the EDA perturbations.
 
         If no EDA perturbations are given, we simply stack the deterministic ERA5

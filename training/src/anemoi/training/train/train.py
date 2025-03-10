@@ -21,14 +21,12 @@ import hydra
 import numpy as np
 import pytorch_lightning as pl
 import torch
+from hydra.utils import get_class
+from hydra.utils import instantiate
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
-
-from hydra.utils import instantiate
-from hydra.utils import get_class
-
 from scipy.sparse import load_npz
 
 from anemoi.training.diagnostics.callbacks import get_callbacks
@@ -83,7 +81,7 @@ class AnemoiTrainer:
         self._log_information()
 
     @cached_property
-    def datamodule(self) -> Any: # I think we need a wrapper class here .... -> AnemoiDatasetsDataModule:
+    def datamodule(self) -> Any:  # I think we need a wrapper class here .... -> AnemoiDatasetsDataModule:
         """DataModule instance and DataSets."""
         datamodule = instantiate(self.config.datamodule, self.config, self.graph_data)
         self.config.data.num_features = len(datamodule.ds_train.data.variables)
@@ -147,21 +145,21 @@ class AnemoiTrainer:
 
     @cached_property
     def truncation_data(self) -> dict:
-        """Interpolation data.
+        """Truncation data.
 
-        Loads interpolation data.
+        Loads truncation data.
         """
-        truncation_data = {}  
-        if self.config.hardware.files.interp_up:
-            truncation_data["up"] = load_npz(Path(self.config.hardware.paths.inter_mat, self.config.hardware.files.interp_up))
+        truncation_data = {}
+        if self.config.hardware.files.get("truncation", None):
+            truncation_data["down"] = load_npz(self.config.hardware.files.truncation)
 
-        if self.config.hardware.files.interp_down:
-            truncation_data["down"] = load_npz(Path(self.config.hardware.paths.inter_mat, self.config.hardware.files.interp_down))
+        if self.config.hardware.files.get("truncation_inv", None):
+            truncation_data["up"] = load_npz(self.config.hardware.files.truncation_inv)
 
         return truncation_data
 
     @cached_property
-    def model(self) -> Any: # another wrapper class required? -> GraphEnsForecaster:
+    def model(self) -> Any:  # another wrapper class required? -> GraphEnsForecaster:
         """Provide the model instance."""
         kwargs = {
             "config": self.config,
@@ -403,8 +401,11 @@ class AnemoiTrainer:
     @cached_property
     def strategy(self) -> Any:
         return instantiate(
-            self.config.training.strategy, 
-            read_group_size=self.config.dataloader.get("read_group_size", self.config.hardware.num_gpus_per_model), # was ... self.config.hardware.num_gpus_per_ensemble
+            self.config.training.strategy,
+            read_group_size=self.config.dataloader.get(
+                "read_group_size",
+                self.config.hardware.num_gpus_per_model,
+            ),  # was ... self.config.hardware.num_gpus_per_ensemble
             static_graph=not self.config.training.accum_grad_batches > 1,
         )
 

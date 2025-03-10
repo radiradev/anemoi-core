@@ -23,7 +23,6 @@ from torch.distributed.distributed_c10d import ProcessGroup
 
 from anemoi.models.distributed.transformer import shard_heads
 from anemoi.models.distributed.transformer import shard_sequence
-from anemoi.models.layers.normalization import AutocastLayerNorm
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -115,9 +114,9 @@ class MultiHeadSelfAttention(nn.Module):
 
         self.projection = linear(embed_dim, embed_dim, bias=True)
 
-        if self.qk_norm: # todo -> make configurable?
-            self.q_norm = AutocastLayerNorm(self.head_dim)
-            self.k_norm = AutocastLayerNorm(self.head_dim)
+        if self.qk_norm:
+            self.q_norm = layer_kernels["QueryNorm"](self.head_dim)
+            self.k_norm = layer_kernels["KeyNorm"](self.head_dim)
 
     def set_attention_function(self):
         attn_funcs = {

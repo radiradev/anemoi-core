@@ -4,15 +4,30 @@ num_channels: 512
 model:
   _target_: anemoi.models.models.AnemoiModelEncProcDec
 
+# The GNN requires the autocast layer norm, otherwise its memory usage is too high.
+# TODO: Add this to documentation.
 layer_kernels:
+  processor:
     LayerNorm:
       _target_: anemoi.models.layers.normalization.AutocastLayerNorm
       _partial_: True
-      #Any arguments to your chosen function go here e.g.
     Linear:
       _target_: torch.nn.Linear
       _partial_: True
-      #Any arguments to your chosen function go here e.g.
+  encoder:
+    LayerNorm:
+      _target_: anemoi.models.layers.normalization.AutocastLayerNorm
+      _partial_: True
+    Linear:
+      _target_: torch.nn.Linear
+      _partial_: True
+  decoder:
+    LayerNorm:
+      _target_: anemoi.models.layers.normalization.AutocastLayerNorm
+      _partial_: True
+    Linear:
+      _target_: torch.nn.Linear
+      _partial_: True
 
 processor:
   _target_: anemoi.models.layers.processor.GNNProcessor

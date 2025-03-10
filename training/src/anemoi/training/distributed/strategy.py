@@ -8,6 +8,8 @@
 # nor does it submit to any jurisdiction.
 
 
+from __future__ import annotations
+
 import logging
 
 import numpy as np
@@ -43,6 +45,7 @@ def seed_rnd(model_comm_group_id: int, global_rank: int) -> None:
         sanity_rnd,
     )
 
+
 def get_my_model_comm_group(num_gpus_per_model: int, global_rank: int, world_size: int) -> tuple[int, int, int]:
     """Determine tasks that work together and from a model group.
 
@@ -61,6 +64,7 @@ def get_my_model_comm_group(num_gpus_per_model: int, global_rank: int, world_siz
     model_comm_num_groups = world_size // num_gpus_per_model
 
     return model_comm_group_id, model_comm_group_rank, model_comm_num_groups
+
 
 def get_my_reader_group(model_comm_group_rank: int, read_group_size: int, global_rank: int) -> tuple[int, int, int]:
     """Determine tasks that work together and from a reader group.
@@ -83,7 +87,8 @@ def get_my_reader_group(model_comm_group_rank: int, read_group_size: int, global
     reader_group_root = (global_rank // read_group_size) * read_group_size
 
     return reader_group_id, reader_group_rank, reader_group_size, reader_group_root
-    
+
+
 class DDPGroupStrategy(DDPStrategy):
     """Distributed Data Parallel strategy with group communication."""
 
@@ -124,7 +129,9 @@ class DDPGroupStrategy(DDPStrategy):
         ]  # every rank has to create all of these
 
         model_comm_group_id, model_comm_group_rank, model_comm_num_groups = get_my_model_comm_group(
-            self.model_comm_group_size, self.global_rank, self.world_size,
+            self.model_comm_group_size,
+            self.global_rank,
+            self.world_size,
         )
         model_comm_group = model_comm_groups[model_comm_group_id]
         self.model.set_model_comm_group(
@@ -229,12 +236,14 @@ class DDPGroupStrategy(DDPStrategy):
 
         # pass model and reader group information to the dataloaders dataset
         model_comm_group_id, model_comm_group_rank, model_comm_num_groups = get_my_model_comm_group(
-            self.model_comm_group_size, self.global_rank, self.world_size,
+            self.model_comm_group_size,
+            self.global_rank,
+            self.world_size,
         )
         _, reader_group_rank, _, _ = get_my_reader_group(
-                model_comm_group_rank,
-                self.read_group_size,
-                self.global_rank,
+            model_comm_group_rank,
+            self.read_group_size,
+            self.global_rank,
         )
 
         dataloader.dataset.set_comm_group_info(
@@ -301,7 +310,9 @@ class DDPEnsGroupStrategy(DDPStrategy):
         ]  # every rank has to create all of these
 
         model_comm_group_id, model_comm_group_rank, model_comm_num_groups = get_my_model_comm_group(
-            self.model_comm_group_size, self.global_rank, self.world_size,
+            self.model_comm_group_size,
+            self.global_rank,
+            self.world_size,
         )
         model_comm_group = model_comm_groups[model_comm_group_id]
         self.model.set_model_comm_group(
@@ -341,8 +352,10 @@ class DDPEnsGroupStrategy(DDPStrategy):
         )
 
         LOGGER.info(
-            "Rank %d model_comm_group_id: %d model_comm_group: %s model_comm_group_rank: %d model_comm_group.size(): %d "
-            "reader_group_id: %d reader_group: %s reader_group_rank: %d reader_group_root (global): %d "
+            "Rank %d model_comm_group_id: %d model_comm_group: %s "
+            "model_comm_group_rank: %d model_comm_group.size(): %d "
+            "reader_group_id: %d reader_group: %s reader_group_rank: %d "
+            "reader_group_root (global): %d "
             "model_reader_groups: %s reader_groups: %s",
             self.global_rank,
             model_comm_group_id,
@@ -374,7 +387,9 @@ class DDPEnsGroupStrategy(DDPStrategy):
         ens_comm_groups = [torch.distributed.new_group(x) for x in ens_comm_group_ranks]
 
         ens_comm_group_id, ens_comm_group_rank, ens_comm_num_groups = get_my_model_comm_group(
-            self.ens_comm_group_size, self.global_rank, self.world_size,
+            self.ens_comm_group_size,
+            self.global_rank,
+            self.world_size,
         )
 
         ens_comm_group = ens_comm_groups[ens_comm_group_id]
@@ -450,15 +465,19 @@ class DDPEnsGroupStrategy(DDPStrategy):
 
         # pass model and reader group information to the dataloaders dataset
         model_comm_group_id, model_comm_group_rank, model_comm_num_groups = get_my_model_comm_group(
-            self.model_comm_group_size, self.global_rank, self.world_size,
+            self.model_comm_group_size,
+            self.global_rank,
+            self.world_size,
         )
         _, reader_group_rank, _, _ = get_my_reader_group(
-                model_comm_group_rank,
-                self.read_group_size,
-                self.global_rank,
+            model_comm_group_rank,
+            self.read_group_size,
+            self.global_rank,
         )
         ens_comm_group_id, ens_comm_group_rank, ens_comm_num_groups = get_my_model_comm_group(
-            self.ens_comm_group_size, self.global_rank, self.world_size,
+            self.ens_comm_group_size,
+            self.global_rank,
+            self.world_size,
         )
 
         dataloader.dataset.set_comm_group_info(
