@@ -13,12 +13,12 @@ import logging
 import os
 import random
 from functools import cached_property
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING
+from typing import Dict
 
-import json
-import yaml
 import numpy as np
 import torch
+import yaml
 from einops import rearrange
 from torch.utils.data import IterableDataset
 from torch.utils.data import get_worker_info
@@ -121,7 +121,7 @@ class NativeGridDataset(IterableDataset):
         Dict
             Custom statistics dictionary.
         """
-        with open(path, 'r') as file:
+        with open(path) as file:
             custom_statistics = yaml.safe_load(file)
 
         out_dict = {}
