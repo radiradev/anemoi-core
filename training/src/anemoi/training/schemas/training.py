@@ -82,6 +82,7 @@ class LR(BaseModel):
 
 class OptimizerSchema(BaseModel):
     """Optimizer configuration."""
+
     zero: bool = Field(example=False)
     "Use Zero optimiser."
     kwargs: dict[str, Any] = Field(default_factory=dict)
@@ -125,8 +126,8 @@ class ImplementedLossesUsingBaseLossSchema(str, Enum):
     mae = "anemoi.training.losses.mae.WeightedMAELoss"
     logcosh = "anemoi.training.losses.logcosh.WeightedLogCoshLoss"
     huber = "anemoi.training.losses.huber.WeightedHuberLoss"
-    kcrps= "anemoi.training.losses.kcrps.KernelCRPS"
-    afkcrps= "anemoi.training.losses.kcrps.AlmostFairKernelCRPS"
+    kcrps = "anemoi.training.losses.kcrps.KernelCRPS"
+    afkcrps = "anemoi.training.losses.kcrps.AlmostFairKernelCRPS"
 
 
 class BaseLossSchema(BaseModel):
@@ -145,7 +146,7 @@ class KernelCRPSSchema(BaseLossSchema):
 
 class AlmostFairKernelCRPSSchema(BaseLossSchema):
     alpha: float = 1.0
-    """Factor for linear combination of fair (unbiased, ensemble variance component 
+    """Factor for linear combination of fair (unbiased, ensemble variance component
     weighted by (ens-size-1)^-1) and standard CRPS (1.0 = fully fair, 0.0 = fully unfair)"""
     no_autocast: bool = True
     "Deactivate autocast for the kernel CRPS calculation"
@@ -192,7 +193,14 @@ class CombinedLossSchema(BaseLossSchema):
         return self
 
 
-LossSchemas = Union[BaseLossSchema, HuberLossSchema, WeightedMSELossLimitedAreaSchema, CombinedLossSchema, KernelCRPSSchema, AlmostFairKernelCRPSSchema]
+LossSchemas = Union[
+    BaseLossSchema,
+    HuberLossSchema,
+    WeightedMSELossLimitedAreaSchema,
+    CombinedLossSchema,
+    KernelCRPSSchema,
+    AlmostFairKernelCRPSSchema,
+]
 
 
 class GraphNodeAttributeSchema(BaseModel):
@@ -260,9 +268,9 @@ class TrainingSchema(BaseModel):
     "Sanity check runs n batches of val before starting the training routine."
     gradient_clip: GradientClip
     "Config for gradient clipping."
-    forecaster: Any # todo: Fix this 
+    forecaster: Any  # TODO: Fix this
     "Forecaster to use."
-    strategy: Any # todo: Fix this 
+    strategy: Any  # TODO: Fix this
     "Strategy to use."
     ensemble_size_per_device: PositiveInt = Field(example=1)
     "Number of ensemble member per device"

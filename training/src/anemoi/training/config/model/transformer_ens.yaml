@@ -98,7 +98,7 @@ decoder:
   num_heads: 16 # GraphTransformer or Transformer only
   initialise_data_extractor_zero: True
   qk_norm: False # Transformer and GraphTransformer only
-  cpu_offload: ${model.cpu_offload}  
+  cpu_offload: ${model.cpu_offload}
 
 trainable_parameters:
   data: 8
