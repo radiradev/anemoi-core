@@ -99,7 +99,7 @@ class TransformerProcessor(BaseProcessor):
         num_heads: int = 16,
         mlp_hidden_ratio: int = 4,
         qk_norm=False,
-        dropout_p: float = 0.1,
+        dropout_p: float = 0.0,
         attention_implementation: str = "flash_attention",
         softcap: float = 0.0,
         use_alibi_slopes: bool = False,
