@@ -50,7 +50,7 @@ layer_kernels:
       #Any arguments to your chosen function go here
 
 noise_injector:
-  _target_: anemoi.models.models.layers.ensemble.NoiseConditioning
+  _target_: anemoi.models.layers.ensemble.NoiseConditioning
   _convert_: all
   noise_std: 1
   noise_channels_dim: 4
