@@ -3,7 +3,7 @@ num_channels: 512
 output_mask: null
 
 model:
-  _target_: anemoi.models.models.AnemoiEnsModelEncProcDec
+  _target_: anemoi.models.models.encoder_processor_decoder.AnemoiEnsModelEncProcDec
 
 layer_kernels:
   processor:

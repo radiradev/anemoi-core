@@ -177,14 +177,6 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
 
         r = max(rollout, self.rollout)
 
-        # Compute effective batch size
-        effective_bs = (
-            self.config.dataloader.batch_size.training
-            * self.config.hardware.num_gpus_per_node
-            * self.config.hardware.num_nodes
-            // self.config.hardware.num_gpus_per_model
-        )
-
         return NativeGridDataset(
             data_reader=data_reader,
             rollout=r,
@@ -193,7 +185,6 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             shuffle=shuffle,
             grid_indices=self.grid_indices,
             label=label,
-            effective_bs=effective_bs,
         )
 
     def _get_dataloader(self, ds: NativeGridDataset, stage: str) -> DataLoader:
@@ -236,14 +227,6 @@ class AnemoiEnsDatasetsDataModule(AnemoiDatasetsDataModule):
 
         r = max(rollout, self.rollout)
 
-        # Compute effective batch size
-        effective_bs = (
-            self.config.dataloader.batch_size["training"]
-            * self.config.hardware.num_gpus_per_node
-            * self.config.hardware.num_nodes
-            // self.config.hardware.num_gpus_per_model
-        )
-
         return EnsNativeGridDataset(
             data_reader=data_reader,
             rollout=r,
@@ -252,7 +235,6 @@ class AnemoiEnsDatasetsDataModule(AnemoiDatasetsDataModule):
             shuffle=shuffle,
             grid_indices=self.grid_indices,
             label=label,
-            effective_bs=effective_bs,
             ens_members_per_device=self.config.training.ensemble_size_per_device,
             num_gpus_per_ens=self.config.hardware.num_gpus_per_ensemble,
             num_gpus_per_model=self.config.hardware.num_gpus_per_model,

@@ -161,16 +161,16 @@ class AnemoiTrainer:
         Loads truncation data.
         """
         truncation_data = {}
-        if self.config.hardware.files.get("truncation", None):
+        if self.config.hardware.files.truncation is not None:
             truncation_data["down"] = load_npz(self.config.hardware.files.truncation)
 
-        if self.config.hardware.files.get("truncation_inv", None):
+        if self.config.hardware.files.truncation_inv is not None:
             truncation_data["up"] = load_npz(self.config.hardware.files.truncation_inv)
 
         return truncation_data
 
     @cached_property
-    def model(self) -> Any:  # another wrapper class required? -> GraphEnsForecaster:
+    def model(self) -> Any:
         """Provide the model instance."""
         kwargs = {
             "config": self.config,

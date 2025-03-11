@@ -44,7 +44,6 @@ class NativeGridDataset(IterableDataset):
         timeincrement: int = 1,
         shuffle: bool = True,
         label: str = "generic",
-        effective_bs: int = 1,
     ) -> None:
         """Initialize (part of) the dataset state.
 
@@ -64,11 +63,8 @@ class NativeGridDataset(IterableDataset):
             Shuffle batches, by default True
         label : str, optional
             label for the dataset, by default "generic"
-        effective_bs : int, default 1
-            effective batch size useful to compute the lenght of the dataset
         """
         self.label = label
-        self.effective_bs = effective_bs
 
         self.data = data_reader
 
@@ -351,7 +347,6 @@ class EnsNativeGridDataset(NativeGridDataset):
         timeincrement: int = 1,
         shuffle: bool = True,
         label: str = "generic",
-        effective_bs: int = 1,
         ens_members_per_device: int = 1,
         num_gpus_per_ens: int = 1,
         num_gpus_per_model: int = 1,
@@ -384,7 +379,6 @@ class EnsNativeGridDataset(NativeGridDataset):
             shuffle=shuffle,
             grid_indices=grid_indices,
             label=label,
-            effective_bs=effective_bs,
         )
 
         # Lazy init

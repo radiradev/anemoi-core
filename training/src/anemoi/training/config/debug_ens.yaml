@@ -26,7 +26,6 @@ hardware:
   paths:
     truncation: /ec/res4/hpcperm/nesl/inter_mat
     data: /home/mlx/ai-ml/datasets/
-    grids: /home/mlx/ai-ml/grids/
     output: ${oc.env:SCRATCH}/aifs/${data.resolution}/
   files:
     truncation: ${hardware.paths.truncation}/O96-O32-linear.mat.npz
@@ -56,12 +55,10 @@ dataloader:
     training: 2
     validation: 2
     test: 1
-    predict: 1
   batch_size:
     training: 2
     validation: 2
     test: 2
-    predict: 2
   limit_batches:
     training: 8
     validation: 8
