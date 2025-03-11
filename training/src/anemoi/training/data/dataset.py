@@ -149,7 +149,6 @@ class NativeGridDataset(IterableDataset):
         default_statistics = self.data.statistics
         # Merge custom statistics with default statistics
         merged_statistics = {**default_statistics, **self.custom_statistics}
-        breakpoint()
         return merged_statistics
 
     @cached_property

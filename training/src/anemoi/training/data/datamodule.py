@@ -197,8 +197,6 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
         else:
             custom_statistics_file = None
 
-        breakpoint()
-
         return NativeGridDataset(
             data_reader=data_reader,
             rollout=r,
