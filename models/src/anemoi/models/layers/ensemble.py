@@ -57,9 +57,7 @@ class NoiseInjector(nn.Module):
 
     def make_noise(self, noise_ref):
         tensor_shape = (*noise_ref.shape[:-1], self.noise_channels)
-        noise = torch.normal(
-            mean=0, std=self.noise_std, size=tensor_shape, dtype=noise_ref.dtype, device=noise_ref.device
-        )
+        noise = torch.randn(size=tensor_shape, dtype=noise_ref.dtype, device=noise_ref.device) * self.noise_std
         noise.requires_grad = False
         return noise
 

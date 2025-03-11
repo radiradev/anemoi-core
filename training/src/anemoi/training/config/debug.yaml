@@ -9,6 +9,7 @@ defaults:
 - training: default
 - _self_
 
+no_validation: False
 
 data:
   resolution: o96
