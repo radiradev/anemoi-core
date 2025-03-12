@@ -22,7 +22,7 @@ from torch_geometric.utils import mask_to_index
 
 
 def get_k_hop_edges(
-    nodes: Tensor, edge_attr: Tensor, edge_index: Adj, num_hops: int = 1, num_nodes: int | None = None
+    nodes: Tensor, edge_attr: Tensor, edge_index: Adj, num_hops: int = 1, num_nodes: Optional[int] = None
 ) -> tuple[Adj, Tensor]:
     """Return 1 hop subgraph.
 
