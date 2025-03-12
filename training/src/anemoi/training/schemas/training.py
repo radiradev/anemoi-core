@@ -264,13 +264,13 @@ class TrainingSchema(BaseModel):
     accum_grad_batches: PositiveInt = Field(default=1)
     """Accumulates gradients over k batches before stepping the optimizer.
     K >= 1 (if K == 1 then no accumulation). The effective bacthsize becomes num-device * k."""
-    num_sanity_val_steps: PositiveInt = Field(example=6)
+    num_sanity_val_steps: NonNegativeInt = Field(example=6)
     "Sanity check runs n batches of val before starting the training routine."
     gradient_clip: GradientClip
     "Config for gradient clipping."
-    forecaster: Any  # TODO: Fix this
+    forecaster: Any  # TODO(Simon): Fix this
     "Forecaster to use."
-    strategy: Any  # TODO: Fix this
+    strategy: Any  # TODO(Simon): Fix this
     "Strategy to use."
     ensemble_size_per_device: PositiveInt = Field(example=1)
     "Number of ensemble member per device"
