@@ -169,9 +169,10 @@ def test_GraphTransformerProcessorBlock_forward_backward(init, block):
     edge_index = torch.randint(1, 10, (2, 10))
     shapes = (10, 10, 10)
     batch_size = 1
+    size = 10
 
     # Forward pass
-    output, _ = block(x, edge_attr, edge_index, shapes, batch_size)
+    output, _ = block(x, edge_attr, edge_index, shapes, batch_size, size)
 
     # Check output shape
     assert output.shape == (10, out_channels)
@@ -215,6 +216,7 @@ def test_GraphTransformerProcessorBlock_chunking(init, block, monkeypatch):
     edge_index = torch.randint(1, 10, (2, 10))
     shapes = (10, 10, 10)
     batch_size = 1
+    size = 10
     num_chunks = torch.randint(2, 10, (1,)).item()
 
     # manually set to non-training mode
@@ -223,11 +225,11 @@ def test_GraphTransformerProcessorBlock_chunking(init, block, monkeypatch):
     # result with chunks
     monkeypatch.setenv("ANEMOI_INFERENCE_NUM_CHUNKS", str(num_chunks))
     importlib.reload(anemoi.models.layers.block)
-    out_chunked, _ = block(x, edge_attr, edge_index, shapes, batch_size)
+    out_chunked, _ = block(x, edge_attr, edge_index, shapes, batch_size, size)
     # result without chunks, reload block for new env variable
     monkeypatch.setenv("ANEMOI_INFERENCE_NUM_CHUNKS", "1")
     importlib.reload(anemoi.models.layers.block)
-    out, _ = block(x, edge_attr, edge_index, shapes, batch_size)
+    out, _ = block(x, edge_attr, edge_index, shapes, batch_size, size)
 
     assert out.shape == out_chunked.shape, f"out.shape ({out.shape}) != out_chunked.shape ({out_chunked.shape})"
     assert torch.allclose(out, out_chunked, atol=1e-4), "out != out_chunked"
@@ -361,7 +363,7 @@ def test_GraphTransformerMapperBlock_forward_backward(init, mapper_block):
     size = (10, 10)
 
     # Forward pass
-    output, _ = block(x, edge_attr, edge_index, shapes, batch_size, size=size)
+    output, _ = block(x, edge_attr, edge_index, shapes, batch_size, size)
 
     # Check output shape
     assert output[0].shape == (10, out_channels)
