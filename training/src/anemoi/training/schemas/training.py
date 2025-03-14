@@ -204,7 +204,7 @@ class BaseDDPStrategySchema(BaseModel):
     target_: ImplementedStrategiesUsingBaseDDPStrategySchema = Field(..., alias="_target_")
     num_gpus_per_model: PositiveInt = Field(example=2)
     "Number of GPUs per model."
-    # TODO(Ana): check why this is not passed in the config
+    # TODO(Ana): check why the read_group_size is not passed in the config
     kwargs: dict[str, Any] = Field(default_factory=dict)
     "Additional arguments to pass to the strategy."
 
