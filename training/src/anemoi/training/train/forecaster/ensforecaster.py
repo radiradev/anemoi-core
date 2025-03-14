@@ -14,16 +14,17 @@ import logging
 from typing import TYPE_CHECKING
 
 import torch
-from omegaconf import DictConfig
 from torch.utils.checkpoint import checkpoint
 
 from anemoi.training.distributed.ensemble import gather_ensemble_members
 from anemoi.training.utils.inicond import EnsembleInitialConditions
-from anemoi.training.train.forecaster import GraphForecaster
+
+from .forecaster import GraphForecaster
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
+    from omegaconf import DictConfig
     from torch.distributed.distributed_c10d import ProcessGroup
     from torch_geometric.data import HeteroData
 
