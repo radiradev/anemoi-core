@@ -162,10 +162,13 @@ class AnemoiTrainer:
         """
         truncation_data = {}
         if self.config.hardware.files.truncation is not None:
-            truncation_data["down"] = load_npz(self.config.hardware.files.truncation)
-
+            truncation_data["down"] = load_npz(
+                Path(self.config.hardware.paths.truncation, self.config.hardware.files.truncation),
+            )
         if self.config.hardware.files.truncation_inv is not None:
-            truncation_data["up"] = load_npz(self.config.hardware.files.truncation_inv)
+            truncation_data["up"] = load_npz(
+                Path(self.config.hardware.paths.truncation, self.config.hardware.files.truncation_inv),
+            )
 
         return truncation_data
 

@@ -30,7 +30,7 @@ datamodule:
 
 hardware:
   paths:
-    truncation_matrices: /ec/res4/hpcperm/nesl/inter_mat
+    truncation: /ec/res4/hpcperm/nesl/inter_mat
     data: /home/mlx/ai-ml/datasets/
     grids: /home/mlx/ai-ml/grids/
     output: ${oc.env:SCRATCH}/aifs/${data.resolution}/
