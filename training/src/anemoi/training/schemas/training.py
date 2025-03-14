@@ -193,6 +193,34 @@ class CombinedLossSchema(BaseLossSchema):
         return self
 
 
+class ImplementedStrategiesUsingBaseDDPStrategySchema(str, Enum):
+    ddp_ens = "anemoi.training.distributed.strategy.DDPEnsGroupStrategy"
+    ddp = "anemoi.training.distributed.strategy.DDPStrategy"
+
+
+class BaseDDPStrategySchema(BaseModel):
+    """Strategy configuration."""
+
+    target_: ImplementedStrategiesUsingBaseDDPStrategySchema = Field(..., alias="_target_")
+    num_gpus_per_model: PositiveInt = Field(example=2)
+    "Number of GPUs per model."
+    # TODO(Ana): check why this is not passed in the config
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+    "Additional arguments to pass to the strategy."
+
+
+class DDPEnsGroupStrategyStrategySchema(BaseDDPStrategySchema):
+    """Strategy object from anemoi.training.strategy."""
+
+    num_gpus_per_ensemble: PositiveInt = Field(example=2)
+    "Number of GPUs per ensemble."
+
+
+StrategySchemas = Union[
+    BaseDDPStrategySchema,
+    DDPEnsGroupStrategyStrategySchema,
+]
+
 LossSchemas = Union[
     BaseLossSchema,
     HuberLossSchema,
@@ -270,7 +298,7 @@ class TrainingSchema(BaseModel):
     "Config for gradient clipping."
     forecaster: Any  # TODO(Simon): Fix this
     "Forecaster to use."
-    strategy: Any  # TODO(Simon): Fix this
+    strategy: StrategySchemas  # TODO(Simon): Fix this
     "Strategy to use."
     ensemble_size_per_device: PositiveInt = Field(example=1)
     "Number of ensemble member per device"
