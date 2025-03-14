@@ -13,9 +13,9 @@ import torch
 from hydra.errors import InstantiationException
 from omegaconf import DictConfig
 
+from anemoi.training.losses.combined import CombinedLoss
 from anemoi.training.losses.kcrps import AlmostFairKernelCRPS
 from anemoi.training.losses.kcrps import KernelCRPS
-from anemoi.training.losses.combined import CombinedLoss
 from anemoi.training.losses.mae import WeightedMAELoss
 from anemoi.training.losses.mse import WeightedMSELoss
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
