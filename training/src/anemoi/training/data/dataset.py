@@ -85,8 +85,8 @@ class NativeGridDataset(IterableDataset):
         self.reader_group_rank = 0
         self.reader_group_size = 1
 
-        self.seed_comm_num_groups = 1
-        self.seed_comm_group_id = 0
+        self.sample_comm_num_groups = 1 # groups that work on the same sample / batch
+        self.sample_comm_group_id = 0
 
         # additional state vars (lazy init)
         self.n_samples_per_worker = 0
@@ -171,8 +171,8 @@ class NativeGridDataset(IterableDataset):
         self.reader_group_rank = reader_group_rank
         self.reader_group_size = reader_group_size
 
-        self.seed_comm_group_id = model_comm_group_id
-        self.seed_comm_num_groups = model_comm_num_groups
+        self.sample_comm_group_id = model_comm_group_id
+        self.sample_comm_num_groups = model_comm_num_groups
 
         assert self.reader_group_size >= 1, "reader_group_size must be positive"
 
@@ -202,9 +202,9 @@ class NativeGridDataset(IterableDataset):
         self.worker_id = worker_id
 
         # Divide this equally across shards (one shard per group!)
-        shard_size = len(self.valid_date_indices) // self.seed_comm_num_groups
-        shard_start = self.seed_comm_group_id * shard_size
-        shard_end = (self.seed_comm_group_id + 1) * shard_size
+        shard_size = len(self.valid_date_indices) // self.sample_comm_num_groups
+        shard_start = self.sample_comm_group_id * shard_size
+        shard_end = (self.sample_comm_group_id + 1) * shard_size
 
         shard_len = shard_end - shard_start
         self.n_samples_per_worker = shard_len // n_workers
@@ -241,7 +241,7 @@ class NativeGridDataset(IterableDataset):
             self.global_rank,
             self.model_comm_group_id,
             self.model_comm_group_rank,
-            self.seed_comm_group_id,
+            self.sample_comm_group_id,
             base_seed,
             sanity_rnd,
         )
@@ -275,7 +275,7 @@ class NativeGridDataset(IterableDataset):
             self.global_rank,
             self.model_comm_group_id,
             self.model_comm_group_rank,
-            self.seed_comm_group_id,
+            self.sample_comm_group_id,
             shuffled_chunk_indices[:10],
         )
 
@@ -475,8 +475,8 @@ class EnsNativeGridDataset(NativeGridDataset):
         self.reader_group_rank = reader_group_rank
         self.reader_group_size = reader_group_size
 
-        self.seed_comm_group_id = ens_comm_group_id  # used for seeding
-        self.seed_comm_num_groups = ens_comm_num_groups
+        self.sample_comm_group_id = ens_comm_group_id  # groups that work on the same sample / batch
+        self.sample_comm_num_groups = ens_comm_num_groups
 
         assert self.reader_group_size >= 1, "reader_group_size must be positive"
 
@@ -517,7 +517,7 @@ class EnsNativeGridDataset(NativeGridDataset):
 
         base_seed = get_base_seed()
         seed = (
-            base_seed * (self.seed_comm_group_id + 1) - worker_id
+            base_seed * (self.sample_comm_group_id + 1) - worker_id
         )  # note that test, validation etc. datasets get same seed
         self.rng_inicond_sampling = np.random.default_rng(seed=seed)
         sanity_rnd = self.rng.random(1)
@@ -537,7 +537,7 @@ class EnsNativeGridDataset(NativeGridDataset):
             self.model_comm_group_rank,
             self.ens_comm_group_id,
             self.ens_comm_group_rank,
-            self.seed_comm_group_id,
+            self.sample_comm_group_id,
             seed,
             sanity_rnd,
             sanity_rnd_ini,
@@ -569,7 +569,7 @@ class EnsNativeGridDataset(NativeGridDataset):
             self.global_rank,
             self.model_comm_group_id,
             self.model_comm_group_rank,
-            self.seed_comm_group_id,
+            self.sample_comm_group_id,
             shuffled_chunk_indices[:10],
         )
 
