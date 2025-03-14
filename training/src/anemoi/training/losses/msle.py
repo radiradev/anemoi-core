@@ -20,9 +20,9 @@ LOGGER = logging.getLogger(__name__)
 
 
 class WeightedMSLELoss(BaseWeightedLoss):
-    """Node-weighted MSE loss."""
+    """Node-weighted MSLE loss."""
 
-    name = "wmse"
+    name = "wmsle"
 
     def __init__(
         self,
