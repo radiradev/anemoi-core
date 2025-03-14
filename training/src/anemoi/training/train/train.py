@@ -182,7 +182,7 @@ class AnemoiTrainer:
             "supporting_arrays": self.supporting_arrays,
         }
 
-        model_class = get_class(self.config.training.forecaster)
+        model_class = get_class(self.config.training.model_class)
         model = model_class(**kwargs)
 
         # Load the model weights
