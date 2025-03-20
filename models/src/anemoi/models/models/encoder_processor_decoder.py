@@ -80,22 +80,22 @@ class AnemoiModelEncProcDec(nn.Module):
                                                                     fourier_dim=self.fourier_dim, hidden_dim=self.hidden_dim,
                                                                     encoded_dim=self.encoded_dim, num_levels=self.num_levels, 
                                                                     data_indices=self.data_indices)
-
-        if self.vertical_embeddings_method == 'concat':
-            input_dim = (
-                self.multi_step * (self.num_input_channels + self.num_input_channels * self.embedder.encoded_dim)
-                + self.node_attributes.attr_ndims[self._graph_name_data]
-            )
+        
+        #if self.vertical_embeddings_method == 'concat':
+        #    input_dim = (
+        #        self.multi_step * (self.num_input_channels + self.num_input_channels * self.embedder.encoded_dim)
+        #        + self.node_attributes.attr_ndims[self._graph_name_data]
+        #    )
         # elif self.vertical_embeddings_method == 'attention':
-        #     input_dim = (
-        #         self.multi_step * (6 * self.embedder.encoded_dim)
-        #         + self.node_attributes.attr_ndims[self._graph_name_data]
+        # input_dim = (
+        #     self.multi_step * (6 * self.embedder.encoded_dim)
+        #     + self.node_attributes.attr_ndims[self._graph_name_data]
         #     )
-        else:
-            input_dim = (
-                self.multi_step * (self.num_input_channels)
-                + self.node_attributes.attr_ndims[self._graph_name_data]
-            )
+        #else:
+        input_dim = (
+               self.multi_step * (self.num_input_channels)
+               + self.node_attributes.attr_ndims[self._graph_name_data]
+        )
 
         # Encoder data -> hidden
         self.encoder = instantiate(
@@ -137,7 +137,7 @@ class AnemoiModelEncProcDec(nn.Module):
             ]
         )
 
-        self.pressure_level_block = TransformerProcessorBlock(num_channels = self.embedder.num_levels, hidden_dim = self.embedder.hidden_dim, num_heads = 13, activation = 'ReLU', window_size = 26, dropout_p = 0.0)
+        self.pressure_level_mapper_block = TransformerProcessorBlock(num_channels=13, hidden_dim=10, window_size=13, activation='GELU', num_heads=13)
 
     def _calculate_shapes_and_indices(self, data_indices: dict) -> None:
         self.num_input_channels = len(data_indices.internal_model.input)
@@ -212,13 +212,11 @@ class AnemoiModelEncProcDec(nn.Module):
     def forward(self, x: Tensor, model_comm_group: Optional[ProcessGroup] = None) -> Tensor:
         batch_size = x.shape[0]
         ensemble_size = x.shape[2]
-
         n_times = x.shape[1]
         num_grid_points = x.shape[3]        
         self.num_variables = int(x.shape[4]/self.num_levels)
         x_reshaped = torch.reshape(x, (batch_size, n_times, ensemble_size, num_grid_points, self.num_variables, self.num_levels)).to("cuda")
         mapped_features = self.embedder(x)
-
 
         x_reshaped = x_reshaped + mapped_features
 
@@ -227,10 +225,11 @@ class AnemoiModelEncProcDec(nn.Module):
             )
         
         x_att = einops.rearrange(
-                x_reshaped, "batch ensemble grid vars time levels -> (batch ensemble grid vars time) (levels)"
-            )
+               x_reshaped, "batch ensemble grid vars time levels -> (batch ensemble grid vars time) (levels)"
+           )
 
-        x_att = self.pressure_level_block(x_att, shapes=[[x_att.shape[0], x_att.shape[1]]], batch_size=240)
+
+        x_att = self.pressure_level_mapper_block(x_att, shapes=[[x_att.shape[0], x_att.shape[1]]], batch_size=512)
 
         x_data_vertical_latent = x_att.reshape(int(x_att.shape[0]/(2*6)), (6*2*self.embedder.num_levels))
 

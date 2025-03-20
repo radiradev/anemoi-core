@@ -43,6 +43,8 @@ class NativeGridDataset(IterableDataset):
         timeincrement: int = 1,
         shuffle: bool = True,
         label: str = "generic",
+        num_model_workers: int = 1,
+        batch_size: int = 1,
         effective_bs: int = 1,
     ) -> None:
         """Initialize (part of) the dataset state.
@@ -63,10 +65,13 @@ class NativeGridDataset(IterableDataset):
             Shuffle batches, by default True
         label : str, optional
             label for the dataset, by default "generic"
+        batch_size: int, default 1
+            batch size per model group
         effective_bs : int, default 1
             effective batch size useful to compute the lenght of the dataset
         """
         self.label = label
+        self.batch_size = batch_size
         self.effective_bs = effective_bs
 
         self.data = data_reader
@@ -83,6 +88,7 @@ class NativeGridDataset(IterableDataset):
         self.model_comm_group_rank = 0
         self.model_comm_num_groups = 1
         self.model_comm_group_id = 0
+        self.model_comm_group_nworkers = num_model_workers
         self.global_rank = 0
 
         self.reader_group_rank = 0
@@ -182,6 +188,25 @@ class NativeGridDataset(IterableDataset):
             model_comm_num_groups,
             reader_group_rank,
         )
+
+    # def shard_len(self) -> int:
+    #     # Total number of valid ICs is dataset length minus rollout minus additional multistep inputs
+    #     len_full = len(self.valid_date_indices) #+ (((self.rollout + 1) + (self.multi_step -1)) * self.timeincrement)
+    #     # Now we have to adjust this length such that the overall length is divisible by: (batch_size * num_workers * self.model_comm_num_groups)
+    #     # This is because we use drop_last=True in the DataLoader so this is when validation will stop
+    #     # len_corrected = len_corrected - (len_corrected % effective_batch_size)
+
+    #     if (len_full % (self.batch_size*self.model_comm_group_nworkers* self.model_comm_num_groups)) < (self.batch_size*self.model_comm_group_nworkers* self.model_comm_num_groups)/2:
+    #         len_adjusted = len_full + (len_full % (self.batch_size*self.model_comm_group_nworkers* self.model_comm_num_groups)) # *  max(1, self.model_comm_group_nworkers)* self.model_comm_num_groups))
+    #     else:
+    #         len_adjusted = len_full + ((self.batch_size*self.model_comm_group_nworkers* self.model_comm_num_groups) - (len_full % (self.batch_size*self.model_comm_group_nworkers* self.model_comm_num_groups))) # *  max(1, self.model_comm_group_nworkers)* self.model_comm_num_groups))
+    #     # Divide this equally across shards (one shard per group!)
+    #     shard_len = len_adjusted #// self.model_comm_num_groups
+    #     print('here')
+    #     print(len_full % (self.batch_size*self.model_comm_group_nworkers* self.model_comm_num_groups))
+    #     print(len_full)
+
+    #     return shard_len
 
     def per_worker_init(self, n_workers: int, worker_id: int) -> None:
         """Called by worker_init_func on each copy of dataset.
@@ -286,6 +311,17 @@ class NativeGridDataset(IterableDataset):
 
             yield torch.from_numpy(x)
 
+    # def __len__(self) -> int:
+    #     # This is then __len__ for this shard, which is distributed across the workers
+
+    #      shard_len = self.shard_len() #727
+
+    #      return shard_len
+
+    def _get_total_batch_num(self) -> int:
+        num_batches = self.shard_len()/self.effective_bs
+        return num_batches    
+    
     def __repr__(self) -> str:
         return f"""
             {super().__repr__()}

@@ -124,7 +124,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
     def ds_train(self) -> NativeGridDataset:
         return self._get_dataset(
             open_dataset(OmegaConf.to_container(self.config.dataloader.training, resolve=True)),
-            label="train",
+            label="training",
         )
 
     @cached_property
@@ -172,7 +172,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
 
         # Compute effective batch size
         effective_bs = (
-            self.config.dataloader.batch_size["training"]
+            self.config.dataloader.batch_size[label]
             * self.config.hardware.num_gpus_per_node
             * self.config.hardware.num_nodes
             // self.config.hardware.num_gpus_per_model
@@ -186,6 +186,8 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             shuffle=shuffle,
             grid_indices=self.grid_indices,
             label=label,
+            num_model_workers = self.config.dataloader.num_workers[label],
+            batch_size= self.config.dataloader.batch_size[label],
             effective_bs=effective_bs,
         )
 
