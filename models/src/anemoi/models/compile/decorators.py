@@ -8,14 +8,23 @@
 # nor does it submit to any jurisdiction.
 
 
-def torch_compile():
+def torch_compile(dynamic=True, **kwargs):
+    """
+    Compile a function using torch.compile.
+
+    This requires torch>=2.6, and torch_geometric>=2.6,
+    and will silently return the original function if the requirements are not met.
+
+    All arguments are passed to torch.compile.
+    """
+
     def decorator(func):
         import torch
         import torch_geometric
 
         req = torch.__version__ >= "2.6" and torch_geometric.__version__ >= "2.6"
         if req:
-            compile_func = torch.compile(dynamic=True)
+            compile_func = torch.compile(dynamic=dynamic, **kwargs)
             return compile_func(func)
         return func
 
