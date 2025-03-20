@@ -193,6 +193,16 @@ class CombinedLossSchema(BaseLossSchema):
         return self
 
 
+LossSchemas = Union[
+    BaseLossSchema,
+    HuberLossSchema,
+    WeightedMSELossLimitedAreaSchema,
+    CombinedLossSchema,
+    KernelCRPSSchema,
+    AlmostFairKernelCRPSSchema,
+]
+
+
 class ImplementedStrategiesUsingBaseDDPStrategySchema(str, Enum):
     ddp_ens = "anemoi.training.distributed.strategy.DDPEnsGroupStrategy"
     ddp = "anemoi.training.distributed.strategy.DDPStrategy"
@@ -221,14 +231,18 @@ StrategySchemas = Union[
     DDPEnsGroupStrategyStrategySchema,
 ]
 
-LossSchemas = Union[
-    BaseLossSchema,
-    HuberLossSchema,
-    WeightedMSELossLimitedAreaSchema,
-    CombinedLossSchema,
-    KernelCRPSSchema,
-    AlmostFairKernelCRPSSchema,
-]
+
+class ImplementedGraphForecasterSchemas(str, Enum):
+    forecaster_single = "anemoi.training.train.forecaster.GraphForecaster"
+    forecaster_ens = "anemoi.training.train.forecaster.GraphEnsForecaster"
+
+
+class GraphForecasterSchema(BaseModel):
+    model_class: ImplementedGraphForecasterSchemas = Field(
+        example="anemoi.training.train.forecaster.GraphForecaster",
+        alias="task",
+    )
+    "Training model class."
 
 
 class GraphNodeAttributeSchema(BaseModel):
@@ -296,9 +310,9 @@ class TrainingSchema(BaseModel):
     "Sanity check runs n batches of val before starting the training routine."
     gradient_clip: GradientClip
     "Config for gradient clipping."
-    forecaster: Any  # TODO(Simon): Fix this
+    forecaster: GraphForecasterSchema
     "Forecaster to use."
-    strategy: StrategySchemas  # TODO(Simon): Fix this
+    strategy: StrategySchemas
     "Strategy to use."
     ensemble_size_per_device: PositiveInt = Field(example=1)
     "Number of ensemble member per device"
