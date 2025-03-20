@@ -270,7 +270,7 @@ class ScaleValidationMetrics(BaseModel):
     """List of metrics to keep in normalised space.."""
 
 
-class TrainingSchema(BaseModel):
+class BaseTrainingSchema(BaseModel):
     """Training configuration."""
 
     run_id: Union[str, None] = Field(example=None)
@@ -297,11 +297,6 @@ class TrainingSchema(BaseModel):
     "Sanity check runs n batches of val before starting the training routine."
     gradient_clip: GradientClip
     "Config for gradient clipping."
-    forecaster: Literal[
-        "anemoi.training.train.forecaster.GraphForecaster",
-        "anemoi.training.train.forecaster.GraphEnsForecaster",
-    ]
-    "Forecaster to use."
     strategy: StrategySchemas
     "Strategy to use."
     ensemble_size_per_device: PositiveInt = Field(example=1)
@@ -334,3 +329,15 @@ class TrainingSchema(BaseModel):
     "List of metrics"
     node_loss_weights: NodeLossWeightsSchema
     "Node loss weights configuration."
+    task: str
+
+
+class ForecasterSchema(BaseTrainingSchema):
+    task: Literal[
+        "anemoi.training.train.forecaster.GraphForecaster",
+        "anemoi.training.train.forecaster.GraphEnsForecaster",
+    ] = Field(..., alias="model_class")
+    "Training objective."
+
+
+TrainingSchema = Union[ForecasterSchema]
