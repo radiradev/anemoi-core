@@ -232,19 +232,6 @@ StrategySchemas = Union[
 ]
 
 
-class ImplementedGraphForecasterSchemas(str, Enum):
-    forecaster_single = "anemoi.training.train.forecaster.GraphForecaster"
-    forecaster_ens = "anemoi.training.train.forecaster.GraphEnsForecaster"
-
-
-class GraphForecasterSchema(BaseModel):
-    model_class: ImplementedGraphForecasterSchemas = Field(
-        example="anemoi.training.train.forecaster.GraphForecaster",
-        alias="task",
-    )
-    "Training model class."
-
-
 class GraphNodeAttributeSchema(BaseModel):
     target_: Literal["anemoi.training.losses.nodeweights.GraphNodeAttribute"] = Field(..., alias="_target_")
     "Node loss weights object from anemoi.training.losses."
@@ -310,7 +297,10 @@ class TrainingSchema(BaseModel):
     "Sanity check runs n batches of val before starting the training routine."
     gradient_clip: GradientClip
     "Config for gradient clipping."
-    forecaster: GraphForecasterSchema
+    forecaster: Literal[
+        "anemoi.training.train.forecaster.GraphForecaster",
+        "anemoi.training.train.forecaster.GraphEnsForecaster",
+    ]
     "Forecaster to use."
     strategy: StrategySchemas
     "Strategy to use."
