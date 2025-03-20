@@ -162,15 +162,18 @@ class AnemoiTrainer:
         """
         truncation_data = {}
         if self.config.hardware.files.truncation is not None:
-            truncation_data["down"] = load_npz(self.config.hardware.files.truncation)
-
+            truncation_data["down"] = load_npz(
+                Path(self.config.hardware.paths.truncation, self.config.hardware.files.truncation),
+            )
         if self.config.hardware.files.truncation_inv is not None:
-            truncation_data["up"] = load_npz(self.config.hardware.files.truncation_inv)
+            truncation_data["up"] = load_npz(
+                Path(self.config.hardware.paths.truncation, self.config.hardware.files.truncation_inv),
+            )
 
         return truncation_data
 
     @cached_property
-    def model(self) -> Any:
+    def model(self) -> pl.LightningModule:
         """Provide the model instance."""
         kwargs = {
             "config": self.config,
@@ -182,8 +185,8 @@ class AnemoiTrainer:
             "supporting_arrays": self.supporting_arrays,
         }
 
-        forecaster = get_class(self.config.training.forecaster)
-        model = forecaster(**kwargs)
+        model_class = get_class(self.config.training.model_class)
+        model = model_class(**kwargs)
 
         # Load the model weights
         if self.load_weights_only:
@@ -194,11 +197,11 @@ class AnemoiTrainer:
                     model = transfer_learning_loading(model, self.last_checkpoint)
                 else:
                     LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
-                    model = forecaster.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
+                    model = model_class.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
 
             else:
                 LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
-                model = forecaster.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
+                model = model_class.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
 
         if hasattr(self.config.training, "submodules_to_freeze"):
             # Freeze the chosen model weights

@@ -59,9 +59,6 @@ class KernelCRPS(BaseWeightedLoss):
 
         assert ens_size > 1, "Ensemble size must be greater than 1."
 
-        if ens_size == 1:
-            return mae
-
         coef = -1.0 / (ens_size * (ens_size - 1)) if self.fair else -1.0 / (ens_size**2)
 
         ens_var = torch.zeros(size=preds.shape[:-1], device=preds.device)
