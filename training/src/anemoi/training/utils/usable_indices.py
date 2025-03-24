@@ -30,7 +30,7 @@ def get_usable_indices(
     relative_indices: array[np.int64]
         Array of relative indices requested at each index i.
     trajectory_ids: array[np.int64]
-        Array of integers of length series length that indicates which forecast trajectory a time index belongs to. 
+        Array of integers of length series length that indicates which forecast trajectory a time index belongs to.
         When training on analysis: None
 
     Returns
