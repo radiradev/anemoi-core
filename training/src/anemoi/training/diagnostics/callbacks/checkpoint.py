@@ -208,6 +208,7 @@ class AnemoiCheckpoint(ModelCheckpoint):
         if trainer.is_global_zero:
             from weakref import proxy
 
+            save_metadata(lightning_checkpoint_filepath, metadata)
             # notify loggers
             for logger in trainer.loggers:
                 logger.after_save_checkpoint(proxy(self))
