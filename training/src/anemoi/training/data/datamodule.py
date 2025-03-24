@@ -101,6 +101,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
 
     def add_trajectory_ids(self, data_reader: Callable) -> Callable:
         """Determine an index of forecast trajectories associated with the time index and add to a data_reader object.
+
         This is needed for interpolation to ensure that the interpolator is trained on consistent time slices.
 
         NOTE: This is only relevant when training on non-analysis and could in the future be replaced with
