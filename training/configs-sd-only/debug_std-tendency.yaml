@@ -1,0 +1,106 @@
+defaults:
+- data: zarr
+- dataloader: native_grid
+- diagnostics: evaluation
+- hardware: atos  # leonardo
+- graph: encoder_decoder_only
+- model: transformer
+- training: default_tendency
+- _self_
+
+
+### This file is for local experimentation.
+##  When you commit your changes, assign the new features and keywords
+##  to the correct defaults.
+# For example to change from default GPU count:
+# hardware:
+#   num_gpus_per_node: 1
+
+### This file is for local experimentation.
+##  When you commit your changes, assign the new features and keywords
+##  to the correct defaults.
+# For example to change from default GPU count:
+# hardware:
+#   num_gpus_per_node: 1
+diagnostics:
+  log:
+    mlflow:
+      enabled: True
+      offline: True
+      experiment_name: 'std-tendency-loss'
+      terminal: True
+  plot:
+    enabled: True
+    scatter: False
+    asynchronous: False
+    mode: asyncio
+model:
+  num_channels: 1024
+  trainable_parameters:
+    data: 8
+    hidden: 8
+    data2hidden: 8
+    hidden2data: 8
+dataloader:
+  batch_size:
+    training: 1
+    validation: 1
+  limit_batches:
+    training: null
+    validation: 500
+
+training:
+  max_steps: 265000
+  lr:
+    rate: 3.125e-5 # tests
+    #rate: 1.5625e-5 # tests
+    iterations: 260000
+    min: 3e-7 #Not scaled by #GPU
+  # fork_run_id: 4fba9f2c35694dc9be9e72a3a5276d25
+  # rollout:
+  #   epoch_increment: 1
+  #   max: 12
+  #   start: 1
+  variable_loss_scaling:
+    variable_groups:
+      default: sfc
+      pl: [q, t, u, v, w, z]
+    default: 1
+    q: 1
+    t: 1
+    u: 1
+    v: 1
+    w: 0.1
+    z: 1
+    sp: 1
+    10u: 1
+    10v: 1
+    2d: 1
+    tp: 1
+    cp: 1
+    swvl1: 0.2
+    swvl2: 0.05
+  additional_scalars:
+    # pressure level scalar
+    - _target_: anemoi.training.train.scaling.ReluVariableLevelScaler
+      group: pl
+      y_intercept: 0.2
+      slope: 0.001
+      scale_dim: -1 # dimension on which scaling applied
+      name: "variable_pressure_level"
+    # tendency scalers
+    # scale the prognostic losses by the stdev of the variable tendencies (e.g. the 6-hourly differences of the data)
+    # useful if including slow vs fast evolving variables in the training (e.g. Land/Ocean vs Atmosphere)
+    # if using this option 'variable_loss_scalings' should all be set close to 1.0 for prognostic variables
+    # stdev tendency scaler
+    # - _target_: anemoi.training.data.scaling.StdevTendencyScaler
+    #   scale_dim: -1 # dimension on which scaling applied
+    #   name: "tendency"
+    # var tendency scaler (this should be default!?)
+    - _target_: anemoi.training.train.scaling.StdevTendencyScaler
+      scale_dim: -1 # dimension on which scaling applied
+      name: "tendency"
+
+# hardware:
+#   files:
+#     warm_start: aifs-by_time-epoch_086-step_290410.ckpt

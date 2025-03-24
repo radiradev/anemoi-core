@@ -1,0 +1,13 @@
+data: /leonardo_work/DestE_340_25/ai-ml/datasets/
+dataset_land: /leonardo_work/DestE_340_25/ai-ml/datasets/
+grids: /leonardo_work/DestE_340_25/AIFS_grids/
+output: /leonardo_work/DestE_340_25/output/${oc.env:USER}
+logs:
+  base: ${hardware.paths.output}/logs
+  wandb: ${hardware.paths.logs.base}
+  mlflow: ${hardware.paths.logs.base}/mlflow
+  tensorboard: ${hardware.paths.logs.base}/tensorboard
+checkpoints: ${hardware.paths.output}/checkpoint
+plots: ${hardware.paths.output}/plots
+profiler: ${hardware.paths.output}profiler/
+graph: /leonardo_work/DestE_340_25/output/${oc.env:USER}/graphs/

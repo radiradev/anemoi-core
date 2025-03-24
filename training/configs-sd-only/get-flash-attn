@@ -1,0 +1,132 @@
+#!/bin/bash
+
+# This program reads info about your install and tries to find a matching flash attn wheel from
+# https://github.com/Dao-AILab/flash-attention/releases
+
+# An example wheel: flash_attn-2.7.0.post1+cu12torch2.5cxx11abiTRUE-cp311-cp311-linux_x86_64.whl
+
+# For this we need to know
+#       Cuda version
+#       torch version
+#       cxx abi TRUE/FALSE
+#       python version
+#       OS (assume linux)
+#       ISA
+
+if command -v python3 &> /dev/null; then
+	PYTHON_CMD="python3"
+else
+	PYTHON_CMD="python"
+fi
+
+echo "importing torch to parse config. could take a min..."
+torch_config=`$PYTHON_CMD -c "import torch; print(torch.__config__.show())"` ||{
+        echo "Error. could not import torch config. maybe torch can't be found? Have you activated your python evironment?"
+        echo "exiting..."
+        exit 1
+}
+
+# cut off everything up to and inc "CUDA_VERSION="      -> 12.4,CUDNN_VERSION=...
+# takes up to the first '.'                             -> 12
+cuda_version=`echo ${torch_config#*CUDA_VERSION=} | awk -F'.' '{print $1}'`
+echo " +        cu$cuda_version"
+
+# cut off everything up to and inc "TORCH_VERSION="             -> 2.5.1, USE_CUDA=ON, USE_CUDNN=ON,
+# split along '.', take the 1st and 2nd match and add a '.'     -> 2.5
+torch_version=`echo ${torch_config#*TORCH_VERSION=} | awk -F'.' '{print $1 "." $2 }'`
+echo " +        torch v$torch_version"
+
+# flash_attn_version '2.7.0.post2'
+# Only has wheels up to torch 2.5
+# If a newer version of torch is used, set version to 2.5 so we can find a wheel
+# If this is a problem, i will remove it
+if [ `echo $torch_version'>'2.5 | bc -l` -eq 1 ]; then
+        echo "detected torch version '$torch_version' newer then latest known wheel '2.5'"
+        echo "Will try get a v2.5 wheel"
+        torch_version="2.5"
+fi
+
+# cut off everything up to and inc "ABI="
+# then read the first char
+ABI=`echo ${torch_config#*ABI=} | awk '{print substr ($0, 0, 1)}'`  # 0 or 1
+if [[ ! $ABI -eq 0 ]] && [[ ! $ABI -eq 1 ]]; then
+        "Error! ABI=$ABI, only '0' or '1' is valid. exiting..."
+        exit 1
+fi
+#convert from 0/1 to TRUE/FALSE for whl name later
+if [[ $ABI -eq 0 ]]; then
+        ABI="FALSE"
+else
+        ABI="TRUE"
+fi
+echo " +        ABI$ABI"
+
+# python version
+# python3 --version                     -> Python 3.11.10
+# cuts along ' ', takes the 2nd match   -> 3.11.10
+# cuts along '.', takes the 2nd match   -> 11
+python_version=`$PYTHON_CMD --version | awk -F' ' '{print $2}' | awk -F'.' '{print $2}'`
+echo " +        cp${python_version}"
+
+# OS
+# Assume Linux. Always assume Linux
+os="linux"
+echo " +        $os"
+
+# ISA
+# Only x86_64 is available
+isa="x86_64"
+echo " +        $isa"
+#assume 'x86' if lscpu cant be found
+if  command -v lscpu 2>&1 >/dev/null; then
+        isa=`lscpu | grep "^Architecture:" | awk '{print $2}'`
+fi
+if [[ $isa != "x86_64" ]]; then
+        echo "Error! your ISA was detected to be '$isa'"
+        echo "Prebuilt wheels for flash_attn are only available for 'x86_64'. Exiting..."
+        exit 1
+fi
+
+
+#check for internet
+# if no, just run offline mode
+wget -q --spider http://google.com
+if [ ! $? -eq 0 ]; then
+        echo "Warning! no internet detected (unable to ping 'http://google.com')"
+        echo "Running in offline mode instead"
+        OFFLINE=1
+fi
+
+# Hardcoded - I can manually bump with new releases
+flash_attn_version="2.7.0.post2"
+
+# An example wheel: flash_attn-2.7.0.post1+cu12torch2.5cxx11abiTRUE-cp311-cp311-linux_x86_64.whl
+flash_attn_wheel="flash_attn-${flash_attn_version}+cu${cuda_version}torch${torch_version}cxx11abi${ABI}-cp3${python_version}-cp3${python_version}-${os}_${isa}.whl"
+echo " =>       flash_attn_wheel=$flash_attn_wheel"
+
+url="https://github.com/Dao-AILab/flash-attention/releases/download/v${flash_attn_version}/$flash_attn_wheel"
+if [[ "$DRYRUN" -eq "1" ]] ; then
+        echo "Dryrun! Printing commands instead:"
+        echo " #        wget $url"
+        echo " #        pip install $flash_attn_wheel"
+elif [[ "$OFFLINE" -eq 1 ]]; then
+        echo "Offline! To install flash-attn, please run 'wget ...' on a system with internet and copy it over and then run 'pip install':"
+        echo "          wget $url"
+        echo "          scp $flash_attn_wheel ..."
+        echo "          pip install $flash_attn_wheel"
+else
+        wget $url 2>&1 > /dev/null ||{
+                echo "url not found! Maybe '$flash_attn_wheel' is not a supported configuration :( "
+                echo "exiting.."
+                exit 1
+        }
+
+        pip install --force-reinstall $flash_attn_wheel
+        rm $flash_attn_wheel
+
+        pip list | grep "flash-attn" > /dev/null &&{
+                echo "flash-attn $flash_attn_version installed"
+        }
+fi
+
+exit 0

@@ -345,6 +345,8 @@ def plot_histogram(
         ax[plot_idx].set_title(variable_name)
         ax[plot_idx].set_xlabel(variable_name)
         ax[plot_idx].set_ylabel("Density")
+        if "sd" in variable_name or "snow" in variable_name:
+            ax[plot_idx].set_yscale("log")
         ax[plot_idx].legend()
         ax[plot_idx].set_aspect("auto", adjustable=None)
 
@@ -579,6 +581,51 @@ def plot_flat_sample(
             title=f"{vname} pred err: {np.nanmean(np.abs(err_plot)):.{4}f} deg.",
             datashader=datashader,
         )
+    elif "sd" in vname:
+        # Add 1 to all data to ensure positive values for log scale
+        combined_data = np.concatenate((input_, truth, pred))
+        # For 'errors', only persistence and increments need identical colorbar-limits
+        combined_error = np.concatenate(((pred - input_), (truth - input_)))
+        # Create custom levels with more detail at lower snow depths (in meters)
+        # More resolution below 1m, then coarser steps up to 10m
+        snow_levels = np.concatenate(
+            [
+                np.array([0.0, 0.001, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05]),  # Very fine detail < 5cm
+                np.array([0.075, 0.1, 0.15, 0.2, 0.3, 0.5, 0.75, 1.0]),  # Fine detail < 1m
+                np.arange(1.5, 10.5, 0.5),  # Coarser steps > 1m
+            ],
+        )
+        # Create a custom colormap - starting from white for snow, getting darker blue for deeper snow
+        # Using a slightly off-white start color to ensure contrast with background
+        colors = plt.cm.Blues_r(np.linspace(0, 1, len(snow_levels)))
+        colors[0] = [1, 1, 1, 1]  # Make zero snow pure white
+        colors[1:] = plt.cm.Blues_r(np.linspace(0.1, 0.9, len(snow_levels) - 1))  # Adjust blue range
+        snow_cmap = ListedColormap(colors)
+        # Use BoundaryNorm to create discrete color bands
+        norm = BoundaryNorm(snow_levels, snow_cmap.N)
+        single_plot(
+            fig,
+            ax[1],
+            lon,
+            lat,
+            truth,
+            norm=norm,
+            cmap=snow_cmap,
+            title=f"{vname} target",
+            datashader=datashader,
+        )
+        single_plot(fig, ax[2], lon, lat, pred, norm=norm, cmap=snow_cmap, title=f"{vname} pred", datashader=datashader)
+        single_plot(
+            fig,
+            ax[3],
+            lon,
+            lat,
+            truth - pred,
+            cmap="bwr",
+            norm=TwoSlopeNorm(vcenter=0.0),
+            title=f"{vname} pred err",
+            datashader=datashader,
+        )
     else:
         combined_data = np.concatenate((input_, truth, pred))
         # For 'errors', only persistence and increments need identical colorbar-limits
@@ -632,6 +679,40 @@ def plot_flat_sample(
                 cmap="bwr",
                 norm=TwoSlopeNorm(vcenter=0.0),
                 title=f"{vname} persist err: {np.nanmean(np.abs(err_plot)):.{4}f} deg.",
+                datashader=datashader,
+            )
+        elif "sd" in vname:
+            single_plot(
+                fig,
+                ax[0],
+                lon,
+                lat,
+                input_,
+                norm=norm,
+                title=f"{vname} input",
+                cmap=snow_cmap,
+                datashader=datashader,
+            )
+            single_plot(
+                fig,
+                ax[4],
+                lon,
+                lat,
+                pred - input_,
+                cmap="bwr",
+                norm=TwoSlopeNorm(vmin=combined_error.min(), vcenter=0.0, vmax=combined_error.max()),
+                title=f"{vname} increment [pred - input]",
+                datashader=datashader,
+            )
+            single_plot(
+                fig,
+                ax[5],
+                lon,
+                lat,
+                truth - input_,
+                cmap="bwr",
+                norm=TwoSlopeNorm(vmin=combined_error.min(), vcenter=0.0, vmax=combined_error.max()),
+                title=f"{vname} persist err",
                 datashader=datashader,
             )
         elif vname in precip_and_related_fields:

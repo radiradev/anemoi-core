@@ -64,7 +64,9 @@ normalizer:
     - "q_850"
     - "q_925"
     - "q_1000"
-    - "sd_no_glacier"
+    #- "sd_no_glacier"
+    #- "sd_glacier_only"
+    - "sd"
   min-max:
 
 
@@ -72,7 +74,7 @@ normalizer:
     - "sdor"
     - "slor"
     - "z"
-    - "sd_glacier_only"
+    #- "sd_glacier_only"
 
   none:
     - "cos_latitude"
@@ -93,19 +95,27 @@ normalizer:
     # - "swvl2"
     - "snowc"
 
-
 imputer:
   default: "none"
-  0:
-    - sd_no_glacier
-    - sd_glacier_only
+  # 0:
+  #   - sd
+  #   - tsn
+  #   - rsn
+  #   #- sd_no_glacier
+  #   #- sd_glacier_only
+  #   - snowc
+  minimum:
+    - sd
+    - tsn
+    - rsn
+    #- sd_no_glacier
+    #- sd_glacier_only
     - snowc
-
 
 # processors including imputers and normalizers are applied in order of definition
 processors:
   imputer:
-    _target_: anemoi.models.preprocessing.imputer.ConstantImputer
+    _target_: anemoi.models.preprocessing.imputer.InputImputer
     _convert_: all
     config: ${data.imputer}
   normalizer:
