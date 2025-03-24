@@ -582,39 +582,50 @@ def plot_flat_sample(
             datashader=datashader,
         )
     elif "sd" in vname:
-        # Add 1 to all data to ensure positive values for log scale
         combined_data = np.concatenate((input_, truth, pred))
         # For 'errors', only persistence and increments need identical colorbar-limits
         combined_error = np.concatenate(((pred - input_), (truth - input_)))
-        # Create custom levels with more detail at lower snow depths (in meters)
-        # More resolution below 1m, then coarser steps up to 10m
-        snow_levels = np.concatenate(
-            [
-                np.array([0.0, 0.001, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05]),  # Very fine detail < 5cm
-                np.array([0.075, 0.1, 0.15, 0.2, 0.3, 0.5, 0.75, 1.0]),  # Fine detail < 1m
-                np.arange(1.5, 10.5, 0.5),  # Coarser steps > 1m
-            ],
-        )
-        # Create a custom colormap - starting from white for snow, getting darker blue for deeper snow
-        # Using a slightly off-white start color to ensure contrast with background
-        colors = plt.cm.Blues_r(np.linspace(0, 1, len(snow_levels)))
-        colors[0] = [1, 1, 1, 1]  # Make zero snow pure white
-        colors[1:] = plt.cm.Blues_r(np.linspace(0.1, 0.9, len(snow_levels) - 1))  # Adjust blue range
-        snow_cmap = ListedColormap(colors)
-        # Use BoundaryNorm to create discrete color bands
-        norm = BoundaryNorm(snow_levels, snow_cmap.N)
+        # Create a custom colormap - using only blues from dark to light
+        snow_colors = [
+            "#000033",
+            "#000099",
+            "#0000cc",
+            "#1a1aff",
+            "#4d4dff",
+            "#8080ff",
+            "#b3b3ff",
+            "#d6d6ff",
+            "#e6e6ff",
+            "#f0f0ff",
+        ]
+        snow_colormap = ListedColormap(snow_colors)
+
+        # Defining the actual snow depth levels in meters
+        snow_levels = np.array([0.0, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 10.0])
+        norm = BoundaryNorm(snow_levels, len(snow_levels) + 1)
+
         single_plot(
             fig,
             ax[1],
             lon,
             lat,
             truth,
+            cmap=snow_colormap,
             norm=norm,
-            cmap=snow_cmap,
             title=f"{vname} target",
             datashader=datashader,
         )
-        single_plot(fig, ax[2], lon, lat, pred, norm=norm, cmap=snow_cmap, title=f"{vname} pred", datashader=datashader)
+        single_plot(
+            fig,
+            ax[2],
+            lon,
+            lat,
+            pred,
+            cmap=snow_colormap,
+            norm=norm,
+            title=f"{vname} pred",
+            datashader=datashader,
+        )
         single_plot(
             fig,
             ax[3],
@@ -690,7 +701,7 @@ def plot_flat_sample(
                 input_,
                 norm=norm,
                 title=f"{vname} input",
-                cmap=snow_cmap,
+                cmap=snow_colormap,
                 datashader=datashader,
             )
             single_plot(
