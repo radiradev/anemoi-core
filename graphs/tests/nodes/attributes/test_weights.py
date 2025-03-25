@@ -65,6 +65,7 @@ def test_spherical_area_weights_wrong_fill_value(fill_value: str):
     with pytest.raises(AssertionError):
         SphericalAreaWeights(fill_value=fill_value)
 
+
 def test_masked_area_weights_fail(graph_with_nodes: HeteroData):
     """Test attribute builder for AreaWeights with invalid radius."""
     with pytest.raises(KeyError):
