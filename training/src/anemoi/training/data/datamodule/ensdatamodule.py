@@ -29,17 +29,15 @@ class AnemoiEnsDatasetsDataModule(AnemoiDatasetsDataModule):
         self,
         data_reader: Callable,
         shuffle: bool = True,
-        rollout: int = 1,
+        val_rollout: int = 1,
         label: str = "generic",
     ) -> EnsNativeGridDataset:
 
-        r = max(rollout, self.rollout)
+        data_reader = self.add_model_run_ids(data_reader)  # NOTE: Temporary
 
         return EnsNativeGridDataset(
             data_reader=data_reader,
-            rollout=r,
-            multistep=self.config.training.multistep_input,
-            timeincrement=self.timeincrement,
+            relative_date_indices=self.relative_date_indices(val_rollout),
             shuffle=shuffle,
             grid_indices=self.grid_indices,
             label=label,
