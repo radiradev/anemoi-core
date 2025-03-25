@@ -33,7 +33,7 @@ class AnemoiEnsDatasetsDataModule(AnemoiDatasetsDataModule):
         label: str = "generic",
     ) -> EnsNativeGridDataset:
 
-        data_reader = self.add_model_run_ids(data_reader)  # NOTE: Temporary
+        data_reader = self.add_trajectory_ids(data_reader)  # NOTE: Functionality to be moved to anemoi datasets
 
         return EnsNativeGridDataset(
             data_reader=data_reader,
