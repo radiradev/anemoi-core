@@ -39,4 +39,5 @@ module load python3
 source ${VENV}/bin/activate
 # export PATH="$HOME/.local/bin:$PATH"
 
-srun anemoi-training train --config-name=debug_o96-std-tendency hardware=slurm
+#srun anemoi-training train --config-name=debug_o96-std-tendency hardware=slurm
+srun anemoi-training train --config-name=debug_o96-roll hardware=slurm
