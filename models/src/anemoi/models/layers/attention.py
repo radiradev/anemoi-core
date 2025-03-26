@@ -26,7 +26,8 @@ from anemoi.models.distributed.transformer import shard_heads
 from anemoi.models.distributed.transformer import shard_sequence
 from anemoi.models.layers.normalization import AutocastLayerNorm
 from anemoi.utils.config import DotDict
-
+from typing import Callable
+from anemoi.models.layers.attention_flex import BlockMaskManager, BlockMask
 LOGGER = logging.getLogger(__name__)
 
 
@@ -52,6 +53,8 @@ class MultiHeadSelfAttention(nn.Module):
         use_alibi_slopes: bool = False,
         use_qk_norm: bool = False,
         use_rotary_embeddings: bool = False,
+        block_mask: Tensor | BlockMaskManager | BlockMask | None = None,
+        
     ):
         """Initialize MultiHeadSelfAttention.
 
@@ -126,6 +129,7 @@ class MultiHeadSelfAttention(nn.Module):
         attn_funcs = {
             "flash_attention": FlashAttentionWrapper,
             "scaled_dot_product_attention": SDPAAttentionWrapper,
+            "flex_attention": FlexAttentionWrapper,
         }
         assert (
             self.attention_implementation in attn_funcs
@@ -149,6 +153,7 @@ class MultiHeadSelfAttention(nn.Module):
         shapes: list,
         batch_size: int,
         model_comm_group: Optional[ProcessGroup] = None,
+        score_mod: Optional[Callable] = None,
     ) -> Tensor:
         if model_comm_group:
             assert (
@@ -327,6 +332,90 @@ class FlashAttentionWrapper(nn.Module):
         out = einops.rearrange(out, "batch grid heads vars -> batch heads grid vars")
         return out
 
+
+class FlexAttentionWrapper(nn.Module):
+    """Wrapper for Flex Attention mechanism."""
+
+    def __init__(self, block_mask: Tensor | BlockMaskManager | BlockMask | None = None):
+        super().__init__()
+        try:
+            from torch.nn.attention.flex_attention import flex_attention
+        except ImportError:
+            raise ImportError("Error: Flex attention not available in your PyTorch version. Please update PyTorch.")
+            
+        self.block_mask = block_mask
+        self.flex_attention = flex_attention
+        
+    def forward(
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        batch_size: int,
+        causal: bool = False,
+        window_size: Optional[int] = None,
+        dropout_p: float = 0.0,
+        softcap: Optional[float] = None,
+        alibi_slopes: Optional[Tensor] = None,
+        score_mod: Optional[Callable] = None,
+    ) -> Tensor:
+        """Apply flex attention to inputs.
+        
+        Parameters
+        ----------
+        query : Tensor
+            Query tensor
+        key : Tensor
+            Key tensor
+        value : Tensor
+            Value tensor
+        batch_size : int
+            Batch size
+        causal : bool, optional
+            Whether to use causal attention, by default False
+        window_size : Optional[int], optional
+            Window size, by default None (unused in flex attention)
+        dropout_p : float, optional
+            Dropout probability, by default 0.0 (unused in flex attention)
+        softcap : Optional[float], optional
+            Softcap value, by default None (unused in flex attention)
+        alibi_slopes : Optional[Tensor], optional
+            Alibi slopes tensor, by default None (unused in flex attention)
+        score_mod : Optional[Callable], optional
+            Function to modify attention scores, by default None
+            
+        Returns
+        -------
+        Tensor
+            Output tensor
+        """
+        if softcap is not None:
+            LOGGER.warning("Softcap not supported in Flex Attention, ignoring.")
+        
+        if alibi_slopes is not None:
+            LOGGER.warning("Alibi slopes not supported in Flex Attention, ignoring.")
+            
+        if window_size is not None:
+            LOGGER.warning("Window size parameter not used in Flex Attention, ignoring.")
+        
+        if dropout_p > 0.0:
+            LOGGER.warning("Dropout not supported in Flex Attention, ignoring.")
+            
+        # Get the block mask if we have a manager
+        block_mask = None
+        if isinstance(self.block_mask, BlockMaskManager):
+            block_mask = self.block_mask.get_block_mask(query.device)
+        elif isinstance(self.block_mask, (BlockMask, Tensor)):
+            block_mask = self.block_mask
+            
+        # Apply flex attention
+        return self.flex_attention(
+            query,
+            key,
+            value,
+            block_mask=block_mask,
+            score_mod=score_mod
+        )
 
 class MultiHeadCrossAttention(MultiHeadSelfAttention):
     """Multi Head Cross Attention Pytorch Layer."""

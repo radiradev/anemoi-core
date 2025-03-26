@@ -119,6 +119,7 @@ logs/
 _dev/
 outputs/
 *tmp_data/
+private_jobscripts/
 
 # Project specific
 ?
@@ -133,3 +134,6 @@ _version.py
 *.to_upload
 tempCodeRunnerFile.python
 Untitled-*.py
+
+**private_*
+**tmp_notes*
