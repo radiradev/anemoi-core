@@ -1,0 +1,19 @@
+defaults:
+  - graphtransformermapper_transformerproc
+  - _self_
+
+processor:
+  attention_implementation: flex_attention # flash_attention, scaled_dot_product_attention
+  window_size: None
+
+
+block_mask:
+
+  processor:
+    _target_: anemoi.models.layers.attention.BlockMaskManager
+    _convert_: partial
+    method: oval_radius_lat_bands_lon_idx
+    base_grid: query
+    attention_span: [5, 9] # [lat, lon]
+    query_grid_name: ${graph.hidden}
+    keyvalue_grid_name: ${graph.hidden}

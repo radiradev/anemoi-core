@@ -53,7 +53,7 @@ class MultiHeadSelfAttention(nn.Module):
         use_alibi_slopes: bool = False,
         use_qk_norm: bool = False,
         use_rotary_embeddings: bool = False,
-        block_mask: Tensor | BlockMaskManager | BlockMask | None = None,
+        block_mask_manager: Tensor | BlockMaskManager | BlockMask | None = None,
         
     ):
         """Initialize MultiHeadSelfAttention.
@@ -105,6 +105,7 @@ class MultiHeadSelfAttention(nn.Module):
         self.softcap = softcap
         self.use_qk_norm = use_qk_norm
         self.use_rotary_embeddings = use_rotary_embeddings
+        self.block_mask_manager = block_mask_manager
 
         self.set_attention_function()
 
@@ -144,7 +145,7 @@ class MultiHeadSelfAttention(nn.Module):
             )
         elif self.attention_implementation == "flex_attention":
             self.attention = attn_funcs[self.attention_implementation](
-                block_mask=self.block_mask
+                block_mask_manager=self.block_mask_manager
             )
         else:
             self.attention = attn_funcs[self.attention_implementation]()
@@ -348,7 +349,7 @@ class FlexAttentionWrapper(nn.Module):
         except ImportError:
             raise ImportError("Error: Flex attention not available in your PyTorch version. Please update PyTorch.")
             
-        self.block_mask = block_mask
+        self.block_mask_manager = block_mask_manager
         self.flex_attention = flex_attention
         
     def forward(
@@ -395,7 +396,7 @@ class FlexAttentionWrapper(nn.Module):
             query,
             key,
             value,
-            block_mask= self.block_mask.get_block_mask(query.device) if self.block_mask is not None else None,
+            block_mask= self.block_mask_manager.get_block_mask(query.device) if self.block_mask_manager is not None else None,
         )
 
 class MultiHeadCrossAttention(MultiHeadSelfAttention):

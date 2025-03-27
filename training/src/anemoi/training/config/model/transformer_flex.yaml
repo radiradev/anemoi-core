@@ -1,16 +1,18 @@
 defaults:
-  - transformer_transformermapper
+  - transformer
   - _self_
 
 processor:
   attention_implementation: flex_attention # flash_attention, scaled_dot_product_attention
+  window_size: None
 
 encoder:
   attention_implementation: flex_attention # flash_attention, scaled_dot_product_attention
+  window_size: None
 
 decoder:
   attention_implementation: flex_attention # flash_attention, scaled_dot_product_attention
-
+  window_size: None
 
 block_mask:
   encoder:
