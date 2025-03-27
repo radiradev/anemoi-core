@@ -81,6 +81,11 @@ class AnemoiModelEncProcDec(nn.Module):
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             layer_kernels=self.layer_kernels,
+            block_mask_manager= instantiate(
+                model_config.model.block_mask.encoder_mapper,
+                self._graph_data,
+            )
+
         )
 
         # Processor hidden -> hidden
@@ -91,6 +96,10 @@ class AnemoiModelEncProcDec(nn.Module):
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             layer_kernels=self.layer_kernels,
+            block_mask_manager= instantiate(
+                model_config.model.block_mask.processor_mapper,
+                self._graph_data,
+            )
         )
 
         # Decoder hidden -> data
@@ -104,6 +113,10 @@ class AnemoiModelEncProcDec(nn.Module):
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
             layer_kernels=self.layer_kernels,
+            block_mask_manager= instantiate(
+                model_config.model.block_mask.decoder_mapper,
+                self._graph_data,
+            )
         )
 
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)

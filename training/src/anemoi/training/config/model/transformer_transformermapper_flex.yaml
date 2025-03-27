@@ -1,0 +1,41 @@
+defaults:
+  - transformer_transformermapper
+  - _self_
+
+processor:
+  attention_implementation: flex_attention # flash_attention, scaled_dot_product_attention
+
+encoder:
+  attention_implementation: flex_attention # flash_attention, scaled_dot_product_attention
+
+decoder:
+  attention_implementation: flex_attention # flash_attention, scaled_dot_product_attention
+
+
+block_mask:
+  encoder:
+    _target_: anemoi.models.layers.attention.BlockMaskManager
+    _convert_: partial
+    method: oval_radius_lat_bands_lon_idx # window, oval_radius_lat_bands_lon_idx, oval_radius_distance
+    base_grid: query
+    attention_span: [4, 8] # [lat, lon]
+    query_grid_name: ${graph.data}
+    keyvalue_grid_name: ${graph.hidden}
+    
+  processor:
+    _target_: anemoi.models.layers.attention.BlockMaskManager
+    _convert_: partial
+    method: oval_radius_lat_bands_lon_idx
+    base_grid: query
+    attention_span: [5, 9] # [lat, lon]
+    query_grid_name: ${graph.hidden}
+    keyvalue_grid_name: ${graph.hidden}
+
+  decoder:
+    _target_: anemoi.models.layers.attention.BlockMaskManager
+    _convert_: partial
+    method: oval_radius_lat_bands_lon_idx
+    attention_span: [4, 8] # [lat, lon]
+    base_grid: keyvalue
+    query_grid_name: ${graph.hidden}
+    keyvalue_grid_name: ${graph.data}

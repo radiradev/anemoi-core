@@ -28,7 +28,7 @@ from anemoi.models.layers.chunk import TransformerProcessorChunk
 from anemoi.models.layers.graph import TrainableTensor
 from anemoi.models.layers.mapper import GraphEdgeMixin
 from anemoi.utils.config import DotDict
-
+from anemoi.models.layers.attention_flex import BlockMaskManager
 
 class BaseProcessor(nn.Module, ABC):
     """Base Processor."""
@@ -102,6 +102,7 @@ class TransformerProcessor(BaseProcessor):
         attention_implementation: str = "flash_attention",
         softcap: float = 0.0,
         use_alibi_slopes: bool = False,
+        block_mask_manager: Optional[BlockMaskManager] = None,
         **kwargs,
     ) -> None:
         """Initialize TransformerProcessor.
@@ -157,6 +158,7 @@ class TransformerProcessor(BaseProcessor):
             attention_implementation=attention_implementation,
             softcap=softcap,
             use_alibi_slopes=use_alibi_slopes,
+            block_mask_manager=block_mask_manager,
         )
 
         self.offload_layers(cpu_offload)

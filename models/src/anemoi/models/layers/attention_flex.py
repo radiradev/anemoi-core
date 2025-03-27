@@ -28,59 +28,6 @@ from omegaconf import ListConfig
 LOGGER = logging.getLogger(__name__)
 
 
-def calculate_scaled_attention_attention_spans(
-    base_attention_span,
-    base_grid_name,
-    target_grid_name,
-    scaling_method,
-    _graph_data,
-    method,
-):
-    """
-    Calculate scaled attention spans based on grid sizes.
-    
-    Parameters
-    ----------
-    base_attention_span : int or list
-        Base attention span value
-    base_grid_name : str
-        Name of the base grid
-    target_grid_name : str
-        Name of the target grid
-    scaling_method : str
-        Method to use for scaling
-    _graph_data : HeteroData
-        Graph data containing grid information
-    method : str
-        Attention method
-        
-    Returns
-    -------
-    int or list
-        Scaled attention span
-    """
-    # Simple pass-through if no scaling needed
-    if base_grid_name is None or base_grid_name == target_grid_name:
-        return base_attention_span
-    
-    # Scale based on grid sizes
-    if scaling_method == "constant_span_relative_to_grid_size":
-        base_grid_size = _graph_data[base_grid_name].num_nodes
-        target_grid_size = _graph_data[target_grid_name].num_nodes
-        
-        scale_factor = (target_grid_size / base_grid_size) ** 0.5
-        
-        if isinstance(base_attention_span, (list, tuple, ListConfig)):
-            return [int(span * scale_factor) for span in base_attention_span]
-        else:
-            return int(base_attention_span * scale_factor)
-    
-    # Add other scaling methods as needed
-    
-    # Default: return unmodified
-    return base_attention_span
-
-
 class BlockMaskManager(nn.Module):
     """
     Manages block masks for flex attention by creating and caching them for different devices.
@@ -103,12 +50,10 @@ class BlockMaskManager(nn.Module):
         query_grid_name: str,
         keyvalue_grid_name: str,
         attention_span: Optional[int] = None,
-        base_attention_span: Optional[int] = None,
         method: str = "oval_radius_distance",
         base_grid: str = "query",
         block_size: Union[int, Tuple[int, int]] = 32,  # Default block size
-        bmcachedtype: torch.dtype | None = None,
-        **kwargs,
+        calc_dtype: torch.dtype | None = None,
     ):
         """
         Initialize BlockMaskManager.
@@ -123,22 +68,23 @@ class BlockMaskManager(nn.Module):
             Name of the key-value grid
         attention_span : Optional[int], optional
             Attention span, by default None
-        base_attention_span : Optional[int], optional
-            Base attention span for scaling, by default None
         method : str, optional
             Method for attention pattern, by default "oval_radius_distance"
         base_grid : str, optional
             Base grid for scaling, by default "query"
         block_size : Union[int, Tuple[int, int]], optional
             Block size for block mask, by default 32
-        bmcachedtype : torch.dtype | None, optional
+        calc_dtype : torch.dtype | None, optional
             Data type for cached calculations, by default None
         """
         super().__init__()
 
+        LOGGER.info(f"BlockMaskManager initialized with calc_dtype: {calc_dtype}")
+        LOGGER.warning("BlockMask currently only supports o grids")
+
         self.graph = graph
         self.map_device_block_mask: dict[torch.device, BlockMask] = {}
-        self.bmcachedtype = bmcachedtype
+        self.calc_dtype = calc_dtype
 
         assert method in [
             "window",
@@ -147,16 +93,8 @@ class BlockMaskManager(nn.Module):
         ], f"Method {method} not supported"
         self.method = method
 
-        assert attention_span is not None or base_attention_span is not None
-        self.setup_attention_span(
-            attention_span,
-            base_attention_span,
-            base_grid_name=kwargs.get("base_attention_span_grid", None),
-            query_grid_name=query_grid_name,
-            keyvalue_grid_name=keyvalue_grid_name,
-            base_grid=base_grid,
-            **kwargs,
-        )
+        assert attention_span is not None
+        self.attention_span = tuple(attention_span) if isinstance(attention_span, list) else attention_span
 
         self.base_grid = base_grid
         self.query_grid_name = query_grid_name
@@ -169,47 +107,8 @@ class BlockMaskManager(nn.Module):
         self.setup_attn_mask()
         self.setup_mask_mod()
 
-    def setup_attention_span(
-        self,
-        attention_span=None,
-        base_attention_span=None,
-        base_grid_name=None,
-        query_grid_name=None,
-        keyvalue_grid_name=None,
-        base_grid=None,
-        **kwargs,
-    ):
-        """
-        Setup attention span, potentially scaling based on grid sizes.
+        _, self.create_block_mask_compiled = get_compiled_flex_attention_functions()
         
-        Parameters
-        ----------
-        attention_span : int or list, optional
-            Attention span, by default None
-        base_attention_span : int or list, optional
-            Base attention span for scaling, by default None
-        base_grid_name : str, optional
-            Name of the base grid, by default None
-        query_grid_name : str, optional
-            Name of the query grid, by default None
-        keyvalue_grid_name : str, optional
-            Name of the key-value grid, by default None
-        base_grid : str, optional
-            Base grid for scaling, by default None
-        """
-        if attention_span is not None:
-            pass
-        else:
-            attention_span = calculate_scaled_attention_attention_spans(
-                base_attention_span,
-                base_grid_name=kwargs.get("base_attention_span_grid", None),
-                target_grid_name=query_grid_name if base_grid == "query" else keyvalue_grid_name,
-                scaling_method=self.scaling_method[self.method],
-                _graph_data=self.graph,
-                method=self.method,
-            )
-
-        self.attention_span = tuple(attention_span) if isinstance(attention_span, list) else attention_span
 
     def setup_attn_mask(self):
         """Setup attention mask parameters based on the chosen method."""
@@ -218,7 +117,7 @@ class BlockMaskManager(nn.Module):
             
         elif self.method in ["oval_radius_lat_bands_lon_idx", "oval_radius_distance"]:
             assert (
-                self.bmcachedtype is None or self.bmcachedtype == torch.float32
+                self.calc_dtype is None or self.calc_dtype == torch.float32
             ), "Precision required for this to work is float32"
 
             if self.method == "oval_radius_lat_bands_lon_idx":
@@ -349,7 +248,7 @@ class BlockMaskManager(nn.Module):
             q_grid_size = self.graph[self.query_grid_name].num_nodes
             kv_grid_size = self.graph[self.keyvalue_grid_name].num_nodes
 
-            block_mask = create_block_mask(
+            block_mask = self.create_block_mask_compiled(
                 self.mask_mod,
                 B=None,
                 H=None,
@@ -410,10 +309,10 @@ class BlockMaskManager(nn.Module):
         max_lon_radius = self.attention_radius_lon
 
         q_lat_band, q_lon_idx = self.decode_latlon(
-            q_idx.to(self.bmcachedtype), self.southern_hemisphere_start_idx_q, self.lat_bands_div2_q
+            q_idx.to(self.calc_dtype), self.southern_hemisphere_start_idx_q, self.lat_bands_div2_q
         )
         kv_lat_band, kv_lon_idx = self.decode_latlon(
-            kv_idx.to(self.bmcachedtype), self.southern_hemisphere_start_idx_kv, self.lat_bands_div2_kv
+            kv_idx.to(self.calc_dtype), self.southern_hemisphere_start_idx_kv, self.lat_bands_div2_kv
         )
 
         q_nodes_per_band = self.nodes_per_lat_band(q_lat_band, self.lat_bands_div2_q)
@@ -454,10 +353,10 @@ class BlockMaskManager(nn.Module):
         max_lon_radius = self.attention_radius_lon
 
         q_lat_band, q_lon_idx = self.decode_latlon(
-            q_idx.to(self.bmcachedtype), self.southern_hemisphere_start_idx_q, self.lat_bands_div2_q
+            q_idx.to(self.calc_dtype), self.southern_hemisphere_start_idx_q, self.lat_bands_div2_q
         )
         kv_lat_band, kv_lon_idx = self.decode_latlon(
-            kv_idx.to(self.bmcachedtype), self.southern_hemisphere_start_idx_kv, self.lat_bands_div2_kv
+            kv_idx.to(self.calc_dtype), self.southern_hemisphere_start_idx_kv, self.lat_bands_div2_kv
         )
 
         q_nodes_per_band = self.nodes_per_lat_band(q_lat_band, self.lat_bands_div2_q)
@@ -498,10 +397,10 @@ class BlockMaskManager(nn.Module):
         max_zonal_radius = self.attention_radius_zonal
 
         q_lat_band, q_lon_idx = self.decode_latlon(
-            q_idx.to(self.bmcachedtype), self.southern_hemisphere_start_idx_q, self.lat_bands_div2_q
+            q_idx.to(self.calc_dtype), self.southern_hemisphere_start_idx_q, self.lat_bands_div2_q
         )
         kv_lat_band, kv_lon_idx = self.decode_latlon(
-            kv_idx.to(self.bmcachedtype), self.southern_hemisphere_start_idx_kv, self.lat_bands_div2_kv
+            kv_idx.to(self.calc_dtype), self.southern_hemisphere_start_idx_kv, self.lat_bands_div2_kv
         )
 
         q_lat_radians = self.pi_over_2 - (q_lat_band + 1) * self.angle_between_lat_bands_q
@@ -624,3 +523,76 @@ class BlockMaskManager(nn.Module):
             Tuple of (attention_span, keyvalue_grid_name, query_grid_name, base_grid)
         """
         return (self.attention_span, self.keyvalue_grid_name, self.query_grid_name, self.base_grid)
+
+
+def get_compiled_flex_attention_functions( debug=False):
+    """
+    Get the compiled flex attention function.
+    """
+    from torch.nn.attention.flex_attention import flex_attention, create_block_mask
+
+    # torch._dynamo.reset()
+    # from torch._inductor import config
+
+    import torch
+
+    # Compile the flex_attention function w/ optimal settings
+    torch._dynamo.config.cache_size_limit = 16384
+    torch._dynamo.config.accumulated_cache_size_limit = 16384
+    torch._dynamo.config.fail_on_cache_limit_hit = False  # Turn on true for debugging
+    torch._dynamo.config.optimize_ddp = os.getenv("TORCH_DYNAMO_OPTIMIZE_DDP", "ddp_optimizer")
+    torch._inductor.config.mixed_mm_choice = "triton,aten"  
+    torch._inductor.config.max_autotune_gemm_backends = "TRITON,CPP"
+    torch._inductor.config.max_autotune_gemm_search_space = "DEFAULT"  
+    torch._inductor.config.max_autotune_pointwise = False
+    torch._inductor.config.max_fusion_size = 64
+    torch._inductor.config.shape_padding = True
+    # torch._inductor.config.realize_opcount_threshold = 4096
+
+    # Aggresive optimize settings
+    torch._inductor.config.max_autotune = False
+    torch._inductor.config.max_autotune_gemm = True
+    torch._inductor.config.max_autotune_pointwise = True
+    torch._inductor.config.aggressive_fusion = True
+    torch._inductor.config.triton.cooperative_reductions = True
+    torch._inductor.config.cuda.use_fast_math = True
+    torch._inductor.config.memory_planning = True
+    torch._inductor.config.memory_pool = "combined"
+    torch._inductor.config.size_asserts = False
+    torch._inductor.config.nan_asserts = False
+    # torch._inductor.config.spill_threshold = 0
+
+    # Conservative settings
+    # torch._inductor.config.aggressive_fusion = False
+    # torch._inductor.config.triton.cooperative_reductions = False
+    # torch._inductor.config.cuda.use_fast_math = False
+    # torch._inductor.config.memory_planning = False
+    # torch._inductor.config.memory_pool = "none"
+
+    if debug:   
+        # Debugging settings
+        torch._inductor.config.codegen_upcast_to_fp32 = True
+        torch._inductor.config.trace.enabled = True
+        torch._inductor.config.trace.debug_dir = "/home/ecm9156/debug_triton"
+
+    # TODO (rilwan-adewoyin): Pass the the options to the options dict instead of changing them globally
+    flex_attention_conpiled = torch.compile(
+        flex_attention,
+        dynamic=False,
+        fullgraph=True,
+    )
+
+
+    create_block_mask_compiled = torch.compile(
+        create_block_mask,
+        dynamic=False,
+        fullgraph=True,
+        # options={
+            # "cuda.use_fast_math": True,
+            #    "triton.cooperative_reductions": True,
+        # },
+    )  # https://twitter.com/cHHillee/status/1851418255749169419ate
+
+
+    return flex_attention_conpiled, create_block_mask_compiled
+

@@ -57,7 +57,6 @@ decoder:
   use_rotary_embeddings: False
 
 
-
 trainable_parameters:
   data: 8
   hidden: 8
@@ -95,3 +94,11 @@ bounding: #These are applied in order
   #   min_val: 0
   #   max_val: 1
   #   total_var: tp
+
+block_mask:
+  encoder:
+    _target_: types.NoneType
+  processor:
+    _target_: types.NoneType
+  decoder:
+    _target_: types.NoneType

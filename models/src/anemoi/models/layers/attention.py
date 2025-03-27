@@ -142,6 +142,10 @@ class MultiHeadSelfAttention(nn.Module):
             self.attention = attn_funcs[self.attention_implementation](
                 use_rotary_embeddings=self.use_rotary_embeddings, head_dim=self.head_dim
             )
+        elif self.attention_implementation == "flex_attention":
+            self.attention = attn_funcs[self.attention_implementation](
+                block_mask=self.block_mask
+            )
         else:
             self.attention = attn_funcs[self.attention_implementation]()
 
@@ -153,7 +157,6 @@ class MultiHeadSelfAttention(nn.Module):
         shapes: list,
         batch_size: int,
         model_comm_group: Optional[ProcessGroup] = None,
-        score_mod: Optional[Callable] = None,
     ) -> Tensor:
         if model_comm_group:
             assert (
@@ -336,10 +339,12 @@ class FlashAttentionWrapper(nn.Module):
 class FlexAttentionWrapper(nn.Module):
     """Wrapper for Flex Attention mechanism."""
 
-    def __init__(self, block_mask: Tensor | BlockMaskManager | BlockMask | None = None):
+    def __init__(self, block_mask: Tensor | BlockMaskManager | None = None):
         super().__init__()
         try:
-            from torch.nn.attention.flex_attention import flex_attention
+            from anemoi.models.layers.attention_flex import get_compiled_flex_attention_functions
+            flex_attention, _ = get_compiled_flex_attention_functions()
+
         except ImportError:
             raise ImportError("Error: Flex attention not available in your PyTorch version. Please update PyTorch.")
             
@@ -354,10 +359,7 @@ class FlexAttentionWrapper(nn.Module):
         batch_size: int,
         causal: bool = False,
         window_size: Optional[int] = None,
-        dropout_p: float = 0.0,
-        softcap: Optional[float] = None,
-        alibi_slopes: Optional[Tensor] = None,
-        score_mod: Optional[Callable] = None,
+        **kwargs
     ) -> Tensor:
         """Apply flex attention to inputs.
         
@@ -381,40 +383,19 @@ class FlexAttentionWrapper(nn.Module):
             Softcap value, by default None (unused in flex attention)
         alibi_slopes : Optional[Tensor], optional
             Alibi slopes tensor, by default None (unused in flex attention)
-        score_mod : Optional[Callable], optional
-            Function to modify attention scores, by default None
             
         Returns
         -------
         Tensor
             Output tensor
         """
-        if softcap is not None:
-            LOGGER.warning("Softcap not supported in Flex Attention, ignoring.")
-        
-        if alibi_slopes is not None:
-            LOGGER.warning("Alibi slopes not supported in Flex Attention, ignoring.")
-            
-        if window_size is not None:
-            LOGGER.warning("Window size parameter not used in Flex Attention, ignoring.")
-        
-        if dropout_p > 0.0:
-            LOGGER.warning("Dropout not supported in Flex Attention, ignoring.")
-            
-        # Get the block mask if we have a manager
-        block_mask = None
-        if isinstance(self.block_mask, BlockMaskManager):
-            block_mask = self.block_mask.get_block_mask(query.device)
-        elif isinstance(self.block_mask, (BlockMask, Tensor)):
-            block_mask = self.block_mask
-            
+ 
         # Apply flex attention
         return self.flex_attention(
             query,
             key,
             value,
-            block_mask=block_mask,
-            score_mod=score_mod
+            block_mask= self.block_mask.get_block_mask(query.device) if self.block_mask is not None else None,
         )
 
 class MultiHeadCrossAttention(MultiHeadSelfAttention):

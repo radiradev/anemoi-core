@@ -33,7 +33,7 @@ from anemoi.models.layers.block import TransformerMapperBlock
 from anemoi.models.layers.graph import TrainableTensor
 from anemoi.models.layers.mlp import MLP
 from anemoi.utils.config import DotDict
-
+from anemoi.models.layers.attention_flex import BlockMaskManager
 LOGGER = logging.getLogger(__name__)
 
 
@@ -302,6 +302,7 @@ class GraphTransformerForwardMapper(ForwardMapperPreProcessMixin, GraphTransform
         src_grid_size: int = 0,
         dst_grid_size: int = 0,
         layer_kernels: DotDict = None,
+        **kwargs,
     ) -> None:
         """Initialize GraphTransformerForwardMapper.
 
@@ -377,6 +378,7 @@ class GraphTransformerBackwardMapper(BackwardMapperPostProcessMixin, GraphTransf
         src_grid_size: int = 0,
         dst_grid_size: int = 0,
         layer_kernels: DotDict = None,
+        **kwargs,
     ) -> None:
         """Initialize GraphTransformerBackwardMapper.
 
@@ -563,6 +565,7 @@ class GNNForwardMapper(ForwardMapperPreProcessMixin, GNNBaseMapper):
         src_grid_size: int = 0,
         dst_grid_size: int = 0,
         layer_kernels: DotDict = None,
+        **kwargs,
     ) -> None:
         """Initialize GNNForwardMapper.
 
@@ -657,6 +660,7 @@ class GNNBackwardMapper(BackwardMapperPostProcessMixin, GNNBaseMapper):
         src_grid_size: int = 0,
         dst_grid_size: int = 0,
         layer_kernels: DotDict = None,
+        **kwargs,
     ) -> None:
         """Initialize GNNBackwardMapper.
 
@@ -764,6 +768,7 @@ class TransformerBaseMapper(BaseMapper):
         use_alibi_slopes: Optional[bool] = None,
         use_qk_norm: Optional[bool] = False,
         use_rotary_embeddings: Optional[bool] = False,
+        block_mask_manager: Optional[BlockMaskManager] = None,
     ) -> None:
         """Initialize TransformerBaseMapper.
 
@@ -811,6 +816,7 @@ class TransformerBaseMapper(BaseMapper):
             use_alibi_slopes=use_alibi_slopes,
             use_qk_norm=use_qk_norm,
             use_rotary_embeddings=use_rotary_embeddings,
+            block_mask_manager=block_mask_manager,
         )
 
         self.offload_layers(cpu_offload)
@@ -861,6 +867,7 @@ class TransformerForwardMapper(ForwardMapperPreProcessMixin, TransformerBaseMapp
         use_alibi_slopes: bool = None,
         use_qk_norm: bool = False,
         use_rotary_embeddings: bool = False,
+        block_mask_manager: Optional[BlockMaskManager] = None,
         **kwargs,  # accept not needed extra arguments like subgraph etc.
     ) -> None:
         """Initialize TransformerForwardMapper.
@@ -904,6 +911,7 @@ class TransformerForwardMapper(ForwardMapperPreProcessMixin, TransformerBaseMapp
             use_alibi_slopes=use_alibi_slopes,
             use_qk_norm=use_qk_norm,
             use_rotary_embeddings=use_rotary_embeddings,
+            block_mask_manager=block_mask_manager,
         )
 
         self.emb_nodes_src = nn.Linear(self.in_channels_src, self.hidden_dim)
@@ -941,6 +949,7 @@ class TransformerBackwardMapper(BackwardMapperPostProcessMixin, TransformerBaseM
         use_alibi_slopes: bool = None,
         use_qk_norm: bool = False,
         use_rotary_embeddings: bool = False,
+        block_mask_manager: Optional[BlockMaskManager] = None,
         **kwargs,  # accept not needed extra arguments like subgraph etc.
     ) -> None:
         """Initialize TransformerBackwardMapper.
@@ -984,6 +993,7 @@ class TransformerBackwardMapper(BackwardMapperPostProcessMixin, TransformerBaseM
             use_alibi_slopes=use_alibi_slopes,
             use_qk_norm=use_qk_norm,
             use_rotary_embeddings=use_rotary_embeddings,
+            block_mask_manager=block_mask_manager,
         )
 
         self.node_data_extractor = nn.Sequential(
