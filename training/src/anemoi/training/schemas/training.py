@@ -89,6 +89,30 @@ class OptimizerSchema(BaseModel):
     "Additional arguments to pass to the optimizer."
 
 
+class ExplicitTimes(BaseModel):
+    """Time indices for input and output.
+
+    Starts at index 0. Input and output can overlap.
+    """
+
+    input: list[NonNegativeInt] = Field(examples=[0, 1])
+    "Input time indices."
+    target: list[NonNegativeInt] = Field(examples=[2])
+    "Target time indices."
+
+
+class TargetForcing(BaseModel):
+    """Forcing parameters for target output times.
+
+    Extra forcing parameters to use as input to distinguish between different target times.
+    """
+
+    data: list[str] = Field(examples=["insolation"])
+    "List of forcing parameters to use as input to the model at the interpolated step."
+    time_fraction: bool = Field(example=True)
+    "Use target time as a fraction between input boundary times as input."
+
+
 class LossScalingSchema(BaseModel):
     default: int = 1
     "Default scaling value applied to the variables loss. Default to 1."
@@ -117,7 +141,10 @@ class PressureLevelScalerSchema(BaseModel):
     "Slope of the scaling function."
 
 
-PossibleScalars = Annotated[str, AfterValidator(partial(allowed_values, values=["variable", "loss_weights_mask", "*"]))]
+PossibleScalars = Annotated[
+    str,
+    AfterValidator(partial(allowed_values, values=["limited_area_mask", "variable", "loss_weights_mask", "*"])),
+]
 
 
 class ImplementedLossesUsingBaseLossSchema(str, Enum):
@@ -128,6 +155,7 @@ class ImplementedLossesUsingBaseLossSchema(str, Enum):
     huber = "anemoi.training.losses.huber.WeightedHuberLoss"
     kcrps = "anemoi.training.losses.kcrps.KernelCRPS"
     afkcrps = "anemoi.training.losses.kcrps.AlmostFairKernelCRPS"
+    limited_mse = "anemoi.training.losses.limitedarea.WeightedMSELossLimitedArea"
 
 
 class BaseLossSchema(BaseModel):
@@ -299,6 +327,8 @@ class BaseTrainingSchema(BaseModel):
     "Config for gradient clipping."
     strategy: StrategySchemas
     "Strategy to use."
+    model_class: TrainingSchema
+    "Forecaster to use."
     ensemble_size_per_device: PositiveInt = Field(example=1)
     "Number of ensemble member per device"
     swa: SWA = Field(default_factory=SWA)
@@ -329,7 +359,6 @@ class BaseTrainingSchema(BaseModel):
     "List of metrics"
     node_loss_weights: NodeLossWeightsSchema
     "Node loss weights configuration."
-    task: str
 
 
 class ForecasterSchema(BaseTrainingSchema):
@@ -340,4 +369,13 @@ class ForecasterSchema(BaseTrainingSchema):
     "Training objective."
 
 
-TrainingSchema = Union[ForecasterSchema]
+class InterpolationSchema(BaseTrainingSchema):
+    task: Literal["anemoi.training.train.interpolator.GraphInterpolator"] = Field(..., alias="model_class")
+    "Training objective."
+    explicit_times: ExplicitTimes
+    "Time indices for input and output."
+    target_forcing: TargetForcing
+    "Forcing parameters for target output times."
+
+
+TrainingSchema = Union[ForecasterSchema, InterpolationSchema]

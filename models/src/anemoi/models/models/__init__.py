@@ -10,5 +10,11 @@
 from .encoder_processor_decoder import AnemoiEnsModelEncProcDec
 from .encoder_processor_decoder import AnemoiModelEncProcDec
 from .hierarchical import AnemoiModelEncProcDecHierarchical
+from .interpolator import AnemoiModelEncProcDecInterpolator
 
-__all__ = ["AnemoiModelEncProcDec", "AnemoiEnsModelEncProcDec", "AnemoiModelEncProcDecHierarchical"]
+__all__ = [
+    "AnemoiModelEncProcDec",
+    "AnemoiEnsModelEncProcDec",
+    "AnemoiModelEncProcDecHierarchical",
+    "AnemoiModelEncProcDecInterpolator",
+]

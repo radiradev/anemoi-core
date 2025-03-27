@@ -58,10 +58,20 @@ class AnemoiModelEncProcDec(nn.Module):
         self._graph_name_data = model_config.graph.data
         self._graph_name_hidden = model_config.graph.hidden
 
+        self.multi_step = model_config.training.multistep_input
+        self.num_channels = model_config.model.num_channels
+
+        self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
+
         self._calculate_shapes_and_indices(data_indices)
         self._assert_matching_indices(data_indices)
         self.data_indices = data_indices
         self.statistics = statistics
+
+        # read config.model.layer_kernels to get the implementation for certain layers
+        self.layer_kernels_encoder = load_layer_kernels(model_config.model.layer_kernels.get("encoder", {}))
+        self.layer_kernels_decoder = load_layer_kernels(model_config.model.layer_kernels.get("decoder", {}))
+        self.layer_kernels_processor = load_layer_kernels(model_config.model.layer_kernels.get("processor", {}))
 
         self.multi_step = model_config.training.multistep_input
         self.num_channels = model_config.model.num_channels
@@ -70,7 +80,7 @@ class AnemoiModelEncProcDec(nn.Module):
 
         self._truncation_data = truncation_data
 
-        input_dim = self._calculate_input_dim(model_config)
+        self.input_dim = self._calculate_input_dim(model_config)
 
         # we can't register these as buffers because DDP does not support sparse tensors
         # these will be moved to the GPU when first used via sefl.interpolate_down/interpolate_up
@@ -85,13 +95,13 @@ class AnemoiModelEncProcDec(nn.Module):
         # Encoder data -> hidden
         self.encoder = instantiate(
             model_config.model.encoder,
-            in_channels_src=input_dim,
+            in_channels_src=self.input_dim,
             in_channels_dst=self.node_attributes.attr_ndims[self._graph_name_hidden],
             hidden_dim=self.num_channels,
             sub_graph=self._graph_data[(self._graph_name_data, "to", self._graph_name_hidden)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-            layer_kernels=load_layer_kernels(model_config.model.layer_kernels.get("encoder", {})),
+            layer_kernels=self.layer_kernels_encoder,
         )
 
         # Processor hidden -> hidden
@@ -101,20 +111,20 @@ class AnemoiModelEncProcDec(nn.Module):
             sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_hidden)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-            layer_kernels=load_layer_kernels(model_config.model.layer_kernels.get("processor", {})),
+            layer_kernels=self.layer_kernels_processor,
         )
 
         # Decoder hidden -> data
         self.decoder = instantiate(
             model_config.model.decoder,
             in_channels_src=self.num_channels,
-            in_channels_dst=input_dim,
+            in_channels_dst=self.input_dim,
             hidden_dim=self.num_channels,
             out_channels_dst=self.num_output_channels,
             sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_data)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
-            layer_kernels=load_layer_kernels(model_config.model.layer_kernels.get("decoder", {})),
+            layer_kernels=self.layer_kernels_decoder,
         )
 
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
@@ -209,6 +219,9 @@ class AnemoiModelEncProcDec(nn.Module):
         self.num_input_channels_prognostic = len(data_indices.model.input.prognostic)
         self._internal_input_idx = data_indices.internal_model.input.prognostic
         self._internal_output_idx = data_indices.internal_model.output.prognostic
+        self.input_dim = (
+            self.multi_step * self.num_input_channels + self.node_attributes.attr_ndims[self._graph_name_data]
+        )
 
     def _assert_matching_indices(self, data_indices: dict) -> None:
 

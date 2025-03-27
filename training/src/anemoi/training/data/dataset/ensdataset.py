@@ -36,9 +36,7 @@ class EnsNativeGridDataset(NativeGridDataset):
         self,
         data_reader: Callable,
         grid_indices: type[BaseGridIndices],
-        rollout: int = 1,
-        multistep: int = 1,
-        timeincrement: int = 1,
+        relative_date_indices: list,
         shuffle: bool = True,
         label: str = "generic",
         ens_members_per_device: int = 1,
@@ -51,14 +49,18 @@ class EnsNativeGridDataset(NativeGridDataset):
         ----------
         data_reader : Callable
             user function that opens and returns the zarr array data
-        rollout : int, optional
-            length of rollout window, by default 12
-        multistep : int, optional
-            collate (t-1, ... t - multistep) into the input state vector, by default 1
+        relative_date_indices: list
+            list of time indices to load from the data relative to the current sample i in __iter__
         ens_members_per_device: int, optional
             number of ensemble members input for each GPU device, by default 1
         shuffle : bool, optional
             Shuffle batches, by default True
+        ens_members_per_device : int, optional
+            Number of ensemble members input for each GPU device, by default 1
+        num_gpus_per_ens : int, optional
+            Number of GPUs per ensemble, by default 1
+        num_gpus_per_model : int, optional
+            Number of GPUs per model, by default 1
 
         Raises
         ------
@@ -67,9 +69,7 @@ class EnsNativeGridDataset(NativeGridDataset):
         """
         super().__init__(
             data_reader=data_reader,
-            rollout=rollout,
-            multistep=multistep,
-            timeincrement=timeincrement,
+            relative_date_indices=relative_date_indices,
             shuffle=shuffle,
             grid_indices=grid_indices,
             label=label,
@@ -269,9 +269,12 @@ class EnsNativeGridDataset(NativeGridDataset):
 
         for i in shuffled_chunk_indices:
             # start and end time indices, for analysis and EDA
-            start = i - (self.multi_step - 1) * self.timeincrement
-            end_an = i + (self.rollout + 1) * self.timeincrement
-            end_eda = i + self.timeincrement
+            start = i + self.relative_date_indices[0]
+            end_an = i + self.relative_date_indices[-1] + 1
+            timeincrement = self.relative_date_indices[1] - self.relative_date_indices[0]
+            # NOTE: this is temporary until anemoi datasets allows indexing with arrays or lists
+            # data[start...] will be replaced with data[self.relative_date_indices + i]
+            end_eda = i + timeincrement
 
             if self.eda_flag:
                 _, eda_member_idx = self.sample_eda_members(self.num_eda_members)
@@ -281,12 +284,12 @@ class EnsNativeGridDataset(NativeGridDataset):
             grid_shard_indices = self.grid_indices.get_shard_indices(self.reader_group_rank)
             if isinstance(grid_shard_indices, slice):
                 # Load only shards into CPU memory
-                x_an = self.data[start : end_an : self.timeincrement, :, 0:1, grid_shard_indices]
+                x_an = self.data[start:end_an:timeincrement, :, 0:1, grid_shard_indices]
             else:
                 # Load full grid in CPU memory, select grid_shard after
                 # Note that anemoi-datasets currently doesn't support slicing + indexing
                 # in the same operation.
-                x_an = self.data[start : end_an : self.timeincrement, :, 0:1, ...]
+                x_an = self.data[start:end_an:timeincrement, :, 0:1, ...]
                 x_an = x_an[..., grid_shard_indices]  # select the grid shard
             x_an = rearrange(x_an, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
 
@@ -317,9 +320,7 @@ class EnsNativeGridDataset(NativeGridDataset):
             f"""
             {super().__repr__()}
             Dataset: {self.data}
-            Rollout: {self.rollout}
-            Multistep: {self.multi_step}
-            Timeincrement: {self.timeincrement}
+            Relative dates: {self.relative_date_indices}
             EDA: {self.eda_flag}
             """
             f"""
