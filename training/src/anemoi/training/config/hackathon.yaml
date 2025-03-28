@@ -17,7 +17,7 @@ hydra:
 no_validation: True
 
 model: #transformer only
-  num_channels: 1024
+  num_channels: 512 # full model: 1024
   processor:
     attention_implementation: 'flash_attention_v3'
     window_size: 1120
@@ -58,7 +58,7 @@ hardware:
     output: ${oc.decode:${oc.env:SCRATCH}}/aifs/outputs
   num_gpus_per_node: ${oc.decode:${oc.env:SLURM_NTASKS_PER_NODE}}
   num_nodes: ${oc.decode:${oc.env:SLURM_NNODES}}
-  num_gpus_per_model: ${oc.decode:${oc.env:SLURM_N}}
+  num_gpus_per_model: ${oc.decode:${oc.env:SLURM_NTASKS}}
 
 diagnostics:
   enable_checkpointing: True
