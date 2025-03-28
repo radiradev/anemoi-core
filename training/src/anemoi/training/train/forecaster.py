@@ -530,7 +530,7 @@ class GraphForecaster(pl.LightningModule):
             None
         """
         # for validation not normalized in-place because remappers cannot be applied in-place
-        batch = self.model.pre_processors(batch, in_place=not validation_mode)
+        batch = self.model.pre_processors(batch, in_place=True)
 
         if not self.updated_loss_mask:
             # update loss scalar after first application and initialization of preprocessors
@@ -661,8 +661,8 @@ class GraphForecaster(pl.LightningModule):
                 validation metrics and predictions
         """
         metrics = {}
-        y_postprocessed = self.model.post_processors(y, in_place=False)
-        y_pred_postprocessed = self.model.post_processors(y_pred, in_place=False)
+        y_postprocessed = self.model.post_processors(y, in_place=True)
+        y_pred_postprocessed = self.model.post_processors(y_pred, in_place=True)
 
         for metric in self.metrics:
             metric_name = getattr(metric, "name", metric.__class__.__name__.lower())
