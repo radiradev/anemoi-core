@@ -314,7 +314,7 @@ class BenchmarkProfiler(Profiler):
         from lightning_fabric.utilities.distributed import group as _group
 
         string_var = [string_var]
-        dist.broadcast_object_list(string_var, src_rank, group=_group.WORLD)
+        #dist.broadcast_object_list(string_var, src_rank, group=_group.WORLD)
         return string_var[0]
 
     def setup(self, stage: str, local_rank: int | None = None, log_dir: str | None = None) -> None:

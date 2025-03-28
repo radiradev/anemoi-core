@@ -82,6 +82,7 @@ class AnemoiModelEncProcDec(nn.Module):
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             layer_kernels=self.layer_kernels,
+            shard_strategy=model_config.model.encoder.shard_strategy, # TODO: add this to config
         )
 
         # Processor hidden -> hidden
@@ -105,6 +106,7 @@ class AnemoiModelEncProcDec(nn.Module):
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
             layer_kernels=self.layer_kernels,
+            shard_strategy=model_config.model.decoder.shard_strategy,
         )
 
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
