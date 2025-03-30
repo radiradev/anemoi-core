@@ -40,7 +40,7 @@ optimizer:
     betas: [0.9, 0.95]
 
 # select model
-model_class: anemoi.training.train.forecaster.GraphForecaster
+model_task: anemoi.training.train.forecaster.GraphForecaster
 
 # select strategy
 strategy:

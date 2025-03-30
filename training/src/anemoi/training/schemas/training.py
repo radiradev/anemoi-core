@@ -326,7 +326,7 @@ class BaseTrainingSchema(BaseModel):
     "Config for gradient clipping."
     strategy: StrategySchemas
     "Strategy to use."
-    model_class: TrainingSchema
+    model_task: TrainingSchema
     "Forecaster to use."
     swa: SWA = Field(default_factory=SWA)
     "Config for stochastic weight averaging."
@@ -359,19 +359,19 @@ class BaseTrainingSchema(BaseModel):
 
 
 class ForecasterSchema(BaseTrainingSchema):
-    model_class: Literal["anemoi.training.train.forecaster.GraphForecaster",] = Field(..., alias="model_class")
+    model_task: Literal["anemoi.training.train.forecaster.GraphForecaster",] = Field(..., alias="model_task")
     "Training objective."
 
 
 class ForecasterEnsSchema(BaseTrainingSchema):
-    model_class: Literal["anemoi.training.train.forecaster.GraphEnsForecaster",] = Field(..., alias="model_class")
+    model_task: Literal["anemoi.training.train.forecaster.GraphEnsForecaster",] = Field(..., alias="model_task")
     "Training objective."
     ensemble_size_per_device: PositiveInt = Field(example=1)
     "Number of ensemble member per device"
 
 
 class InterpolationSchema(BaseTrainingSchema):
-    model_class: Literal["anemoi.training.train.interpolator.GraphInterpolator"] = Field(..., alias="model_class")
+    model_task: Literal["anemoi.training.train.interpolator.GraphInterpolator"] = Field(..., alias="model_task")
     "Training objective."
     explicit_times: ExplicitTimes
     "Time indices for input and output."
