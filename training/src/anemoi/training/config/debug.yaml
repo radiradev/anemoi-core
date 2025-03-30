@@ -22,13 +22,8 @@ diagnostics:
   plot:
     callbacks: []
 hardware:
-  paths:
-    truncation: /ec/res4/hpcperm/nesl/inter_mat
   files:
     graph: ???
-    truncation: O96-O32-linear.mat.npz
-    truncation_inv: O32-O96-linear.mat.npz
-    dataset: aifs-ea-an-oper-0001-mars-${data.resolution}-1979-2022-6h-v6.zarr
   accelerator: auto
   num_gpus_per_node: 1
   num_nodes: 1
