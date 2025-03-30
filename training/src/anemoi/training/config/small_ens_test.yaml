@@ -167,3 +167,5 @@ diagnostics:
       run_name: 'small_test99'
   profiler: False
   enable_progress_bar: True
+
+no_validation: False

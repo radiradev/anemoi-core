@@ -233,7 +233,7 @@ LossSchemas = Union[
 
 class ImplementedStrategiesUsingBaseDDPStrategySchema(str, Enum):
     ddp_ens = "anemoi.training.distributed.strategy.DDPEnsGroupStrategy"
-    ddp = "anemoi.training.distributed.strategy.DDPStrategy"
+    ddp = "anemoi.training.distributed.strategy.DDPGroupStrategy"
 
 
 class BaseDDPStrategySchema(BaseModel):
@@ -242,7 +242,6 @@ class BaseDDPStrategySchema(BaseModel):
     target_: ImplementedStrategiesUsingBaseDDPStrategySchema = Field(..., alias="_target_")
     num_gpus_per_model: PositiveInt = Field(example=2)
     "Number of GPUs per model."
-    # TODO(Ana): check why the read_group_size is not passed in the config
     kwargs: dict[str, Any] = Field(default_factory=dict)
     "Additional arguments to pass to the strategy."
 
@@ -329,8 +328,6 @@ class BaseTrainingSchema(BaseModel):
     "Strategy to use."
     model_class: TrainingSchema
     "Forecaster to use."
-    ensemble_size_per_device: PositiveInt = Field(example=1)
-    "Number of ensemble member per device"
     swa: SWA = Field(default_factory=SWA)
     "Config for stochastic weight averaging."
     training_loss: LossSchemas
@@ -362,11 +359,15 @@ class BaseTrainingSchema(BaseModel):
 
 
 class ForecasterSchema(BaseTrainingSchema):
-    model_class: Literal[
-        "anemoi.training.train.forecaster.GraphForecaster",
-        "anemoi.training.train.forecaster.GraphEnsForecaster",
-    ] = Field(..., alias="model_class")
+    model_class: Literal["anemoi.training.train.forecaster.GraphForecaster",] = Field(..., alias="model_class")
     "Training objective."
+
+
+class ForecasterEnsSchema(BaseTrainingSchema):
+    model_class: Literal["anemoi.training.train.forecaster.GraphEnsForecaster",] = Field(..., alias="model_class")
+    "Training objective."
+    ensemble_size_per_device: PositiveInt = Field(example=1)
+    "Number of ensemble member per device"
 
 
 class InterpolationSchema(BaseTrainingSchema):
@@ -378,4 +379,4 @@ class InterpolationSchema(BaseTrainingSchema):
     "Forcing parameters for target output times."
 
 
-TrainingSchema = Union[ForecasterSchema, InterpolationSchema]
+TrainingSchema = Union[ForecasterSchema, ForecasterEnsSchema, InterpolationSchema]

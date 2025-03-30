@@ -1,6 +1,7 @@
 activation: GELU
 num_channels: 1024
 output_mask: null
+cpu_offload: False
 
 model:
   _target_: anemoi.models.models.encoder_processor_decoder.AnemoiEnsModelEncProcDec
@@ -48,7 +49,6 @@ noise_injector:
 
 processor:
   _target_: anemoi.models.layers.processor.GraphTransformerProcessor
-  _convert_: all
   activation: ${model.activation}
   trainable_size: ${model.trainable_parameters.hidden2hidden}
   sub_graph_edge_attributes: ${model.attributes.edges}
@@ -56,22 +56,23 @@ processor:
   num_chunks: 2
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
-  dropout_p: 0.0 # GraphTransformer or Transformer only
   qk_norm: True # Transformer and GraphTransformer only
+  cpu_offload: ${model.cpu_offload}
 
 encoder:
   _target_: anemoi.models.layers.mapper.GraphTransformerForwardMapper
-  _convert_: all
   trainable_size: ${model.trainable_parameters.data2hidden}
   sub_graph_edge_attributes: ${model.attributes.edges}
   activation: ${model.activation}
   num_chunks: 1
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
+  cpu_offload: ${model.cpu_offload}
+  qk_norm: False
+
 
 decoder:
   _target_: anemoi.models.layers.mapper.GraphTransformerBackwardMapper
-  _convert_: all
   trainable_size: ${model.trainable_parameters.hidden2data}
   sub_graph_edge_attributes: ${model.attributes.edges}
   activation: ${model.activation}
@@ -79,6 +80,9 @@ decoder:
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
   initialise_data_extractor_zero: True
+  cpu_offload: ${model.cpu_offload}
+  qk_norm: False
+
 
 trainable_parameters:
   data: 8

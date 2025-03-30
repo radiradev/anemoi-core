@@ -51,7 +51,6 @@ layer_kernels:
 
 noise_injector:
   _target_: anemoi.models.layers.ensemble.NoiseConditioning
-  _convert_: all
   noise_std: 1
   noise_channels_dim: 4
   noise_mlp_hidden_dim: 32
@@ -59,7 +58,6 @@ noise_injector:
 
 processor:
   _target_: anemoi.models.layers.processor.TransformerProcessor
-  _convert_: all
   activation: ${model.activation}
   num_layers: 16
   num_chunks: 2
@@ -89,7 +87,6 @@ encoder:
 
 decoder:
   _target_: anemoi.models.layers.mapper.GraphTransformerBackwardMapper
-  _convert_: all
   trainable_size: ${model.trainable_parameters.hidden2data}
   sub_graph_edge_attributes: ${model.attributes.edges}
   activation: ${model.activation}
