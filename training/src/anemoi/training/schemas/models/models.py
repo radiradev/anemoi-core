@@ -109,7 +109,7 @@ Bounding = Annotated[
 ]
 
 
-class ModelSchema(PydanticBaseModel):
+class BaseModelSchema(PydanticBaseModel):
 
     num_channels: NonNegativeInt = Field(example=512)
     "Feature tensor size in the hidden space."
@@ -137,3 +137,24 @@ class ModelSchema(PydanticBaseModel):
     "GNN encoder schema."
     decoder: Union[GNNDecoderSchema, GraphTransformerDecoderSchema] = Field(..., discriminator="target_")
     "GNN decoder schema."
+
+
+class NoiseInjectorSchema(BaseModel):
+    target_: Literal["anemoi.models.layers.ensemble.NoiseConditioning"] = Field(..., alias="_target_")
+    "Noise injection layer class"
+    noise_std: NonNegativeInt = Field(example=1)
+    "Standard deviation of the noise to be injected."
+    noise_channels_dim: NonNegativeInt = Field(example=4)
+    "Number of channels in the noise tensor."
+    noise_mlp_hidden_dim: NonNegativeInt = Field(example=8)
+    "Hidden dimension of the MLP used to process the noise."
+    inject_noise: bool = Field(default=True)
+    "Whether to inject noise or not."
+
+
+class EnsModelSchema(BaseModelSchema):
+    noise_injector: NoiseInjectorSchema = Field(default_factory=list)
+    "Settings related to custom kernels for encoder processor and decoder blocks"
+
+
+ModelSchema = Union[BaseModelSchema, EnsModelSchema]

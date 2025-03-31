@@ -337,7 +337,7 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
             graph_data=graph_data,
             truncation_data=truncation_data,
         )
-
+        model_config = DotDict(model_config)
         self.noise_injector = instantiate(
             model_config.model.noise_injector,
             num_channels=self.num_channels,
