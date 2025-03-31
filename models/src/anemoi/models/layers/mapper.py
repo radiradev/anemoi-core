@@ -10,7 +10,6 @@
 
 import logging
 from abc import ABC
-import os
 from typing import Optional
 
 import numpy as np
@@ -26,7 +25,8 @@ from torch_geometric.typing import PairTensor
 from anemoi.models.distributed.graph import gather_tensor
 from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.graph import sync_tensor
-from anemoi.models.distributed.khop_edges import sort_edges_1hop_sharding, drop_unconnected_src_nodes
+from anemoi.models.distributed.khop_edges import drop_unconnected_src_nodes
+from anemoi.models.distributed.khop_edges import sort_edges_1hop_sharding
 from anemoi.models.distributed.shapes import change_channels_in_shape
 from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.layers.block import GraphConvMapperBlock
@@ -37,9 +37,6 @@ from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
 
-DROP_UNCONNECTED_SRC_NODES = os.environ.get("DROP_UNCONNECTED_SRC_NODES", "0") == "1"
-if DROP_UNCONNECTED_SRC_NODES:
-    print(f"Dropping unconnected src nodes in mapper, set DROP_UNCONNECTED_SRC_NODES=0 to disable this.")
 
 class BaseMapper(nn.Module, ABC):
     """Base Mapper from souce dimension to destination dimension."""
@@ -276,7 +273,7 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
     def prepare_edges(self, size, batch_size, model_comm_group=None):
         edge_attr = self.trainable(self.edge_attr, batch_size)
         edge_index = self._expand_edges(self.edge_index_base, self.edge_inc, batch_size)
-        
+
         # sort edges for sharding by splitting x_dst in equal parts and taking the incoming edges to each part
         edge_attr, edge_index, shapes_edge_attr, shapes_edge_idx = sort_edges_1hop_sharding(
             size, edge_attr, edge_index, model_comm_group, relabel_nodes=True
@@ -287,7 +284,7 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
         edge_attr = shard_tensor(edge_attr, 0, shapes_edge_attr, model_comm_group)
 
         return edge_attr, edge_index
-    
+
     def pre_process_edge_sharding_wrapper(
         self,
         x: PairTensor,
@@ -299,19 +296,20 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
     ):
         x_src, x_dst = x
 
-        x_src = sync_tensor(x_src, 0, change_channels_in_shape(shard_shapes[0], x_src.shape[-1]), model_comm_group)
+        if x_src_is_sharded:
+            x_src = sync_tensor(x_src, 0, change_channels_in_shape(shard_shapes[0], x_src.shape[-1]), model_comm_group)
 
+        # TODO next: allgather into single tensor, simplify the edge selection
         size_full_graph = (sum(shape[0] for shape in shard_shapes[0]), sum(shape[0] for shape in shard_shapes[1]))
         edge_attr, edge_index = self.prepare_edges(size_full_graph, batch_size, model_comm_group)
 
-         # at this point, x_src is synced i.e. full, x_dst is sharded, edges are sharded (incoming edges to x_dst)
+        # at this point, x_src is synced i.e. full, x_dst is sharded, edges are sharded (incoming edges to x_dst)
         size_src_full_dst_shard = (x_src.shape[0], x_dst.shape[0])
-        if DROP_UNCONNECTED_SRC_NODES:
-            x_src, edge_index = drop_unconnected_src_nodes(x_src, edge_index, size_src_full_dst_shard)
+        x_src, edge_index = drop_unconnected_src_nodes(x_src, edge_index, size_src_full_dst_shard)
 
         x_src, x_dst, shapes_src, shapes_dst = self.pre_process(
-            (x_src, x_dst), shard_shapes, model_comm_group, x_src_is_sharded, x_dst_is_sharded
-        )
+            (x_src, x_dst), shard_shapes, model_comm_group, True, x_dst_is_sharded
+        )  # x_sharded=True to not shard x_src again
 
         return x_src, x_dst, edge_attr, edge_index, shapes_src, shapes_dst
 
@@ -369,7 +367,7 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
             x, shard_shapes, batch_size, model_comm_group, x_src_is_sharded, x_dst_is_sharded
         )
 
-        size = (x_src.shape[0], x_dst.shape[0]) # node sizes of local graph shard
+        size = (x_src.shape[0], x_dst.shape[0])  # node sizes of local graph shard
 
         (x_src, x_dst), edge_attr = self.proc(
             x=(x_src, x_dst),
@@ -384,6 +382,7 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
         x_dst = self.post_process(x_dst, shapes_dst, model_comm_group, keep_x_dst_sharded=keep_x_dst_sharded)
 
         return x_dst
+
 
 class GraphTransformerForwardMapper(ForwardMapperPreProcessMixin, GraphTransformerBaseMapper):
     """Graph Transformer Mapper from data -> hidden."""

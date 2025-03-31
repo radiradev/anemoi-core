@@ -314,7 +314,7 @@ class BenchmarkProfiler(Profiler):
         from lightning_fabric.utilities.distributed import group as _group
 
         string_var = [string_var]
-        #dist.broadcast_object_list(string_var, src_rank, group=_group.WORLD)
+        dist.broadcast_object_list(string_var, src_rank, group=_group.WORLD)
         return string_var[0]
 
     def setup(self, stage: str, local_rank: int | None = None, log_dir: str | None = None) -> None:
@@ -635,8 +635,12 @@ class BenchmarkProfiler(Profiler):
         if time_rows:
             time_rows_dict = {}
             for row in time_rows:
-                key, val = row.split(":")
-                val = convert_to_seconds(val.strip())
+                try:
+                    key, val = row.split(":")
+                    val = convert_to_seconds(val.strip())
+                except ValueError as e:
+                    LOGGER.warning("Value error: %s for row: %s, skipping.", e, row)
+                    continue
                 time_rows_dict[key] = val
             self.time_rows_dict = time_rows_dict
 
