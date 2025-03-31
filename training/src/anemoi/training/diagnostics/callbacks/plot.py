@@ -42,11 +42,13 @@ from anemoi.training.diagnostics.plots import plot_loss
 from anemoi.training.diagnostics.plots import plot_power_spectrum
 from anemoi.training.diagnostics.plots import plot_predicted_multilevel_flat_sample
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
+from anemoi.training.schemas.base_schema import BaseSchema  # noqa: TC001
 
 if TYPE_CHECKING:
     from typing import Any
 
     import pytorch_lightning as pl
+    from matplotlib.colors import Colormap
     from omegaconf import OmegaConf
 
     from anemoi.models.layers.graph import NamedNodesAttributes
@@ -57,7 +59,7 @@ LOGGER = logging.getLogger(__name__)
 class BasePlotCallback(Callback, ABC):
     """Factory for creating a callback that plots data to Experiment Logging."""
 
-    def __init__(self, config: OmegaConf) -> None:
+    def __init__(self, config: BaseSchema) -> None:
         """Initialise the BasePlotCallback abstract base class.
 
         Parameters
@@ -333,7 +335,7 @@ class LongRolloutPlots(BasePlotCallback):
         parameters: list[str],
         video_rollout: int = 0,
         accumulation_levels_plot: list[float] | None = None,
-        colormaps: dict[str, str] | None = None,
+        colormaps: dict[str, Colormap] | None = None,
         per_sample: int = 6,
         every_n_epochs: int = 1,
         animation_interval: int = 400,
@@ -354,7 +356,7 @@ class LongRolloutPlots(BasePlotCallback):
             Number of rollout steps for video, by default 0 (no video)
         accumulation_levels_plot : list[float] | None
             Accumulation levels to plot, by default None
-        colormaps : dict[str, str] | None
+        colormaps : dict[str, Colormap] | None
             Dictionary of colormaps, by default None
         per_sample : int, optional
             Number of plots per sample, by default 6
@@ -880,7 +882,7 @@ class PlotSample(BasePerBatchPlotCallback):
         parameters: list[str],
         accumulation_levels_plot: list[float],
         precip_and_related_fields: list[str] | None = None,
-        colormaps: dict[str, str] | None = None,
+        colormaps: dict[str, Colormap] | None = None,
         per_sample: int = 6,
         every_n_batches: int | None = None,
         **kwargs: Any,
@@ -899,7 +901,7 @@ class PlotSample(BasePerBatchPlotCallback):
             Accumulation levels to plot
         precip_and_related_fields : list[str] | None, optional
             Precip variable names, by default None
-        colormaps : dict[str, str] | None, optional
+        colormaps : dict[str, Colormap] | None, optional
             Dictionary of colormaps, by default None
         per_sample : int, optional
             Number of plots per sample, by default 6

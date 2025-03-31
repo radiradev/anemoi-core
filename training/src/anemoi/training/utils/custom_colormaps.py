@@ -43,6 +43,15 @@ class MatplotlibColormap(CustomColormap):
     """Class for Matplotlib colormaps."""
 
     def __init__(self, name: str, variables: list | None = None) -> None:
+        """Initializes the custom colormap with a Matplotlib colormap.
+
+        Parameters
+        ----------
+        name : str
+            The name of the Matplotlib colormap.
+        variables : list, optional
+            A list of strings representing the variables for which the colormap is used.
+        """
         super().__init__(variables)
         self.name = name
         self.colormap = cm.get_cmap(self.name)
@@ -54,12 +63,12 @@ class MatplotlibColormap(CustomColormap):
 class MatplotlibColormapClevels(CustomColormap):
     """Class for Matplotlib colormaps with custom levels."""
 
-    def __init__(self, clevels: float, variables: list | None = None) -> None:
+    def __init__(self, clevels: list, variables: list | None = None) -> None:
         """Initializes the custom colormap with custom levels.
 
         Parameters
         ----------
-        clevels : float
+        clevels : list
             The custom levels for the colormap.
         variables : list, optional
             A list of strings representing the variables for which the colormap is used.
@@ -72,7 +81,7 @@ class MatplotlibColormapClevels(CustomColormap):
         return self.colormap
 
 
-class DistinctpyColormap(CustomColormap):
+class DistinctipyColormap(CustomColormap):
     def __init__(self, n_colors: int, variables: list | None = None, colorblind_type: str | None = None) -> None:
         """Initializes the custom colormap with distinctipy.
 
@@ -88,7 +97,7 @@ class DistinctpyColormap(CustomColormap):
         try:
             from distinctipy import distinctipy
         except ImportError:
-            error_message = "distinctipy package is not available. Please install it to use DistinctpyColormapN."
+            error_message = "distinctipy package is not available. Please install it to use DistinctipyColormapN."
             raise ImportError(error_message) from None
         super().__init__(variables)
         self.n_colors = n_colors
