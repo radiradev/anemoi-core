@@ -229,6 +229,23 @@ class AnemoiTrainer:
         """TensorBoard logger."""
         return get_tensorboard_logger(self.config)
 
+    def _get_warm_start_checkpoint(self, config: DictConfig) -> str | None:
+        """Returns the warm start checkpoint path if specified."""
+        warm_start = config.hardware.files.warm_start
+        if warm_start:
+            warm_start_path = Path(warm_start)
+            # Use absolute path if provided, otherwise assume it's in a warm start directory
+            return (
+                warm_start_path
+                if warm_start_path.is_absolute()
+                else Path(config.hardware.paths.warm_starts) / warm_start
+            )
+        return None  # No warm start specified
+
+    def _get_checkpoint_directory(self, config: DictConfig, fork_id: str, lineage_run: str) -> Path:
+        """Returns the directory where checkpoints are stored."""
+        return Path(config.hardware.paths.checkpoints.parent, fork_id or lineage_run)
+
     @cached_property
     def last_checkpoint(self) -> str | None:
         """Path to the last checkpoint."""
@@ -236,11 +253,13 @@ class AnemoiTrainer:
             return None
 
         fork_id = self.fork_run_server2server or self.config.training.fork_run_id
-        checkpoint = Path(
-            self.config.hardware.paths.checkpoints.parent,
-            fork_id or self.lineage_run,
-            self.config.hardware.files.warm_start or "last.ckpt",
-        )
+
+        # Usage
+        warm_start_path = self._get_warm_start_checkpoint(self.config)
+        if warm_start_path:
+            checkpoint = warm_start_path
+        else:
+            checkpoint = self._get_checkpoint_directory(self.config, fork_id, self.lineage_run) / "last.ckpt"
 
         # Check if the last checkpoint exists
         if Path(checkpoint).exists():
