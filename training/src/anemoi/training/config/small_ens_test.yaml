@@ -22,6 +22,8 @@ defaults:
 # - graph: encoder_decoder_only
 # - model: transformer
 
+no_validation: True
+
 data:
   resolution: o96
 
@@ -158,6 +160,8 @@ diagnostics:
     callbacks: []
   log:
     interval: 20
+    wandb:
+      entity: 'ecmwf'
     mlflow:
       enabled: True
       offline: True
