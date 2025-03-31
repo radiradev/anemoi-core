@@ -94,7 +94,7 @@ class AnemoiTrainer:
     @cached_property
     def datamodule(self) -> Any:
         """DataModule instance and DataSets."""
-        datamodule = instantiate(self.config.datamodule, self.config, self.graph_data)
+        datamodule = instantiate(convert_to_omegaconf(self.config).datamodule, self.config, self.graph_data)
         self.config.data.num_features = len(datamodule.ds_train.data.variables)
         LOGGER.info("Number of data variables: %s", str(len(datamodule.ds_train.data.variables)))
         LOGGER.debug("Variables: %s", str(datamodule.ds_train.data.variables))
@@ -185,8 +185,8 @@ class AnemoiTrainer:
             "supporting_arrays": self.supporting_arrays,
         }
 
-        model_class = get_class(self.config.training.model_class)
-        model = model_class(**kwargs)
+        model_task = get_class(self.config.training.model_task)
+        model = model_task(**kwargs)
 
         # Load the model weights
         if self.load_weights_only:
@@ -197,11 +197,11 @@ class AnemoiTrainer:
                     model = transfer_learning_loading(model, self.last_checkpoint)
                 else:
                     LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
-                    model = model_class.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
+                    model = model_task.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
 
             else:
                 LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
-                model = model_class.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
+                model = model_task.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
 
         if hasattr(self.config.training, "submodules_to_freeze"):
             # Freeze the chosen model weights
@@ -416,7 +416,7 @@ class AnemoiTrainer:
     @cached_property
     def strategy(self) -> Any:
         return instantiate(
-            self.config.training.strategy,
+            convert_to_omegaconf(self.config).training.strategy,
             read_group_size=self.config.dataloader.read_group_size,
             static_graph=not self.config.training.accum_grad_batches > 1,
         )

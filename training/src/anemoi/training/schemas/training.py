@@ -242,8 +242,8 @@ class BaseDDPStrategySchema(BaseModel):
     target_: ImplementedStrategiesUsingBaseDDPStrategySchema = Field(..., alias="_target_")
     num_gpus_per_model: PositiveInt = Field(example=2)
     "Number of GPUs per model."
-    kwargs: dict[str, Any] = Field(default_factory=dict)
-    "Additional arguments to pass to the strategy."
+    read_group_size: PositiveInt = Field(example=1)
+    "Number of GPUs per reader group. Defaults to number of GPUs."
 
 
 class DDPEnsGroupStrategyStrategySchema(BaseDDPStrategySchema):
