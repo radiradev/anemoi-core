@@ -333,6 +333,7 @@ class GraphForecaster(pl.LightningModule):
                 # Apply surface variable scaling
                 if key in config.training.variable_loss_scaling.sfc:
                     variable_loss_scaling[idx] = config.training.variable_loss_scaling.sfc[key]
+                    LOGGER.info("Parameter %s scaled by %f.", key, config.training.variable_loss_scaling.sfc[key])
                 else:
                     LOGGER.debug("Parameter %s was not scaled.", key)
 

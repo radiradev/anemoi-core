@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import logging
 from abc import ABC
 from abc import abstractmethod
 from typing import Optional
@@ -17,6 +18,8 @@ import torch
 from torch import nn
 
 from anemoi.models.data_indices.tensor import InputTensorIndex
+
+LOGGER = logging.getLogger(__name__)
 
 
 class BaseBounding(nn.Module, ABC):
@@ -278,6 +281,7 @@ class VariableDependentMasking(BaseBounding):
         del statistics, name_to_index_stats
         super().__init__(variables=variables, name_to_index=name_to_index)
         self.masking_var = self._create_index(variables=[masking_var])
+        LOGGER.info(f"Bound {variables} depending on {masking_var}.")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Mask the data_index variables where the masking_var is zero
