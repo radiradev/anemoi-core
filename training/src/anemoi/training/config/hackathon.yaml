@@ -21,6 +21,10 @@ model: #transformer only
   processor:
     attention_implementation: 'flash_attention_v3'
     window_size: 1120
+  encoder:
+    shard_strategy: 'edges'
+  decoder:
+    shard_strategy: 'edges'
   layer_kernels:
     LayerNorm:
       _target_: "torch.nn.LayerNorm" #the default PyTorch implementation

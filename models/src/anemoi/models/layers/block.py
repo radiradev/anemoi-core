@@ -369,6 +369,8 @@ class GraphTransformerBaseBlock(BaseBlock, ABC):
 
         self.conv = GraphTransformerConv(out_channels=self.out_channels_conv)
 
+        self.conv = torch.compile(self.conv, dynamic=False)
+
         self.projection = linear(out_channels, out_channels)
 
         try:
@@ -553,7 +555,7 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
         update_src_nodes: bool, by default False
             Update src if src and dst nodes are given
         """
-        print(f"GraphTransformerMapperBlock:")
+        print("GraphTransformerMapperBlock:")
 
         super().__init__(
             in_channels=in_channels,
@@ -594,18 +596,20 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
         query, key, value, edges = self.get_qkve(x, edge_attr)
 
         if self.shard_strategy == "heads":
-            query, key, value, edges = self.shard_qkve_heads(query, key, value, edges, shapes, batch_size, model_comm_group)
+            query, key, value, edges = self.shard_qkve_heads(
+                query, key, value, edges, shapes, batch_size, model_comm_group
+            )
         else:
             query, key, value, edges = (
-            einops.rearrange(
-                t,
-                "(batch grid) (heads vars) -> (batch grid) heads vars",
-                heads=self.num_heads,
-                vars=self.out_channels_conv,
-                batch=batch_size,
+                einops.rearrange(
+                    t,
+                    "(batch grid) (heads vars) -> (batch grid) heads vars",
+                    heads=self.num_heads,
+                    vars=self.out_channels_conv,
+                    batch=batch_size,
+                )
+                for t in (query, key, value, edges)
             )
-            for t in (query, key, value, edges)
-        )
 
         num_chunks = self.num_chunks if self.training else NUM_CHUNKS_INFERENCE_MAPPER
 
@@ -678,8 +682,8 @@ class GraphTransformerProcessorBlock(GraphTransformerBaseBlock):
         update_src_nodes: bool, by default False
             Update src if src and dst nodes are given
         """
-        print(f"GraphTransformerProcessorBlock:")
-        
+        print("GraphTransformerProcessorBlock:")
+
         super().__init__(
             in_channels=in_channels,
             hidden_dim=hidden_dim,
@@ -712,18 +716,20 @@ class GraphTransformerProcessorBlock(GraphTransformerBaseBlock):
         query, key, value, edges = self.get_qkve(x, edge_attr)
 
         if self.shard_strategy == "heads":
-            query, key, value, edges = self.shard_qkve_heads(query, key, value, edges, shapes, batch_size, model_comm_group)
+            query, key, value, edges = self.shard_qkve_heads(
+                query, key, value, edges, shapes, batch_size, model_comm_group
+            )
         else:
             query, key, value, edges = (
-            einops.rearrange(
-                t,
-                "(batch grid) (heads vars) -> (batch grid) heads vars",
-                heads=self.num_heads,
-                vars=self.out_channels_conv,
-                batch=batch_size,
+                einops.rearrange(
+                    t,
+                    "(batch grid) (heads vars) -> (batch grid) heads vars",
+                    heads=self.num_heads,
+                    vars=self.out_channels_conv,
+                    batch=batch_size,
+                )
+                for t in (query, key, value, edges)
             )
-            for t in (query, key, value, edges)
-        )
 
         num_chunks = self.num_chunks if self.training else NUM_CHUNKS_INFERENCE_PROCESSOR
 
