@@ -108,7 +108,7 @@ def _gather(
 
     return output
 
-def _reduce(input_: Tensor, use_fp32: Optional[bool] = False, group: Optional[ProcessGroup] = None) -> Tensor:
+def _reduce(input_: Tensor, use_fp32: Optional[bool] = True, group: Optional[ProcessGroup] = None) -> Tensor:
     """All-reduce the input tensor across model parallel group."""
     # Modified from
     # Copyright (c) 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
