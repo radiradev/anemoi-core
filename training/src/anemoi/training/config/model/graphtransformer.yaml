@@ -57,8 +57,9 @@ processor:
   num_chunks: 2
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
-  cpu_offload: ${model.cpu_offload}
   qk_norm: False
+  cpu_offload: ${model.cpu_offload}
+
 
 encoder:
   _target_: anemoi.models.layers.mapper.GraphTransformerForwardMapper
@@ -68,8 +69,8 @@ encoder:
   num_chunks: 1
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
-  cpu_offload: ${model.cpu_offload}
   qk_norm: False
+  cpu_offload: ${model.cpu_offload}
 
 
 decoder:
@@ -80,9 +81,10 @@ decoder:
   num_chunks: 1
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
-  cpu_offload: ${model.cpu_offload}
   initialise_data_extractor_zero: False
   qk_norm: False
+  cpu_offload: ${model.cpu_offload}
+
 
 trainable_parameters:
   data: 8

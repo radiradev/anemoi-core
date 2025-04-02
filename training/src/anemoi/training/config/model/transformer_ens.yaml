@@ -1,7 +1,7 @@
 activation: GELU
 num_channels: 1024
-cpu_offload: False
 output_mask: null
+cpu_offload: False
 
 model:
   _target_: anemoi.models.models.encoder_processor_decoder.AnemoiEnsModelEncProcDec
@@ -74,7 +74,6 @@ processor:
 
 encoder:
   _target_: anemoi.models.layers.mapper.GraphTransformerForwardMapper
-  _convert_: all
   trainable_size: ${model.trainable_parameters.data2hidden}
   sub_graph_edge_attributes: ${model.attributes.edges}
   activation: ${model.activation}
@@ -83,6 +82,7 @@ encoder:
   num_heads: 16 # GraphTransformer or Transformer only
   qk_norm: False
   cpu_offload: ${model.cpu_offload}
+
 
 
 decoder:
@@ -94,8 +94,10 @@ decoder:
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
   initialise_data_extractor_zero: True
-  qk_norm: False # Transformer and GraphTransformer only
+  qk_norm: False
   cpu_offload: ${model.cpu_offload}
+
+
 
 trainable_parameters:
   data: 8

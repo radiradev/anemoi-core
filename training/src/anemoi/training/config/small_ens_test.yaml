@@ -22,8 +22,6 @@ defaults:
 # - graph: encoder_decoder_only
 # - model: transformer
 
-no_validation: True
-
 data:
   resolution: o96
 
