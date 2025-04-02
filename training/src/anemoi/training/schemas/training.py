@@ -231,6 +231,34 @@ LossSchemas = Union[
 ]
 
 
+class ImplementedStrategiesUsingBaseDDPStrategySchema(str, Enum):
+    ddp_ens = "anemoi.training.distributed.strategy.DDPEnsGroupStrategy"
+    ddp = "anemoi.training.distributed.strategy.DDPGroupStrategy"
+
+
+class BaseDDPStrategySchema(BaseModel):
+    """Strategy configuration."""
+
+    target_: ImplementedStrategiesUsingBaseDDPStrategySchema = Field(..., alias="_target_")
+    num_gpus_per_model: PositiveInt = Field(example=2)
+    "Number of GPUs per model."
+    read_group_size: PositiveInt = Field(example=1)
+    "Number of GPUs per reader group. Defaults to number of GPUs."
+
+
+class DDPEnsGroupStrategyStrategySchema(BaseDDPStrategySchema):
+    """Strategy object from anemoi.training.strategy."""
+
+    num_gpus_per_ensemble: PositiveInt = Field(example=2)
+    "Number of GPUs per ensemble."
+
+
+StrategySchemas = Union[
+    BaseDDPStrategySchema,
+    DDPEnsGroupStrategyStrategySchema,
+]
+
+
 class GraphNodeAttributeSchema(BaseModel):
     target_: Literal["anemoi.training.losses.nodeweights.GraphNodeAttribute"] = Field(..., alias="_target_")
     "Node loss weights object from anemoi.training.losses."
@@ -292,16 +320,14 @@ class BaseTrainingSchema(BaseModel):
     accum_grad_batches: PositiveInt = Field(default=1)
     """Accumulates gradients over k batches before stepping the optimizer.
     K >= 1 (if K == 1 then no accumulation). The effective bacthsize becomes num-device * k."""
-    num_sanity_val_steps: PositiveInt = Field(example=6)
+    num_sanity_val_steps: NonNegativeInt = Field(example=6)
     "Sanity check runs n batches of val before starting the training routine."
     gradient_clip: GradientClip
     "Config for gradient clipping."
-    model_class: Any
-    "Forecaster to use."
-    strategy: Any
+    strategy: StrategySchemas
     "Strategy to use."
-    ensemble_size_per_device: PositiveInt = Field(example=1)
-    "Number of ensemble member per device"
+    model_task: TrainingSchema
+    "Forecaster to use."
     swa: SWA = Field(default_factory=SWA)
     "Config for stochastic weight averaging."
     training_loss: LossSchemas
@@ -330,17 +356,22 @@ class BaseTrainingSchema(BaseModel):
     "List of metrics"
     node_loss_weights: NodeLossWeightsSchema
     "Node loss weights configuration."
-    task: str
-    "Training objective."
 
 
 class ForecasterSchema(BaseTrainingSchema):
-    task: str = Field(example="anemoi.training.train.forecaster.GraphForecaster")
+    model_task: Literal["anemoi.training.train.forecaster.GraphForecaster",] = Field(..., alias="model_task")
     "Training objective."
 
 
+class ForecasterEnsSchema(BaseTrainingSchema):
+    model_task: Literal["anemoi.training.train.forecaster.GraphEnsForecaster",] = Field(..., alias="model_task")
+    "Training objective."
+    ensemble_size_per_device: PositiveInt = Field(example=1)
+    "Number of ensemble member per device"
+
+
 class InterpolationSchema(BaseTrainingSchema):
-    task: str = Field(example="anemoi.training.train.interpolator.GraphInterpolator")
+    model_task: Literal["anemoi.training.train.interpolator.GraphInterpolator"] = Field(..., alias="model_task")
     "Training objective."
     explicit_times: ExplicitTimes
     "Time indices for input and output."
@@ -348,4 +379,4 @@ class InterpolationSchema(BaseTrainingSchema):
     "Forcing parameters for target output times."
 
 
-TrainingSchema = Union[ForecasterSchema, InterpolationSchema]
+TrainingSchema = Union[ForecasterSchema, ForecasterEnsSchema, InterpolationSchema]
