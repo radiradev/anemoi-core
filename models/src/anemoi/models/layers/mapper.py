@@ -33,6 +33,15 @@ from anemoi.models.layers.graph import TrainableTensor
 from anemoi.models.layers.mlp import MLP
 from anemoi.utils.config import DotDict
 
+import os
+dtype=torch.float16
+if "bfloat16" in os.getenv("DTYPE", ""):
+    dtype=torch.bfloat16
+elif "float8" in os.getenv("DTYPE", ""):
+    dtype=torch.float8_e4m3fn  # or torch.float8_e5m2
+elif "float32" in os.getenv("DTYPE", ""):
+    dtype=torch.float32
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -148,7 +157,7 @@ class GraphEdgeMixin:
         assert sub_graph, f"{self.__class__.__name__} needs a valid sub_graph to register edges."
         assert edge_attributes is not None, "Edge attributes must be provided"
 
-        edge_attr_tensor = torch.cat([sub_graph[attr] for attr in edge_attributes], axis=1).type(torch.float16)
+        edge_attr_tensor = torch.cat([sub_graph[attr] for attr in edge_attributes], axis=1).type(dtype)
 
         self.edge_dim = edge_attr_tensor.shape[1] + trainable_size
         self.register_buffer("edge_attr", edge_attr_tensor, persistent=False)

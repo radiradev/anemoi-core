@@ -22,6 +22,14 @@ from matepoint import checkpoint as wb_checkpoint
 import os
 if os.getenv("OFFLOAD", "") != "":
     checkpoint=wb_checkpoint
+dtype=torch.float16
+if "bfloat16" in os.getenv("DTYPE", ""):
+    dtype=torch.bfloat16
+elif "float8" in os.getenv("DTYPE", ""):
+    dtype=torch.float8_e4m3fn  # or torch.float8_e5m2
+elif "float32" in os.getenv("DTYPE", ""):
+    dtype=torch.float32
+
 from torch_geometric.data import HeteroData
 
 from anemoi.models.distributed.shapes import apply_shard_shapes
@@ -72,7 +80,7 @@ class AnemoiModelEncProcDec(nn.Module):
         self.statistics = statistics
 
         #TODO read this from the config, and pass it to below and mapper
-        torch.set_default_dtype(torch.float16)
+        torch.set_default_dtype(dtype)
 
         # read config.model.layer_kernels to get the implementation for certain layers
         self.layer_kernels = load_layer_kernels(model_config.get("model.layer_kernels", {}))
