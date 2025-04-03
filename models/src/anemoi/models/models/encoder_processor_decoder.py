@@ -300,7 +300,8 @@ class AnemoiModelEncProcDec(nn.Module):
         )
 
         # residual connection (just for the prognostic variables)
-        x_out[..., self._internal_output_idx] += x[:, -1, :, :, self._internal_input_idx]
+        if os.getenv("SYNC", "1") == "1":
+            x_out[..., self._internal_output_idx] += x[:, -1, :, :, self._internal_input_idx]
 
         for bounding in self.boundings:
             # bounding performed in the order specified in the config file

@@ -15,6 +15,7 @@ from typing import Optional
 
 import torch
 from torch import nn
+import os
 
 from anemoi.models.data_indices.tensor import InputTensorIndex
 
@@ -78,7 +79,8 @@ class ReluBounding(BaseBounding):
     """Initializes the bounding with a ReLU activation / zero clamping."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x[..., self.data_index] = torch.nn.functional.relu(x[..., self.data_index])
+        if os.getenv("SYNC", "1") == "1":
+            x[..., self.data_index] = torch.nn.functional.relu(x[..., self.data_index])
         return x
 
 
