@@ -371,7 +371,7 @@ class ForecasterEnsSchema(BaseTrainingSchema):
 
 
 class InterpolationSchema(BaseTrainingSchema):
-    model_task: Literal["anemoi.training.train.interpolator.GraphInterpolator"] = Field(..., alias="model_task")
+    model_task: Literal["anemoi.training.train.forecaster.GraphInterpolator"] = Field(..., alias="model_task")
     "Training objective."
     explicit_times: ExplicitTimes
     "Time indices for input and output."

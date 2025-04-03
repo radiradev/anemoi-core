@@ -3,7 +3,7 @@ defaults:
 - dataloader: native_grid
 - datamodule: single
 - diagnostics: evaluation
-- hardware: atos
+- hardware: example
 - graph: multi_scale
 - model: graphtransformer
 - training: default
@@ -27,7 +27,7 @@ model:
   grid_skip: 0 # Which of the input indices to use as residual connection, null if none.
 
 training:
-  model_task: anemoi.training.train.interpolator.GraphInterpolator
+  model_task: anemoi.training.train.forecaster.GraphInterpolator
 
 # Instead of inferred using multistep and timeincrement, specify time indices explicitly
   explicit_times:

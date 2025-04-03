@@ -9,5 +9,6 @@
 
 from .ensforecaster import GraphEnsForecaster
 from .forecaster import GraphForecaster
+from .interpolator import GraphInterpolator
 
-__all__ = ["GraphEnsForecaster", "GraphForecaster"]
+__all__ = ["GraphEnsForecaster", "GraphForecaster", "GraphInterpolator"]
