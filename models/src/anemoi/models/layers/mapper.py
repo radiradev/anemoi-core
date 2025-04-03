@@ -26,6 +26,7 @@ from anemoi.models.distributed.graph import gather_tensor
 from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.graph import sync_tensor
 from anemoi.models.distributed.khop_edges import drop_unconnected_src_nodes
+from anemoi.models.distributed.khop_edges import get_edges_sharding
 from anemoi.models.distributed.khop_edges import sort_edges_1hop_sharding
 from anemoi.models.distributed.shapes import change_channels_in_shape
 from anemoi.models.distributed.shapes import get_shard_shapes
@@ -274,14 +275,9 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
         edge_attr = self.trainable(self.edge_attr, batch_size)
         edge_index = self._expand_edges(self.edge_index_base, self.edge_inc, batch_size)
 
-        # sort edges for sharding by splitting x_dst in equal parts and taking the incoming edges to each part
-        edge_attr, edge_index, shapes_edge_attr, shapes_edge_idx = sort_edges_1hop_sharding(
+        edge_attr, edge_index, _, _ = get_edges_sharding(
             size, edge_attr, edge_index, model_comm_group, relabel_nodes=True
         )
-
-        # assuming x_dst is sharded across dim 0, these edges are exactly the incoming edges to x_dst on each device
-        edge_index = shard_tensor(edge_index, 1, shapes_edge_idx, model_comm_group)
-        edge_attr = shard_tensor(edge_attr, 0, shapes_edge_attr, model_comm_group)
 
         return edge_attr, edge_index
 
@@ -299,7 +295,6 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
         if x_src_is_sharded:
             x_src = sync_tensor(x_src, 0, change_channels_in_shape(shard_shapes[0], x_src.shape[-1]), model_comm_group)
 
-        # TODO next: allgather into single tensor, simplify the edge selection
         size_full_graph = (sum(shape[0] for shape in shard_shapes[0]), sum(shape[0] for shape in shard_shapes[1]))
         edge_attr, edge_index = self.prepare_edges(size_full_graph, batch_size, model_comm_group)
 
