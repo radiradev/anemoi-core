@@ -174,6 +174,7 @@ def drop_unconnected_src_nodes(x_src: Tensor, edge_index: Adj, num_nodes: tuple[
     connected_src_nodes = torch.unique(edge_index[0])
 
     src_node_map = torch.zeros(num_nodes[0], dtype=torch.long, device=x_src.device)
+
     src_node_map[connected_src_nodes] = torch.arange(connected_src_nodes.shape[0], device=x_src.device)
     edge_index[0] = src_node_map[edge_index[0]]
 

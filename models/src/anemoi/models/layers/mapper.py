@@ -21,6 +21,7 @@ from torch.distributed.distributed_c10d import ProcessGroup
 from torch_geometric.data import HeteroData
 from torch_geometric.typing import Adj
 from torch_geometric.typing import PairTensor
+from torch.utils.checkpoint import checkpoint
 
 from anemoi.models.distributed.graph import gather_tensor
 from anemoi.models.distributed.graph import shard_tensor
@@ -28,6 +29,8 @@ from anemoi.models.distributed.graph import sync_tensor
 from anemoi.models.distributed.khop_edges import drop_unconnected_src_nodes
 from anemoi.models.distributed.khop_edges import get_edges_sharding
 from anemoi.models.distributed.khop_edges import sort_edges_1hop_sharding
+from anemoi.models.distributed.khop_edges import partition_dst_nodes
+from anemoi.models.distributed.khop_edges import bipartite_subgraph
 from anemoi.models.distributed.shapes import change_channels_in_shape
 from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.layers.block import GraphConvMapperBlock
@@ -244,6 +247,8 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
             activation=activation,
         )
 
+        self.num_chunks = num_chunks
+
         # Linear = layer_kernels.get("Linear", torch.nn.Linear)
         Linear = layer_kernels["Linear"]
 
@@ -258,7 +263,7 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
             num_heads=num_heads,
             edge_dim=self.edge_dim,
             activation=activation,
-            num_chunks=num_chunks,
+            num_chunks=1, # disable "inner" chunking, maybe even remove
             layer_kernels=layer_kernels,
             shard_strategy=shard_strategy,
         )
@@ -269,7 +274,7 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
 
         self.shard_strategy = shard_strategy
 
-        print(f"GraphTransformerBaseMapper: shard_strategy={shard_strategy}")
+        print(f"GraphTransformerBaseMapper: shard_strategy={shard_strategy}, num_chunks={num_chunks}")
 
     def prepare_edges(self, size, batch_size, model_comm_group=None):
         edge_attr = self.trainable(self.edge_attr, batch_size)
@@ -292,6 +297,7 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
     ):
         x_src, x_dst = x
 
+        # TODO: don't checkpoint communication here, either move outside ckpt or exclude communication from checkpoint
         if x_src_is_sharded:
             x_src = sync_tensor(x_src, 0, change_channels_in_shape(shard_shapes[0], x_src.shape[-1]), model_comm_group)
 
@@ -302,11 +308,51 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
         size_src_full_dst_shard = (x_src.shape[0], x_dst.shape[0])
         x_src, edge_index = drop_unconnected_src_nodes(x_src, edge_index, size_src_full_dst_shard)
 
+        # TODO: maybe move this inside the chunked forward
         x_src, x_dst, shapes_src, shapes_dst = self.pre_process(
             (x_src, x_dst), shard_shapes, model_comm_group, True, x_dst_is_sharded
         )  # x_sharded=True to not shard x_src again
 
         return x_src, x_dst, edge_attr, edge_index, shapes_src, shapes_dst
+
+    def run_proc_chunk(
+        self,
+        dst_chunk: Tensor, # ids of dst nodes in chunk
+        x: tuple[Tensor, Tensor], # x_src_shard ("full"), x_dst_chunk
+        edge_attr: Tensor, # full edges of shard
+        edge_index: Adj,
+        shapes: tuple[tuple[int], tuple[int]],
+        batch_size: int,
+        size: tuple[int],
+        model_comm_group: Optional[ProcessGroup] = None,
+    ) -> Tensor:
+        x_src, x_dst = x
+        # get subgraph of x_dst_chunk and incoming edges, drop unconnected src nodes
+        nodes_src_full = torch.arange(size[0], device=edge_index.device)
+        edge_index, edge_attr = bipartite_subgraph(
+            (nodes_src_full, dst_chunk),
+            edge_index,
+            edge_attr,
+            size=size,
+            relabel_nodes=True,
+        )
+
+        # drop unconnected src nodes and relabel edges
+        x_src_chunk, edge_index_chunk = drop_unconnected_src_nodes(x_src, edge_index, size)
+
+        chunk_size = (x_src_chunk.shape[0], x_dst.shape[0])
+
+        (_, x_dst_out), _ = self.proc( # note: we don't update x_src or edge_attr here, only x_dst
+            (x_src_chunk, x_dst),
+            edge_attr,
+            edge_index_chunk,
+            shapes, # TODO: update chunked shapes (fine for edge sharding, no comms in self.proc)
+            batch_size,
+            chunk_size,
+            model_comm_group,
+        )
+
+        return x_dst_out
 
     def forward(
         self,
@@ -358,23 +404,46 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
         x_dst_is_sharded: bool = False,
         keep_x_dst_sharded: bool = False,
     ) -> PairTensor:
-        x_src, x_dst, edge_attr, edge_index, shapes_src, shapes_dst = self.pre_process_edge_sharding_wrapper(
-            x, shard_shapes, batch_size, model_comm_group, x_src_is_sharded, x_dst_is_sharded
+        x_src, x_dst, edge_attr, edge_index, shapes_src, shapes_dst = checkpoint(
+            self.pre_process_edge_sharding_wrapper,
+            x,
+            shard_shapes,
+            batch_size,
+            model_comm_group,
+            x_src_is_sharded,
+            x_dst_is_sharded,
+            use_reentrant=False,
         )
 
         size = (x_src.shape[0], x_dst.shape[0])  # node sizes of local graph shard
 
-        (x_src, x_dst), edge_attr = self.proc(
-            x=(x_src, x_dst),
-            edge_attr=edge_attr,
-            edge_index=edge_index,
-            shapes=(shapes_src, shapes_dst),
-            batch_size=batch_size,
-            size=size,
-            model_comm_group=model_comm_group,
+        # TODO: special case for num_chunks = 1? (probably not needed)
+        dst_chunks = partition_dst_nodes(
+            edge_index, self.num_chunks, balanced=False, return_edge_counts=False
         )
+        
+        for dst_chunk in dst_chunks:
+            x_dst[dst_chunk] = checkpoint(
+                self.run_proc_chunk,
+                dst_chunk,
+                (x_src, x_dst[dst_chunk]),
+                edge_attr,
+                edge_index,
+                (shapes_src, shapes_dst),
+                batch_size,
+                size,
+                model_comm_group,
+                use_reentrant=False,
+            )
 
-        x_dst = self.post_process(x_dst, shapes_dst, model_comm_group, keep_x_dst_sharded=keep_x_dst_sharded)
+        x_dst = checkpoint(
+            self.post_process,
+            x_dst,
+            shapes_dst,
+            model_comm_group,
+            keep_x_dst_sharded=keep_x_dst_sharded,
+            use_reentrant=False,
+        )
 
         return x_dst
 
