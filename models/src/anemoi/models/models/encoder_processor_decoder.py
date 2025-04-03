@@ -18,6 +18,10 @@ from torch import Tensor
 from torch import nn
 from torch.distributed.distributed_c10d import ProcessGroup
 from torch.utils.checkpoint import checkpoint
+from matepoint import checkpoint as wb_checkpoint
+import os
+if os.getenv("OFFLOAD", "") != "":
+    checkpoint=wb_checkpoint
 from torch_geometric.data import HeteroData
 
 from anemoi.models.distributed.shapes import apply_shard_shapes
@@ -68,7 +72,7 @@ class AnemoiModelEncProcDec(nn.Module):
         self.statistics = statistics
 
         #TODO read this from the config, and pass it to below and mapper
-        #torch.set_default_dtype(self.dtype)
+        torch.set_default_dtype(torch.float16)
 
         # read config.model.layer_kernels to get the implementation for certain layers
         self.layer_kernels = load_layer_kernels(model_config.get("model.layer_kernels", {}))

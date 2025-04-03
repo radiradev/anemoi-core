@@ -16,6 +16,10 @@ from torch import nn
 from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import offload_wrapper
 from torch.distributed.distributed_c10d import ProcessGroup
 from torch.utils.checkpoint import checkpoint
+from matepoint import checkpoint as wb_checkpoint
+import os
+if os.getenv("OFFLOAD", "") != "":
+    checkpoint=wb_checkpoint
 from torch_geometric.data import HeteroData
 
 from anemoi.models.distributed.graph import shard_tensor

@@ -15,6 +15,10 @@ from hydra.errors import InstantiationException
 from hydra.utils import instantiate
 from torch import nn
 from torch.utils.checkpoint import checkpoint
+from matepoint import checkpoint as wb_checkpoint
+import os
+if os.getenv("OFFLOAD", "") != "":
+    checkpoint=wb_checkpoint
 
 from anemoi.utils.config import DotDict
 
