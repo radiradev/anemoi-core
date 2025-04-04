@@ -13,6 +13,7 @@ import torch
 from torch import Tensor
 from torch import nn
 from torch_geometric.data import HeteroData
+from anemoi.models.layers.utils import nvtx_wrapper, get_tensor_shape_info
 
 
 class TrainableTensor(nn.Module):
@@ -36,8 +37,9 @@ class TrainableTensor(nn.Module):
 
     def forward(self, x: Tensor, batch_size: int) -> Tensor:
         latent = [einops.repeat(x, "e f -> (repeat e) f", repeat=batch_size)]
-        if self.trainable is not None:
-            latent.append(einops.repeat(self.trainable.to(x.device), "e f -> (repeat e) f", repeat=batch_size))
+        with nvtx_wrapper(f"graph.py - TrainableTensor.trainable.to, input tensor: (x)={get_tensor_shape_info(x)}"):
+            if self.trainable is not None:
+                latent.append(einops.repeat(self.trainable.to(x.device), "e f -> (repeat e) f", repeat=batch_size))
         return torch.cat(
             latent,
             dim=-1,  # feature dimension
@@ -108,6 +110,6 @@ class NamedNodesAttributes(nn.Module):
         """Returns the node attributes to be passed trough the graph neural network.
 
         It includes both the coordinates and the trainable parameters.
-        """
+        """ 
         latlons = getattr(self, f"latlons_{name}")
         return self.trainable_tensors[name](latlons, batch_size)

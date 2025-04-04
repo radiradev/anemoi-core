@@ -14,6 +14,7 @@ from abc import ABC
 from abc import abstractmethod
 from typing import Optional
 from typing import Union
+from anemoi.models.layers.utils import nvtx_wrapper, get_tensor_shape_info
 
 import einops
 import torch
@@ -112,8 +113,10 @@ class TransformerProcessorBlock(BaseBlock):
         self, x: Tensor, shapes: list, batch_size: int, model_comm_group: Optional[ProcessGroup] = None
     ) -> Tensor:
         # Need to be out of place for gradient propagation
-        x = x + self.attention(self.layer_norm_attention(x), shapes, batch_size, model_comm_group=model_comm_group)
-        x = x + self.mlp(self.layer_norm_mlp(x))
+        with nvtx_wrapper(f"block.py - TransformerProcessorBlock.attention, input tensor: (x)={get_tensor_shape_info(x)}"):
+            x = x + self.attention(self.layer_norm_attention(x), shapes, batch_size, model_comm_group=model_comm_group)
+        with nvtx_wrapper(f"block.py - TransformerProcessorBlock.mlp, input tensor: (x)={get_tensor_shape_info(x)}"):
+            x = x + self.mlp(self.layer_norm_mlp(x))
         return x
 
 
@@ -219,26 +222,27 @@ class GraphConvProcessorBlock(GraphConvBaseBlock):
         model_comm_group: Optional[ProcessGroup] = None,
         size: Optional[Size] = None,
     ) -> tuple[Tensor, Tensor]:
+        with nvtx_wrapper(f"block.py - graph.sync_tensor, input tensor: (x)={get_tensor_shape_info(x)}"):
+            x_in = sync_tensor(x, 0, shapes[1], model_comm_group)
+        with nvtx_wrapper(f"block.py - GraphConvProcessorBlock.conv, input tensor: (x_in)={get_tensor_shape_info(x_in)}"):
+            if self.num_chunks > 1:
+                edge_index_list = torch.tensor_split(edge_index, self.num_chunks, dim=1)
+                edge_attr_list = torch.tensor_split(edge_attr, self.num_chunks, dim=0)
+                edges_out = []
+                for i in range(self.num_chunks):
+                    out1, edges_out1 = self.conv(x_in, edge_attr_list[i], edge_index_list[i], size=size)
+                    edges_out.append(edges_out1)
+                    if i == 0:
+                        out = torch.zeros_like(out1)
+                    out = out + out1
+                edges_new = torch.cat(edges_out, dim=0)
+            else:
+                out, edges_new = self.conv(x_in, edge_attr, edge_index, size=size)
+        with nvtx_wrapper(f"block.py - graph.shard_tensor, input tensor: (out)={get_tensor_shape_info(out)}"):
+            out = shard_tensor(out, 0, shapes[1], model_comm_group, gather_in_backward=False)
 
-        x_in = sync_tensor(x, 0, shapes[1], model_comm_group)
-
-        if self.num_chunks > 1:
-            edge_index_list = torch.tensor_split(edge_index, self.num_chunks, dim=1)
-            edge_attr_list = torch.tensor_split(edge_attr, self.num_chunks, dim=0)
-            edges_out = []
-            for i in range(self.num_chunks):
-                out1, edges_out1 = self.conv(x_in, edge_attr_list[i], edge_index_list[i], size=size)
-                edges_out.append(edges_out1)
-                if i == 0:
-                    out = torch.zeros_like(out1)
-                out = out + out1
-            edges_new = torch.cat(edges_out, dim=0)
-        else:
-            out, edges_new = self.conv(x_in, edge_attr, edge_index, size=size)
-
-        out = shard_tensor(out, 0, shapes[1], model_comm_group, gather_in_backward=False)
-
-        nodes_new = self.node_mlp(torch.cat([x, out], dim=1)) + x
+        with nvtx_wrapper(f"block.py - GraphConvProcessorBlock.node_mlp, input tensors: (x, out)={get_tensor_shape_info((x, out))}"):
+            nodes_new = self.node_mlp(torch.cat([x, out], dim=1)) + x
 
         return nodes_new, edges_new
 
@@ -277,31 +281,32 @@ class GraphConvMapperBlock(GraphConvBaseBlock):
         model_comm_group: Optional[ProcessGroup] = None,
         size: Optional[Size] = None,
     ) -> tuple[Tensor, Tensor]:
-
-        x_src = sync_tensor(x[0], 0, shapes[0], model_comm_group)
-        x_dst = sync_tensor(x[1], 0, shapes[1], model_comm_group)
+        with nvtx_wrapper(f"block.py - graph.sync_tensor, input tensor: (x)={get_tensor_shape_info(x)}"):
+            x_src = sync_tensor(x[0], 0, shapes[0], model_comm_group)
+            x_dst = sync_tensor(x[1], 0, shapes[1], model_comm_group)
         x_in = (x_src, x_dst)
+        with nvtx_wrapper(f"block.py - GraphConvMapperBlock.conv, input tensor: (x_in)={get_tensor_shape_info(x_in)}"):
+            if self.num_chunks > 1:
+                edge_index_list = torch.tensor_split(edge_index, self.num_chunks, dim=1)
+                edge_attr_list = torch.tensor_split(edge_attr, self.num_chunks, dim=0)
+                edges_out = []
+                for i in range(self.num_chunks):
+                    out1, edges_out1 = self.conv(x_in, edge_attr_list[i], edge_index_list[i], size=size)
+                    edges_out.append(edges_out1)
+                    if i == 0:
+                        out = torch.zeros_like(out1)
+                    out = out + out1
+                edges_new = torch.cat(edges_out, dim=0)
+            else:
+                out, edges_new = self.conv(x_in, edge_attr, edge_index, size=size)
+        with nvtx_wrapper(f"block.py - graph.shard_tensor, input tensor: (out)={get_tensor_shape_info(out)}"):
+            out = shard_tensor(out, 0, shapes[1], model_comm_group, gather_in_backward=False)
 
-        if self.num_chunks > 1:
-            edge_index_list = torch.tensor_split(edge_index, self.num_chunks, dim=1)
-            edge_attr_list = torch.tensor_split(edge_attr, self.num_chunks, dim=0)
-            edges_out = []
-            for i in range(self.num_chunks):
-                out1, edges_out1 = self.conv(x_in, edge_attr_list[i], edge_index_list[i], size=size)
-                edges_out.append(edges_out1)
-                if i == 0:
-                    out = torch.zeros_like(out1)
-                out = out + out1
-            edges_new = torch.cat(edges_out, dim=0)
-        else:
-            out, edges_new = self.conv(x_in, edge_attr, edge_index, size=size)
-
-        out = shard_tensor(out, 0, shapes[1], model_comm_group, gather_in_backward=False)
-
-        nodes_new_dst = self.node_mlp(torch.cat([x[1], out], dim=1)) + x[1]
+        with nvtx_wrapper(f"block.py - GraphConvMapperBlock.node_mlp, input tensors: (x, out)={get_tensor_shape_info((x, out))}"):
+            nodes_new_dst = self.node_mlp(torch.cat([x[1], out], dim=1)) + x[1]
 
         # update only needed in forward mapper
-        nodes_new_src = x[0] if not self.update_src_nodes else self.node_mlp(torch.cat([x[0], x[0]], dim=1)) + x[0]
+            nodes_new_src = x[0] if not self.update_src_nodes else self.node_mlp(torch.cat([x[0], x[0]], dim=1)) + x[0]
 
         nodes_new = (nodes_new_src, nodes_new_dst)
 
@@ -581,16 +586,17 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
         )
 
         x_r = self.lin_self(x[1])
-
-        query, key, value, edges = self.get_qkve(x, edge_attr)
-
-        query, key, value, edges = self.shard_qkve_heads(query, key, value, edges, shapes, batch_size, model_comm_group)
+        with nvtx_wrapper(f"block.py - GraphTransformerMapperBlock.get_qkve, input tensors: (x, edge_attr)={get_tensor_shape_info((x, edge_attr))}"):
+            query, key, value, edges = self.get_qkve(x, edge_attr)
+        with nvtx_wrapper(f"block.py - GraphTransformerMapperBlock.shard_qkve_heads, input tensors: (query, key, value, edges)={get_tensor_shape_info((query, key, value, edges))}"):
+            query, key, value, edges = self.shard_qkve_heads(query, key, value, edges, shapes, batch_size, model_comm_group)
 
         num_chunks = self.num_chunks if self.training else NUM_CHUNKS_INFERENCE_MAPPER
-
-        out = self.attention_block(query, key, value, edges, edge_index, size, num_chunks)
-
-        out = self.shard_output_seq(out, shapes, batch_size, model_comm_group)
+##### continue annotating here, do not forget blocking and enable flag
+        with nvtx_wrapper(f"block.py - GraphTransformerMapperBlock.attention_block, input tensors: (query, key, value, edges)={get_tensor_shape_info((query, key, value, edges))}"):
+            out = self.attention_block(query, key, value, edges, edge_index, size, num_chunks)
+        with nvtx_wrapper(f"block.py - GraphTransformerMapperBlock.shard_output_seq, input tensor: (out)={get_tensor_shape_info(out)}"):
+            out = self.shard_output_seq(out, shapes, batch_size, model_comm_group)
 
         # out = self.projection(out + x_r) in chunks:
         out = torch.cat([self.projection(chunk) for chunk in torch.tensor_split(out + x_r, num_chunks, dim=0)], dim=0)
@@ -680,19 +686,19 @@ class GraphTransformerProcessorBlock(GraphTransformerBaseBlock):
         model_comm_group: Optional[ProcessGroup] = None,
     ):
         x_skip = x
-
-        x = self.layer_norm_attention(x)
+        with nvtx_wrapper(f"block.py - GraphTransformerProcessorBlock.layer_norm_attention, input tensor: (x)={get_tensor_shape_info(x)}"):
+            x = self.layer_norm_attention(x)
         x_r = self.lin_self(x)
-
-        query, key, value, edges = self.get_qkve(x, edge_attr)
-
-        query, key, value, edges = self.shard_qkve_heads(query, key, value, edges, shapes, batch_size, model_comm_group)
+        with nvtx_wrapper(f"block.py - GraphTransformerProcessorBlock.get_qkve, input tensors: (x, edge_attr)={get_tensor_shape_info((x, edge_attr))}"):
+            query, key, value, edges = self.get_qkve(x, edge_attr)
+        with nvtx_wrapper(f"block.py - GraphTransformerProcessorBlock.shard_qkve_heads, input tensors: (query, key, value, edges)={get_tensor_shape_info((query, key, value, edges))}"):
+            query, key, value, edges = self.shard_qkve_heads(query, key, value, edges, shapes, batch_size, model_comm_group)
 
         num_chunks = self.num_chunks if self.training else NUM_CHUNKS_INFERENCE_PROCESSOR
-
-        out = self.attention_block(query, key, value, edges, edge_index, size, num_chunks)
-
-        out = self.shard_output_seq(out, shapes, batch_size, model_comm_group)
+        with nvtx_wrapper(f"block.py - GraphTransformerProcessorBlock.attention_block, input tensors: (query, key, value, edges)={get_tensor_shape_info((query, key, value, edges))}"):
+            out = self.attention_block(query, key, value, edges, edge_index, size, num_chunks)
+        with nvtx_wrapper(f"block.py - GraphTransformerProcessorBlock.shard_output_seq, input tensor: (out)={get_tensor_shape_info(out)}"):
+            out = self.shard_output_seq(out, shapes, batch_size, model_comm_group)
 
         # out = self.projection(out + x_r) in chunks:
         out = torch.cat([self.projection(chunk) for chunk in torch.tensor_split(out + x_r, num_chunks, dim=0)], dim=0)

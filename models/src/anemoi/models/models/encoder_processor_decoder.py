@@ -23,7 +23,7 @@ from torch_geometric.data import HeteroData
 from anemoi.models.distributed.shapes import apply_shard_shapes
 from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.layers.graph import NamedNodesAttributes
-from anemoi.models.layers.utils import load_layer_kernels
+from anemoi.models.layers.utils import load_layer_kernels, get_tensor_shape_info, nvtx_wrapper
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -239,39 +239,45 @@ class AnemoiModelEncProcDec(nn.Module):
             shard_shapes_data = apply_shard_shapes(x_data_latent, 0, grid_shard_shapes)
         shard_shapes_hidden = get_shard_shapes(x_hidden_latent, 0, model_comm_group)
 
+        #with nvtx_wrapper(f"encoder_processor_decoder.py: self._run_mapper (encoder) tensor shapes: data (x_data_latent) {get_tensor_shape_info(x_data_latent)}, hidden (x_hidden_latent) {get_tensor_shape_info(x_hidden_latent)}"):
+        with nvtx_wrapper(f"encoder_processor_decoder.py - encoder, input tensors: (x_data_latent, x_hidden_latent)={get_tensor_shape_info((x_data_latent, x_hidden_latent))}"):
         # Run encoder
-        x_data_latent, x_latent = self._run_mapper(
-            self.encoder,
-            (x_data_latent, x_hidden_latent),
-            batch_size=batch_size,
-            shard_shapes=(shard_shapes_data, shard_shapes_hidden),
-            model_comm_group=model_comm_group,
-            x_src_is_sharded=in_out_sharded,  # x_data_latent comes sharded iff in_out_sharded
-            x_dst_is_sharded=False,  # x_latent does not come sharded
-            keep_x_dst_sharded=True,  # always keep x_latent sharded for the processor
-        )
+            x_data_latent, x_latent = self._run_mapper(
+                self.encoder,
+                (x_data_latent, x_hidden_latent),
+                batch_size=batch_size,
+                shard_shapes=(shard_shapes_data, shard_shapes_hidden),
+                model_comm_group=model_comm_group,
+                x_src_is_sharded=in_out_sharded,  # x_data_latent comes sharded iff in_out_sharded
+                x_dst_is_sharded=False,  # x_latent does not come sharded
+                keep_x_dst_sharded=True,  # always keep x_latent sharded for the processor
+            )
+        
+        with nvtx_wrapper(f"encoder_processor_decoder.py - processor, input tensor: (x_latent)={get_tensor_shape_info(x_latent)}"):
+            # Run processor
+            x_latent_proc = self.processor(
+                x_latent,
+                batch_size=batch_size,
+                shard_shapes=shard_shapes_hidden,
+                model_comm_group=model_comm_group,
+            )
 
-        x_latent_proc = self.processor(
-            x_latent,
-            batch_size=batch_size,
-            shard_shapes=shard_shapes_hidden,
-            model_comm_group=model_comm_group,
-        )
+            # add skip connection (hidden -> hidden)
+            x_latent_proc = x_latent_proc + x_latent
+       
+        with nvtx_wrapper(f"encoder_processor_decoder.py - decoder, input tensors: (x_latent_proc, x_data_latent)={get_tensor_shape_info((x_latent_proc, x_data_latent))}"):
 
-        # add skip connection (hidden -> hidden)
-        x_latent_proc = x_latent_proc + x_latent
-
-        # Run decoder
-        x_out = self._run_mapper(
-            self.decoder,
-            (x_latent_proc, x_data_latent),
-            batch_size=batch_size,
-            shard_shapes=(shard_shapes_hidden, shard_shapes_data),
-            model_comm_group=model_comm_group,
-            x_src_is_sharded=True,  # x_latent always comes sharded
-            x_dst_is_sharded=in_out_sharded,  # x_data_latent comes sharded iff in_out_sharded
-            keep_x_dst_sharded=in_out_sharded,  # keep x_out sharded iff in_out_sharded
-        )
+            # Run decoder
+            x_out = self._run_mapper(
+                self.decoder,
+                (x_latent_proc, x_data_latent),
+                batch_size=batch_size,
+                shard_shapes=(shard_shapes_hidden, shard_shapes_data),
+                model_comm_group=model_comm_group,
+                x_src_is_sharded=True,  # x_latent always comes sharded
+                x_dst_is_sharded=in_out_sharded,  # x_data_latent comes sharded iff in_out_sharded
+                keep_x_dst_sharded=in_out_sharded,  # keep x_out sharded iff in_out_sharded
+            )
 
         x_out = (
             einops.rearrange(

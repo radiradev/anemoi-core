@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import math
+from anemoi.models.layers.utils import nvtx_wrapper, get_tensor_shape_info
 from typing import Optional
 
 import einops
@@ -24,6 +25,7 @@ from torch.distributed.distributed_c10d import ProcessGroup
 from anemoi.models.distributed.transformer import shard_heads
 from anemoi.models.distributed.transformer import shard_sequence
 from anemoi.utils.config import DotDict
+#from layers.utils import nvtx_wrapper, get_tensor_shape_info
 
 LOGGER = logging.getLogger(__name__)
 
@@ -128,8 +130,8 @@ class MultiHeadSelfAttention(nn.Module):
     def forward(
         self, x: Tensor, shapes: list, batch_size: int, model_comm_group: Optional[ProcessGroup] = None
     ) -> Tensor:
-
-        query, key, value = self.lin_qkv(x).chunk(3, -1)
+        with nvtx_wrapper(f"attention.py - MultiHeadSelfAttention.ink_qkv, input tensor: (x)={get_tensor_shape_info(x)}"):
+            query, key, value = self.lin_qkv(x).chunk(3, -1)
 
         if model_comm_group:
             assert (
@@ -150,18 +152,18 @@ class MultiHeadSelfAttention(nn.Module):
         key = shard_heads(key, shapes=shapes, mgroup=model_comm_group)
         value = shard_heads(value, shapes=shapes, mgroup=model_comm_group)
         dropout_p = self.dropout_p if self.training else 0.0
-
-        out = self.attention(
-            query,
-            key,
-            value,
-            batch_size,
-            causal=False,
-            window_size=self.window_size,
-            dropout_p=dropout_p,
-            softcap=self.softcap,
-            alibi_slopes=self.alibi_slopes,
-        )
+        with nvtx_wrapper(f"attention.py - MultiHeadSelfAttention.attention, input tensors: (query, key, value)={get_tensor_shape_info((query, key, value))}"):
+            out = self.attention(
+                query,
+                key,
+                value,
+                batch_size,
+                causal=False,
+                window_size=self.window_size,
+                dropout_p=dropout_p,
+                softcap=self.softcap,
+                alibi_slopes=self.alibi_slopes,
+            )
 
         out = shard_sequence(out, shapes=shapes, mgroup=model_comm_group)
         out = einops.rearrange(out, "batch heads grid vars -> (batch grid) (heads vars)")
@@ -217,16 +219,16 @@ class SDPAAttentionWrapper(nn.Module):
 
         if window_size is not None and (self.mask is None or tuple(self.mask.shape) != (sequence_len, sequence_len)):
             self.update_mask(sequence_len, window_size=window_size, device=query.device)
-
-        with torch.nn.attention.sdpa_kernel(backends=[torch.nn.attention.SDPBackend.MATH]):
-            out = self.attention(
-                query,
-                key,
-                value,
-                attn_mask=self.mask,
-                is_causal=causal,
-                dropout_p=dropout_p,
-            )
+        with nvtx_wrapper(f"attention.py - SDPAAttentionWrapper.attention, input tensors: (query, key, value)={get_tensor_shape_info((query, key, value))}"):
+            with torch.nn.attention.sdpa_kernel(backends=[torch.nn.attention.SDPBackend.MATH]):
+                out = self.attention(
+                    query,
+                    key,
+                    value,
+                    attn_mask=self.mask,
+                    is_causal=causal,
+                    dropout_p=dropout_p,
+                )
 
         return out
 
@@ -263,17 +265,17 @@ class FlashAttentionWrapper(nn.Module):
         )
 
         alibi_slopes = alibi_slopes.repeat(batch_size, 1).to(query.device) if alibi_slopes is not None else None
-
-        out = self.attention(
-            query,
-            key,
-            value,
-            causal=False,
-            window_size=(window_size, window_size),
-            dropout_p=dropout_p,
-            softcap=softcap,
-            alibi_slopes=alibi_slopes,
-        )
+        with nvtx_wrapper(f"attention.py - FlashAttentionWrapper.attention, input tensors: (query, key, value)={get_tensor_shape_info((query, key, value))}"):
+            out = self.attention(
+                query,
+                key,
+                value,
+                causal=False,
+                window_size=(window_size, window_size),
+                dropout_p=dropout_p,
+                softcap=softcap,
+                alibi_slopes=alibi_slopes,
+            )
         out = einops.rearrange(out, "batch grid heads vars -> batch heads grid vars")
         return out
 
@@ -305,14 +307,14 @@ class FlashAttentionV3Wrapper(nn.Module):
         query, key, value = (
             einops.rearrange(t, "batch heads grid vars -> batch grid heads vars") for t in (query, key, value)
         )
-
-        out = self.attention(
-            query,
-            key,
-            value,
-            causal=False,
-            window_size=(window_size, window_size),
-        )[0]
+        with nvtx_wrapper(f"attention.py - FlashAttentionV3Wrapper.attention, input tensors: (query, key, value)={get_tensor_shape_info((query, key, value))}"):
+            out = self.attention(
+                query,
+                key,
+                value,
+                causal=False,
+                window_size=(window_size, window_size),
+            )[0]
         out = einops.rearrange(out, "batch grid heads vars -> batch heads grid vars")
         return out
 

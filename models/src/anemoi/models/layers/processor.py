@@ -28,6 +28,7 @@ from anemoi.models.layers.chunk import TransformerProcessorChunk
 from anemoi.models.layers.graph import TrainableTensor
 from anemoi.models.layers.mapper import GraphEdgeMixin
 from anemoi.utils.config import DotDict
+from anemoi.models.layers.utils import nvtx_wrapper, get_tensor_shape_info
 
 
 class BaseProcessor(nn.Module, ABC):
@@ -79,7 +80,8 @@ class BaseProcessor(nn.Module, ABC):
 
     def forward(self, x: Tensor, *args, **kwargs) -> Tensor:
         """Example forward pass."""
-        x = self.run_layers((x,), *args, **kwargs)
+        with nvtx_wrapper(f"processor.py - BaseProcessor.run_layers, input tensor: (x)={get_tensor_shape_info(x)}"):
+            x = self.run_layers((x,), *args, **kwargs)
         return x
 
 
@@ -175,8 +177,8 @@ class TransformerProcessor(BaseProcessor):
             assert (
                 model_comm_group.size() == 1 or batch_size == 1
             ), "Only batch size of 1 is supported when model is sharded accross GPUs"
-
-        (x,) = self.run_layers((x,), shape_nodes, batch_size, model_comm_group)
+        with nvtx_wrapper(f"processor.py - TransformerProcessor.run_layers, input tensor: (x)={get_tensor_shape_info(x)}"):
+            (x,) = self.run_layers((x,), shape_nodes, batch_size, model_comm_group)
 
         return x
 
@@ -263,8 +265,8 @@ class GNNProcessor(GraphEdgeMixin, BaseProcessor):
         )
         edge_index = shard_tensor(edge_index, 1, shapes_edge_idx, model_comm_group)
         edge_attr = shard_tensor(edge_attr, 0, shapes_edge_attr, model_comm_group)
-
-        x, edge_attr = self.run_layers((x, edge_attr), edge_index, (shape_nodes, shape_nodes), model_comm_group)
+        with nvtx_wrapper(f"processor.py - GNNProcessor.run_layers, input tensors: (x, edge_attr)={get_tensor_shape_info((x,edge_attr))}"):
+            x, edge_attr = self.run_layers((x, edge_attr), edge_index, (shape_nodes, shape_nodes), model_comm_group)
 
         return x
 
@@ -353,14 +355,14 @@ class GraphTransformerProcessor(GraphEdgeMixin, BaseProcessor):
 
         shapes_edge_attr = get_shard_shapes(edge_attr, 0, model_comm_group)
         edge_attr = shard_tensor(edge_attr, 0, shapes_edge_attr, model_comm_group)
-
-        x, edge_attr = self.run_layers(
-            data=(x, edge_attr),
-            edge_index=edge_index,
-            shapes=(shape_nodes, shape_nodes, shapes_edge_attr),
-            batch_size=batch_size,
-            size=size,
-            model_comm_group=model_comm_group,
-        )
+        with nvtx_wrapper(f"processor.py - GraphTransformerProcessor.run_layers, input tensors: (x, edge_attr)={get_tensor_shape_info((x,edge_attr))}"):
+            x, edge_attr = self.run_layers(
+                data=(x, edge_attr),
+                edge_index=edge_index,
+                shapes=(shape_nodes, shape_nodes, shapes_edge_attr),
+                batch_size=batch_size,
+                size=size,
+                model_comm_group=model_comm_group,
+            )
 
         return x

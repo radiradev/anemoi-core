@@ -21,6 +21,8 @@ from torch.distributed.distributed_c10d import ProcessGroup
 from torch_geometric.data import HeteroData
 from torch_geometric.typing import Adj
 from torch_geometric.typing import PairTensor
+from anemoi.models.layers.utils import nvtx_wrapper, get_tensor_shape_info
+
 
 from anemoi.models.distributed.graph import gather_tensor
 from anemoi.models.distributed.graph import shard_tensor
@@ -276,21 +278,22 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
         shapes_edge_attr = get_shard_shapes(edge_attr, 0, model_comm_group)
         edge_attr = shard_tensor(edge_attr, 0, shapes_edge_attr, model_comm_group)
 
-        x_src, x_dst, shapes_src, shapes_dst = self.pre_process(
-            x, shard_shapes, model_comm_group, x_src_is_sharded, x_dst_is_sharded
-        )
-
-        (x_src, x_dst), edge_attr = self.proc(
-            x=(x_src, x_dst),
-            edge_attr=edge_attr,
-            edge_index=edge_index,
-            shapes=(shapes_src, shapes_dst, shapes_edge_attr),
-            batch_size=batch_size,
-            size=size,
-            model_comm_group=model_comm_group,
-        )
-
-        x_dst = self.post_process(x_dst, shapes_dst, model_comm_group, keep_x_dst_sharded=keep_x_dst_sharded)
+        with nvtx_wrapper(f"mapper.py - GraphTransformerBaseMapper.pre_process, input tensor: (x)={get_tensor_shape_info(x)}"):
+            x_src, x_dst, shapes_src, shapes_dst = self.pre_process(
+                x, shard_shapes, model_comm_group, x_src_is_sharded, x_dst_is_sharded
+            )
+        with nvtx_wrapper(f"mapper.py - GraphTransformerBaseMapper.proc, input tensors: (x_src, x_dst, edge_attr, shapes_edge_attr)={get_tensor_shape_info((x_src, x_dst, edge_attr, shapes_edge_attr))}"):
+            (x_src, x_dst), edge_attr = self.proc(
+                x=(x_src, x_dst),
+                edge_attr=edge_attr,
+                edge_index=edge_index,
+                shapes=(shapes_src, shapes_dst, shapes_edge_attr),
+                batch_size=batch_size,
+                size=size,
+                model_comm_group=model_comm_group,
+            )
+        with nvtx_wrapper(f"mapper.py - GraphTransformerBaseMapper.post_process, input tensor: (x_dst)={get_tensor_shape_info(x_dst)}"):
+            x_dst = self.post_process(x_dst, shapes_dst, model_comm_group, keep_x_dst_sharded=keep_x_dst_sharded)
 
         return x_dst
 
@@ -551,21 +554,21 @@ class GNNBaseMapper(GraphEdgeMixin, BaseMapper):
         size = (sum(x[0] for x in shard_shapes[0]), sum(x[0] for x in shard_shapes[1]))
 
         edge_attr, edge_index = self.prepare_edges(size, batch_size, model_comm_group)
-
-        x_src, x_dst, shapes_src, shapes_dst = self.pre_process(
-            x, shard_shapes, model_comm_group, x_src_is_sharded, x_dst_is_sharded
-        )
-
-        (x_src, x_dst), edge_attr = self.proc(
-            (x_src, x_dst),
-            edge_attr,
-            edge_index,
-            (shapes_src, shapes_dst),
-            model_comm_group,
-            size=size,
-        )
-
-        x_dst = self.post_process(x_dst, shapes_dst, model_comm_group, keep_x_dst_sharded)
+        with nvtx_wrapper(f"mapper.py - GNNBaseMapper.pre_process, input tensor: (x)={get_tensor_shape_info(x)}"):
+            x_src, x_dst, shapes_src, shapes_dst = self.pre_process(
+                x, shard_shapes, model_comm_group, x_src_is_sharded, x_dst_is_sharded
+            )
+        with nvtx_wrapper(f"mapper.py - GNNBaseMapper.proc, input tensors: (x_src, x_dst, edge_attr)={get_tensor_shape_info((x_src, x_dst, edge_attr))}"):
+            (x_src, x_dst), edge_attr = self.proc(
+                (x_src, x_dst),
+                edge_attr,
+                edge_index,
+                (shapes_src, shapes_dst),
+                model_comm_group,
+                size=size,
+            )
+        with nvtx_wrapper(f"mapper.py - GNNBaseMapper.post_process, input tensor: (x_dst)={get_tensor_shape_info(x_dst)}"):
+            x_dst = self.post_process(x_dst, shapes_dst, model_comm_group, keep_x_dst_sharded)
 
         return x_src, x_dst
 
