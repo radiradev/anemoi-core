@@ -711,7 +711,9 @@ def plot_flat_sample(
                 lat,
                 pred - input_,
                 cmap="bwr",
-                norm=TwoSlopeNorm(vmin=combined_error.min(), vcenter=0.0, vmax=combined_error.max()),
+                norm=TwoSlopeNorm(
+                    vmin=np.percentile(combined_error, 0.05), vcenter=0.0, vmax=np.percentile(combined_error, 95),
+                ),
                 title=f"{vname} increment [pred - input]",
                 datashader=datashader,
             )
@@ -722,7 +724,9 @@ def plot_flat_sample(
                 lat,
                 truth - input_,
                 cmap="bwr",
-                norm=TwoSlopeNorm(vmin=combined_error.min(), vcenter=0.0, vmax=combined_error.max()),
+                norm=TwoSlopeNorm(
+                    vmin=np.percentile(combined_error, 0.05), vcenter=0.0, vmax=np.percentile(combined_error, 95),
+                ),
                 title=f"{vname} persist err",
                 datashader=datashader,
             )

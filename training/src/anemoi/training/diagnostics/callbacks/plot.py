@@ -571,6 +571,10 @@ class LongRolloutPlots(BasePlotCallback):
             # Prepare the figure
             fig, ax = plt.subplots(figsize=(10, 6), dpi=72)
             cmap = "twilight" if variable_name == "mwd" else "viridis"
+            vmin_dict = {"sd": 0.0, "snowc": 0.0}
+            vmax_dict = {"sd": 0.1, "snowc": 1.0}
+            idx_vmin = vmin_dict[variable_name] if variable_name in vmin_dict else vmin[idx]
+            idx_vmax = vmax_dict[variable_name] if variable_name in vmax_dict else vmax[idx]
 
             # Create initial data and colorbar
             ax, scatter_frame = get_scatter_frame(
@@ -578,8 +582,8 @@ class LongRolloutPlots(BasePlotCallback):
                 data_0[0, :, variable_idx],
                 self.latlons,
                 cmap=cmap,
-                vmin=vmin[idx],
-                vmax=vmax[idx],
+                vmin=idx_vmin,
+                vmax=idx_vmax,
             )
             ax.set_title(f"{variable_name}")
             fig.colorbar(scatter_frame, ax=ax)
@@ -592,8 +596,8 @@ class LongRolloutPlots(BasePlotCallback):
                     frame_data[idx],
                     self.latlons,
                     cmap=cmap,
-                    vmin=vmin[idx],
-                    vmax=vmax[idx],
+                    vmin=idx_vmin,
+                    vmax=idx_vmax,
                 )
                 frames.append([scatter_frame])  # Each frame contains a list of artists (images)
 
