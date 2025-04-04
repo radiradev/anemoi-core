@@ -23,8 +23,10 @@ model: #transformer only
     window_size: 1120
   encoder:
     shard_strategy: 'edges'
+    num_chunks: 16
   decoder:
     shard_strategy: 'edges'
+    num_chunks: 16
   layer_kernels:
     LayerNorm:
       _target_: "torch.nn.LayerNorm" #the default PyTorch implementation
@@ -51,14 +53,14 @@ dataloader:
     training: 1
     validation: 1
   training:
-    end: 20230125
+    end: 20200125
   validation:
-    start: 20230126
-    end: 20230131
+    start: 20200126
+    end: 20200131
 
 hardware:
   files:
-    dataset: aifs-od-an-oper-0001-mars-o1280-2023-2023-6h-v1-one-month-8gridchunks.zarr
+    dataset: aifs-ea-an-oper-0001-mars-n320-2020-2020-6h-v4.zarr
     graph: hackathon.graph
   paths:
     data: /p/scratch/jureap5/aifs/inputs/

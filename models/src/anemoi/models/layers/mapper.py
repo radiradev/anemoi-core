@@ -436,16 +436,33 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
                 use_reentrant=False,
             )
 
-        x_dst = checkpoint(
-            self.post_process,
-            x_dst,
-            shapes_dst,
-            model_comm_group,
-            keep_x_dst_sharded=keep_x_dst_sharded,
-            use_reentrant=False,
-        )
+        if self.num_chunks > 1:
+            out_channels = self.out_channels_dst if self.out_channels_dst is not None else self.hidden_dim
+            out_dst = torch.empty((*x_dst.shape[:-1], out_channels), device=x_dst.device, dtype=x_dst.dtype)
+            for dst_chunk in dst_chunks:
+                out_dst[dst_chunk] = checkpoint(
+                    self.post_process,
+                    x_dst[dst_chunk],
+                    shapes_dst,
+                    model_comm_group,
+                    keep_x_dst_sharded=True, # allways keep sharded here, gather later if required
+                    use_reentrant=False,
+                )
+            if not keep_x_dst_sharded: # gather x_dst here instead if required
+                out_dst = gather_tensor(
+                    out_dst, 0, change_channels_in_shape(shapes_dst, out_channels), model_comm_group
+                )
+        else:
+            out_dst = checkpoint(
+                self.post_process,
+                x_dst,
+                shapes_dst,
+                model_comm_group,
+                keep_x_dst_sharded=keep_x_dst_sharded,
+                use_reentrant=False,
+            )
 
-        return x_dst
+        return out_dst
 
 
 class GraphTransformerForwardMapper(ForwardMapperPreProcessMixin, GraphTransformerBaseMapper):

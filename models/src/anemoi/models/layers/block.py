@@ -42,6 +42,7 @@ NUM_CHUNKS_INFERENCE = int(os.environ.get("ANEMOI_INFERENCE_NUM_CHUNKS", "1"))
 NUM_CHUNKS_INFERENCE_MAPPER = int(os.environ.get("ANEMOI_INFERENCE_NUM_CHUNKS_MAPPER", NUM_CHUNKS_INFERENCE))
 NUM_CHUNKS_INFERENCE_PROCESSOR = int(os.environ.get("ANEMOI_INFERENCE_NUM_CHUNKS_PROCESSOR", NUM_CHUNKS_INFERENCE))
 
+COMPILE_GT_CONV = os.environ.get("ANEMOI_COMPILE_GT_CONV", "0") == "1"
 
 class BaseBlock(nn.Module, ABC):
     """Base class for network blocks."""
@@ -369,7 +370,8 @@ class GraphTransformerBaseBlock(BaseBlock, ABC):
 
         self.conv = GraphTransformerConv(out_channels=self.out_channels_conv)
 
-        self.conv = torch.compile(self.conv, dynamic=False)
+        if COMPILE_GT_CONV:
+            self.conv = torch.compile(self.conv, dynamic=False)
 
         self.projection = linear(out_channels, out_channels)
 
