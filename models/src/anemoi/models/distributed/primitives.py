@@ -14,6 +14,7 @@ import torch
 import torch.distributed as dist
 from torch import Tensor
 from torch.distributed.distributed_c10d import ProcessGroup
+from anemoi.models.layers.utils import nvtx_wrapper, get_tensor_shape_info
 
 from anemoi.models.distributed.utils import get_memory_format
 
@@ -34,22 +35,22 @@ def _split(input_: Tensor, dim_: int, shapes_: tuple, group: Optional[ProcessGro
     # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
     # See the License for the specific language governing permissions and
     # limitations under the License.
+    with nvtx_wrapper(f"primitives.py - split, input tensor: (input)={get_tensor_shape_info(input_)}"):
+        # get input format
+        input_format = get_memory_format(input_)
 
-    # get input format
-    input_format = get_memory_format(input_)
+        # Bypass the function if we are using only 1 GPU.
+        comm_size = dist.get_world_size(group=group)
+        if comm_size == 1:
+            return input_
 
-    # Bypass the function if we are using only 1 GPU.
-    comm_size = dist.get_world_size(group=group)
-    if comm_size == 1:
-        return input_
+        # sanity checks
+        assert dim_ < input_.dim(), f"Error, cannot split along {dim_} for tensor with {input_.dim()} dimensions."
 
-    # sanity checks
-    assert dim_ < input_.dim(), f"Error, cannot split along {dim_} for tensor with {input_.dim()} dimensions."
+        input_list = torch.split(input_, [x[dim_] for x in shapes_], dim=dim_)
 
-    input_list = torch.split(input_, [x[dim_] for x in shapes_], dim=dim_)
-
-    rank = dist.get_rank(group=group)
-    output = input_list[rank].contiguous(memory_format=input_format)
+        rank = dist.get_rank(group=group)
+        output = input_list[rank].contiguous(memory_format=input_format)
 
     return output
 
@@ -78,33 +79,34 @@ def _gather(
     # limitations under the License.
 
     # get input format
-    input_format = get_memory_format(input_)
+    with nvtx_wrapper(f"primitives.py - gather, input tensor: (input)={get_tensor_shape_info(input_)}"):
+        input_format = get_memory_format(input_)
 
-    comm_size = dist.get_world_size(group=group)
-    # Bypass the function if we are using only 1 GPU.
-    if comm_size == 1:
-        return input_
+        comm_size = dist.get_world_size(group=group)
+        # Bypass the function if we are using only 1 GPU.
+        if comm_size == 1:
+            return input_
 
-    # sanity checks
-    assert dim_ < input_.dim(), f"Error, cannot gather along {dim_} for tensor with {input_.dim()} dimensions."
+        # sanity checks
+        assert dim_ < input_.dim(), f"Error, cannot gather along {dim_} for tensor with {input_.dim()} dimensions."
 
-    # Size and dimension.
-    comm_rank = dist.get_rank(group=group)
+        # Size and dimension.
+        comm_rank = dist.get_rank(group=group)
 
-    input_ = input_.contiguous(memory_format=input_format)
-    tensor_list = [
-        torch.empty(
-            shapes[rank], dtype=input_.dtype, layout=input_.layout, device=input_.device, memory_format=input_format
-        )
-        for rank in range(comm_size)
-    ]
+        input_ = input_.contiguous(memory_format=input_format)
+        tensor_list = [
+            torch.empty(
+                shapes[rank], dtype=input_.dtype, layout=input_.layout, device=input_.device, memory_format=input_format
+            )
+            for rank in range(comm_size)
+        ]
 
-    tensor_list[comm_rank] = input_
-    if gather_in_backward:
-        dist.all_gather(tensor_list, input_, group=group)
+        tensor_list[comm_rank] = input_
+        if gather_in_backward:
+            dist.all_gather(tensor_list, input_, group=group)
 
-    # Note: torch.cat already creates a contiguous tensor.
-    output = torch.cat(tensor_list, dim=dim_).contiguous(memory_format=input_format)
+        # Note: torch.cat already creates a contiguous tensor.
+        output = torch.cat(tensor_list, dim=dim_).contiguous(memory_format=input_format)
 
     return output
 
@@ -125,19 +127,19 @@ def _reduce(input_: Tensor, use_fp32: Optional[bool] = True, group: Optional[Pro
     # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
     # See the License for the specific language governing permissions and
     # limitations under the License.
+    with nvtx_wrapper(f"primitives.py - reduce, input tensor: (input)={get_tensor_shape_info(input_)}"):
+        comm_size = dist.get_world_size(group=group)
+        # Bypass the function if we are using only 1 GPU.
+        if comm_size == 1:
+            return input_
 
-    comm_size = dist.get_world_size(group=group)
-    # Bypass the function if we are using only 1 GPU.
-    if comm_size == 1:
-        return input_
-
-    # All-reduce.
-    if use_fp32:
-        dtype = input_.dtype
-        inputf_ = input_.float()
-        dist.all_reduce(inputf_, group=group)
-        input_ = inputf_.to(dtype)
-    else:
-        dist.all_reduce(input_, group=group)
+        # All-reduce.
+        if use_fp32:
+            dtype = input_.dtype
+            inputf_ = input_.float()
+            dist.all_reduce(inputf_, group=group)
+            input_ = inputf_.to(dtype)
+        else:
+            dist.all_reduce(input_, group=group)
 
     return input_
