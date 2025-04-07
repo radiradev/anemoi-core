@@ -12,6 +12,8 @@ from __future__ import annotations
 from abc import ABC
 from abc import abstractmethod
 from typing import Optional
+from anemoi.models.layers.utils import nvtx_wrapper, get_tensor_shape_info
+
 
 import torch
 from torch import nn
@@ -78,7 +80,8 @@ class ReluBounding(BaseBounding):
     """Initializes the bounding with a ReLU activation / zero clamping."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x[..., self.data_index] = torch.nn.functional.relu(x[..., self.data_index])
+        with nvtx_wrapper(f"bounding.py - ReluBounding, input tensor: (x)={get_tensor_shape_info(x)}"):
+            x[..., self.data_index] = torch.nn.functional.relu(x[..., self.data_index])
         return x
 
 
@@ -169,9 +172,10 @@ class NormalizedReluBounding(BaseBounding):
             The processed tensor with bounding applied.
         """
         self.norm_min_val = self.norm_min_val.to(x.device)
-        x[..., self.data_index] = (
-            torch.nn.functional.relu(x[..., self.data_index] - self.norm_min_val) + self.norm_min_val
-        )
+        with nvtx_wrapper(f"bounding.py - NormalizedReluBounding, input tensor: (x)={get_tensor_shape_info(x)}"):
+            x[..., self.data_index] = (
+                torch.nn.functional.relu(x[..., self.data_index] - self.norm_min_val) + self.norm_min_val
+            )
         return x
 
 
@@ -205,9 +209,10 @@ class HardtanhBounding(BaseBounding):
         self.max_val = max_val
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x[..., self.data_index] = torch.nn.functional.hardtanh(
-            x[..., self.data_index], min_val=self.min_val, max_val=self.max_val
-        )
+        with nvtx_wrapper(f"bounding.py - HardtanhBounding, input tensor: (x)={get_tensor_shape_info(x)}"):
+            x[..., self.data_index] = torch.nn.functional.hardtanh(
+                x[..., self.data_index], min_val=self.min_val, max_val=self.max_val
+            )
         return x
 
 

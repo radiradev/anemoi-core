@@ -12,6 +12,7 @@ import logging
 from abc import ABC
 from abc import abstractmethod
 from typing import Optional
+from anemoi.models.layers.utils import nvtx_wrapper, get_tensor_shape_info
 
 from torch import Tensor
 from torch import nn
@@ -133,8 +134,9 @@ class TransformerProcessorChunk(BaseProcessorChunk):
         batch_size: int,
         model_comm_group: Optional[ProcessGroup] = None,
     ) -> Tensor:
-        for i in range(self.num_layers):
-            x = self.blocks[i](x, shapes, batch_size, model_comm_group=model_comm_group)
+        with nvtx_wrapper(f"chunk.py - TransformerProcessorChunk.blocks, input tensor: (x)={get_tensor_shape_info(x)}"):
+            for i in range(self.num_layers):
+                x = self.blocks[i](x, shapes, batch_size, model_comm_group=model_comm_group)
 
         return (x,)  # return tuple for consistency with other processors
 
@@ -205,9 +207,9 @@ class GNNProcessorChunk(BaseProcessorChunk):
         x_out = x * 1.0  # required for pytorch >= 2.1
         if self.emb_edges:
             edge_attr = self.emb_edges(edge_attr)
-
-        for i in range(self.num_layers):
-            x_out, edge_attr = self.blocks[i](x_out, edge_attr, edge_index, shapes, model_comm_group, size=size)
+        with nvtx_wrapper(f"chunk.py - GNNProcessorChunk.blocks, input tensor: (x_out, edge_attr)={get_tensor_shape_info((x_out,edge_attr))}"):
+            for i in range(self.num_layers):
+                x_out, edge_attr = self.blocks[i](x_out, edge_attr, edge_index, shapes, model_comm_group, size=size)
 
         return x_out, edge_attr
 
@@ -268,7 +270,8 @@ class GraphTransformerProcessorChunk(BaseProcessorChunk):
         model_comm_group: Optional[ProcessGroup] = None,
         size: Optional[Size] = None,
     ) -> OptPairTensor:
-        for i in range(self.num_layers):
-            x, edge_attr = self.blocks[i](x, edge_attr, edge_index, shapes, batch_size, size, model_comm_group)
+        with nvtx_wrapper(f"chunk.py - GraphTransformerProcessorChunk.blocks, input tensor: (x, edge_attr)={get_tensor_shape_info((x, edge_attr))}"):
+            for i in range(self.num_layers):
+                x, edge_attr = self.blocks[i](x, edge_attr, edge_index, shapes, batch_size, size, model_comm_group)
 
         return x, edge_attr

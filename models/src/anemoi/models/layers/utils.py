@@ -9,11 +9,13 @@
 
 
 import logging
+import torch
+import os
+from torch import nn, cuda, Tensor
 from typing import Optional
-
 from hydra.errors import InstantiationException
 from hydra.utils import instantiate
-from torch import nn
+from contextlib import contextmanager
 from torch.utils.checkpoint import checkpoint
 
 from anemoi.utils.config import DotDict
@@ -62,3 +64,49 @@ def load_layer_kernels(kernel_config: Optional[DotDict] = {}) -> DotDict:
         else:
             LOGGER.info(f"{kernel} kernel: {kernel_entry}")
     return layer_kernels
+
+
+
+def get_tensor_shape_info(x, str=""):
+    """
+    Recursively looks for tensors in the input and prints their shape and dtype.
+    """
+    if isinstance(x, Tensor):
+        return str + f"({tuple(x.shape)}, {x.dtype})"
+    elif isinstance(x, list):
+        str += "["
+        for item in x:
+            str += get_tensor_shape_info(item) + ", "
+        str += "]"
+    elif isinstance(x, tuple):
+        str += "("
+        for item in x:
+            str += get_tensor_shape_info(item) + ", "
+        str += ")"
+    elif isinstance(x, dict):
+        str += "{"
+        for key, value in x.items():
+            str += f"{key}: "
+            str += get_tensor_shape_info(value) + ", "
+        str += "}"
+    else: # add _ for non-tensor items
+        str += "_"
+
+    return str
+
+@contextmanager
+def nvtx_wrapper(marker, enabled=True, blocking=True):
+    if(enabled):
+        cuda.nvtx.range_push(marker)
+       # if(blocking): 
+           # torch.cuda.synchronize()
+        #if blocking and 'CUDA_LAUNCH_BLOCKING' not in os.environ:
+           # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+        
+    yield
+    if(enabled):
+        cuda.nvtx.range_pop()
+        #if(blocking): 
+           # torch.cuda.synchronize()
+        #  print("CUDA_LAUNCH_BLOCKING= ", os.getenv('CUDA_LAUNCH_BLOCKING'))
+        

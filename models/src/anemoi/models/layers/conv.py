@@ -22,6 +22,7 @@ from torch_geometric.utils import scatter
 from torch_geometric.utils import softmax
 
 from anemoi.models.layers.mlp import MLP
+from anemoi.models.layers.utils import nvtx_wrapper, get_tensor_shape_info
 from anemoi.utils.config import DotDict
 
 
@@ -66,8 +67,8 @@ class GraphConv(MessagePassing):
 
     def forward(self, x: OptPairTensor, edge_attr: Tensor, edge_index: Adj, size: Optional[Size] = None):
         dim_size = x.shape[0] if isinstance(x, Tensor) else x[1].shape[0]
-
-        out, edges_new = self.propagate(edge_index, x=x, edge_attr=edge_attr, size=size, dim_size=dim_size)
+        with nvtx_wrapper(f"conv.py - GraphConv.propagate, input tensor: (x, edge_attr)={get_tensor_shape_info((x,edge_attr))}"):
+            out, edges_new = self.propagate(edge_index, x=x, edge_attr=edge_attr, size=size, dim_size=dim_size)
 
         return out, edges_new
 
@@ -112,17 +113,17 @@ class GraphTransformerConv(MessagePassing):
     ):
         dim_size = query.shape[0]
         heads = query.shape[1]
-
-        out = self.propagate(
-            edge_index=edge_index,
-            size=size,
-            dim_size=dim_size,
-            edge_attr=edge_attr,
-            heads=heads,
-            query=query,
-            key=key,
-            value=value,
-        )
+        with nvtx_wrapper(f"conv.py - GraphTransformerConv.propagate, input tensor: (query, key, value)={get_tensor_shape_info((query,key,value))}"):
+            out = self.propagate(
+                edge_index=edge_index,
+                size=size,
+                dim_size=dim_size,
+                edge_attr=edge_attr,
+                heads=heads,
+                query=query,
+                key=key,
+                value=value,
+            )
 
         return out
 
