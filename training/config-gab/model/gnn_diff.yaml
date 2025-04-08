@@ -1,0 +1,33 @@
+# specific GNN encoder settings
+activation: SiLU
+num_channels: 1024
+
+mlp:
+  extra_layers: 0 # GNN only
+
+processor:
+  type: Transformer # GNN, GNNTransformer or Transformer
+  num_layers: 16
+  chunks: 2
+  heads: 8 # GNNTransformer or Transformer only
+  mlp_hidden_ratio: 4 # GNNTransformer or Transformer only
+  window_size: 608 # GNNTransformer or Transformer only
+
+encoder:
+  type: GNNTransformer # GNN, GNNTransformer
+  num_chunks: 1
+  heads: 8 # GNNTransformer or Transformer only
+  mlp_hidden_ratio: 4 # GNNTransformer or Transformer only
+
+decoder:
+  type: GNNTransformer # GNN, GNNTransformer
+  num_chunks: 1
+  heads: 8 # GNNTransformer or Transformer only
+  mlp_hidden_ratio: 4 # GNNTransformer or Transformer only
+
+trainable_parameters:
+  era: 8
+  hidden: 8
+  era2hidden: 8
+  hidden2era: 8
+  hidden2hidden: 8 # GNN and GNNTransformer Processor only

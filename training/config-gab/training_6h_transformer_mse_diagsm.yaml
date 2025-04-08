@@ -1,0 +1,107 @@
+defaults:
+- data: zarr_n320_soildiag
+- dataloader: dataloader_n320
+- diagnostics: evaluation_n320
+- hardware: atos_slurm_n320
+- graph: encoder_decoder_only_n320
+- model: transformer_n320_b
+- training: training_n320
+- _self_
+no_validation: True
+
+
+### This file is for local experimentation.
+##  When you commit your changes, assign the new features and keywords
+##  to the correct defaults.
+# For example to change from default GPU count:
+# hardware:
+#   num_gpus_per_node: 1
+
+### This file is for local experimentation.
+##  When you commit your changes, assign the new features and keywords
+##  to the correct defaults.
+# For example to change from default GPU count:
+# hardware:
+#   num_gpus_per_node: 1
+diagnostics:
+  log:
+    mlflow:
+      enabled: True
+      offline: True
+      experiment_name: 'rain_pox'
+      run_name: 'mse_smdiag'
+      terminal: True
+  plot:
+    enabled: True
+    scatter: False
+    asynchronous: False
+    mode: asyncio
+model:
+  num_channels: 1024
+dataloader:
+  batch_size:
+    training: 1
+    validation: 1
+  limit_batches:
+    training: null
+    validation: null
+#   num_channels: 1024
+# dataloader:
+#   batch_size:
+#     training: 1
+#     validation: 1
+
+
+
+training:
+  training_loss:
+    # loss class to initialise
+    _target_: anemoi.training.losses.mse.WeightedMSELoss
+    # Scalars to include in loss calculation
+    # Available scalars include:
+    # - 'variable': See `variable_loss_scaling` for more information
+    # - 'loss_weights_mask': Giving imputed NaNs a zero weight in the loss function
+    scalars: ['variable', 'variable_pressure_level', 'loss_weights_mask',]
+    # ignore_nans: True
+    ignore_nans: False
+
+
+  validation_metrics:
+    # loss class to initialise
+    - _target_: anemoi.training.losses.mse.WeightedMSELoss
+      # Scalars to include in loss calculation
+      # Available scalars include, 'variable'
+      scalars: []
+      # other kwargs
+      ignore_nans: True
+    - _target_: anemoi.training.losses.mae.WeightedMAELoss
+      # Scalars to include in loss calculation
+      # Available scalars include, 'variable'
+      scalars: []
+      # other kwargs
+      ignore_nans: True
+    - _target_: anemoi.training.losses.logcosh.WeightedLogCoshLoss
+      # Scalars to include in loss calculation
+      # Available scalars include, 'variable'
+      scalars: []
+      # other kwargs
+      ignore_nans: True
+  load_weights_only: null
+
+  max_epochs: 100
+  max_steps: 102500
+  lr:
+    rate: 3.125e-5 # tests
+    #rate: 1.5625e-5 # tests
+    iterations: 100000
+    min: 3e-7 #Not scaled by #GPU
+    warmup_t: 100
+  # fork_run_id: 0dec42442ce64045bd4ef06137afebf8
+  # rollout:
+  #   epoch_increment: 1
+  #   max: 12
+  #   start: 1
+
+# hardware:
+#   files:
+#     warm_start: aifs-by_time-epoch_086-step_290410.ckpt

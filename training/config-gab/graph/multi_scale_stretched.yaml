@@ -1,0 +1,59 @@
+---
+overwrite: True
+
+data: "data"
+hidden: "hidden"
+
+nodes:
+  data:
+    node_builder:
+      _target_: anemoi.graphs.nodes.ZarrDatasetNodes
+      dataset: ${dataloader.dataset}
+    attributes:
+      weights:
+        _target_: anemoi.graphs.nodes.attributes.SphericalAreaWeights
+        norm: unit-max
+      cutout_mask:
+        _target_: anemoi.graphs.nodes.attributes.CutOutMask
+  hidden:
+    node_builder:
+      _target_: anemoi.graphs.nodes.StretchedTriNodes
+      lam_resolution: 6
+      global_resolution: 4
+      reference_node_name: data
+      mask_attr_name: cutout_mask
+
+edges:
+  - source_name: data
+    target_name: hidden
+    edge_builders:
+    - _target_: anemoi.graphs.edges.KNNEdges
+      num_nearest_neighbours: 12
+    #- _target_: anemoi.graphs.edges.CutOffEdges # connects only boundary nodes
+    #  cutoff_factor: 1.5 # only for cutoff method
+    #  source_mask_attr_name: boundary_mask
+    attributes:
+      edge_length:
+        _target_: anemoi.graphs.edges.attributes.EdgeLength
+      edge_dirs:
+        _target_: anemoi.graphs.edges.attributes.EdgeDirection
+  - source_name: hidden
+    target_name: hidden
+    edge_builders:
+    - _target_: anemoi.graphs.edges.MultiScaleEdges
+      x_hops: 1
+    attributes:
+      edge_length:
+        _target_: anemoi.graphs.edges.attributes.EdgeLength
+      edge_dirs:
+        _target_: anemoi.graphs.edges.attributes.EdgeDirection
+  - source_name: hidden
+    target_name: data
+    edge_builders:
+    - _target_: anemoi.graphs.edges.KNNEdges
+      num_nearest_neighbours: 3
+    attributes:
+      edge_length:
+        _target_: anemoi.graphs.edges.attributes.EdgeLength
+      edge_dirs:
+        _target_: anemoi.graphs.edges.attributes.EdgeDirection

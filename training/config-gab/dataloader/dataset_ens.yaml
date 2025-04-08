@@ -1,0 +1,50 @@
+prefetch_factor: 2
+
+num_workers:
+  training: 8
+  validation: 8
+batch_size:
+  training: 1
+  validation: 1
+# runs only N training batches [N = integer | null]
+# if null then we run through all the batches
+limit_batches:
+  training: null
+  validation: null
+
+# ============
+# Dataloader definitions
+# You can make these as complicated for merging as you like
+# See https://anemoi-datasets.readthedocs.io/en/latest/
+# ============
+
+training:
+  end: 2017
+  ensemble:
+    # note the analysis should be first in the list
+    - dataset: ${hardware.paths.data}/aifs-ea-an-oper-0001-mars-o96-1979-2022-6h-v6.zarr
+      frequency: ${data.frequency}
+      start: null
+      end: ${dataloader.training.end}
+    # EDA recentred
+    - dataset: ${hardware.paths.data}/aifs-ea-an-enda-0001-mars-o96-1979-2023-6h-v2-recentered-on-oper.zarr
+      frequency: ${data.frequency}
+      reorder: ['q_50', 'q_100', 'q_150', 'q_200', 'q_250', 'q_300', 'q_400', 'q_500', 'q_600', 'q_700', 'q_850', 'q_925', 'q_1000', 't_50', 't_100', 't_150', 't_200', 't_250', 't_300', 't_400', 't_500', 't_600', 't_700', 't_850', 't_925', 't_1000', 'u_50', 'u_100', 'u_150', 'u_200', 'u_250', 'u_300', 'u_400', 'u_500', 'u_600', 'u_700', 'u_850', 'u_925', 'u_1000', 'v_50', 'v_100', 'v_150', 'v_200', 'v_250', 'v_300', 'v_400', 'v_500', 'v_600', 'v_700', 'v_850', 'v_925', 'v_1000', 'w_50', 'w_100', 'w_150', 'w_200', 'w_250', 'w_300', 'w_400', 'w_500', 'w_600', 'w_700', 'w_850', 'w_925', 'w_1000', 'z_50', 'z_100', 'z_150', 'z_200', 'z_250', 'z_300', 'z_400', 'z_500', 'z_600', 'z_700', 'z_850', 'z_925', 'z_1000', '10u', '10v', '2d', '2t', 'lsm', 'msl', 'sdor', 'skt', 'slor', 'sp', 'tcw', 'z', 'cp', 'tp', 'cos_latitude', 'cos_longitude', 'sin_latitude', 'sin_longitude', 'cos_julian_day', 'cos_local_time', 'sin_julian_day', 'sin_local_time', 'insolation']
+      start: null
+      end: ${dataloader.training.end}
+
+validation:
+  start: 2018
+  end: 2019
+  ensemble:
+    # note the analysis should be first in the list
+    - dataset: ${hardware.paths.data}/aifs-ea-an-oper-0001-mars-o96-1979-2022-6h-v6.zarr
+      frequency: ${data.frequency}
+      start: ${dataloader.validation.start}
+      end: ${dataloader.validation.end}
+    # EDA recentred
+    - dataset: ${hardware.paths.data}/aifs-ea-an-enda-0001-mars-o96-1979-2023-6h-v2-recentered-on-oper.zarr
+      frequency: ${data.frequency}
+      reorder: ['q_50', 'q_100', 'q_150', 'q_200', 'q_250', 'q_300', 'q_400', 'q_500', 'q_600', 'q_700', 'q_850', 'q_925', 'q_1000', 't_50', 't_100', 't_150', 't_200', 't_250', 't_300', 't_400', 't_500', 't_600', 't_700', 't_850', 't_925', 't_1000', 'u_50', 'u_100', 'u_150', 'u_200', 'u_250', 'u_300', 'u_400', 'u_500', 'u_600', 'u_700', 'u_850', 'u_925', 'u_1000', 'v_50', 'v_100', 'v_150', 'v_200', 'v_250', 'v_300', 'v_400', 'v_500', 'v_600', 'v_700', 'v_850', 'v_925', 'v_1000', 'w_50', 'w_100', 'w_150', 'w_200', 'w_250', 'w_300', 'w_400', 'w_500', 'w_600', 'w_700', 'w_850', 'w_925', 'w_1000', 'z_50', 'z_100', 'z_150', 'z_200', 'z_250', 'z_300', 'z_400', 'z_500', 'z_600', 'z_700', 'z_850', 'z_925', 'z_1000', '10u', '10v', '2d', '2t', 'lsm', 'msl', 'sdor', 'skt', 'slor', 'sp', 'tcw', 'z', 'cp', 'tp', 'cos_latitude', 'cos_longitude', 'sin_latitude', 'sin_longitude', 'cos_julian_day', 'cos_local_time', 'sin_julian_day', 'sin_local_time', 'insolation']
+      start: ${dataloader.validation.start}
+      end: ${dataloader.validation.end}
