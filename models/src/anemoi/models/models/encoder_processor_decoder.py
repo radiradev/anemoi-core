@@ -82,7 +82,11 @@ class AnemoiModelEncProcDec(nn.Module):
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             layer_kernels=self.layer_kernels,
+            shard_strategy=model_config.model.encoder.shard_strategy, # TODO: add this to config
         )
+
+        self.encoder_num_chunks = model_config.model.encoder.get("num_chunks", 1)
+        print(f"Encoder num chunks: {self.encoder_num_chunks}")
 
         # Processor hidden -> hidden
         self.processor = instantiate(
@@ -105,7 +109,11 @@ class AnemoiModelEncProcDec(nn.Module):
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
             layer_kernels=self.layer_kernels,
+            shard_strategy=model_config.model.decoder.shard_strategy,
         )
+
+        self.decoder_num_chunks = model_config.model.decoder.get("num_chunks", 1)
+        print(f"Decoder num chunks: {self.decoder_num_chunks}")
 
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
         self.boundings = nn.ModuleList(
@@ -169,6 +177,12 @@ class AnemoiModelEncProcDec(nn.Module):
         model_comm_group : ProcessGroup
             model communication group, specifies which GPUs work together
             in one model instance
+        x_src_is_sharded : bool, optional
+            Source data is sharded, by default False
+        x_dst_is_sharded : bool, optional
+            Destination data is sharded, by default False
+        keep_x_dst_sharded : bool, optional
+            Keep destination data sharded, by default False
         use_reentrant : bool, optional
             Use reentrant, by default False
 
@@ -177,17 +191,28 @@ class AnemoiModelEncProcDec(nn.Module):
         Tensor
             Mapped data
         """
-        return checkpoint(
-            mapper,
-            data,
-            batch_size=batch_size,
-            shard_shapes=shard_shapes,
-            model_comm_group=model_comm_group,
-            x_src_is_sharded=x_src_is_sharded,
-            x_dst_is_sharded=x_dst_is_sharded,
-            keep_x_dst_sharded=keep_x_dst_sharded,
-            use_reentrant=use_reentrant,
-        )
+        if mapper.shard_strategy == "edges":
+            return mapper(
+                data,
+                batch_size=batch_size,
+                shard_shapes=shard_shapes,
+                model_comm_group=model_comm_group,
+                x_src_is_sharded=x_src_is_sharded,
+                x_dst_is_sharded=x_dst_is_sharded,
+                keep_x_dst_sharded=keep_x_dst_sharded,
+            )
+        else:
+            return checkpoint(
+                mapper,
+                data,
+                batch_size=batch_size,
+                shard_shapes=shard_shapes,
+                model_comm_group=model_comm_group,
+                x_src_is_sharded=x_src_is_sharded,
+                x_dst_is_sharded=x_dst_is_sharded,
+                keep_x_dst_sharded=keep_x_dst_sharded,
+                use_reentrant=use_reentrant,
+            )
 
     def forward(
         self,

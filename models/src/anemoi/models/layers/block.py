@@ -43,6 +43,7 @@ NUM_CHUNKS_INFERENCE = int(os.environ.get("ANEMOI_INFERENCE_NUM_CHUNKS", "1"))
 NUM_CHUNKS_INFERENCE_MAPPER = int(os.environ.get("ANEMOI_INFERENCE_NUM_CHUNKS_MAPPER", NUM_CHUNKS_INFERENCE))
 NUM_CHUNKS_INFERENCE_PROCESSOR = int(os.environ.get("ANEMOI_INFERENCE_NUM_CHUNKS_PROCESSOR", NUM_CHUNKS_INFERENCE))
 
+COMPILE_GT_CONV = os.environ.get("ANEMOI_COMPILE_GT_CONV", "0") == "1"
 
 class BaseBlock(nn.Module, ABC):
     """Base class for network blocks."""
@@ -328,6 +329,7 @@ class GraphTransformerBaseBlock(BaseBlock, ABC):
         activation: str = "GELU",
         num_chunks: int = 1,
         update_src_nodes: bool = False,
+        shard_strategy: str = "heads",
         **kwargs,
     ) -> None:
         """Initialize GraphTransformerBlock.
@@ -351,6 +353,8 @@ class GraphTransformerBaseBlock(BaseBlock, ABC):
             Activation function, by default "GELU"
         update_src_nodes: bool, by default False
             Update src if src and dst nodes are given
+        shard_strategy: str, by default "heads"
+            Strategy to shard tensors
         """
         super().__init__(**kwargs)
 
@@ -370,6 +374,9 @@ class GraphTransformerBaseBlock(BaseBlock, ABC):
         self.lin_edge = linear(edge_dim, num_heads * self.out_channels_conv)  # , bias=False)
 
         self.conv = GraphTransformerConv(out_channels=self.out_channels_conv)
+
+        if COMPILE_GT_CONV:
+            self.conv = torch.compile(self.conv, dynamic=False)
 
         self.projection = linear(out_channels, out_channels)
 
@@ -396,6 +403,10 @@ class GraphTransformerBaseBlock(BaseBlock, ABC):
                 act_func(),
                 linear(hidden_dim, out_channels),
             )
+
+        self.shard_strategy = shard_strategy
+
+        print(f"GraphTransformerBaseBlock: shard_strategy={shard_strategy}")
 
     def get_qkve(
         self,
@@ -551,6 +562,8 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
         update_src_nodes: bool, by default False
             Update src if src and dst nodes are given
         """
+        print("GraphTransformerMapperBlock:")
+
         super().__init__(
             in_channels=in_channels,
             hidden_dim=hidden_dim,
@@ -589,14 +602,30 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
         with nvtx_wrapper(f"block.py - GraphTransformerMapperBlock.get_qkve, input tensors: (x, edge_attr)={get_tensor_shape_info((x, edge_attr))}"):
             query, key, value, edges = self.get_qkve(x, edge_attr)
         with nvtx_wrapper(f"block.py - GraphTransformerMapperBlock.shard_qkve_heads, input tensors: (query, key, value, edges)={get_tensor_shape_info((query, key, value, edges))}"):
-            query, key, value, edges = self.shard_qkve_heads(query, key, value, edges, shapes, batch_size, model_comm_group)
+            if self.shard_strategy == "heads":
+                query, key, value, edges = self.shard_qkve_heads(
+                    query, key, value, edges, shapes, batch_size, model_comm_group
+                )
+            else:
+                query, key, value, edges = (
+                    einops.rearrange(
+                        t,
+                        "(batch grid) (heads vars) -> (batch grid) heads vars",
+                        heads=self.num_heads,
+                        vars=self.out_channels_conv,
+                        batch=batch_size,
+                    )
+                    for t in (query, key, value, edges)
+                )
 
         num_chunks = self.num_chunks if self.training else NUM_CHUNKS_INFERENCE_MAPPER
-##### continue annotating here, do not forget blocking and enable flag
         with nvtx_wrapper(f"block.py - GraphTransformerMapperBlock.attention_block, input tensors: (query, key, value, edges)={get_tensor_shape_info((query, key, value, edges))}"):
             out = self.attention_block(query, key, value, edges, edge_index, size, num_chunks)
         with nvtx_wrapper(f"block.py - GraphTransformerMapperBlock.shard_output_seq, input tensor: (out)={get_tensor_shape_info(out)}"):
-            out = self.shard_output_seq(out, shapes, batch_size, model_comm_group)
+            if self.shard_strategy == "heads":
+                out = self.shard_output_seq(out, shapes, batch_size, model_comm_group)
+            else:
+                out = einops.rearrange(out, "(batch grid) heads vars -> (batch grid) (heads vars)", batch=batch_size)
 
         # out = self.projection(out + x_r) in chunks:
         out = torch.cat([self.projection(chunk) for chunk in torch.tensor_split(out + x_r, num_chunks, dim=0)], dim=0)
@@ -660,6 +689,7 @@ class GraphTransformerProcessorBlock(GraphTransformerBaseBlock):
         update_src_nodes: bool, by default False
             Update src if src and dst nodes are given
         """
+        print("GraphTransformerProcessorBlock:")
 
         super().__init__(
             in_channels=in_channels,
@@ -692,13 +722,30 @@ class GraphTransformerProcessorBlock(GraphTransformerBaseBlock):
         with nvtx_wrapper(f"block.py - GraphTransformerProcessorBlock.get_qkve, input tensors: (x, edge_attr)={get_tensor_shape_info((x, edge_attr))}"):
             query, key, value, edges = self.get_qkve(x, edge_attr)
         with nvtx_wrapper(f"block.py - GraphTransformerProcessorBlock.shard_qkve_heads, input tensors: (query, key, value, edges)={get_tensor_shape_info((query, key, value, edges))}"):
-            query, key, value, edges = self.shard_qkve_heads(query, key, value, edges, shapes, batch_size, model_comm_group)
+            if self.shard_strategy == "heads":
+                query, key, value, edges = self.shard_qkve_heads(
+                    query, key, value, edges, shapes, batch_size, model_comm_group
+                )
+            else:
+                query, key, value, edges = (
+                    einops.rearrange(
+                        t,
+                        "(batch grid) (heads vars) -> (batch grid) heads vars",
+                        heads=self.num_heads,
+                        vars=self.out_channels_conv,
+                        batch=batch_size,
+                    )
+                    for t in (query, key, value, edges)
+                )
 
         num_chunks = self.num_chunks if self.training else NUM_CHUNKS_INFERENCE_PROCESSOR
         with nvtx_wrapper(f"block.py - GraphTransformerProcessorBlock.attention_block, input tensors: (query, key, value, edges)={get_tensor_shape_info((query, key, value, edges))}"):
             out = self.attention_block(query, key, value, edges, edge_index, size, num_chunks)
         with nvtx_wrapper(f"block.py - GraphTransformerProcessorBlock.shard_output_seq, input tensor: (out)={get_tensor_shape_info(out)}"):
-            out = self.shard_output_seq(out, shapes, batch_size, model_comm_group)
+            if self.shard_strategy == "heads":
+                out = self.shard_output_seq(out, shapes, batch_size, model_comm_group)
+            else:
+                out = einops.rearrange(out, "(batch grid) heads vars -> (batch grid) (heads vars)")
 
         # out = self.projection(out + x_r) in chunks:
         out = torch.cat([self.projection(chunk) for chunk in torch.tensor_split(out + x_r, num_chunks, dim=0)], dim=0)
