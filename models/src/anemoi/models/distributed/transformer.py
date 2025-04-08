@@ -14,6 +14,7 @@ import torch
 import torch.distributed as dist
 from torch import Tensor
 from torch.distributed.distributed_c10d import ProcessGroup
+from anemoi.models.layers.utils import nvtx_wrapper, get_tensor_shape_info
 
 from anemoi.models.distributed.utils import get_memory_format
 
@@ -135,20 +136,22 @@ class _SplitHeadsParallelSection(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, input_, shapes_, mgroup_):
-        ctx.shapes = shapes_
-        ctx.comm_group = mgroup_
-        if mgroup_:
-            return _headsalltoall(input_, shapes_, group=mgroup_)
+        with nvtx_wrapper(f"transformer.py - _SplitHeadsParallelSection.forward, input tensor: (input)={get_tensor_shape_info(input_)}"):
+            ctx.shapes = shapes_
+            ctx.comm_group = mgroup_
+            if mgroup_:
+                return _headsalltoall(input_, shapes_, group=mgroup_)
         return input_
 
     @staticmethod
     def backward(ctx, grad_output):
-        if ctx.comm_group:
-            return (
-                _seqalltoall(grad_output, ctx.shapes, group=ctx.comm_group),
-                None,
-                None,
-            )
+        with nvtx_wrapper(f"transformer.py - _SplitHeadsParallelSection.backward, input tensor: (grad_output)={get_tensor_shape_info(grad_output)}"):
+            if ctx.comm_group:
+                return (
+                    _seqalltoall(grad_output, ctx.shapes, group=ctx.comm_group),
+                    None,
+                    None,
+                )
         return grad_output, None, None
 
 
