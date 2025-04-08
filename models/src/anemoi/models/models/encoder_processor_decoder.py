@@ -160,7 +160,6 @@ class AnemoiModelEncProcDec(nn.Module):
         x_src_is_sharded: bool = False,
         x_dst_is_sharded: bool = False,
         keep_x_dst_sharded: bool = False,
-        num_chunks: int = 1,
         use_reentrant: bool = False,
     ) -> Tensor:
         """Run mapper with activation checkpoint.
@@ -184,8 +183,6 @@ class AnemoiModelEncProcDec(nn.Module):
             Destination data is sharded, by default False
         keep_x_dst_sharded : bool, optional
             Keep destination data sharded, by default False
-        num_chunks : int, optional
-            Number of chunks to partition the mapper, by default 1
         use_reentrant : bool, optional
             Use reentrant, by default False
 
@@ -194,9 +191,7 @@ class AnemoiModelEncProcDec(nn.Module):
         Tensor
             Mapped data
         """
-        # 1 chunk -> checkpoint whole mapper
-        # (TODO: are recursive mapper checkpoints ignored in this case?) 
-        if num_chunks > 1: 
+        if mapper.shard_strategy == "edges":
             return mapper(
                 data,
                 batch_size=batch_size,
@@ -206,7 +201,7 @@ class AnemoiModelEncProcDec(nn.Module):
                 x_dst_is_sharded=x_dst_is_sharded,
                 keep_x_dst_sharded=keep_x_dst_sharded,
             )
-        else: # multiple chunks -> use checkpoints inside the mapper
+        else:
             return checkpoint(
                 mapper,
                 data,
@@ -279,7 +274,6 @@ class AnemoiModelEncProcDec(nn.Module):
             x_src_is_sharded=in_out_sharded,  # x_data_latent comes sharded iff in_out_sharded
             x_dst_is_sharded=False,  # x_latent does not come sharded
             keep_x_dst_sharded=True,  # always keep x_latent sharded for the processor
-            num_chunks=self.encoder_num_chunks,
         )
 
         x_latent_proc = self.processor(
@@ -302,7 +296,6 @@ class AnemoiModelEncProcDec(nn.Module):
             x_src_is_sharded=True,  # x_latent always comes sharded
             x_dst_is_sharded=in_out_sharded,  # x_data_latent comes sharded iff in_out_sharded
             keep_x_dst_sharded=in_out_sharded,  # keep x_out sharded iff in_out_sharded
-            num_chunks=self.decoder_num_chunks,
         )
 
         x_out = (
