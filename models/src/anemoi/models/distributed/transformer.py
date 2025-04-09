@@ -160,18 +160,20 @@ class _SplitSequenceParallelSection(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, input_, shapes_, mgroup_):
-        ctx.shapes = shapes_
-        ctx.comm_group = mgroup_
-        if mgroup_:
-            return _seqalltoall(input_, shapes_, group=mgroup_)
+        with nvtx_wrapper(f"transformer.py - _SplitSequenceParallelSection.forward, input tensor: (input)={get_tensor_shape_info(input_)}"):
+            ctx.shapes = shapes_
+            ctx.comm_group = mgroup_
+            if mgroup_:
+                return _seqalltoall(input_, shapes_, group=mgroup_)
         return input_
 
     @staticmethod
     def backward(ctx, grad_output):
-        if ctx.comm_group:
-            return (
-                _headsalltoall(grad_output, ctx.shapes, group=ctx.comm_group),
-                None,
-                None,
-            )
+        with nvtx_wrapper(f"transformer.py - _SplitSequenceParallelSection.backward, input tensor: (input)={get_tensor_shape_info(grad_output)}"):
+            if ctx.comm_group:
+                return (
+                    _headsalltoall(grad_output, ctx.shapes, group=ctx.comm_group),
+                    None,
+                    None,
+                )
         return grad_output, None, None
