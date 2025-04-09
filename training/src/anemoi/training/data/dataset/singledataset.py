@@ -55,8 +55,6 @@ class NativeGridDataset(IterableDataset):
             list of time indices to load from the data relative to the current sample i in __iter__
         timestep : int, optional
             the time frequency of the samples, by default '6h'
-        multistep : int, optional
-            collate (t-1, ... t - multistep) into the input state vector, by default 1
         shuffle : bool, optional
             Shuffle batches, by default True
         label : str, optional
