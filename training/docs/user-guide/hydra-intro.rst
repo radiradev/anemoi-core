@@ -80,8 +80,8 @@ The following missing config options which must be overridden by users:
    specify its filename here. Otherwise, a new graph will be constructed
    on the fly and written to the filename given.
 
--  ``dataloader.data``: Description of the dataset, as provided to `anemoi.datasets.open_dataset`
-
+-  ``dataloader.data``: Description of the dataset, as provided to
+   `anemoi.datasets.open_dataset`
 
 *********************************
  Validation of the Configuration
