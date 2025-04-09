@@ -117,7 +117,7 @@ def test_dynamic_init_scaler_exclude(loss_cls: type[BaseLoss]) -> None:
     )
     assert isinstance(loss, BaseLoss)
     assert "test" not in loss.scaler
-    
+
 
 def test_combined_loss() -> None:
     """Test the combined loss function."""
