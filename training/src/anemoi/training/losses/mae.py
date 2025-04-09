@@ -22,6 +22,8 @@ LOGGER = logging.getLogger(__name__)
 class MAELoss(FunctionalLoss):
     """MAE loss."""
 
+    name: str = "mae"
+
     def calculate_difference(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """Calculate the MAE loss.
 

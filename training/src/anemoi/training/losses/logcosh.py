@@ -38,6 +38,8 @@ class LogCosh(torch.autograd.Function):
 class LogCoshLoss(FunctionalLoss):
     """LogCosh loss."""
 
+    name: str = "logcosh"
+
     def calculate_difference(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """Calculate the Log-cosh loss.
 

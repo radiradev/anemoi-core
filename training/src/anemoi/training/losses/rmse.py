@@ -22,6 +22,8 @@ LOGGER = logging.getLogger(__name__)
 class RMSELoss(MSELoss):
     """RMSE loss."""
 
+    name: str = "rmse"
+
     def forward(
         self,
         pred: torch.Tensor,
