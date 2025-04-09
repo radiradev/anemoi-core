@@ -20,7 +20,7 @@ LOGGER = logging.getLogger(__name__)
 
 class HuberLoss(FunctionalLoss):
     """Huber loss."""
-    
+
     name: str = "huber"
 
     def __init__(
