@@ -67,7 +67,7 @@ loss_gradient_scaling: False
 validation_metrics:
   # loss class to initialise
   mse:
-    _target_: anemoi.training.losses.mse.MSELoss
+    _target_: anemoi.training.losses.MSELoss
     # Scalers to include in loss calculation
     # Cannot scale over the variable dimension due to possible remappings.
     # Available scalers include:
@@ -77,15 +77,15 @@ validation_metrics:
     # other kwargs
     ignore_nans: True
   mse_inside_lam_contribution:
-    _target_: anemoi.training.losses.mse.MSELoss
+    _target_: anemoi.training.losses.MSELoss
     scalers: ['limited_area_mask', 'node_weights']
     ignore_nans: True
   mse_outside_lam_contribution:
-    _target_: anemoi.training.losses.mse.MSELoss
+    _target_: anemoi.training.losses.MSELoss
     scalars: ['outside_lam_mask', 'node_weights']
     ignore_nans: True
   mse_inside_lam:
-    _target_: anemoi.training.losses.mse.MSELoss
+    _target_: anemoi.training.losses.MSELoss
     scalars: ['limited_area_mask', 'lam_node_weights']
     ignore_nans: True
 
