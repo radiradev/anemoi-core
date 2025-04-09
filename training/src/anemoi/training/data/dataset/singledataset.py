@@ -38,11 +38,8 @@ class NativeGridDataset(IterableDataset):
         self,
         data_reader: Callable,
         grid_indices: type[BaseGridIndices],
-        rollout: int = 1,
-        multistep: int = 1,
-        timeincrement: int = 1,
-        timestep: str = "6h",
         relative_date_indices: list,
+        timestep: str = "6h",
         shuffle: bool = True,
         label: str = "generic",
     ) -> None:
@@ -56,10 +53,6 @@ class NativeGridDataset(IterableDataset):
             indices of the grid to keep. Defaults to None, which keeps all spatial indices.
         relative_date_indices: list
             list of time indices to load from the data relative to the current sample i in __iter__
-        rollout : int, optional
-            length of rollout window, by default 12
-        timeincrement : int, optional
-            time increment between samples, by default 1
         timestep : int, optional
             the time frequency of the samples, by default '6h'
         multistep : int, optional
@@ -73,8 +66,6 @@ class NativeGridDataset(IterableDataset):
 
         self.data = data_reader
 
-        self.rollout = rollout
-        self.timeincrement = timeincrement
         self.timestep = timestep
         self.grid_indices = grid_indices
 
