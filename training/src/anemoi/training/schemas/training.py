@@ -334,7 +334,9 @@ class BaseTrainingSchema(BaseModel):
     scalers: dict[str, ScalerSchema]
     "Scalers to use in the computation of the loss and validation scores."
     validation_metrics: dict[str, LossSchemas]
-    "List of validation metrics configurations. These metrics """
+    "List of validation metrics configurations."
+    variable_groups: dict[str, Union[str, list[str]]]
+    "Groups for variable loss scaling"
     rollout: Rollout = Field(default_factory=Rollout)
     "Rollout configuration."
     max_epochs: Union[PositiveInt, None] = None

@@ -77,7 +77,7 @@ class GraphForecaster(pl.LightningModule):
 
         graph_data = graph_data.to(self.device)
 
-        self.output_mask = instantiate(config.model.output_mask, graph_data=graph_data)
+        self.output_mask = instantiate(config.model_dump(by_alias=True).model.output_mask, graph_data=graph_data)
 
         self.model = AnemoiModelInterface(
             statistics=statistics,
@@ -100,7 +100,7 @@ class GraphForecaster(pl.LightningModule):
 
         # Instantiate all scalers with the training configuration
         self.scalers, self.delayed_scaler_builders = create_scalers(
-            config.training.scalers,
+            config.model_dump(by_alias=True).training.scalers,
             group_config=config.model_dump(by_alias=True).training.variable_groups,
             data_indices=data_indices,
             graph_data=graph_data,
