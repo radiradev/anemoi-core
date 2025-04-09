@@ -94,10 +94,43 @@ def get_tensor_shape_info(x, str=""):
 
     return str
 
+class NVTXRangePush(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, name: str, *args):
+        torch.cuda.nvtx.range_push(f"{name}-forward")
+        ctx.name = name
+        return args
+
+    @staticmethod
+    def backward(ctx, *grad_outs):
+        torch.cuda.nvtx.range_pop()
+        return None, *grad_outs
+    
+    
+class NVTXRangePop(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, name: str, *args):
+        ctx.name = name
+        torch.cuda.nvtx.range_pop()
+        return args
+
+    @staticmethod
+    def backward(ctx, *grad_outs):
+        torch.cuda.nvtx.range_push(f"{ctx.name}-backward")
+        return None, *grad_outs
+
+
+def nvtx_range_push(name: str, *args):
+    return NVTXRangePush.apply(name, *args)
+
+
+def nvtx_range_pop(name: str, *args):
+    return NVTXRangePop.apply(name, *args)
+
 @contextmanager
-def nvtx_wrapper(marker, enabled=True, blocking=True):
+def nvtx_wrapper(marker, enabled=True):
     if(enabled):
-        cuda.nvtx.range_push(marker)
+        nvtx_range_push(marker)
        # if(blocking): 
            # torch.cuda.synchronize()
         #if blocking and 'CUDA_LAUNCH_BLOCKING' not in os.environ:
@@ -105,7 +138,7 @@ def nvtx_wrapper(marker, enabled=True, blocking=True):
         
     yield
     if(enabled):
-        cuda.nvtx.range_pop()
+        nvtx_range_pop(marker)
         #if(blocking): 
            # torch.cuda.synchronize()
         #  print("CUDA_LAUNCH_BLOCKING= ", os.getenv('CUDA_LAUNCH_BLOCKING'))
