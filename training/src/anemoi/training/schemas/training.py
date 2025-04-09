@@ -280,6 +280,7 @@ class ImplementedStrategiesUsingBaseDDPStrategySchema(str, Enum):
 
 class BaseDDPStrategySchema(BaseModel):
     """Strategy configuration."""
+
     target_: ImplementedStrategiesUsingBaseDDPStrategySchema = Field(..., alias="_target_")
     num_gpus_per_model: PositiveInt = Field(example=2)
     "Number of GPUs per model."
@@ -289,14 +290,17 @@ class BaseDDPStrategySchema(BaseModel):
 
 class DDPEnsGroupStrategyStrategySchema(BaseDDPStrategySchema):
     """Strategy object from anemoi.training.strategy."""
+
     num_gpus_per_ensemble: PositiveInt = Field(example=2)
     "Number of GPUs per ensemble."
 
 
 StrategySchemas = Union[BaseDDPStrategySchema, DDPEnsGroupStrategyStrategySchema]
 
+
 class BaseTrainingSchema(BaseModel):
     """Training configuration."""
+
     run_id: Union[str, None] = Field(example=None)
     "Run ID: used to resume a run from a checkpoint, either last.ckpt or specified in hardware.files.warm_start."
     fork_run_id: Union[str, None] = Field(example=None)
