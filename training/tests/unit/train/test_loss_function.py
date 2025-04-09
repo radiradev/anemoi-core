@@ -13,31 +13,37 @@ import torch
 from hydra.errors import InstantiationException
 from omegaconf import DictConfig
 
+from anemoi.training.losses import AlmostFairKernelCRPS
 from anemoi.training.losses import CombinedLoss
 from anemoi.training.losses import HuberLoss
+from anemoi.training.losses import KernelCRPS
 from anemoi.training.losses import LogCoshLoss
 from anemoi.training.losses import MAELoss
 from anemoi.training.losses import MSELoss
 from anemoi.training.losses import RMSELoss
-from anemoi.training.losses import KernelCRPS
-from anemoi.training.losses import AlmostFairKernelCRPS
 from anemoi.training.losses.base import BaseLoss
 from anemoi.training.losses.loss import get_loss_function
 
 
-@pytest.mark.parametrize("loss_cls", [MSELoss, HuberLoss, MAELoss, RMSELoss, LogCoshLoss, KernelCRPS, AlmostFairKernelCRPS])
+@pytest.mark.parametrize(
+    "loss_cls", [MSELoss, HuberLoss, MAELoss, RMSELoss, LogCoshLoss, KernelCRPS, AlmostFairKernelCRPS],
+)
 def test_manual_init(loss_cls: type[BaseLoss]) -> None:
     loss = loss_cls(torch.ones(1))
     assert isinstance(loss, BaseLoss)
 
 
-@pytest.mark.parametrize("loss_cls", [MSELoss, HuberLoss, MAELoss, RMSELoss, LogCoshLoss, KernelCRPS, AlmostFairKernelCRPS])
+@pytest.mark.parametrize(
+    "loss_cls", [MSELoss, HuberLoss, MAELoss, RMSELoss, LogCoshLoss, KernelCRPS, AlmostFairKernelCRPS],
+)
 def test_dynamic_init_include(loss_cls: type[BaseLoss]) -> None:
     loss = get_loss_function(DictConfig({"_target_": f"anemoi.training.losses.{loss_cls.__name__}"}))
     assert isinstance(loss, BaseLoss)
 
 
-@pytest.mark.parametrize("loss_cls", [MSELoss, HuberLoss, MAELoss, RMSELoss, LogCoshLoss, KernelCRPS, AlmostFairKernelCRPS])
+@pytest.mark.parametrize(
+    "loss_cls", [MSELoss, HuberLoss, MAELoss, RMSELoss, LogCoshLoss, KernelCRPS, AlmostFairKernelCRPS],
+)
 def test_dynamic_init_scaler(loss_cls: type[BaseLoss]) -> None:
     loss = get_loss_function(
         DictConfig(
@@ -54,7 +60,9 @@ def test_dynamic_init_scaler(loss_cls: type[BaseLoss]) -> None:
     torch.testing.assert_close(loss.scaler.get_scaler(2), torch.ones((1, 2)))
 
 
-@pytest.mark.parametrize("loss_cls", [MSELoss, HuberLoss, MAELoss, RMSELoss, LogCoshLoss, KernelCRPS, AlmostFairKernelCRPS])
+@pytest.mark.parametrize(
+    "loss_cls", [MSELoss, HuberLoss, MAELoss, RMSELoss, LogCoshLoss, KernelCRPS, AlmostFairKernelCRPS],
+)
 def test_dynamic_init_add_all(loss_cls: type[BaseLoss]) -> None:
     loss = get_loss_function(
         DictConfig(
@@ -71,7 +79,9 @@ def test_dynamic_init_add_all(loss_cls: type[BaseLoss]) -> None:
     torch.testing.assert_close(loss.scaler.get_scaler(2), torch.ones((1, 2)))
 
 
-@pytest.mark.parametrize("loss_cls", [MSELoss, HuberLoss, MAELoss, RMSELoss, LogCoshLoss, KernelCRPS, AlmostFairKernelCRPS])
+@pytest.mark.parametrize(
+    "loss_cls", [MSELoss, HuberLoss, MAELoss, RMSELoss, LogCoshLoss, KernelCRPS, AlmostFairKernelCRPS],
+)
 def test_dynamic_init_scaler_not_add(loss_cls: type[BaseLoss]) -> None:
     loss = get_loss_function(
         DictConfig(
@@ -86,7 +96,9 @@ def test_dynamic_init_scaler_not_add(loss_cls: type[BaseLoss]) -> None:
     assert "test" not in loss.scaler
 
 
-@pytest.mark.parametrize("loss_cls", [MSELoss, HuberLoss, MAELoss, RMSELoss, LogCoshLoss, KernelCRPS, AlmostFairKernelCRPS])
+@pytest.mark.parametrize(
+    "loss_cls", [MSELoss, HuberLoss, MAELoss, RMSELoss, LogCoshLoss, KernelCRPS, AlmostFairKernelCRPS],
+)
 def test_dynamic_init_scaler_exclude(loss_cls: type[BaseLoss]) -> None:
     loss = get_loss_function(
         DictConfig(
