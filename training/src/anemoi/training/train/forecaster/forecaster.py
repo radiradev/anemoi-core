@@ -570,7 +570,7 @@ class GraphForecaster(pl.LightningModule):
         self,
         y_pred: torch.Tensor,
         y: torch.Tensor,
-        rollout_step: int,
+        rollout_step: int = 0,
     ) -> tuple[dict, list[torch.Tensor]]:
         """Calculate metrics on the validation output.
 
