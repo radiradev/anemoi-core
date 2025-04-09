@@ -27,10 +27,11 @@ diagnostics:
   log:
     mlflow:
       enabled: True
-      offline: True
+      offline: True  # True
       experiment_name: 'rain_pox'
-      run_name: 'mse_smdiag'
+      run_name: 'mse_mask_sm_leaky'
       terminal: True
+      #authentication: True
   plot:
     enabled: True
     scatter: False
@@ -44,7 +45,7 @@ dataloader:
     validation: 1
   limit_batches:
     training: null
-    validation: null
+    validation: 10  # null
 #   num_channels: 1024
 # dataloader:
 #   batch_size:
@@ -54,6 +55,7 @@ dataloader:
 
 
 training:
+  #run_id: fa38c9b26e2c4d4f975b8e12dfcfd3de  # null
   training_loss:
     # loss class to initialise
     _target_: anemoi.training.losses.mse.WeightedMSELoss
@@ -74,18 +76,18 @@ training:
       scalars: []
       # other kwargs
       ignore_nans: True
-    - _target_: anemoi.training.losses.mae.WeightedMAELoss
-      # Scalars to include in loss calculation
-      # Available scalars include, 'variable'
-      scalars: []
-      # other kwargs
-      ignore_nans: True
-    - _target_: anemoi.training.losses.logcosh.WeightedLogCoshLoss
-      # Scalars to include in loss calculation
-      # Available scalars include, 'variable'
-      scalars: []
-      # other kwargs
-      ignore_nans: True
+    # - _target_: anemoi.training.losses.mae.WeightedMAELoss
+    #   # Scalars to include in loss calculation
+    #   # Available scalars include, 'variable'
+    #   scalars: []
+    #   # other kwargs
+    #   ignore_nans: True
+    # - _target_: anemoi.training.losses.logcosh.WeightedLogCoshLoss
+    #   # Scalars to include in loss calculation
+    #   # Available scalars include, 'variable'
+    #   scalars: []
+    #   # other kwargs
+    #   ignore_nans: True
   load_weights_only: null
 
   max_epochs: 100
@@ -101,6 +103,20 @@ training:
   #   epoch_increment: 1
   #   max: 12
   #   start: 1
+
+  additional_scalars:
+    # pressure level scalar
+    - _target_: anemoi.training.train.scaling.ReluVariableLevelScaler
+      group: pl
+      y_intercept: 0.2
+      slope: 0.001
+      scale_dim: -1  # dimension on which scaling applied
+      name: "variable_pressure_level"
+    # tendency scalers
+    # var tendency scaler (this should be default!?)
+    # - _target_: anemoi.training.train.scaling.StdevTendencyScaler
+    #   scale_dim: -1  # dimension on which scaling applied
+    #   name: "tendency"
 
 # hardware:
 #   files:

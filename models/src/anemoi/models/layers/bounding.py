@@ -57,6 +57,32 @@ class BaseBounding(nn.Module, ABC):
         pass
 
 
+def leaky_hardtanh(input: torch.Tensor, min_val: float = -1.0, max_val: float = 1.0, negative_slope: float = 0.01, positive_slope: float = 0.01) -> torch.Tensor:
+    """
+    Leaky version of hardtanh where regions outside [min_val, max_val] have small non-zero slopes.
+
+    Args:
+        input: Input tensor
+        min_val: Minimum value of the linear region
+        max_val: Maximum value of the linear region
+        negative_slope: Slope for x < min_val
+        positive_slope: Slope for x > max_val
+
+    Returns
+    -------
+    torch.Tensor
+        A tensor with the leaky hardtanh applied.
+    """
+    below_min = input < min_val
+    above_max = input > max_val
+    # Standard hardtanh behavior for the middle region
+    result = torch.clamp(input, min_val, max_val)
+    # Add leaky behavior for regions outside the clamped range
+    result = torch.where(below_min, min_val + negative_slope * (input - min_val), result)
+    result = torch.where(above_max, max_val + positive_slope * (input - max_val), result)
+    return result
+
+
 class ReluBounding(BaseBounding):
     """Initializes the bounding with a ReLU activation / zero clamping."""
 
@@ -86,7 +112,34 @@ class HardtanhBounding(BaseBounding):
         self.max_val = max_val
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x[..., self.data_index] = torch.nn.functional.hardtanh(
+        x[..., self.data_index] = nn.functional.hardtanh(
+            x[..., self.data_index], min_val=self.min_val, max_val=self.max_val
+        )
+        return x
+
+
+class LeakyHardtanhBounding(BaseBounding):
+    """Initializes the bounding with specified minimum and maximum values for bounding.
+
+    Parameters
+    ----------
+    variables : list[str]
+        A list of strings representing the variables that will be bounded.
+    name_to_index : dict
+        A dictionary mapping the variable names to their corresponding indices.
+    min_val : float
+        The minimum value for the HardTanh activation.
+    max_val : float
+        The maximum value for the HardTanh activation.
+    """
+
+    def __init__(self, *, variables: list[str], name_to_index: dict, min_val: float, max_val: float) -> None:
+        super().__init__(variables=variables, name_to_index=name_to_index)
+        self.min_val = min_val
+        self.max_val = max_val
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x[..., self.data_index] = leaky_hardtanh(
             x[..., self.data_index], min_val=self.min_val, max_val=self.max_val
         )
         return x

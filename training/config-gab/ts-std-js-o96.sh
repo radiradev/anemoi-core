@@ -1,11 +1,12 @@
 #!/bin/bash
 #SBATCH --qos=ng
-#SBATCH --nodes=1
+#SBATCH --nodes=4
 #SBATCH --ntasks-per-node=4
 #SBATCH --gpus-per-node=4
 #SBATCH --cpus-per-task=12
-#SBATCH --mem=120G
-#SBATCH --time=1:00:00
+#SBATCH --account=ecaifs
+#SBATCH --mem=240G
+#SBATCH --time=47:00:00
 #SBATCH --output=slurm/output-%j.out
 #set -x
 

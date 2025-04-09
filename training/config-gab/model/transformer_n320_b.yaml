@@ -41,7 +41,6 @@ encoder:
   num_heads: 16 # GraphTransformer or Transformer only
   cpu_offload: ${model.cpu_offload}
 
-
 decoder:
   _target_: anemoi.models.layers.mapper.GraphTransformerBackwardMapper
   trainable_size: ${model.trainable_parameters.hidden2data}
@@ -52,14 +51,11 @@ decoder:
   num_heads: 16 # GraphTransformer or Transformer only
   cpu_offload: ${model.cpu_offload}
 
-
 trainable_parameters:
   data: 8
   hidden: 8
   data2hidden: 8
   hidden2data: 8
-
-
 
 attributes:
   edges:
@@ -95,14 +91,15 @@ bounding: #These are applied in order
   - _target_: anemoi.models.layers.bounding.HardtanhBounding #[0, 1)
     variables:
     - tcc
-    - swvl1
-    - swvl2
+    # - swvl1
+    # - swvl2
     min_val: 0
     max_val: 1
   - _target_: anemoi.models.layers.bounding.FractionBounding # fraction of tp
     variables:
     - cp
     - sf
+    - ro
     min_val: 0
     max_val: 1
     total_var: tp
@@ -114,3 +111,9 @@ bounding: #These are applied in order
     min_val: 0
     max_val: 1
     total_var: tcc
+  - _target_: anemoi.models.layers.bounding.LeakyHardtanhBounding #[0, 1)
+    variables:
+    - swvl1
+    - swvl2
+    min_val: 0
+    max_val: 0.8

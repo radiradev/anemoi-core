@@ -110,14 +110,14 @@ variable_loss_scaling:
   2d: 0.5
   tp: 0.025
   cp: 0.0025
-  ro: 0.005
+  ro: 0.0025
   sf: 0.025
   tcc: 0.1
   mcc: 0.1
   lcc: 0.1
   hcc: 0.1
-  swvl2: 200
-  swvl1: 100
+  swvl2: 2  # 200
+  swvl1: 1  # 100
   stl2: 10
   stl1: 1
   ssrd: 0.05

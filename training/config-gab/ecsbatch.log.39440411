@@ -1,0 +1,39 @@
+[ECMWF-INFO -sbatch] - -------------------------------------------------------------------------------------
+[ECMWF-INFO -sbatch] -  This is the ECMWF jobfilter
+[ECMWF-INFO -sbatch] -  +++ Please report issues using the Support portal +++
+[ECMWF-INFO -sbatch] -  +++ https://support.ecmwf.int                     +++
+[ECMWF-INFO -sbatch] -  /usr/local/bin/ecsbatch: size: 52065, mtime: Wed Feb 12 19:10:58 2025
+[ECMWF-INFO -sbatch] - -------------------------------------------------------------------------------------
+[ECMWF-INFO -sbatch] - Time at submit: Wed Apr  9 10:44:57 2025 (1744195497.11214) on ac6-101.bullx:/etc/ecmwf/nfs/dh2_2_perm_a/daep/projects/anemoi-core/feature-snow/training/config-gab
+[ECMWF-INFO -sbatch] - --- SLURM VARIABLES ---
+[ECMWF-INFO -sbatch] - EC_CLUSTER=ac
+[ECMWF-INFO -sbatch] - SLURM_EXPORT_ENV=ALL
+[ECMWF-INFO -sbatch] - SBATCH_EXPORT=NONE
+[ECMWF-INFO -sbatch] - -----------------------
+[ECMWF-INFO -sbatch] - jobscript: /etc/ecmwf/nfs/dh2_2_perm_a/daep/projects/anemoi-core/feature-snow/training/config-gab/ts-std-js-o96.sh
+[ECMWF-INFO -sbatch] - --- SCRIPT OPTIONS ---
+[ECMWF-INFO -sbatch] - #SBATCH --qos=ng
+[ECMWF-INFO -sbatch] - #SBATCH --nodes=4
+[ECMWF-INFO -sbatch] - #SBATCH --ntasks-per-node=4
+[ECMWF-INFO -sbatch] - #SBATCH --gpus-per-node=4
+[ECMWF-INFO -sbatch] - #SBATCH --cpus-per-task=12
+[ECMWF-INFO -sbatch] - #SBATCH --mem=240G
+[ECMWF-INFO -sbatch] - #SBATCH --time=47:00:00
+[ECMWF-INFO -sbatch] - #SBATCH --output=slurm/output-%j.out
+[ECMWF-INFO -sbatch] - -----------------------
+[ECMWF-INFO -sbatch] - --- POST-PROCESSED OPTIONS ---
+[ECMWF-INFO -sbatch] - ARG --positional=['ts-std-js-o96.sh']
+[ECMWF-INFO -sbatch] - ARG --cpus_per_task=12
+[ECMWF-INFO -sbatch] - ARG --ntasks_per_node=4
+[ECMWF-INFO -sbatch] - ARG --nodes=4
+[ECMWF-INFO -sbatch] - ARG --output=slurm/output-%j.out
+[ECMWF-INFO -sbatch] - ARG --qos=ng
+[ECMWF-INFO -sbatch] - ARG --time=47:00:00
+[ECMWF-INFO -sbatch] - ARG --mem=240G
+[ECMWF-INFO -sbatch] - ARG --gpus_per_node=4
+[ECMWF-INFO -sbatch] - ------------------------------
+[ECMWF-INFO -sbatch] - jobtag: daep-ts-std-js-o96.sh-4x48-/etc/ecmwf/nfs/dh2_2_perm_a/daep/projects/anemoi-core/feature-snow/training/config-gab/slurm/output-_JOBID_.out
+[ECMWF-INFO -sbatch] - ['/usr/bin/sbatch', '--cpus-per-task=12', '--ntasks-per-node=4', '--nodes=4', '--output=slurm/output-%j.out', '--qos=ng', '--time=47:00:00', '--mem=240G', '--gpus-per-node=4', '--licenses=h2resw01', '--export=EC_user_time_limit=47:00:00', '/etc/ecmwf/nfs/dh2_2_perm_a/daep/projects/anemoi-core/feature-snow/training/config-gab/ts-std-js-o96.sh']
+[ECMWF-INFO -sbatch] - sbatch executed on ac
+[ECMWF-INFO -sbatch] - Job queued on ac using method local
+[ECMWF-INFO -sbatch] - Submitted batch job 39440411
