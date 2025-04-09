@@ -99,6 +99,91 @@ def test_dynamic_init_scaler_exclude(loss_cls: type[BaseLoss]) -> None:
     assert "test" not in loss.scaler
 
 
+# KernelCRPS tests
+def test_kcrps_manual_init() -> None:
+    """Test manual initialization of KernelCRPS."""
+    loss = KernelCRPS(torch.ones(1), fair=True)
+    assert isinstance(loss, BaseWeightedLoss)
+    assert loss.node_weights == torch.ones(1)
+    assert loss.fair is True
+
+
+def test_kcrps_dynamic_init() -> None:
+    """Test dynamic initialization of KernelCRPS through config."""
+    loss = GraphForecaster.get_loss_function(
+        DictConfig(
+            {
+                "_target_": "anemoi.training.losses.kcrps.KernelCRPS",
+                "fair": True,
+            },
+        ),
+        node_weights=torch.ones(1),
+    )
+    assert isinstance(loss, BaseWeightedLoss)
+    assert loss.node_weights == torch.ones(1)
+    assert loss.fair is True
+
+
+def test_almost_fair_kcrps_manual_init() -> None:
+    """Test manual initialization of AlmostFairKernelCRPS."""
+    loss = AlmostFairKernelCRPS(torch.ones(1), alpha=0.95)
+    assert isinstance(loss, BaseWeightedLoss)
+    assert loss.node_weights == torch.ones(1)
+    assert loss.alpha == 0.95
+
+
+def test_almost_fair_kcrps_dynamic_init() -> None:
+    """Test dynamic initialization of AlmostFairKernelCRPS through config."""
+    loss = GraphForecaster.get_loss_function(
+        DictConfig(
+            {
+                "_target_": "anemoi.training.losses.kcrps.AlmostFairKernelCRPS",
+                "alpha": 0.95,
+            },
+        ),
+        node_weights=torch.ones(1),
+    )
+    assert isinstance(loss, BaseWeightedLoss)
+    assert loss.node_weights == torch.ones(1)
+    assert loss.alpha == 0.95
+
+
+def test_kcrps_with_scalars() -> None:
+    """Test KernelCRPS with scalar variables."""
+    loss = GraphForecaster.get_loss_function(
+        DictConfig(
+            {
+                "_target_": "anemoi.training.losses.kcrps.KernelCRPS",
+                "scalars": ["test"],
+                "fair": True,
+            },
+        ),
+        node_weights=torch.ones(1),
+        scalars={"test": ((0, 1), torch.ones((1, 2)))},
+    )
+    assert isinstance(loss, BaseWeightedLoss)
+    assert "test" in loss.scalar
+    torch.testing.assert_close(loss.scalar.get_scalar(2), torch.ones((1, 2)))
+
+
+def test_almost_fair_kcrps_with_scalars() -> None:
+    """Test AlmostFairKernelCRPS with scalar variables."""
+    loss = GraphForecaster.get_loss_function(
+        DictConfig(
+            {
+                "_target_": "anemoi.training.losses.kcrps.AlmostFairKernelCRPS",
+                "scalars": ["test"],
+                "alpha": 0.95,
+            },
+        ),
+        node_weights=torch.ones(1),
+        scalars={"test": ((0, 1), torch.ones((1, 2)))},
+    )
+    assert isinstance(loss, BaseWeightedLoss)
+    assert "test" in loss.scalar
+    torch.testing.assert_close(loss.scalar.get_scalar(2), torch.ones((1, 2)))
+
+
 def test_combined_loss() -> None:
     """Test the combined loss function."""
     loss = get_loss_function(

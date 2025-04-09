@@ -76,8 +76,17 @@ class LR(BaseModel):
     "Number of iterations."
     min: NonNegativeFloat = Field(example=3e-7)
     "Minimum learning rate."
-    warmup_t: NonNegativeInt = Field(example=1000)
+    warmup: NonNegativeInt = Field(example=1000)
     "Number of warm up iteration. Default to 1000."
+
+
+class OptimizerSchema(BaseModel):
+    """Optimizer configuration."""
+
+    zero: bool = Field(example=False)
+    "Use Zero optimiser."
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+    "Additional arguments to pass to the optimizer."
 
 
 class ExplicitTimes(BaseModel):
@@ -196,6 +205,8 @@ ScalerSchema = Union[
 
 
 class ImplementedLossesUsingBaseLossSchema(str, Enum):
+    kcrps = "anemoi.training.losses.kcrps.KernelCRPS"
+    afkcrps = "anemoi.training.losses.kcrps.AlmostFairKernelCRPS"
     rmse = "anemoi.training.losses.RMSELoss"
     mse = "anemoi.training.losses.MSELoss"
     mae = "anemoi.training.losses.MAELoss"
@@ -210,6 +221,19 @@ class BaseLossSchema(BaseModel):
     "Scalars to include in loss calculation"
     ignore_nans: bool = False
     "Allow nans in the loss and apply methods ignoring nans for measuring the loss."
+
+
+class KernelCRPSSchema(BaseLossSchema):
+    fair: bool = True
+    "Calculate a 'fair' (unbiased) score - ensemble variance component weighted by (ens-size-1)^-1"
+
+
+class AlmostFairKernelCRPSSchema(BaseLossSchema):
+    alpha: float = 1.0
+    """Factor for linear combination of fair (unbiased, ensemble variance component
+    weighted by (ens-size-1)^-1) and standard CRPS (1.0 = fully fair, 0.0 = fully unfair)"""
+    no_autocast: bool = True
+    "Deactivate autocast for the kernel CRPS calculation"
 
 
 class HuberLossSchema(BaseLossSchema):
@@ -285,14 +309,16 @@ class BaseTrainingSchema(BaseModel):
     accum_grad_batches: PositiveInt = Field(default=1)
     """Accumulates gradients over k batches before stepping the optimizer.
     K >= 1 (if K == 1 then no accumulation). The effective bacthsize becomes num-device * k."""
-    num_sanity_val_steps: PositiveInt = Field(example=6)
+    num_sanity_val_steps: NonNegativeInt = Field(example=6)
     "Sanity check runs n batches of val before starting the training routine."
     gradient_clip: GradientClip
     "Config for gradient clipping."
+    strategy: StrategySchemas
+    "Strategy to use."
+    model_task: TrainingSchema
+    "Forecaster to use."
     swa: SWA = Field(default_factory=SWA)
     "Config for stochastic weight averaging."
-    zero_optimizer: bool = Field(example=False)
-    "use ZeroRedundancyOptimizer, saves memory for larger models."
     training_loss: LossSchemas
     "Training loss configuration."
     loss_gradient_scaling: bool = False
@@ -311,21 +337,32 @@ class BaseTrainingSchema(BaseModel):
     "Maximum number of steps, stops earlier if max_epochs is reached first."
     lr: LR = Field(default_factory=LR)
     "Learning rate configuration."
+    optimizer: OptimizerSchema = Field(default_factory=OptimizerSchema)
+    "Optimizer configuration."
+    variable_loss_scaling: LossScalingSchema
+    "Configuration of the variable scaling used in the loss computation."
+    pressure_level_scaler: PressureLevelScalerSchema
+    "Configuration of the pressure level scaler apllied in the loss computation."
     metrics: list[str]
     "List of metrics"
     node_loss_weights: NodeLossWeightsSchema
     "Node loss weights configuration."
-    task: str
-    "Training objective."
 
 
 class ForecasterSchema(BaseTrainingSchema):
-    task: str = Field(example="anemoi.training.train.forecaster.GraphForecaster")
+    model_task: Literal["anemoi.training.train.forecaster.GraphForecaster",] = Field(..., alias="model_task")
     "Training objective."
 
 
+class ForecasterEnsSchema(BaseTrainingSchema):
+    model_task: Literal["anemoi.training.train.forecaster.GraphEnsForecaster",] = Field(..., alias="model_task")
+    "Training objective."
+    ensemble_size_per_device: PositiveInt = Field(example=1)
+    "Number of ensemble member per device"
+
+
 class InterpolationSchema(BaseTrainingSchema):
-    task: str = Field(example="anemoi.training.train.interpolator.GraphInterpolator")
+    model_task: Literal["anemoi.training.train.forecaster.GraphInterpolator"] = Field(..., alias="model_task")
     "Training objective."
     explicit_times: ExplicitTimes
     "Time indices for input and output."
@@ -333,4 +370,4 @@ class InterpolationSchema(BaseTrainingSchema):
     "Forcing parameters for target output times."
 
 
-TrainingSchema = Union[ForecasterSchema, InterpolationSchema]
+TrainingSchema = Union[ForecasterSchema, ForecasterEnsSchema, InterpolationSchema]
