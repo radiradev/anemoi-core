@@ -26,6 +26,7 @@ from anemoi.training.losses.scaler_tensor import grad_scaler
 from anemoi.training.losses.scalers import create_scalers
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.schemas.base_schema import convert_to_omegaconf
+from anemoi.training.utils.enums import TensorDim
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -117,7 +118,7 @@ class GraphForecaster(pl.LightningModule):
         )
 
         self.loss = get_loss_function(config.model_dump(by_alias=True).training.training_loss, scalers=self.scalers)
-        # print_variable_scaling(self.loss, data_indices)
+        # print_variable_scaling(self.loss, data_indices) TODO(Harrison): related to ScalerTensor
 
         self.metrics = torch.nn.ModuleDict(
             {
@@ -398,11 +399,10 @@ class GraphForecaster(pl.LightningModule):
 
             for mkey, indices in self.val_metric_ranges.items():
                 metric_step_name = f"{metric_name}/{mkey}/{rollout_step + 1}"
-                if -1 in metric.scaler:
+                if len(metric.scaler.subset_by_dim(TensorDim.VARIABLE)):
                     exception_msg = (
                         "Validation metrics cannot be scaled over the variable dimension"
-                        " in the post processed space. Please specify them in the config"
-                        " at `scale_validation_metrics`."
+                        " in the post processed space."
                     )
                     raise ValueError(exception_msg)
 
