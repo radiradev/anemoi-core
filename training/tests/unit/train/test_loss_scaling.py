@@ -226,7 +226,7 @@ def test_variable_loss_scaling_vals(
 
     scalers, _ = create_scalers(
         config.training.scalers.builders,
-        group_config=config.training.scalers.variable_groups,
+        group_config=config.training.variable_groups,
         data_indices=data_indices,
         graph_data=graph_with_nodes,
         statistics=statistics,

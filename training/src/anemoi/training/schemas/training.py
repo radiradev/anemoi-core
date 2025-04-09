@@ -273,22 +273,30 @@ class CombinedLossSchema(BaseLossSchema):
 LossSchemas = Union[BaseLossSchema, HuberLossSchema, CombinedLossSchema]
 
 
-class ScaleValidationMetricsSchema(BaseModel):
-    """Configuration for scaling validation metrics.
+class ImplementedStrategiesUsingBaseDDPStrategySchema(str, Enum):
+    ddp_ens = "anemoi.training.distributed.strategy.DDPEnsGroupStrategy"
+    ddp = "anemoi.training.distributed.strategy.DDPGroupStrategy"
 
-    Here variable scaling is possible due to the metrics being calculated in the same way as the
-    training loss, within internal model space.
-    """
 
-    scalers_to_apply: list[str] = Field(example=["variable"])
-    """List of scalars to be applied."""
-    metrics: list[str]
-    """List of metrics to keep in normalised space.."""
+class BaseDDPStrategySchema(BaseModel):
+    """Strategy configuration."""
+    target_: ImplementedStrategiesUsingBaseDDPStrategySchema = Field(..., alias="_target_")
+    num_gpus_per_model: PositiveInt = Field(example=2)
+    "Number of GPUs per model."
+    read_group_size: PositiveInt = Field(example=1)
+    "Number of GPUs per reader group. Defaults to number of GPUs."
 
+
+class DDPEnsGroupStrategyStrategySchema(BaseDDPStrategySchema):
+    """Strategy object from anemoi.training.strategy."""
+    num_gpus_per_ensemble: PositiveInt = Field(example=2)
+    "Number of GPUs per ensemble."
+
+
+StrategySchemas = Union[BaseDDPStrategySchema, DDPEnsGroupStrategyStrategySchema]
 
 class BaseTrainingSchema(BaseModel):
     """Training configuration."""
-
     run_id: Union[str, None] = Field(example=None)
     "Run ID: used to resume a run from a checkpoint, either last.ckpt or specified in hardware.files.warm_start."
     fork_run_id: Union[str, None] = Field(example=None)
@@ -326,9 +334,7 @@ class BaseTrainingSchema(BaseModel):
     scalers: dict[str, ScalerSchema]
     "Scalers to use in the computation of the loss and validation scores."
     validation_metrics: dict[str, LossSchemas]
-    "List of validation metrics configurations. These metrics "
-    scale_validation_metrics: ScaleValidationMetricsSchema
-    """Configuration for scaling validation metrics."""
+    "List of validation metrics configurations. These metrics """
     rollout: Rollout = Field(default_factory=Rollout)
     "Rollout configuration."
     max_epochs: Union[PositiveInt, None] = None
@@ -339,14 +345,8 @@ class BaseTrainingSchema(BaseModel):
     "Learning rate configuration."
     optimizer: OptimizerSchema = Field(default_factory=OptimizerSchema)
     "Optimizer configuration."
-    variable_loss_scaling: LossScalingSchema
-    "Configuration of the variable scaling used in the loss computation."
-    pressure_level_scaler: PressureLevelScalerSchema
-    "Configuration of the pressure level scaler apllied in the loss computation."
     metrics: list[str]
     "List of metrics"
-    node_loss_weights: NodeLossWeightsSchema
-    "Node loss weights configuration."
 
 
 class ForecasterSchema(BaseTrainingSchema):
