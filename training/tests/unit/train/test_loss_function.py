@@ -21,8 +21,8 @@ from anemoi.training.losses import LogCoshLoss
 from anemoi.training.losses import MAELoss
 from anemoi.training.losses import MSELoss
 from anemoi.training.losses import RMSELoss
+from anemoi.training.losses import get_loss_function
 from anemoi.training.losses.base import BaseLoss
-from anemoi.training.losses.loss import get_loss_function
 
 
 @pytest.mark.parametrize(

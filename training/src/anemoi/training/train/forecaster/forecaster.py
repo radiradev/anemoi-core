@@ -369,7 +369,7 @@ class GraphForecaster(pl.LightningModule):
         y_pred: torch.Tensor,
         y: torch.Tensor,
         rollout_step: int,
-    ) -> tuple[dict, list[torch.Tensor]]:
+    ) -> dict[str, torch.Tensor]:
         """Calculate metrics on the validation output.
 
         Parameters
@@ -383,8 +383,8 @@ class GraphForecaster(pl.LightningModule):
 
         Returns
         -------
-            val_metrics, preds:
-                validation metrics and predictions
+        val_metrics : dict[str, torch.Tensor]
+            validation metrics and predictions
         """
         metrics = {}
         y_postprocessed = self.model.post_processors(y, in_place=False)
@@ -413,7 +413,7 @@ class GraphForecaster(pl.LightningModule):
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
         train_loss, _, _ = self._step(batch, batch_idx)
         self.log(
-            "train_loss",
+            "train_" + self.loss.name + "_loss",
             train_loss,
             on_epoch=True,
             on_step=True,
@@ -471,7 +471,7 @@ class GraphForecaster(pl.LightningModule):
             val_loss, metrics, y_preds = self._step(batch, batch_idx, validation_mode=True)
 
         self.log(
-            "val_loss",
+            "val_" + self.loss.name + "_loss",
             val_loss,
             on_epoch=True,
             on_step=True,
@@ -483,7 +483,7 @@ class GraphForecaster(pl.LightningModule):
 
         for mname, mvalue in metrics.items():
             self.log(
-                "val_" + mname,
+                "val_" + mname + "_metric",
                 mvalue,
                 on_epoch=True,
                 on_step=False,
