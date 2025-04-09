@@ -5,7 +5,7 @@ output_mask:
   _target_: anemoi.training.utils.masks.NoOutputMask
 
 model:
-  _target_: anemoi.models.models.encoder_processor_decoder.AnemoiModelEncProcDec
+  _target_: anemoi.models.models.AnemoiModelEncProcDec
 
 
 # The GNN requires the autocast layer norm, otherwise its memory usage is too high.

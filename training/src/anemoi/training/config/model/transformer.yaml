@@ -5,7 +5,7 @@ output_mask:
   _target_: anemoi.training.utils.masks.NoOutputMask
 
 model:
-  _target_: anemoi.models.models.encoder_processor_decoder.AnemoiModelEncProcDec
+  _target_: anemoi.models.models.AnemoiModelEncProcDec
 
 # LayerKernels are optionally. If not specified, the default are pytorch.nn.LayerNorm and torch.nn.Linear.
 layer_kernels:
