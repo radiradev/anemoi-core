@@ -19,11 +19,11 @@ from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.utils.checkpoint import checkpoint
 
 from anemoi.models.interface import AnemoiModelInterface
+from anemoi.training.losses import get_loss_function
 from anemoi.training.losses.base import BaseLoss
-from anemoi.training.losses.loss import get_loss_function
 from anemoi.training.losses.loss import get_metric_ranges
 from anemoi.training.losses.scaler_tensor import grad_scaler
-from anemoi.training.losses.scalers.scaling import create_scalers
+from anemoi.training.losses.scalers import create_scalers
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.schemas.base_schema import convert_to_omegaconf
 

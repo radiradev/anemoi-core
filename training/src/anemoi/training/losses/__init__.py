@@ -12,6 +12,7 @@ from .huber import HuberLoss
 from .kcrps import AlmostFairKernelCRPS
 from .kcrps import KernelCRPS
 from .logcosh import LogCoshLoss
+from .loss import get_loss_function
 from .mae import MAELoss
 from .mse import MSELoss
 from .rmse import RMSELoss
@@ -25,4 +26,5 @@ __all__ = [
     "MAELoss",
     "MSELoss",
     "RMSELoss",
+    "get_loss_function",
 ]

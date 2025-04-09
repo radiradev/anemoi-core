@@ -15,9 +15,9 @@ from omegaconf import DictConfig
 from torch_geometric.data import HeteroData
 
 from anemoi.models.data_indices.collection import IndexCollection
-from anemoi.training.losses.loss import get_loss_function
+from anemoi.training.losses import get_loss_function
 from anemoi.training.losses.loss import get_metric_ranges
-from anemoi.training.losses.scalers.scaling import create_scalers
+from anemoi.training.losses.scalers import create_scalers
 from anemoi.training.utils.enums import TensorDim
 from anemoi.training.utils.masks import NoOutputMask
 
