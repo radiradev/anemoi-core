@@ -121,7 +121,7 @@ class AlmostFairKernelCRPS(BaseLoss):
         alpha : float
             Factor for linear combination of fair (unbiased, ensemble variance component weighted by (ens-size-1)^-1)
             and standard CRPS (1.0 = fully fair, 0.0 = fully unfair)
-        no_autocast : bool, optional 
+        no_autocast : bool, optional
             Deactivate autocast for the kernel CRPS calculation
         ignore_nans : bool, optional
             Allow nans in the loss and apply methods ignoring nans for measuring the loss, by default False

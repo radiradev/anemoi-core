@@ -9,12 +9,12 @@
 
 from .combined import CombinedLoss
 from .huber import HuberLoss
+from .kcrps import AlmostFairKernelCRPS
+from .kcrps import KernelCRPS
 from .logcosh import LogCoshLoss
 from .mae import MAELoss
 from .mse import MSELoss
 from .rmse import RMSELoss
-from .kcrps import AlmostFairKernelCRPS
-from .kcrps import KernelCRPS
 
 __all__ = [
     "AlmostFairKernelCRPS",
