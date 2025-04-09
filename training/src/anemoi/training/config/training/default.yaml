@@ -88,16 +88,6 @@ validation_metrics:
     # other kwargs
     ignore_nans: True
 
-# List of validation metrics to keep in normalised space, and scalers to be applied
-# Use '*' in reference all metrics, or a list of metric names.
-# Unlike above, variable scaling is possible due to these metrics being
-# calculated in the same way as the training loss, within the internal model space.
-scale_validation_metrics:
-  scalers_to_apply: ['general_variable', 'pressure_level', 'node_weights']
-  metrics:
-    - 'all'
-    # - "*"
-
 variable_groups:
   default: sfc
   pl: [q, t, u, v, w, z]

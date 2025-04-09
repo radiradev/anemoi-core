@@ -391,39 +391,22 @@ class GraphForecaster(pl.LightningModule):
         y_pred_postprocessed = self.model.post_processors(y_pred, in_place=False)
 
         for metric_name, metric in self.metrics.items():
-
             if not isinstance(metric, BaseLoss):
-                # If not a weighted loss, we cannot feature scale, so call normally
+                # If not a loss, we cannot feature scale, so call normally
                 metrics[f"{metric_name}/{rollout_step + 1}"] = metric(y_pred_postprocessed, y_postprocessed)
                 continue
 
             for mkey, indices in self.val_metric_ranges.items():
                 metric_step_name = f"{metric_name}/{mkey}/{rollout_step + 1}"
-                if (
-                    mkey in self.config.training.scale_validation_metrics.metrics
-                    or "*" in self.config.training.scale_validation_metrics.metrics
-                ):
-                    with metric.scaler.freeze_state():
-                        for key in self.config.training.scale_validation_metrics.scalers_to_apply:
-                            metric.add_scaler(*self.scalers[key], name=key)
-
-                        # Use internal model space indices
-                        internal_model_indices = self.internal_metric_ranges[mkey]
-                        metrics[metric_step_name] = metric(y_pred, y, scaler_indices=[..., internal_model_indices])
-                else:
-                    if -1 in metric.scaler:
-                        exception_msg = (
-                            "Validation metrics cannot be scaled over the variable dimension"
-                            " in the post processed space. Please specify them in the config"
-                            " at `scale_validation_metrics`."
-                        )
-                        raise ValueError(exception_msg)
-
-                    metrics[metric_step_name] = metric(
-                        y_pred_postprocessed,
-                        y_postprocessed,
-                        scaler_indices=[..., indices],
+                if -1 in metric.scaler:
+                    exception_msg = (
+                        "Validation metrics cannot be scaled over the variable dimension"
+                        " in the post processed space. Please specify them in the config"
+                        " at `scale_validation_metrics`."
                     )
+                    raise ValueError(exception_msg)
+
+                metrics[metric_step_name] = metric(y_pred_postprocessed, y_postprocessed, scaler_indices=[..., indices])
 
         return metrics
 
