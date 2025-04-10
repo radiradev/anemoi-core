@@ -38,6 +38,7 @@ class AnemoiModelEncProcDecHierarchical(AnemoiModelEncProcDec):
         data_indices: dict,
         statistics: dict,
         graph_data: HeteroData,
+        **kwargs,
     ) -> None:
         """Initializes the graph neural network.
 
