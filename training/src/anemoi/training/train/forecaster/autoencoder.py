@@ -107,6 +107,7 @@ class GraphAutoEncoder(GraphForecaster):
             metrics_next = self.calculate_val_metrics(
                 y_pred,
                 y,
+                rollout_step=0,
             )
 
         metrics.update(metrics_next)
