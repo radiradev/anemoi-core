@@ -22,8 +22,8 @@ from torch_geometric.data import HeteroData
 from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.layers.graph import NamedNodesAttributes
 from anemoi.models.layers.utils import load_layer_kernels
-from anemoi.models.models import AnemoiModelEncProcDec
-from anemoi.models.models import AnemoiModelEncProcDecHierarchical
+from anemoi.models.models.encoder_processor_decoder import AnemoiModelEncProcDec
+from anemoi.models.models.hierarchical import AnemoiModelEncProcDecHierarchical
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -138,12 +138,9 @@ class AnemoiModelAutoEncoder(AnemoiModelEncProcDec):
         x_hidden_latent = self.node_attributes(self._graph_name_hidden, batch_size=batch_size)
 
         # get shard shapes
-        print("\nData shape: ", x_data_latent.shape)
         shard_shapes_data = get_shape_shards(x_data_latent, 0, model_comm_group)
-        print("\nHidden shape: ", x_hidden_latent.shape)
         shard_shapes_hidden = get_shape_shards(x_hidden_latent, 0, model_comm_group)
 
-        print("\nEncoder shapes: ", (shard_shapes_data, shard_shapes_hidden))
         # Run encoder
         x_data_latent, x_latent = self._run_mapper(
             self.encoder,
@@ -225,14 +222,11 @@ class AnemoiModelHierarchicalAutoEncoder(AnemoiModelEncProcDecHierarchical):
             x_trainable_hiddens[hidden] = self.node_attributes(hidden, batch_size=batch_size)
 
         # Get data and hidden shapes for sharding
-        print("\nData shape: ", x_trainable_data.shape)
         shard_shapes_data = get_shape_shards(x_trainable_data, 0, model_comm_group)
         shard_shapes_hiddens = {}
         for hidden, x_latent in x_trainable_hiddens.items():
-            print(f"{hidden} shape: ", x_latent.shape)
             shard_shapes_hiddens[hidden] = get_shape_shards(x_latent, 0, model_comm_group)
 
-        print("\nEncoder shapes: ", (shard_shapes_data, shard_shapes_hiddens[self._graph_hidden_names[0]]))
         # Run encoder
         x_data_latent, curr_latent = self._run_mapper(
             self.encoder,
@@ -264,11 +258,6 @@ class AnemoiModelHierarchicalAutoEncoder(AnemoiModelEncProcDecHierarchical):
             x_skip[src_hidden_name] = curr_latent
 
             # Encode to next hidden level
-            print(
-                f"Downscale {i} shapes: ",
-                (shard_shapes_hiddens[src_hidden_name], shard_shapes_hiddens[dst_hidden_name]),
-            )
-
             x_encoded_latents[src_hidden_name], curr_latent = self._run_mapper(
                 self.downscale[src_hidden_name],
                 (curr_latent, x_trainable_hiddens[dst_hidden_name]),
@@ -283,10 +272,6 @@ class AnemoiModelHierarchicalAutoEncoder(AnemoiModelEncProcDecHierarchical):
             dst_hidden_name = self._graph_hidden_names[i - 1]
 
             # Decode to next level
-            print(
-                f"Upscale {i} shapes: ", (shard_shapes_hiddens[src_hidden_name], shard_shapes_hiddens[dst_hidden_name])
-            )
-
             curr_latent = self._run_mapper(
                 self.upscale[src_hidden_name],
                 (curr_latent, x_encoded_latents[dst_hidden_name]),
@@ -305,7 +290,6 @@ class AnemoiModelHierarchicalAutoEncoder(AnemoiModelEncProcDecHierarchical):
                 )
 
         # Run decoder
-        print("Decoder shapes: ", (shard_shapes_hiddens[self._graph_hidden_names[0]], shard_shapes_data))
         x_out = self._run_mapper(
             self.decoder,
             (curr_latent, x_data_latent),
