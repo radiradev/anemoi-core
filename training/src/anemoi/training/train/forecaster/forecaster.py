@@ -57,11 +57,11 @@ class GraphForecaster(pl.LightningModule):
         *,
         config: BaseSchema,
         graph_data: HeteroData,
-        truncation_data: dict,
         statistics: dict,
         data_indices: IndexCollection,
         metadata: dict,
         supporting_arrays: dict,
+        truncation_data: dict = None,
     ) -> None:
         """Initialize graph neural network forecaster.
 

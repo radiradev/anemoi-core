@@ -34,6 +34,7 @@ class GraphAutoEncoder(GraphForecaster):
         data_indices: IndexCollection,
         metadata: dict,
         supporting_arrays: dict,
+        **kwargs,
     ) -> None:
         """Initialize graph neural network forecaster.
 

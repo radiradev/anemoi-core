@@ -35,6 +35,7 @@ class AnemoiModelAutoEncoder(AnemoiModelEncProcDec):
         data_indices: dict,
         statistics: dict,
         graph_data: HeteroData,
+        **kwargs,
     ) -> None:
         """Initializes the graph neural network.
 
@@ -48,7 +49,7 @@ class AnemoiModelAutoEncoder(AnemoiModelEncProcDec):
             Graph definition
         """
         super().__init__(
-            model_config=model_config, data_indices=data_indices, statistics=statistics, graph_data=graph_data
+            model_config=model_config, data_indices=data_indices, statistics=statistics, graph_data=graph_data, **kwargs
         )
 
     def forward(self, x: Tensor, model_comm_group: Optional[ProcessGroup] = None) -> Tensor:
@@ -118,6 +119,7 @@ class AnemoiModelHierarchicalAutoEncoder(AnemoiModelEncProcDecHierarchical):
         data_indices: dict,
         statistics: dict,
         graph_data: HeteroData,
+        **kwargs,
     ) -> None:
         """Initializes the graph neural network.
 
@@ -131,7 +133,7 @@ class AnemoiModelHierarchicalAutoEncoder(AnemoiModelEncProcDecHierarchical):
             Graph definition
         """
         super().__init__(
-            model_config=model_config, data_indices=data_indices, statistics=statistics, graph_data=graph_data
+            model_config=model_config, data_indices=data_indices, statistics=statistics, graph_data=graph_data, **kwargs
         )
 
     def forward(self, x: Tensor, model_comm_group: Optional[ProcessGroup] = None) -> Tensor:
