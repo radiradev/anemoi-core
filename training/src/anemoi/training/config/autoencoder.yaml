@@ -21,6 +21,7 @@ model:
 
 training:
   model_task: anemoi.training.train.forecaster.GraphAutoEncoder
+  multistep_input: 1
 
 diagnostics:
   callbacks:
