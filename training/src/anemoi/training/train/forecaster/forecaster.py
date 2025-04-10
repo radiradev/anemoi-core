@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from typing import TYPE_CHECKING
-
+from typing import Optional
 import numpy as np
 import pytorch_lightning as pl
 import torch
@@ -61,7 +61,7 @@ class GraphForecaster(pl.LightningModule):
         data_indices: IndexCollection,
         metadata: dict,
         supporting_arrays: dict,
-        truncation_data: dict = None,
+        truncation_data: Optional[dict] = None,
     ) -> None:
         """Initialize graph neural network forecaster.
 

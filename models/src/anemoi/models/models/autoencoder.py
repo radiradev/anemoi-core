@@ -39,7 +39,7 @@ class AnemoiModelAutoEncoder(AnemoiModelEncProcDec):
         data_indices: dict,
         statistics: dict,
         graph_data: HeteroData,
-        **kwargs,
+        truncation_data: Optional[dict] = None,
     ) -> None:
         """Initializes the graph neural network.
 
@@ -326,7 +326,7 @@ class AnemoiModelHierarchicalAutoEncoder(AnemoiModelEncProcDecHierarchical):
         )
 
         # residual connection (just for the prognostic variables)
-        x_out[..., self._internal_output_idx] += x[:, -1, :, :, self._internal_input_idx]
+        # x_out[..., self._internal_output_idx] += x[:, -1, :, :, self._internal_input_idx]
 
         for bounding in self.boundings:
             # bounding performed in the order specified in the config file
