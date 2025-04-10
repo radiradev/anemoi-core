@@ -64,7 +64,7 @@ class GraphAutoEncoder(GraphForecaster):
         )
 
         assert self.rollout == 1, "Rollout must be 1 for autoencoder"
-        assert self.rollout_epoch_increment == 1, "Rollout epoch increment must be 1 for autoencoder"
+        assert self.rollout_epoch_increment == 0, "Rollout epoch increment must be 1 for autoencoder"
 
     def _step(
         self,
