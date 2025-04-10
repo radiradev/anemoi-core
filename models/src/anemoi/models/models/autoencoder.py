@@ -33,30 +33,6 @@ LOGGER = logging.getLogger(__name__)
 class AnemoiModelAutoEncoder(AnemoiModelEncProcDec):
     """Message passing graph neural network."""
 
-    # def __init__(
-    #     self,
-    #     *,
-    #     model_config: DotDict,
-    #     data_indices: dict,
-    #     statistics: dict,
-    #     graph_data: HeteroData,
-    #     **kwargs,
-    # ) -> None:
-    #     """Initializes the graph neural network.
-
-    #     Parameters
-    #     ----------
-    #     model_config : DotDict
-    #         Model configuration
-    #     data_indices : dict
-    #         Data indices
-    #     graph_data : HeteroData
-    #         Graph definition
-    #     """
-    #     super().__init__(
-    #         model_config=model_config, data_indices=data_indices, statistics=statistics, graph_data=graph_data, **kwargs
-    #     )
-
     def __init__(
         self,
         *,
