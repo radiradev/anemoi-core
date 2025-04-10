@@ -33,6 +33,30 @@ LOGGER = logging.getLogger(__name__)
 class AnemoiModelAutoEncoder(AnemoiModelEncProcDec):
     """Message passing graph neural network."""
 
+    # def __init__(
+    #     self,
+    #     *,
+    #     model_config: DotDict,
+    #     data_indices: dict,
+    #     statistics: dict,
+    #     graph_data: HeteroData,
+    #     **kwargs,
+    # ) -> None:
+    #     """Initializes the graph neural network.
+
+    #     Parameters
+    #     ----------
+    #     model_config : DotDict
+    #         Model configuration
+    #     data_indices : dict
+    #         Data indices
+    #     graph_data : HeteroData
+    #         Graph definition
+    #     """
+    #     super().__init__(
+    #         model_config=model_config, data_indices=data_indices, statistics=statistics, graph_data=graph_data, **kwargs
+    #     )
+
     def __init__(
         self,
         *,
@@ -53,31 +77,7 @@ class AnemoiModelAutoEncoder(AnemoiModelEncProcDec):
         graph_data : HeteroData
             Graph definition
         """
-        super().__init__(
-            model_config=model_config, data_indices=data_indices, statistics=statistics, graph_data=graph_data, **kwargs
-        )
-
-    def __init__(
-        self,
-        *,
-        model_config: DotDict,
-        data_indices: dict,
-        statistics: dict,
-        graph_data: HeteroData,
-        truncation_data: dict,
-    ) -> None:
-        """Initializes the graph neural network.
-
-        Parameters
-        ----------
-        model_config : DotDict
-            Model configuration
-        data_indices : dict
-            Data indices
-        graph_data : HeteroData
-            Graph definition
-        """
-        super().__init__()
+        super(AnemoiModelEncProcDec, self).__init__() #Temporary -> End state is to create Base Class for Models or Mixins
         model_config = DotDict(model_config)
         self._graph_data = graph_data
         self._graph_name_data = model_config.graph.data
@@ -96,14 +96,11 @@ class AnemoiModelAutoEncoder(AnemoiModelEncProcDec):
         # read config.model.layer_kernels to get the implementation for certain layers
         self.layer_kernels_encoder = load_layer_kernels(model_config.model.layer_kernels.get("encoder", {}))
         self.layer_kernels_decoder = load_layer_kernels(model_config.model.layer_kernels.get("decoder", {}))
-        self.layer_kernels_processor = load_layer_kernels(model_config.model.layer_kernels.get("processor", {}))
 
         self.multi_step = model_config.training.multistep_input
         self.num_channels = model_config.model.num_channels
 
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
-
-        self._truncation_data = truncation_data
 
         self.input_dim = self._calculate_input_dim(model_config)
 
@@ -119,7 +116,7 @@ class AnemoiModelAutoEncoder(AnemoiModelEncProcDec):
             sub_graph=self._graph_data[(self._graph_name_data, "to", self._graph_name_hidden)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-            layer_kernels=self.layer_kernels,
+            layer_kernels=self.layer_kernels_encoder,
         )
 
         # Decoder hidden -> data
@@ -132,7 +129,7 @@ class AnemoiModelAutoEncoder(AnemoiModelEncProcDec):
             sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_data)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
-            layer_kernels=self.layer_kernels,
+            layer_kernels=self.layer_kernels_decoder,
         )
 
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)

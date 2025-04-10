@@ -103,7 +103,7 @@ class AnemoiModelEncProcDec(nn.Module):
             sub_graph=self._graph_data[(self._graph_name_data, "to", self._graph_name_hidden)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-            layer_kernels=self.layer_kernels,
+            layer_kernels=self.layer_kernels_encoder,
         )
 
         # Processor hidden -> hidden
@@ -113,7 +113,7 @@ class AnemoiModelEncProcDec(nn.Module):
             sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_hidden)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-            layer_kernels=self.layer_kernels,
+            layer_kernels=self.layer_kernels_processor,
         )
 
         # Decoder hidden -> data
@@ -126,7 +126,7 @@ class AnemoiModelEncProcDec(nn.Module):
             sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_data)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
-            layer_kernels=self.layer_kernels,
+            layer_kernels=self.layer_kernels_decoder,
         )
 
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
