@@ -13,19 +13,18 @@ from typing import Optional
 
 import einops
 import torch
-from torch import nn
+from hydra.utils import instantiate
 from torch import Tensor
+from torch import nn
 from torch.distributed.distributed_c10d import ProcessGroup
 from torch_geometric.data import HeteroData
 
 from anemoi.models.distributed.shapes import get_shape_shards
+from anemoi.models.layers.graph import NamedNodesAttributes
+from anemoi.models.layers.utils import load_layer_kernels
 from anemoi.models.models import AnemoiModelEncProcDec
 from anemoi.models.models import AnemoiModelEncProcDecHierarchical
 from anemoi.utils.config import DotDict
-
-from anemoi.models.layers.graph import NamedNodesAttributes
-from anemoi.models.layers.utils import load_layer_kernels
-from hydra.utils import instantiate
 
 LOGGER = logging.getLogger(__name__)
 
@@ -53,7 +52,9 @@ class AnemoiModelAutoEncoder(AnemoiModelEncProcDec):
         graph_data : HeteroData
             Graph definition
         """
-        super(AnemoiModelEncProcDec, self).__init__() #Temporary -> End state is to create Base Class for Models or Mixins
+        super(
+            AnemoiModelEncProcDec, self
+        ).__init__()  # Temporary -> End state is to create Base Class for Models or Mixins
         model_config = DotDict(model_config)
         self._graph_data = graph_data
         self._graph_name_data = model_config.graph.data
@@ -82,7 +83,7 @@ class AnemoiModelAutoEncoder(AnemoiModelEncProcDec):
 
         # we can't register these as buffers because DDP does not support sparse tensors
         # these will be moved to the GPU when first used via sefl.interpolate_down/interpolate_up
-        
+
         # Encoder data -> hidden
         self.encoder = instantiate(
             model_config.model.encoder,
@@ -120,7 +121,6 @@ class AnemoiModelAutoEncoder(AnemoiModelEncProcDec):
                 for cfg in getattr(model_config.model, "bounding", [])
             ]
         )
-
 
     def forward(self, x: Tensor, model_comm_group: Optional[ProcessGroup] = None) -> Tensor:
         batch_size = x.shape[0]

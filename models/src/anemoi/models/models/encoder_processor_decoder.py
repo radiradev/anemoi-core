@@ -14,7 +14,6 @@ from typing import Optional
 import einops
 import numpy as np
 import torch
-from hydra.errors import InstantiationException
 from hydra.utils import instantiate
 from torch import Tensor
 from torch import nn
@@ -94,7 +93,7 @@ class AnemoiModelEncProcDec(nn.Module):
             LOGGER.info("Truncation: A_up %s", self.A_up.shape)
 
         # Encoder data -> hidden
-        
+
         self.encoder = instantiate(
             model_config.model.encoder,
             in_channels_src=self.input_dim,
