@@ -14,6 +14,7 @@ import logging
 from collections import defaultdict
 from typing import TYPE_CHECKING
 from typing import Optional
+
 import numpy as np
 import pytorch_lightning as pl
 import torch
