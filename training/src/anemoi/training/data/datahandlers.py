@@ -1,9 +1,13 @@
+# (C) Copyright 2025 Anemoi contributors.
 #
+# This software is licensed under the terms of the Apache Licence Version 2.0
+# which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
 #
-#
-#
-#
-#
+# In applying this licence, ECMWF does not waive the privileges and immunities
+# granted to it by virtue of its status as an intergovernmental organisation
+# nor does it submit to any jurisdiction.
+
+from anemoi.datasets.data import open_dataset
 
 
 def str_(t):
@@ -30,13 +34,11 @@ data_config = {
 }
 model_config = {
     "input": {
-        "fields": ["q_500", "2t"]
+        "fields": ["q_500", "2t"],
         # "more": ["q_50", "2t"]
     },
     "output": {"fields": ["q_1000", "2t"]},
 }
-
-from anemoi.datasets.data import open_dataset
 
 
 class DataHandlers(dict):
@@ -101,20 +103,21 @@ class SampleProvider:
         return sample
 
 
-class Tester:
-    def __init__(self, config, datahandlers):
-        self.input = SampleProvider(config["input"], datahandlers)
-        self.output = SampleProvider(config["output"], datahandlers)
+if __name__ == "__main__":
 
-    def getdata(self, i):
-        input = self.input[i]
-        output = self.output[i]
-        print("input", str_(input))
-        print("output", str_(output))
+    class Tester:
+        def __init__(self, config, datahandlers):
+            self.input = SampleProvider(config["input"], datahandlers)
+            self.output = SampleProvider(config["output"], datahandlers)
 
+        def getdata(self, i):
+            input = self.input[i]
+            output = self.output[i]
+            print("input", str_(input))
+            print("output", str_(output))
 
-dhs = DataHandlers(data_config)
-print(dhs)
+    dhs = DataHandlers(data_config)
+    print(dhs)
 
-model = Tester(model_config, dhs)
-model.getdata(5)
+    model = Tester(model_config, dhs)
+    model.getdata(5)
