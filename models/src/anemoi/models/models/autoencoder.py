@@ -13,6 +13,7 @@ from typing import Optional
 
 import einops
 import torch
+from torch import nn
 from torch import Tensor
 from torch.distributed.distributed_c10d import ProcessGroup
 from torch_geometric.data import HeteroData
@@ -21,6 +22,10 @@ from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.models import AnemoiModelEncProcDec
 from anemoi.models.models import AnemoiModelEncProcDecHierarchical
 from anemoi.utils.config import DotDict
+
+from anemoi.models.layers.graph import NamedNodesAttributes
+from anemoi.models.layers.utils import load_layer_kernels
+from hydra.utils import instantiate
 
 LOGGER = logging.getLogger(__name__)
 
@@ -51,6 +56,98 @@ class AnemoiModelAutoEncoder(AnemoiModelEncProcDec):
         super().__init__(
             model_config=model_config, data_indices=data_indices, statistics=statistics, graph_data=graph_data, **kwargs
         )
+
+    def __init__(
+        self,
+        *,
+        model_config: DotDict,
+        data_indices: dict,
+        statistics: dict,
+        graph_data: HeteroData,
+        truncation_data: dict,
+    ) -> None:
+        """Initializes the graph neural network.
+
+        Parameters
+        ----------
+        model_config : DotDict
+            Model configuration
+        data_indices : dict
+            Data indices
+        graph_data : HeteroData
+            Graph definition
+        """
+        super().__init__()
+        model_config = DotDict(model_config)
+        self._graph_data = graph_data
+        self._graph_name_data = model_config.graph.data
+        self._graph_name_hidden = model_config.graph.hidden
+
+        self.multi_step = model_config.training.multistep_input
+        self.num_channels = model_config.model.num_channels
+
+        self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
+
+        self._calculate_shapes_and_indices(data_indices)
+        self._assert_matching_indices(data_indices)
+        self.data_indices = data_indices
+        self.statistics = statistics
+
+        # read config.model.layer_kernels to get the implementation for certain layers
+        self.layer_kernels_encoder = load_layer_kernels(model_config.model.layer_kernels.get("encoder", {}))
+        self.layer_kernels_decoder = load_layer_kernels(model_config.model.layer_kernels.get("decoder", {}))
+        self.layer_kernels_processor = load_layer_kernels(model_config.model.layer_kernels.get("processor", {}))
+
+        self.multi_step = model_config.training.multistep_input
+        self.num_channels = model_config.model.num_channels
+
+        self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
+
+        self._truncation_data = truncation_data
+
+        self.input_dim = self._calculate_input_dim(model_config)
+
+        # we can't register these as buffers because DDP does not support sparse tensors
+        # these will be moved to the GPU when first used via sefl.interpolate_down/interpolate_up
+        
+        # Encoder data -> hidden
+        self.encoder = instantiate(
+            model_config.model.encoder,
+            in_channels_src=self.input_dim,
+            in_channels_dst=self.node_attributes.attr_ndims[self._graph_name_hidden],
+            hidden_dim=self.num_channels,
+            sub_graph=self._graph_data[(self._graph_name_data, "to", self._graph_name_hidden)],
+            src_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
+            dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
+            layer_kernels=self.layer_kernels,
+        )
+
+        # Decoder hidden -> data
+        self.decoder = instantiate(
+            model_config.model.decoder,
+            in_channels_src=self.num_channels,
+            in_channels_dst=self.input_dim,
+            hidden_dim=self.num_channels,
+            out_channels_dst=self.num_output_channels,
+            sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_data)],
+            src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
+            dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
+            layer_kernels=self.layer_kernels,
+        )
+
+        # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
+        self.boundings = nn.ModuleList(
+            [
+                instantiate(
+                    cfg,
+                    name_to_index=self.data_indices.internal_model.output.name_to_index,
+                    statistics=self.statistics,
+                    name_to_index_stats=self.data_indices.data.input.name_to_index,
+                )
+                for cfg in getattr(model_config.model, "bounding", [])
+            ]
+        )
+
 
     def forward(self, x: Tensor, model_comm_group: Optional[ProcessGroup] = None) -> Tensor:
         batch_size = x.shape[0]
