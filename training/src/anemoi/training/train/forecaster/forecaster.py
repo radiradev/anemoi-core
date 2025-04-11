@@ -23,6 +23,7 @@ from anemoi.training.losses import get_loss_function
 from anemoi.training.losses.base import BaseLoss
 from anemoi.training.losses.loss import get_metric_ranges
 from anemoi.training.losses.scaler_tensor import grad_scaler
+from anemoi.training.losses.utils import print_variable_scaling
 from anemoi.training.losses.scalers import create_scalers
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.schemas.base_schema import convert_to_omegaconf
@@ -118,7 +119,7 @@ class GraphForecaster(pl.LightningModule):
         )
 
         self.loss = get_loss_function(config.model_dump(by_alias=True).training.training_loss, scalers=self.scalers)
-        # print_variable_scaling(self.loss, data_indices) TODO(Harrison): related to ScalerTensor
+        print_variable_scaling(self.loss, data_indices)
 
         self.metrics = torch.nn.ModuleDict(
             {

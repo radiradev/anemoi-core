@@ -10,16 +10,26 @@
 
 import logging
 
-from torch import nn
-
 from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.training.utils.enums import TensorDim
+
+from anemoi.training.losses.base import BaseLoss
 
 LOGGER = logging.getLogger(__name__)
 
 
-def print_variable_scaling(loss: type[nn.Module], data_indices: IndexCollection) -> None:
-    variable_scaling = loss.scaler.subset_by_dim(TensorDim.VARIABLE.value)
+def print_variable_scaling(loss: BaseLoss, data_indices: IndexCollection) -> None:
+    """
+    Log the final variable scaling for each variable in the model.
+
+    Parameters
+    ----------
+    loss : BaseLoss
+        Loss function to get the variable scaling from.
+    data_indices : IndexCollection
+        Index collection to get the variable names from.
+    """
+    variable_scaling = loss.scaler.resolve(len(TensorDim)).subset_by_dim(TensorDim.VARIABLE.value)
     log_text = "Final Variable Scaling: "
     for idx, name in enumerate(data_indices.internal_model.output.name_to_index.keys()):
         log_text += f"{name}: {variable_scaling[idx]:.4g}, "
