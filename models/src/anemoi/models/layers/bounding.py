@@ -262,32 +262,15 @@ class HardtanhBounding(BaseBounding):
         return x
 
 
-class LeakyHardtanhBounding(BaseBounding):
-    """Initializes the bounding with specified minimum and maximum values for bounding.
-
-    Parameters
-    ----------
-    variables : list[str]
-        A list of strings representing the variables that will be bounded.
-    name_to_index : dict
-        A dictionary mapping the variable names to their corresponding indices.
-    min_val : float
-        The minimum value for the HardTanh activation.
-    max_val : float
-        The maximum value for the HardTanh activation.
-    """
-
-    def __init__(self, *, variables: list[str], name_to_index: dict, min_val: float, max_val: float) -> None:
-        super().__init__(variables=variables, name_to_index=name_to_index)
-        self.min_val = min_val
-        self.max_val = max_val
+class LeakyHardtanhBounding(HardtanhBounding):
+    """Initializes the bounding with a Leaky HardTanh activation."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x[..., self.data_index] = leaky_hardtanh(x[..., self.data_index], min_val=self.min_val, max_val=self.max_val)
         return x
 
 
-class FractionBounding(HardtanhBounding):
+class FractionBounding(BaseBounding):
     """Initializes the FractionBounding with specified parameters.
 
     Parameters
@@ -320,56 +303,27 @@ class FractionBounding(HardtanhBounding):
         statistics: Optional[dict] = None,
         name_to_index_stats: Optional[dict] = None,
     ) -> None:
-        super().__init__(variables=variables, name_to_index=name_to_index, min_val=min_val, max_val=max_val)
+        super().__init__(variables=variables, name_to_index=name_to_index)
+        self.min_val = min_val
+        self.max_val = max_val
         self.total_variable = self._create_index(variables=[total_var])
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Apply the HardTanh bounding  to the data_index variables
-        x = super().forward(x)
+        x[..., self.data_index] = torch.nn.functional.hardtanh(
+            x[..., self.data_index], min_val=self.min_val, max_val=self.max_val
+        )
         # Calculate the fraction of the total variable
         x[..., self.data_index] *= x[..., self.total_variable]
         return x
 
 
-class LeakyFractionBounding(LeakyHardtanhBounding):
-    """Initializes the LeakyFractionBounding with specified parameters.
-
-    Parameters
-    ----------
-    variables : list[str]
-        A list of strings representing the variables that will be bounded.
-    name_to_index : dict
-        A dictionary mapping the variable names to their corresponding indices.
-    min_val : float
-        The minimum value for the LeakyHardTanh activation.
-    max_val : float
-        The maximum value for the LeakyHardTanh activation.
-    total_var : str
-        A string representing a variable from which a secondary variable is derived. For
-        example, in the case of convective precipitation (Cp), total_var = Tp (total precipitation).
-    statistics : dict, optional
-        A dictionary containing the statistics of the variables.
-    name_to_index_stats : dict, optional
-        A dictionary mapping the variable names to their corresponding indices in the statistics dictionary.
-    """
-
-    def __init__(
-        self,
-        *,
-        variables: list[str],
-        name_to_index: dict,
-        min_val: float,
-        max_val: float,
-        total_var: str,
-        statistics: Optional[dict] = None,
-        name_to_index_stats: Optional[dict] = None,
-    ) -> None:
-        super().__init__(variables=variables, name_to_index=name_to_index, min_val=min_val, max_val=max_val)
-        self.total_variable = self._create_index(variables=[total_var])
+class LeakyFractionBounding(FractionBounding):
+    """Initializes the bounding with a Leaky HardTanh activation and a fraction of the total variable."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Apply the LeakyHardTanh bounding  to the data_index variables
-        x = super().forward(x)
+        x[..., self.data_index] = leaky_hardtanh(x[..., self.data_index], min_val=self.min_val, max_val=self.max_val)
         # Calculate the fraction of the total variable
         x[..., self.data_index] *= x[..., self.total_variable]
         return x
