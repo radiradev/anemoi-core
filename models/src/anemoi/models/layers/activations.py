@@ -39,3 +39,26 @@ def leaky_hardtanh(
     result = torch.where(below_min, min_val + negative_slope * (input - min_val), result)
     result = torch.where(above_max, max_val + positive_slope * (input - max_val), result)
     return result
+
+
+def scaled_tanh(
+    x: torch.Tensor,
+    min_val: float = -1.0,
+    max_val: float = 1.0,
+) -> torch.Tensor:
+    """Scale and shift the tanh activation function to a specified range.
+
+    This function transforms the standard tanh activation (which outputs values in [-1, 1])
+    to output values in the range [min_val, max_val].
+
+    Args:
+        x: Input tensor to apply the scaled tanh activation to
+        min_val: Lower bound of the output range. Default is -1.0
+        max_val: Upper bound of the output range. Default is 1.0
+
+    Returns:
+        Tensor with values scaled to the range [min_val, max_val]
+    """
+    range_width = max_val - min_val
+    middle = (max_val + min_val) / 2
+    return middle + (range_width / 2) * torch.tanh(x)

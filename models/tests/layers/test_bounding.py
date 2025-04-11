@@ -19,7 +19,10 @@ from anemoi.models.layers.bounding import LeakyHardtanhBounding
 from anemoi.models.layers.bounding import LeakyNormalizedReluBounding
 from anemoi.models.layers.bounding import LeakyReluBounding
 from anemoi.models.layers.bounding import NormalizedReluBounding
+from anemoi.models.layers.bounding import NormalizedSiluBounding
 from anemoi.models.layers.bounding import ReluBounding
+from anemoi.models.layers.bounding import ScaledTanhBounding
+from anemoi.models.layers.bounding import SiluBounding
 from anemoi.utils.config import DotDict
 
 
@@ -112,6 +115,33 @@ def test_multi_chained_bounding(config, name_to_index, input_tensor):
     assert torch.equal(output, expected_output)
 
 
+def test_scaled_tanh_bounding(config, name_to_index, input_tensor):
+    minimum, maximum = -1.0, 1.0
+    bounding = ScaledTanhBounding(
+        variables=config.variables, name_to_index=name_to_index, min_val=minimum, max_val=maximum
+    )
+    output = bounding(input_tensor.clone())
+
+    # Compute expected values using the formula from scaled_tanh implementation:
+    # middle + (range_width / 2) * torch.tanh(x)
+    # where middle = (max_val + min_val) / 2
+    # and range_width = max_val - min_val
+    middle = (maximum + minimum) / 2
+    range_width = maximum - minimum
+
+    def compute_expected(x):
+        return middle + (range_width / 2) * torch.tanh(torch.tensor(x))
+
+    expected_output = torch.tensor(
+        [
+            [compute_expected(-1.0), compute_expected(2.0), 3.0],
+            [compute_expected(4.0), compute_expected(-5.0), 6.0],
+            [compute_expected(0.5), compute_expected(0.5), 0.5],
+        ]
+    )
+    assert torch.allclose(output, expected_output, atol=1e-4)
+
+
 def test_hydra_instantiate_bounding(config, name_to_index, name_to_index_stats, input_tensor, statistics):
     layer_definitions = [
         {
@@ -149,12 +179,38 @@ def test_hydra_instantiate_bounding(config, name_to_index, name_to_index_stats, 
             "total_var": config.total_var,
         },
         {
+            "_target_": "anemoi.models.layers.bounding.NormalizedReluBounding",
+            "variables": config.variables,
+            "min_val": [2.0, 2.0],
+            "normalizer": ["mean-std", "min-max"],
+            "statistics": statistics,
+            "name_to_index_stats": name_to_index_stats,
+        },
+        {
             "_target_": "anemoi.models.layers.bounding.LeakyNormalizedReluBounding",
             "variables": config.variables,
             "min_val": [2.0, 2.0],
             "normalizer": ["mean-std", "min-max"],
             "statistics": statistics,
             "name_to_index_stats": name_to_index_stats,
+        },
+        {
+            "_target_": "anemoi.models.layers.bounding.SiluBounding",
+            "variables": config.variables,
+        },
+        {
+            "_target_": "anemoi.models.layers.bounding.NormalizedSiluBounding",
+            "variables": config.variables,
+            "min_val": [2.0, 2.0],
+            "normalizer": ["mean-std", "min-max"],
+            "statistics": statistics,
+            "name_to_index_stats": name_to_index_stats,
+        },
+        {
+            "_target_": "anemoi.models.layers.bounding.ScaledTanhBounding",
+            "variables": config.variables,
+            "min_val": -1.0,
+            "max_val": 1.0,
         },
     ]
     for layer_definition in layer_definitions:
@@ -261,4 +317,33 @@ def test_leaky_normalized_relu_bounding(config, name_to_index, name_to_index_sta
             [1.985, 0.5, 0.5],  # [0.5, 0.5, 0.5] -> [1.985, 0.5, 0.5]
         ]
     )
+    assert torch.allclose(output, expected_output, atol=1e-4)
+
+
+def test_silu_bounding(config, name_to_index, input_tensor):
+    bounding = SiluBounding(variables=config.variables, name_to_index=name_to_index)
+    output = bounding(input_tensor.clone())
+    # SiLU(x) = x * sigmoid(x)
+    expected_output = torch.tensor(
+        [
+            [torch.nn.functional.silu(torch.tensor(-1.0)), torch.nn.functional.silu(torch.tensor(2.0)), 3.0],
+            [torch.nn.functional.silu(torch.tensor(4.0)), torch.nn.functional.silu(torch.tensor(-5.0)), 6.0],
+            [torch.nn.functional.silu(torch.tensor(0.5)), torch.nn.functional.silu(torch.tensor(0.5)), 0.5],
+        ]
+    )
+    assert torch.allclose(output, expected_output, atol=1e-4)
+
+
+def test_normalized_silu_bounding(config, name_to_index, name_to_index_stats, input_tensor, statistics):
+    bounding = NormalizedSiluBounding(
+        variables=config.variables,
+        name_to_index=name_to_index,
+        min_val=[2.0, 2.0],
+        normalizer=["mean-std", "min-max"],
+        statistics=statistics,
+        name_to_index_stats=name_to_index_stats,
+    )
+    output = bounding(input_tensor.clone())
+
+    expected_output = torch.tensor([[1.8577, 1.7519, 3.0000], [3.7616, 0.0805, 6.0000], [1.7264, 0.3429, 0.5000]])
     assert torch.allclose(output, expected_output, atol=1e-4)

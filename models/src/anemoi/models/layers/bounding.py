@@ -18,6 +18,7 @@ from torch import nn
 
 from anemoi.models.data_indices.tensor import InputTensorIndex
 from anemoi.models.layers.activations import leaky_hardtanh
+from anemoi.models.layers.activations import scaled_tanh
 
 
 class BaseBounding(nn.Module, ABC):
@@ -88,6 +89,14 @@ class LeakyReluBounding(BaseBounding):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x[..., self.data_index] = torch.nn.functional.leaky_relu(x[..., self.data_index])
+        return x
+
+
+class SiluBounding(BaseBounding):
+    """Initializes the bounding with a SiLU activation / zero clamping."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x[..., self.data_index] = torch.nn.functional.silu(x[..., self.data_index])
         return x
 
 
@@ -194,6 +203,16 @@ class LeakyNormalizedReluBounding(NormalizedReluBounding):
         return x
 
 
+class NormalizedSiluBounding(NormalizedReluBounding):
+    """Initializes the bounding with a SiLU activation and customizable normalized thresholds."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x[..., self.data_index] = (
+            torch.nn.functional.silu(x[..., self.data_index] - self.norm_min_val) + self.norm_min_val
+        )
+        return x
+
+
 class HardtanhBounding(BaseBounding):
     """Initializes the bounding with specified minimum and maximum values for bounding.
 
@@ -239,6 +258,14 @@ class LeakyHardtanhBounding(HardtanhBounding):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x[..., self.data_index] = leaky_hardtanh(x[..., self.data_index], min_val=self.min_val, max_val=self.max_val)
+        return x
+
+
+class ScaledTanhBounding(HardtanhBounding):
+    """Initializes the bounding with a scaled Tanh activation."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x[..., self.data_index] = scaled_tanh(x[..., self.data_index], min_val=self.min_val, max_val=self.max_val)
         return x
 
 

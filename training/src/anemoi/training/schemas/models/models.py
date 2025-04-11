@@ -65,6 +65,11 @@ class ReluBoundingSchema(BaseModel):
     "List of variables to bound using the Relu method."
 
 
+class SiluBoundingSchema(ReluBoundingSchema):
+    target_: Literal["anemoi.models.layers.bounding.SiluBounding"] = Field(..., alias="_target_")
+    "SiLU bounding object defined in anemoi.models.layers.bounding."
+
+
 class LeakyReluBoundingSchema(ReluBoundingSchema):
     target_: Literal["anemoi.models.layers.bounding.LeakyReluBounding"] = Field(..., alias="_target_")
     "Leaky Relu bounding object defined in anemoi.models.layers.bounding."
@@ -100,6 +105,11 @@ class HardtanhBoundingSchema(BaseModel):
     "The maximum value for the HardTanh activation."
 
 
+class ScaledTanhBoundingSchema(HardtanhBoundingSchema):
+    target_: Literal["anemoi.models.layers.bounding.ScaledTanhBounding"] = Field(..., alias="_target_")
+    "Scaled tanh bounding object defined in anemoi.models.layers.bounding."
+
+
 class LeakyHardtanhBoundingSchema(HardtanhBoundingSchema):
     target_: Literal["anemoi.models.layers.bounding.LeakyHardtanhBounding"] = Field(..., alias="_target_")
     "Leaky hard tanh bounding method function from anemoi.models.layers.bounding."
@@ -122,6 +132,11 @@ class NormalizedReluBoundingSchema(BaseModel):
         return self
 
 
+class NormalizedSiluBoundingSchema(NormalizedReluBoundingSchema):
+    target_: Literal["anemoi.models.layers.bounding.NormalizedSiluBounding"] = Field(..., alias="_target_")
+    "Normalized SiLU bounding object defined in anemoi.models.layers.bounding."
+
+
 class LeakyNormalizedReluBoundingSchema(NormalizedReluBoundingSchema):
     target_: Literal["anemoi.models.layers.bounding.LeakyNormalizedReluBounding"] = Field(..., alias="_target_")
     "Leaky normalized Relu bounding object defined in anemoi.models.layers.bounding."
@@ -137,6 +152,9 @@ Bounding = Annotated[
         LeakyHardtanhBoundingSchema,
         NormalizedReluBoundingSchema,
         LeakyNormalizedReluBoundingSchema,
+        SiluBoundingSchema,
+        ScaledTanhBoundingSchema,
+        NormalizedSiluBoundingSchema,
     ],
     Field(discriminator="target_"),
 ]
