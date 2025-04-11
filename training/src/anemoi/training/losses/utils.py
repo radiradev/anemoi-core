@@ -11,9 +11,8 @@
 import logging
 
 from anemoi.models.data_indices.collection import IndexCollection
-from anemoi.training.utils.enums import TensorDim
-
 from anemoi.training.losses.base import BaseLoss
+from anemoi.training.utils.enums import TensorDim
 
 LOGGER = logging.getLogger(__name__)
 

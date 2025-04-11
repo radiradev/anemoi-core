@@ -48,11 +48,13 @@ def test_scale_contains_subset_by_dim_indexing() -> None:
     assert "wow" in scale
     assert "test" not in scale
 
+
 def test_scale_resolve() -> None:
     scale = ScaleTensor(test=(-1, 2))
     scale = scale.resolve(4)
     assert 3 in scale
     assert -1 not in scale
+
 
 def test_add_existing_scaler() -> None:
     scale = ScaleTensor(test=(0, torch.tensor([2.0])))
@@ -184,7 +186,7 @@ def test_scaler_subset(subset_id) -> None:  # noqa: ANN001
 
 
 @pytest.mark.parametrize("without_id", ["test", 0])
-def test_scaler_subset_without(without_id: int) -> None:  # noqa: ANN001
+def test_scaler_subset_without(without_id: int) -> None:
     scale = ScaleTensor(test=(0, torch.tensor([2.0])), wow=(1, torch.tensor([3.0])))
     subset = scale.without(without_id)
     assert "test" not in subset
