@@ -236,7 +236,7 @@ def test_variable_loss_scaling_vals(
 
     loss = get_loss_function(config.training.training_loss, scalers=scalers)
 
-    final_variable_scaling = loss.scaler.subset_by_dim(TensorDim.VARIABLE.value)
+    final_variable_scaling = loss.scaler.subset_by_dim(TensorDim.VARIABLE.value).get_scaler(len(TensorDim))
 
     assert torch.allclose(torch.tensor(final_variable_scaling), expected_scaling)
 
