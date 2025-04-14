@@ -53,14 +53,12 @@ edges:
 attributes:
   nodes:
     # Attributes for data nodes
-    area_weight:
-      _target_: anemoi.graphs.nodes.attributes.SphericalAreaWeights
-      norm: unit-max
-      fill_value: 0
     cutout_mask:
       _target_: anemoi.graphs.nodes.attributes.CutOutMask
     area_weight:
       _target_: anemoi.graphs.nodes.attributes.SphericalAreaWeights
+      norm: unit-max
+      fill_value: 0
     lam_area_weight:
       _target_: anemoi.graphs.nodes.attributes.MaskedPlanarAreaWeights
       mask_attr_node_name: cutout_mask
