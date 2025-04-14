@@ -65,16 +65,16 @@ class AnemoiTrainer:
         torch.set_float32_matmul_precision("high")
         # Resolve the config to avoid shenanigans with lazy loading
 
-        if config.no_validation:
-            config = OmegaConf.to_object(config)
-            self.config = UnvalidatedBaseSchema(**DictConfig(config))
-            LOGGER.info("Skipping config validation.")
-        else:
-
+        if config.config_validation:
             OmegaConf.resolve(config)
             self.config = BaseSchema(**config)
 
             LOGGER.info("Config validated.")
+        else:
+            config = OmegaConf.to_object(config)
+            self.config = UnvalidatedBaseSchema(**DictConfig(config))
+
+            LOGGER.info("Skipping config validation.")
 
         self.start_from_checkpoint = bool(self.config.training.run_id) or bool(self.config.training.fork_run_id)
         self.load_weights_only = self.config.training.load_weights_only
@@ -98,7 +98,11 @@ class AnemoiTrainer:
     @cached_property
     def datamodule(self) -> Any:
         """DataModule instance and DataSets."""
-        datamodule = instantiate(convert_to_omegaconf(self.config).datamodule, self.config, self.graph_data)
+        datamodule = instantiate(
+            convert_to_omegaconf(self.config).datamodule,
+            convert_to_omegaconf(self.config),
+            self.graph_data,
+        )
         self.config.data.num_features = len(datamodule.ds_train.data.variables)
         LOGGER.info("Number of data variables: %s", str(len(datamodule.ds_train.data.variables)))
         LOGGER.debug("Variables: %s", str(datamodule.ds_train.data.variables))
@@ -186,6 +190,7 @@ class AnemoiTrainer:
             "truncation_data": self.truncation_data,
             "metadata": self.metadata,
             "statistics": self.datamodule.statistics,
+            "statistics_tendencies": self.datamodule.statistics_tendencies,
             "supporting_arrays": self.supporting_arrays,
         }
 
@@ -425,8 +430,9 @@ class AnemoiTrainer:
 
     def _get_dry_run_id(self) -> None:
         """Check if the run ID is dry, e.g. without a checkpoint."""
+        # The Path casting is needed because in some multiple-gpu use cases
+        # ranks > 0 checkpoint paths are Python strings.
         if Path(self.config.hardware.paths.checkpoints).is_dir():
-            LOGGER.info("Checkpoints path: %s", self.config.hardware.paths.checkpoints)
             self.dry_run_id = False
         else:
             LOGGER.info("Starting from a dry run ID.")

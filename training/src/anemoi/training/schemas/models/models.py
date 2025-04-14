@@ -65,6 +65,11 @@ class ReluBoundingSchema(BaseModel):
     "List of variables to bound using the Relu method."
 
 
+class LeakyReluBoundingSchema(ReluBoundingSchema):
+    target_: Literal["anemoi.models.layers.bounding.LeakyReluBounding"] = Field(..., alias="_target_")
+    "Leaky Relu bounding object defined in anemoi.models.layers.bounding."
+
+
 class FractionBoundingSchema(BaseModel):
     target_: Literal["anemoi.models.layers.bounding.FractionBounding"] = Field(..., alias="_target_")
     "Fraction bounding object defined in anemoi.models.layers.bounding."
@@ -79,6 +84,11 @@ class FractionBoundingSchema(BaseModel):
     For example, convective precipitation should be a fraction of total precipitation."
 
 
+class LeakyFractionBoundingSchema(FractionBoundingSchema):
+    target_: Literal["anemoi.models.layers.bounding.LeakyFractionBounding"] = Field(..., alias="_target_")
+    "Leaky fraction bounding object defined in anemoi.models.layers.bounding."
+
+
 class HardtanhBoundingSchema(BaseModel):
     target_: Literal["anemoi.models.layers.bounding.HardtanhBounding"] = Field(..., alias="_target_")
     "Hard tanh bounding method function from anemoi.models.layers.bounding."
@@ -88,6 +98,11 @@ class HardtanhBoundingSchema(BaseModel):
     "The minimum value for the HardTanh activation."
     max_val: float
     "The maximum value for the HardTanh activation."
+
+
+class LeakyHardtanhBoundingSchema(HardtanhBoundingSchema):
+    target_: Literal["anemoi.models.layers.bounding.LeakyHardtanhBounding"] = Field(..., alias="_target_")
+    "Leaky hard tanh bounding method function from anemoi.models.layers.bounding."
 
 
 class NormalizedReluBoundingSchema(BaseModel):
@@ -107,14 +122,40 @@ class NormalizedReluBoundingSchema(BaseModel):
         return self
 
 
+class LeakyNormalizedReluBoundingSchema(NormalizedReluBoundingSchema):
+    target_: Literal["anemoi.models.layers.bounding.LeakyNormalizedReluBounding"] = Field(..., alias="_target_")
+    "Leaky normalized Relu bounding object defined in anemoi.models.layers.bounding."
+
+
 Bounding = Annotated[
-    Union[ReluBoundingSchema, FractionBoundingSchema, HardtanhBoundingSchema, NormalizedReluBoundingSchema],
+    Union[
+        ReluBoundingSchema,
+        LeakyReluBoundingSchema,
+        FractionBoundingSchema,
+        LeakyFractionBoundingSchema,
+        HardtanhBoundingSchema,
+        LeakyHardtanhBoundingSchema,
+        NormalizedReluBoundingSchema,
+        LeakyNormalizedReluBoundingSchema,
+    ],
     Field(discriminator="target_"),
 ]
 
 
-class BaseModelSchema(PydanticBaseModel):
+class NoOutputMaskSchema(BaseModel):
+    target_: Literal["anemoi.training.utils.masks.NoOutputMask"] = Field(..., alias="_target_")
 
+
+class Boolean1DSchema(BaseModel):
+    target_: Literal["anemoi.training.utils.masks.Boolean1DMask"] = Field(..., alias="_target_")
+    nodes_name: str = Field(examples="data")
+    attribute_name: str = Field(example="cutout_mask")
+
+
+OutputMaskSchemas = Union[NoOutputMaskSchema, Boolean1DSchema]
+
+
+class BaseModelSchema(PydanticBaseModel):
     num_channels: NonNegativeInt = Field(example=512)
     "Feature tensor size in the hidden space."
     model: Model = Field(default_factory=Model)
@@ -125,13 +166,12 @@ class BaseModelSchema(PydanticBaseModel):
     "Learnable node and edge parameters."
     bounding: list[Bounding]
     "List of bounding configuration applied in order to the specified variables."
-    output_mask: Union[str, None] = Field(example=None)  # !TODO CHECK!
-    "Output mask, it must be a node attribute of the output nodes"
+    output_mask: OutputMaskSchemas  # !TODO CHECK!
+    "Output mask"
     latent_skip: bool = True
     "Add skip connection in latent space before/after processor. Currently only in interpolator."
     grid_skip: Union[int, None] = 0  # !TODO set default to -1 if added to standard forecaster.
     "Index of grid residual connection, or use none. Currently only in interpolator."
-
     processor: Union[GNNProcessorSchema, GraphTransformerProcessorSchema, TransformerProcessorSchema] = Field(
         ...,
         discriminator="target_",
