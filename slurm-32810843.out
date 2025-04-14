@@ -1,0 +1,27 @@
+[ECMWF-INFO -ecepilog] ----------------------------------------------------------------------------------------------------
+[ECMWF-INFO -ecepilog] This is the ECMWF job Epilogue
+[ECMWF-INFO -ecepilog] +++ Please report issues using the Support portal +++
+[ECMWF-INFO -ecepilog] +++ https://support.ecmwf.int                     +++
+[ECMWF-INFO -ecepilog] ----------------------------------------------------------------------------------------------------
+[ECMWF-INFO -ecepilog] Run at 2025-03-21T15:20:52 on ac
+[ECMWF-INFO -ecepilog] JobName                   : bash
+[ECMWF-INFO -ecepilog] JobID                     : 32810843
+[ECMWF-INFO -ecepilog] Submit                    : 2025-03-21T14:34:15
+[ECMWF-INFO -ecepilog] Start                     : 2025-03-21T14:34:33
+[ECMWF-INFO -ecepilog] End                       : 2025-03-21T15:20:52
+[ECMWF-INFO -ecepilog] QueuedTime                : 18.0
+[ECMWF-INFO -ecepilog] ElapsedRaw                : 2779
+[ECMWF-INFO -ecepilog] ExitCode                  : 0:9
+[ECMWF-INFO -ecepilog] DerivedExitCode           : 0:0
+[ECMWF-INFO -ecepilog] State                     : FAILED
+[ECMWF-INFO -ecepilog] Account                   : ecrdmomu
+[ECMWF-INFO -ecepilog] QOS                       : ng
+[ECMWF-INFO -ecepilog] User                      : momc
+[ECMWF-INFO -ecepilog] StdOut                    : /etc/ecmwf/nfs/dh1_perm_a/momc/anemoi-core/slurm-32810843.out
+[ECMWF-INFO -ecepilog] StdErr                    : /etc/ecmwf/nfs/dh1_perm_a/momc/anemoi-core/slurm-32810843.out
+[ECMWF-INFO -ecepilog] NNodes                    : 1
+[ECMWF-INFO -ecepilog] NCPUS                     : 8
+[ECMWF-INFO -ecepilog] SBU                       : 52.689
+[ECMWF-INFO -ecepilog] jobtag                    : momc-bash-1x8-/etc/ecmwf/nfs/dh1_perm_a/momc/anemoi-core/slurm-_JOBID_.out
+[ECMWF-INFO -ecepilog] ----------------------------------------------------------------------------------------------------
+

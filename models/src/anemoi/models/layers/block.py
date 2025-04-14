@@ -28,7 +28,7 @@ from anemoi.models.distributed.graph import sync_tensor
 from anemoi.models.distributed.khop_edges import sort_edges_1hop_chunks
 from anemoi.models.distributed.transformer import shard_heads
 from anemoi.models.distributed.transformer import shard_sequence
-from anemoi.models.layers.attention import MultiHeadSelfAttention
+from anemoi.models.layers.attention import MultiHeadSelfAttention, MultiHeadCrossAttention
 from anemoi.models.layers.conv import GraphConv
 from anemoi.models.layers.conv import GraphTransformerConv
 from anemoi.models.layers.mlp import MLP
@@ -104,6 +104,52 @@ class TransformerProcessorBlock(BaseBlock):
         x = x + self.mlp(self.layer_norm2(x))
         return x
 
+
+class TransformerProcessorCrossAttBlock(BaseBlock):
+    """Transformer block with MultiHeadCrossAttention and MLPs."""
+
+    def __init__(
+        self,
+        num_channels: int,
+        hidden_dim: int,
+        num_heads: int,
+        activation: str,
+        window_size: int,
+        dropout_p: float = 0.0,
+    ):
+        super().__init__()
+
+        try:
+            act_func = getattr(nn, activation)
+        except AttributeError as ae:
+            LOGGER.error("Activation function %s not supported", activation)
+            raise RuntimeError from ae
+
+        self.layer_norm1 = nn.LayerNorm(num_channels)
+
+        self.attention = MultiHeadCrossAttention(
+            num_heads=num_heads,
+            embed_dim=num_channels,
+            window_size=window_size,
+            bias=False,
+            is_causal=False,
+            dropout_p=dropout_p,
+        )
+
+        self.mlp = nn.Sequential(
+            nn.Linear(num_channels, hidden_dim),
+            act_func(),
+            nn.Linear(hidden_dim, num_channels),
+        )
+        self.layer_norm2 = nn.LayerNorm(num_channels)
+
+    def forward(
+        self, x: Tensor, shapes: list, batch_size: int, model_comm_group: Optional[ProcessGroup] = None
+    ) -> Tensor:
+        # Need to be out of place for gradient propagation
+        x = x + self.attention(self.layer_norm1(x), shapes, batch_size, model_comm_group=model_comm_group)
+        x = x + self.mlp(self.layer_norm2(x))
+        return x
 
 class GraphConvBaseBlock(BaseBlock):
     """Message passing block with MLPs for node embeddings."""

@@ -161,15 +161,23 @@ class MultiHeadCrossAttention(nn.Module):
                 model_comm_group.size() == 1 or batch_size == 1
             ), "Only batch size of 1 is supported when model is sharded accross GPUs"
 
-        query, key, value = (
-            einops.rearrange(
-                t,
-                "(batch grid) (heads vars) -> batch heads grid vars",
-                batch=batch_size,
-                heads=self.num_heads,
-            )
-            for t in (query, key, value)
-        )
+        query = einops.rearrange(query, "(batch seq_len heads vars) -> batch heads seq_len vars", 
+                                 seq_len = 1, 
+                                 batch=1,
+                                 heads=1,
+                                 vars = self.embed_dim)
+        key = einops.rearrange(key, "(batch seq_len heads vars) -> batch heads seq_len vars", 
+                               seq_len = 1, 
+                               batch=1,
+                               vars=self.embed_dim,
+                               heads=1
+                              )
+        value = einops.rearrange(value, "(batch seq_len heads vars) -> batch heads seq_len vars", 
+                                 seq_len = 1, 
+                                 batch = 1,
+                                 vars=self.embed_dim,
+                                 heads=1
+                                )    
 
         query = shard_heads(query, shapes=shapes, mgroup=model_comm_group)
         key = shard_heads(key, shapes=shapes, mgroup=model_comm_group)

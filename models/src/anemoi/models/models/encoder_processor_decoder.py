@@ -23,8 +23,7 @@ from torch_geometric.data import HeteroData
 from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.layers.graph import NamedNodesAttributes
 from anemoi.models.layers.embedder import VerticalInformationEmbedder
-from anemoi.models.layers.attention import MultiHeadSelfAttention
-from anemoi.models.layers.block import TransformerProcessorBlock
+from anemoi.models.layers.block import TransformerProcessorBlock, TransformerProcessorCrossAttBlock
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -138,6 +137,7 @@ class AnemoiModelEncProcDec(nn.Module):
         )
 
         self.pressure_level_mapper_block = TransformerProcessorBlock(num_channels=13, hidden_dim=10, window_size=13, activation='GELU', num_heads=13)
+        #self.pressure_level_mapper_block = TransformerProcessorCrossAttBlock(num_channels=13, hidden_dim=10, window_size=13, activation='GELU', num_heads=13)
 
     def _calculate_shapes_and_indices(self, data_indices: dict) -> None:
         self.num_input_channels = len(data_indices.internal_model.input)
