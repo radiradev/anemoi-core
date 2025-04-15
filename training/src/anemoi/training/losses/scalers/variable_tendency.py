@@ -35,6 +35,7 @@ class BaseTendencyScaler(BaseVariableLossScaler):
         data_indices: IndexCollection,
         statistics: dict,
         statistics_tendencies: dict,
+        variables: list[str] | None = None,
         norm: str | None = None,
         **kwargs,
     ) -> None:
@@ -57,6 +58,7 @@ class BaseTendencyScaler(BaseVariableLossScaler):
         del kwargs
         self.statistics = statistics
         self.statistics_tendencies = statistics_tendencies
+        self.variables = variables
 
         if not self.statistics_tendencies:
             warnings.warn("Dataset has no tendency statistics! Are you sure you want to use a tendency scaler?")
@@ -74,6 +76,8 @@ class BaseTendencyScaler(BaseVariableLossScaler):
                 idx in self.data_indices.internal_model.output.prognostic
                 and self.data_indices.data.output.name_to_index.get(key)
             ):
+                if self.variables is not None and key not in self.variables:
+                    continue
                 prog_idx = self.data_indices.data.output.name_to_index[key]
                 variable_stdev = self.statistics["stdev"][prog_idx] if self.statistics_tendencies else 1
                 variable_tendency_stdev = (
