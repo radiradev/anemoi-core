@@ -45,22 +45,21 @@ def get_loss_function(
         Loss function configuration, should include `scalers` if scalers are to be added to the loss function.
     scalers : dict[str, tuple[int | tuple[int, ...] | torch.Tensor]], optional
         Scalers which can be added to the loss function. Defaults to None., by default None
-        If a scaler is to be added to the loss, ensure it is in `scalers` in the loss config
-        E.g.
-            If `scalers: ['variable']` is set in the config, and `variable` in `scalers`
-            `variable` will be added to the scaler of the loss function.
+        If a scaler is to be added to the loss, ensure it is in `scalers` in the loss config.
+        For instance, if `scalers: ['variable']` is set in the config, and `variable` in `scalers`
+        `variable` will be added to the scaler of the loss function.
     kwargs : Any
         Additional arguments to pass to the loss function
 
     Returns
     -------
-    Union[BaseLoss, torch.nn.ModuleDict]
-        Loss function, or dict of metrics
+    BaseLoss | torch.nn.ModuleDict
+        The loss function, or dict of metrics, to use for training/validation.
 
     Raises
     ------
     TypeError
-        If not a subclass of `BaseLoss`
+        If not a subclass of `BaseLoss`.
     ValueError
         If scaler is not found in valid scalers
     """

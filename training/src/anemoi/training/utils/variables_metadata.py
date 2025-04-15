@@ -47,17 +47,16 @@ class ExtractVariableGroupAndLevel:
         Parameters
         ----------
         variable_name : str
-        Name of the variable.
+            Name of the variable.
 
         Returns
         -------
-        str
+        group : str
             Group of the variable given in the training-config file.
-        str
+        variable_name : str
             Variable reference which corresponds to the variable name without the variable level
-        str
+        variable_level : str
             Variable level, i.e. pressure level or model level
-
         """
         variable_level = None
         mars_metadata_available = (
@@ -77,4 +76,5 @@ class ExtractVariableGroupAndLevel:
                 variable_name = variable_name[: -len(split[-1]) - 1]
         if variable_name in self.group_variables:
             return self.group_variables[variable_name], variable_name, variable_level
+
         return self.default_group, variable_name, variable_level

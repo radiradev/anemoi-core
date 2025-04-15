@@ -262,10 +262,6 @@ class GraphForecaster(pl.LightningModule):
         Generator[tuple[Union[torch.Tensor, None], dict, list], None, None]
             Loss value, metrics, and predictions (per step)
 
-        Returns
-        -------
-        None
-            None
         """
         # for validation not normalized in-place because remappers cannot be applied in-place
         batch = self.model.pre_processors(batch, in_place=not validation_mode)
@@ -376,12 +372,12 @@ class GraphForecaster(pl.LightningModule):
 
         Parameters
         ----------
-            y_pred: torch.Tensor
-                Predicted ensemble
-            y: torch.Tensor
-                Ground truth (target).
-            rollout_step: int
-                Rollout step
+        y_pred: torch.Tensor
+            Predicted ensemble
+        y: torch.Tensor
+            Ground truth (target).
+        rollout_step: int
+            Rollout step
 
         Returns
         -------
@@ -464,9 +460,6 @@ class GraphForecaster(pl.LightningModule):
         batch_idx : int
             Batch inces
 
-        Returns
-        -------
-        None
         """
         with torch.no_grad():
             val_loss, metrics, y_preds = self._step(batch, batch_idx, validation_mode=True)
@@ -497,6 +490,14 @@ class GraphForecaster(pl.LightningModule):
         return val_loss, y_preds
 
     def configure_optimizers(self) -> tuple[list[torch.optim.Optimizer], list[dict]]:
+        """Configure the optimizers and learning rate scheduler.
+
+        Returns
+        -------
+        tuple[list[torch.optim.Optimizer], list[dict]]
+            List of optimizers and list of dictionaries containing the
+            learning rate scheduler
+        """
         if self.optimizer_settings.zero:
             optimizer = ZeroRedundancyOptimizer(
                 self.trainer.model.parameters(),
@@ -517,4 +518,5 @@ class GraphForecaster(pl.LightningModule):
             t_initial=self.lr_iterations,
             warmup_t=self.lr_warmup,
         )
+
         return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
