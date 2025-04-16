@@ -41,6 +41,9 @@ class ExtractVariableGroupAndLevel:
         self.default_group = self.variable_groups["default"]
         self.metadata_variables = metadata_variables
 
+    def get_group_variables(self, group_name: str) -> list[str]:
+        return self.variable_groups[group_name]
+
     def get_group_and_level(self, variable_name: str) -> tuple[str, str, int]:
         """Get the group and level of a variable.
 

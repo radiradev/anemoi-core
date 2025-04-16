@@ -87,12 +87,12 @@ class BaseVariableLevelScaler(BaseVariableLossScaler):
             "Variable Level Scaling: Applying %s scaling to %s variables (%s)",
             self.__class__.__name__,
             self.scaling_group,
-            self.variable_groups[self.scaling_group],
+            self.variable_metadata_extractor.get_group_variables(self.scaling_group),
         )
         LOGGER.info("with slope = %s and y-intercept/minimum = %s.", self.slope, self.y_intercept)
 
         for variable_name, idx in self.data_indices.internal_model.output.name_to_index.items():
-            variable_group, _, variable_level = self.get_variable_group(variable_name)
+            variable_group, _, variable_level = self.variable_metadata_extractor.get_group_and_level(variable_name)
             if variable_group != self.scaling_group:
                 continue
             # Apply variable level scaling

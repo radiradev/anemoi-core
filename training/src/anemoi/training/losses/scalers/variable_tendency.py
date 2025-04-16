@@ -16,22 +16,23 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from anemoi.training.losses.scalers.variable import BaseVariableLossScaler
+from anemoi.training.losses.scalers.base_scaler import BaseScaler
+from anemoi.training.utils.enums import TensorDim
 
 if TYPE_CHECKING:
-    from omegaconf import DictConfig
 
     from anemoi.models.data_indices.collection import IndexCollection
 
 LOGGER = logging.getLogger(__name__)
 
 
-class BaseTendencyScaler(BaseVariableLossScaler):
+class BaseTendencyScaler(BaseScaler):
     """Configurable method to scale prognostic variables based on data statistics and statistics_tendencies."""
+
+    scale_dims: TensorDim = TensorDim.VARIABLE
 
     def __init__(
         self,
-        group_config: DictConfig,
         data_indices: IndexCollection,
         statistics: dict,
         statistics_tendencies: dict,
@@ -42,8 +43,6 @@ class BaseTendencyScaler(BaseVariableLossScaler):
 
         Parameters
         ----------
-        group_config : DictConfig
-            Configuration of groups for variable loss scaling.
         data_indices : IndexCollection
             Collection of data indices.
         statistics : dict
@@ -53,8 +52,9 @@ class BaseTendencyScaler(BaseVariableLossScaler):
         norm : str, optional
             Type of normalization to apply. Options are None, unit-sum, unit-mean and l1.
         """
-        super().__init__(group_config, data_indices, norm=norm)
+        super().__init__(norm=norm)
         del kwargs
+        self.data_indices = data_indices
         self.statistics = statistics
         self.statistics_tendencies = statistics_tendencies
 

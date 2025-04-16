@@ -61,17 +61,18 @@ class GraphNodeAttributeScaler(BaseScaler):
         **kwargs : dict
             Additional keyword arguments.
         """
+        super().__init__(norm=norm)
+        del kwargs
         self.output_mask = output_mask if output_mask is not None else NoOutputMask()
         self.nodes = graph_data[nodes_name]
         self.nodes_attribute_name = nodes_attribute_name
         self.inverse = inverse
-        super().__init__(data_indices, norm=norm)
-        del kwargs
+        self.data_indices = data_indices
 
     def get_scaling_values(self) -> np.ndarray:
-        scaler_values = self.nodes[self.nodes_attribute_name].squeeze().numpy()
+        scaler_values = self.nodes[self.nodes_attribute_name].squeeze()
         scaler_values = ~scaler_values if self.inverse else scaler_values
-        return self.output_mask.apply(scaler_values, dim=0, fill_value=0.0)
+        return self.output_mask.apply(scaler_values, dim=0, fill_value=0.0).numpy()
 
 
 class ReweightedGraphNodeAttributeScaler(GraphNodeAttributeScaler):
