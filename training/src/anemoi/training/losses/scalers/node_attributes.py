@@ -35,7 +35,6 @@ class GraphNodeAttributeScaler(BaseScaler):
 
     def __init__(
         self,
-        data_indices: IndexCollection,
         graph_data: HeteroData,
         nodes_name: str,
         nodes_attribute_name: str | None = None,
@@ -48,8 +47,6 @@ class GraphNodeAttributeScaler(BaseScaler):
 
         Parameters
         ----------
-        data_indices : IndexCollection
-            Collection of data indices.
         nodes_name : str
             Name of the nodes in the graph.
         nodes_attribute_name : str | None, optional
@@ -67,7 +64,6 @@ class GraphNodeAttributeScaler(BaseScaler):
         self.nodes = graph_data[nodes_name]
         self.nodes_attribute_name = nodes_attribute_name
         self.inverse = inverse
-        self.data_indices = data_indices
 
     def get_scaling_values(self) -> np.ndarray:
         scaler_values = self.nodes[self.nodes_attribute_name].squeeze()
@@ -84,7 +80,6 @@ class ReweightedGraphNodeAttributeScaler(GraphNodeAttributeScaler):
 
     def __init__(
         self,
-        data_indices: IndexCollection,
         graph_data: HeteroData,
         nodes_name: str,
         nodes_attribute_name: str,
@@ -98,7 +93,6 @@ class ReweightedGraphNodeAttributeScaler(GraphNodeAttributeScaler):
         self.scaling_mask_attribute_name = scaling_mask_attribute_name
         self.weight_frac_of_total = weight_frac_of_total
         super().__init__(
-            data_indices=data_indices,
             graph_data=graph_data,
             nodes_name=nodes_name,
             nodes_attribute_name=nodes_attribute_name,
