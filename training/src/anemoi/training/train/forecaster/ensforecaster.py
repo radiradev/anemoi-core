@@ -215,16 +215,18 @@ class GraphEnsForecaster(GraphForecaster):
             None
         """
         # for validation not normalized in-place because remappers cannot be applied in-place
-
-        ens_ic = self.ensemble_ic_generator(batch[0], batch[1] if len(batch) == 2 else None)
-
-        LOGGER.debug("Shapes: batch[0][0].shape = %s, ens_ic.shape = %s", list(batch[0][0].shape), list(ens_ic.shape))
-
         batch[0] = self.model.pre_processors(batch[0], in_place=not validation_mode)
-        x = self.model.pre_processors(
-            ens_ic,
-            in_place=not validation_mode,
-        )  # not in place required here??? ; shape = (bs, multistep, nens_per_device, latlon, input.full)
+
+        x = self.ensemble_ic_generator(
+            batch[0],
+            self.model.pre_processors(batch[1], in_place=not validation_mode) if len(batch) == 2 else None,
+        )
+        LOGGER.debug("Shapes: batch[0][0].shape = %s, ens_ic.shape = %s", list(batch[0][0].shape), list(x.shape))
+
+        # Scalers which are delayed need to be initialized after the pre-processors
+        if self.is_first_step:
+            self.define_delayed_scalers()
+            self.is_first_step = False
 
         assert len(x.shape) == 5, f"Expected a 5-dimensional tensor and got {len(x.shape)} dimensions, shape {x.shape}!"
         assert (x.shape[1] == self.multi_step) and (x.shape[2] == self.nens_per_device), (
@@ -278,7 +280,7 @@ class GraphEnsForecaster(GraphForecaster):
                     y,
                     rollout_step,
                 )
-            yield loss, metrics_next, y_pred_ens_group if validation_mode else [], ens_ic if validation_mode else None
+            yield loss, metrics_next, y_pred_ens_group if validation_mode else [], x if validation_mode else None
 
     def _step(
         self,
