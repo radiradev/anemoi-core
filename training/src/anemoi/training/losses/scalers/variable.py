@@ -43,8 +43,6 @@ class BaseVariableLossScaler(BaseScaler):
 
         Parameters
         ----------
-        group_config: DictConfig
-            Configuration of groups for variable loss scaling.
         data_indices : IndexCollection
             Collection of data indices.
         metadata_variables : dict, optional
@@ -52,35 +50,10 @@ class BaseVariableLossScaler(BaseScaler):
         norm : str, optional
             Type of normalization to apply. Options are None, unit-sum, unit-mean and l1.
         """
-        super().__init__(data_indices, norm=norm)
+        super().__init__(norm=norm)
         del kwargs
-        self.variable_groups = group_config
-        self.metadata_variables = metadata_variables
-
-        self.extract_variable_group_and_level = ExtractVariableGroupAndLevel(
-            self.variable_groups,
-            self.metadata_variables,
-        )
-
-    def get_variable_group(self, variable_name: str) -> tuple[str, str, int]:
-        """Get the group of a variable.
-
-        Parameters
-        ----------
-        variable_name : str
-            Name of the variable.
-
-        Returns
-        -------
-        str
-            Group of the variable given in the training-config file.
-        str
-            Variable reference which corresponds to the variable name without the variable level
-        str
-            Variable level, i.e. pressure level or model level
-
-        """
-        return self.extract_variable_group_and_level.get_group_and_level(variable_name)
+        self.data_indices = data_indices
+        self.variable_metadata_extractor = ExtractVariableGroupAndLevel(group_config, metadata_variables)
 
 
 class GeneralVariableLossScaler(BaseVariableLossScaler):
@@ -126,7 +99,7 @@ class GeneralVariableLossScaler(BaseVariableLossScaler):
         )
 
         for variable_name, idx in self.data_indices.internal_model.output.name_to_index.items():
-            _, variable_ref, _ = self.get_variable_group(variable_name)
+            _, variable_ref, _ = self.variable_metadata_extractor.get_group_and_level(variable_name)
             # Apply variable scaling by variable name
             # or base variable name (variable_ref: variable name without variable level)
             variable_loss_scaling[idx] = self.weights.get(

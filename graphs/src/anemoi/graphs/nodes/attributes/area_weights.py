@@ -160,7 +160,7 @@ class PlanarAreaWeights(BaseNodeAttribute):
         return np.concatenate([expanded_hull, np.vstack(boundary_points)])
 
     def get_raw_values(self, nodes: NodeStorage, **kwargs) -> torch.Tensor:
-        points = self.get_points(nodes)
+        points = self.get_latlon_coordinates(nodes)
         resolution = self._compute_mean_nearest_distance(points)
         boundary_points = self._get_boundary_ring(points, resolution)
 
@@ -212,7 +212,7 @@ class MaskedPlanarAreaWeights(PlanarAreaWeights):
         self.mask_node_attr_name = mask_node_attr_name
 
     def get_points(self, nodes: NodeStorage) -> torch.Tensor:
-        points = super().get_points(nodes)
+        points = super().get_latlon_coordinates(nodes)
         mask = nodes[self.mask_node_attr_name].squeeze()
         return points * mask
 

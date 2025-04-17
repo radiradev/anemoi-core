@@ -18,7 +18,6 @@ from anemoi.training.losses.scalers.base_scaler import BaseDelayedScaler
 from anemoi.training.utils.enums import TensorDim
 
 if TYPE_CHECKING:
-    from anemoi.models.data_indices.collection import IndexCollection
     from anemoi.models.interface import AnemoiModelInterface
 
 LOGGER = logging.getLogger(__name__)
@@ -28,17 +27,15 @@ class NaNMaskScaler(BaseDelayedScaler):
 
     scale_dims: tuple[TensorDim] = (TensorDim.GRID, TensorDim.VARIABLE)
 
-    def __init__(self, data_indices: IndexCollection, norm: str | None = None, **kwargs) -> None:
+    def __init__(self, norm: str | None = None, **kwargs) -> None:
         """Initialise NanMaskScaler.
 
         Parameters
         ----------
-        data_indices : IndexCollection
-            Collection of data indices.
         norm : str, optional
             Type of normalisation to apply. Options are None, unit-sum, unit-mean and l1.
         """
-        super().__init__(data_indices, norm=norm)
+        super().__init__(norm=norm)
         del kwargs
 
     def get_scaling_values(self) -> np.ndarray:
@@ -56,6 +53,6 @@ class NaNMaskScaler(BaseDelayedScaler):
         # iterate over all pre-processors and check if they have a loss_mask_training attribute
         for pre_processor in model.pre_processors.processors.values():
             if hasattr(pre_processor, "loss_mask_training"):
-                loss_weights_mask = loss_weights_mask * pre_processor.loss_mask_training
+                loss_weights_mask = loss_weights_mask * pre_processor.loss_mask_training.cpu().numpy()
 
         return loss_weights_mask

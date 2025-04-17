@@ -19,7 +19,6 @@ import numpy as np
 from anemoi.training.utils.enums import TensorDim
 
 if TYPE_CHECKING:
-    from anemoi.models.data_indices.collection import IndexCollection
     from anemoi.models.interface import AnemoiModelInterface
 
 LOGGER = logging.getLogger(__name__)
@@ -31,17 +30,14 @@ class BaseScaler(ABC):
 
     scale_dims: tuple[TensorDim] = None
 
-    def __init__(self, data_indices: IndexCollection, norm: str | None = None) -> None:
+    def __init__(self, norm: str | None = None) -> None:
         """Initialise BaseScaler.
 
         Parameters
         ----------
-        data_indices : IndexCollection
-            Collection of data indices.
         norm : str, optional
             Type of normalization to apply. Options are None, unit-sum, unit-mean and l1.
         """
-        self.data_indices = data_indices
         self.norm = norm
         assert norm in [
             None,

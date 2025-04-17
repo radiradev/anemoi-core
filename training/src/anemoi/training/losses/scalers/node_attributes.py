@@ -22,7 +22,6 @@ if TYPE_CHECKING:
     import numpy as np
     from torch_geometric.data import HeteroData
 
-    from anemoi.models.data_indices.collection import IndexCollection
     from anemoi.training.utils.masks import BaseMask
 
 LOGGER = logging.getLogger(__name__)
@@ -35,7 +34,6 @@ class GraphNodeAttributeScaler(BaseScaler):
 
     def __init__(
         self,
-        data_indices: IndexCollection,
         graph_data: HeteroData,
         nodes_name: str,
         nodes_attribute_name: str | None = None,
@@ -48,8 +46,6 @@ class GraphNodeAttributeScaler(BaseScaler):
 
         Parameters
         ----------
-        data_indices : IndexCollection
-            Collection of data indices.
         nodes_name : str
             Name of the nodes in the graph.
         nodes_attribute_name : str | None, optional
@@ -61,17 +57,17 @@ class GraphNodeAttributeScaler(BaseScaler):
         **kwargs : dict
             Additional keyword arguments.
         """
+        super().__init__(norm=norm)
+        del kwargs
         self.output_mask = output_mask if output_mask is not None else NoOutputMask()
         self.nodes = graph_data[nodes_name]
         self.nodes_attribute_name = nodes_attribute_name
         self.inverse = inverse
-        super().__init__(data_indices, norm=norm)
-        del kwargs
 
     def get_scaling_values(self) -> np.ndarray:
-        scaler_values = self.nodes[self.nodes_attribute_name].squeeze().numpy()
+        scaler_values = self.nodes[self.nodes_attribute_name].squeeze()
         scaler_values = ~scaler_values if self.inverse else scaler_values
-        return self.output_mask.apply(scaler_values, dim=0, fill_value=0.0)
+        return self.output_mask.apply(scaler_values, dim=0, fill_value=0.0).numpy()
 
 
 class ReweightedGraphNodeAttributeScaler(GraphNodeAttributeScaler):
@@ -83,7 +79,6 @@ class ReweightedGraphNodeAttributeScaler(GraphNodeAttributeScaler):
 
     def __init__(
         self,
-        data_indices: IndexCollection,
         graph_data: HeteroData,
         nodes_name: str,
         nodes_attribute_name: str,
@@ -97,7 +92,6 @@ class ReweightedGraphNodeAttributeScaler(GraphNodeAttributeScaler):
         self.scaling_mask_attribute_name = scaling_mask_attribute_name
         self.weight_frac_of_total = weight_frac_of_total
         super().__init__(
-            data_indices=data_indices,
             graph_data=graph_data,
             nodes_name=nodes_name,
             nodes_attribute_name=nodes_attribute_name,
