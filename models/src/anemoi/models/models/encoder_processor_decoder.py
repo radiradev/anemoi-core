@@ -35,6 +35,8 @@ class AnemoiModelEncProcDec(nn.Module):
     def __init__(
         self,
         *,
+        input: dict,
+        output: dict,
         model_config: DotDict,
         data_indices: dict,
         statistics: dict,
@@ -63,18 +65,29 @@ class AnemoiModelEncProcDec(nn.Module):
 
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
 
-        self._calculate_shapes_and_indices(data_indices)
-        self._assert_matching_indices(data_indices)
+        #---------TODO: organize these in a ModelIndex object?---------------------#
+        self.input_data_name = list(input.keys())[0]
+        self.input_variables = input[self.input_data_name]
+        self.num_input_channels = len(self.input_variables)
+
+        self.output_data_name = list(output.keys())[0]
+        self.output_variables = output[self.output_data_name]
+        self.num_output_channels = len(self.output_variables)
+
+        self.name_to_index_input = {var: idx for idx, var in enumerate(self.input_variables)}
+        self.name_to_index_output = {var: idx for idx, var in enumerate(self.output_variables)}
+        skip_variables = [var for var in self.input_variables if var in self.output_variables]
+        self._internal_input_idx = [self.input_variables.index(var) for var in skip_variables]
+        self._internal_output_idx = [self.output_variables.index(var) for var in skip_variables]
+        #-------------------------------------------------------------------------#
+
         self.data_indices = data_indices
         self.statistics = statistics
-
+        
         # read config.model.layer_kernels to get the implementation for certain layers
         self.layer_kernels_encoder = load_layer_kernels(model_config.model.layer_kernels.get("encoder", {}))
         self.layer_kernels_decoder = load_layer_kernels(model_config.model.layer_kernels.get("decoder", {}))
         self.layer_kernels_processor = load_layer_kernels(model_config.model.layer_kernels.get("processor", {}))
-
-        self.multi_step = model_config.training.multistep_input
-        self.num_channels = model_config.model.num_channels
 
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
 
@@ -132,9 +145,9 @@ class AnemoiModelEncProcDec(nn.Module):
             [
                 instantiate(
                     cfg,
-                    name_to_index=self.data_indices.internal_model.output.name_to_index,
+                    name_to_index=self.name_to_index_output,
                     statistics=self.statistics,
-                    name_to_index_stats=self.data_indices.data.input.name_to_index,
+                    name_to_index_stats=self.data_indices.data.input.name_to_index, #Need to find a solution for this if we want to remove data_indices
                 )
                 for cfg in getattr(model_config.model, "bounding", [])
             ]
@@ -277,7 +290,8 @@ class AnemoiModelEncProcDec(nn.Module):
             use_reentrant=use_reentrant,
         )
 
-    def forward(self, x: Tensor, model_comm_group: Optional[ProcessGroup] = None) -> Tensor:
+    def forward(self, batch: dict[str, Tensor], model_comm_group: Optional[ProcessGroup] = None) -> dict[str, Tensor]:
+        x = batch[self.input_data_name]
         batch_size = x.shape[0]
         ensemble_size = x.shape[2]
 
@@ -314,4 +328,4 @@ class AnemoiModelEncProcDec(nn.Module):
 
         x_out = self._assemble_output(x_out, x_skip, batch_size, ensemble_size, x.dtype)
 
-        return x_out
+        return {self.output_data_name: x_out}
