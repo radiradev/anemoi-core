@@ -8,8 +8,8 @@
 # nor does it submit to any jurisdiction.
 
 
-import importlib.util
 import logging
+import sys
 import warnings
 from abc import ABC
 from typing import Optional
@@ -55,7 +55,7 @@ class BaseImputer(BasePreprocessor, ABC):
         self.inference = not self._is_anemoi_training_loaded()
 
     def _is_anemoi_training_loaded(self):
-        return importlib.util.find_spec("anemoi.training") is not None
+        return "anemoi.training" in sys.modules
 
     def _validate_indices(self):
         assert len(self.index_training_input) == len(self.index_inference_input) <= len(self.replacement), (
