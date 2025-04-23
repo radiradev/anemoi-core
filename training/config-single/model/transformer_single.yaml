@@ -53,7 +53,7 @@ processor:
   num_chunks: 2
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
   num_heads: 16 # GraphTransformer or Transformer only
-  window_size: 512
+  window_size: 1120
   dropout_p: 0.0 # GraphTransformer
   attention_implementation: flash_attention # flash_attention, scaled_dot_product_attention
   qk_norm: False # Transformer and GraphTransformer only
@@ -109,6 +109,7 @@ bounding: #These are applied in order
     - ro
     - tcw
     - ssrd
+    - ro
     - q_50
     - q_100
     - q_150
@@ -133,7 +134,6 @@ bounding: #These are applied in order
     variables:
     - cp
     - sf
-    - ro
     min_val: 0
     max_val: 1
     total_var: tp

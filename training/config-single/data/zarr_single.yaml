@@ -1,5 +1,5 @@
 format: zarr
-resolution: o96  # n320
+resolution: n320  # n320
 # Time frequency requested from dataset
 frequency: 6h
 # Time step of model (must be multiple of frequency)

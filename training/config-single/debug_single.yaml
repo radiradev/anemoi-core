@@ -23,11 +23,11 @@ diagnostics:
   log:
     mlflow:
       enabled: True
-      offline: True  # True
+      offline: False  # True
       experiment_name: 'rain_pox'
-      run_name: 'mse_mask_sm'
+      run_name: 'mse_mask_sm-atos'
       terminal: True
-      # authentication: True
+      authentication: True
   plot:
     callbacks: []
 
@@ -43,8 +43,10 @@ dataloader:
     validation: 100
 
 training:
-  max_epochs: 67
+  # max_epochs: 67
+  max_steps: 267500
   lr:
-    rate: 3.125e-5  # Do I need to multiply by 4 if only have 4 nodes on ATOS?
+    # rate: 3.125e-5  # Do I need to multiply by 4 if only have 4 nodes on ATOS?
+    rate: 1.25e-4  # 3.125e-5 * 4 for ATOS change make for 16-node runs!!
     iterations: 260000
-    min: 3e-7 #Not scaled by #GPU
+    min: 3e-7  # Not scaled by GPU
