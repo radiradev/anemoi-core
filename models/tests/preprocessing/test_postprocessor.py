@@ -8,12 +8,13 @@
 # nor does it submit to any jurisdiction.
 
 
-import numpy as np
 import pytest
 import torch
 from omegaconf import DictConfig
 
 from anemoi.models.data_indices.collection import IndexCollection
+from anemoi.models.preprocessing.postprocessor import ConditionalZeroPostprocessor
+from anemoi.models.preprocessing.postprocessor import CustomReluPostprocessor
 from anemoi.models.preprocessing.postprocessor import Postprocessor
 
 
@@ -24,31 +25,103 @@ def postprocessor():
             "diagnostics": {"log": {"code": {"level": "DEBUG"}}},
             "data": {
                 "postprocessor": {"default": "none", "relu": ["q"], "hardtanh": ["x"]},
-                "forcing": ["z", "q"],
+                "forcing": ["z"],
                 "diagnostic": ["other"],
                 "remapped": {},
             },
         },
     )
-    statistics = {
-        "mean": np.array([1.0, 2.0, 3.0, 4.5, 3.0]),
-        "stdev": np.array([0.5, 0.5, 0.5, 1, 14]),
-        "minimum": np.array([1.0, 1.0, 1.0, 1.0, 1.0]),
-        "maximum": np.array([11.0, 10.0, 10.0, 10.0, 10.0]),
-    }
     name_to_index = {"x": 0, "y": 1, "z": 2, "q": 3, "other": 4}
     data_indices = IndexCollection(config=config, name_to_index=name_to_index)
-    return Postprocessor(config=config.data.postprocessor, data_indices=data_indices, statistics=statistics)
+    return Postprocessor(config=config.data.postprocessor, data_indices=data_indices)
 
 
 @pytest.fixture()
 def output_data():
-    base = torch.Tensor([[1.0, 2.0, 3.0, -1, 5.0], [1.0, -2, 8.0, 9.0, 10.0]])
-    expected = torch.Tensor([[1.0, 2.0, 3.0, 0.0, 5.0], [1.0, -1, 8.0, 9.0, 10.0]])
+    base = torch.Tensor([[1.0, 2.0, 3.0, -1, 5.0], [-2, 1, 8.0, 9.0, 10.0]])
+    expected = torch.Tensor([[1.0, 2.0, 3.0, 0.0, 5.0], [-1.0, 1, 8.0, 9.0, 10.0]])
     return base, expected
 
 
-fixture_combinations = (("postprocessor", "output_data"),)
+@pytest.fixture()
+def inference_output_data():
+    base = torch.Tensor([[1.0, 2.0, -1, 5.0], [-2, 1, 9.0, 10.0]])
+    expected = torch.Tensor([[1.0, 2.0, 0.0, 5.0], [-1, 1, 9.0, 10.0]])
+    return base, expected
+
+
+@pytest.fixture()
+def customrelupostprocessor():
+    config = DictConfig(
+        {
+            "diagnostics": {"log": {"code": {"level": "DEBUG"}}},
+            "data": {
+                "customrelupostprocessor": {"default": "none", 0: ["q"], -1.5: ["x"]},
+                "forcing": ["z"],
+                "diagnostic": ["other"],
+                "remapped": {},
+            },
+        },
+    )
+    name_to_index = {"x": 0, "y": 1, "z": 2, "q": 3, "other": 4}
+    data_indices = IndexCollection(config=config, name_to_index=name_to_index)
+    return CustomReluPostprocessor(config=config.data.customrelupostprocessor, data_indices=data_indices)
+
+
+@pytest.fixture()
+def customrelu_output_data():
+    base = torch.Tensor([[1.0, 2.0, 3.0, -1, 5.0], [-2, 1, 8.0, 9.0, 10.0]])
+    expected = torch.Tensor([[1.0, 2.0, 3.0, 0.0, 5.0], [-1.5, 1, 8.0, 9.0, 10.0]])
+    return base, expected
+
+
+@pytest.fixture()
+def customrelu_inference_output_data():
+    base = torch.Tensor([[1.0, 2.0, -1, 5.0], [-2, 1, 9.0, 10.0]])
+    expected = torch.Tensor([[1.0, 2.0, 0.0, 5.0], [-1, 1, 9.0, 10.0]])
+    return base, expected
+
+
+@pytest.fixture()
+def conditionalzeropostprocessor():
+    config = DictConfig(
+        {
+            "diagnostics": {"log": {"code": {"level": "DEBUG"}}},
+            "data": {
+                "conditionalzeropostprocessor": {"default": "none", 0: ["q"], -1.5: ["x"], "remap": "y"},
+                "forcing": ["z"],
+                "diagnostic": ["other"],
+                "remapped": {},
+            },
+        },
+    )
+    name_to_index = {"x": 0, "y": 1, "z": 2, "q": 3, "other": 4}
+    data_indices = IndexCollection(config=config, name_to_index=name_to_index)
+    return ConditionalZeroPostprocessor(config=config.data.conditionalzeropostprocessor, data_indices=data_indices)
+
+
+@pytest.fixture()
+def conditionalzero_output_data():
+    base = torch.Tensor([[[1.0, 0.0, 3.0, -1, 5.0], [-2, 1, 8.0, 9.0, 10.0]]])
+    expected = torch.Tensor([[[-1.5, 0.0, 3.0, 0.0, 5.0], [-2, 1, 8.0, 9.0, 10.0]]])
+    return base, expected
+
+
+@pytest.fixture()
+def conditionalzero_inference_output_data():
+    base = torch.Tensor([[[1.0, 0.0, -1, 5.0], [-2, 1, 9.0, 10.0]]])
+    expected = torch.Tensor([[[-1.5, 0.0, 0.0, 5.0], [-2, 1, 9.0, 10.0]]])
+    return base, expected
+
+
+fixture_combinations = (
+    ("postprocessor", "output_data"),
+    ("postprocessor", "inference_output_data"),
+    ("customrelupostprocessor", "customrelu_output_data"),
+    ("customrelupostprocessor", "customrelu_inference_output_data"),
+    ("conditionalzeropostprocessor", "conditionalzero_output_data"),
+    ("conditionalzeropostprocessor", "conditionalzero_inference_output_data"),
+)
 
 
 @pytest.mark.parametrize(

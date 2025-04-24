@@ -9,7 +9,6 @@
 
 
 import logging
-from abc import abstractmethod
 from typing import Optional
 
 import torch
@@ -54,22 +53,6 @@ class Postprocessor(BasePreprocessor):
             f"{len(self.index_inference_output)}, {len(self.postprocessorfunctions)}"
         )
 
-    @abstractmethod
-    def postprocess(self, x: torch.Tensor) -> torch.Tensor:
-        """Postprocess the input tensor.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input tensor to be postprocessed
-
-        Returns
-        -------
-        torch.Tensor
-            Postprocessed tensor
-        """
-        pass
-
     def _create_imputation_indices(
         self,
         statistics=None,
@@ -94,6 +77,11 @@ class Postprocessor(BasePreprocessor):
             if method == "none":
                 LOGGER.debug(f"Postprocessor: skipping {name} as no postprocessing method is specified")
                 continue
+
+            assert name in name_to_index_inference_output, (
+                f"Postprocessor: {name} not found in inference output indices. "
+                f"Postprocessors cannot be applied to foorcing variables."
+            )
 
             self.index_training_output.append(name_to_index_training_output.get(name, None))
             self.index_inference_output.append(name_to_index_inference_output.get(name, None))
@@ -126,6 +114,96 @@ class Postprocessor(BasePreprocessor):
             if idx_dst is not None:
                 x[..., idx_dst] = postprocessor(x[..., idx_dst])
         return x
+
+
+class CustomRelu(torch.nn.Module):
+    """Custom ReLU activation function with a specified threshold."""
+
+    def __init__(self, threshold: float = 0.0) -> None:
+        """Initialize the CustomReLU with a specified threshold.
+
+        Parameters
+        ----------
+        threshold : float
+            The threshold for the ReLU activation.
+        """
+        super().__init__()
+        self.threshold = threshold
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply the ReLU activation with the specified threshold.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            The input tensor to process.
+
+        Returns
+        -------
+        torch.Tensor
+            The processed tensor with ReLU applied.
+        """
+        return torch.nn.functional.relu(x - self.threshold) + self.threshold
+
+
+class CustomReluPostprocessor(Postprocessor):
+    """Postprocess with a ReLU activation and customizable thresholds.
+
+    Expects the config to have keys corresponding to customizable thresholds as lists of variables to impute.:
+    ```
+    default: "none"
+    1:
+        - y
+    0:
+        - x
+    3.14:
+        - q
+    ```
+    """
+
+    def __init__(
+        self,
+        config=None,
+        data_indices: Optional[IndexCollection] = None,
+        statistics: Optional[dict] = None,
+    ) -> None:
+        super().__init__(config, data_indices, statistics)
+
+        self._create_imputation_indices()
+
+        self._validate_indices()
+
+    def _create_imputation_indices(
+        self,
+        statistics=None,
+    ):
+        """Create the indices for imputation."""
+        name_to_index_training_output = self.data_indices.data.output.name_to_index
+        name_to_index_inference_output = self.data_indices.model.output.name_to_index
+
+        self.num_training_output_vars = len(name_to_index_training_output)
+        self.num_inference_output_vars = len(name_to_index_inference_output)
+
+        (
+            self.index_training_output,
+            self.index_inference_output,
+            self.postprocessorfunctions,
+        ) = ([], [], [])
+
+        # Create indices for imputation
+        for name in name_to_index_training_output:
+
+            method = self.methods.get(name, self.default)
+            if method == "none":
+                LOGGER.debug(f"CustomReluPostprocessor: skipping {name} as no postprocessing method is specified")
+                continue
+
+            self.index_training_output.append(name_to_index_training_output.get(name, None))
+            self.index_inference_output.append(name_to_index_inference_output.get(name, None))
+
+            self.postprocessorfunctions.append(CustomRelu(method))
+
+            LOGGER.info(f"CustomReluPostprocessor: applying CustomRelu with thresholf {method} to {name}.")
 
 
 class ConditionalZeroPostprocessor(Postprocessor):
@@ -177,7 +255,7 @@ class ConditionalZeroPostprocessor(Postprocessor):
         (
             self.index_training_output,
             self.index_inference_output,
-            self.replacement,
+            self.postprocessorfunctions,
         ) = ([], [], [])
 
         # Create indices for imputation
@@ -185,16 +263,16 @@ class ConditionalZeroPostprocessor(Postprocessor):
 
             method = self.methods.get(name, self.default)
             if method == "none":
-                LOGGER.debug(f"Imputer: skipping {name} as no imputation method is specified")
+                LOGGER.debug(f"ConditionalZeroPostprocessor: skipping {name} as no method is specified.")
                 continue
 
             self.index_training_output.append(name_to_index_training_output.get(name, None))
             self.index_inference_output.append(name_to_index_inference_output.get(name, None))
 
-            self.replacement.append(method)
+            self.postprocessorfunctions.append(method)
 
             LOGGER.info(
-                f"ConditionalZeroPostprocessor: replacing valus in {name} with value {self.replacement[-1]} if {self.masking_variable} is zero"
+                f"ConditionalZeroPostprocessor: replacing valus in {name} with value {self.postprocessorfunctions[-1]} if {self.masking_variable} is zero."
             )
 
     def _expand_subset_mask(self, x: torch.Tensor, mask: torch.tensor) -> torch.Tensor:
@@ -208,7 +286,7 @@ class ConditionalZeroPostprocessor(Postprocessor):
         return (x[idx] == 0).squeeze()
 
     def fill_with_value(self, x, index, fill_mask):
-        for idx_dst, value in zip(index, self.replacement):
+        for idx_dst, value in zip(index, self.postprocessorfunctions):
             if idx_dst is not None:
                 x[..., idx_dst][self._expand_subset_mask(x, fill_mask)] = value
         return x

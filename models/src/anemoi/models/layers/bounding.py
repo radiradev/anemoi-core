@@ -184,7 +184,7 @@ class NormalizedReluBounding(BaseBounding):
         return x
 
 
-class LeakyNormalizedReluBounding(NormalizedReluBounding):
+class NormalizedLeakyReluBounding(NormalizedReluBounding):
     """Initializes the bounding with a Leaky ReLU activation and customizable normalized thresholds."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
