@@ -1,15 +1,15 @@
 ---
 overwrite: True
 
-data: "data"
+data: "era5"
 hidden: "hidden"
 
 nodes:
   # Data nodes
-  data:
+  era5:
     node_builder:
       _target_: anemoi.graphs.nodes.AnemoiDatasetNodes # options: AnemoiDatasetNodes, NPZFileNodes
-      dataset: ${dataloader.dataset}
+      dataset: ${data.data_handlers.era5.dataset}
     attributes: ${graph.attributes.nodes}
   # Hidden nodes
   hidden:
