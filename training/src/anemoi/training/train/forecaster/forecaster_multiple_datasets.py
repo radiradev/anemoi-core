@@ -655,10 +655,10 @@ class GraphForecasterMultiDataset(pl.LightningModule):
     
     def training_step(
         self, 
-        batch_input: dict[str, torch.Tensor],
-        batch_target: dict[str, torch.Tensor],
+        batch: tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]],
         batch_idx: int,
         ) -> torch.Tensor:
+        batch_input, batch_target = batch
         train_losses, _ = self._step(batch_input, batch_target, batch_idx)
         combined_loss = sum(train_losses.values())
 
@@ -697,10 +697,10 @@ class GraphForecasterMultiDataset(pl.LightningModule):
 
     def validation_step(
         self,
-        batch_input: dict[str, torch.Tensor],
-        batch_target: dict[str, torch.Tensor],
+        batch: tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]],
         batch_idx: int,
-        ) -> torch.Tensor:
+        ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        batch_input, batch_target = batch
         with torch.no_grad():
             val_losses, pred = self._step(batch_input, batch_target, batch_idx, validation_mode=True)
         combined_loss = sum(val_losses.values())
