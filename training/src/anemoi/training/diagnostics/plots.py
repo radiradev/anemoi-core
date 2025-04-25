@@ -578,7 +578,7 @@ def plot_flat_sample(
 
         else:
             # ensure vcenter is between minimum and maximum error
-            vcenter = max(np.nanmin(combined_error),0.0)
+            vcenter = max(np.nanmin(combined_error), 0.0)
             vcenter = min(np.nanmax(combined_error), vcenter)
             norm_error = TwoSlopeNorm(vmin=np.nanmin(combined_error), vcenter=vcenter, vmax=np.nanmax(combined_error))
             norms[0] = norm
