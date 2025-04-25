@@ -1,7 +1,7 @@
 activation: GELU
 num_channels: 1024
 cpu_offload: False
-output_mask: null
+#output_mask: null # moved this to config.training to have one mask per output
 
 model:
   _target_: anemoi.models.models.encoder_processor_decoder.AnemoiModelEncProcDec

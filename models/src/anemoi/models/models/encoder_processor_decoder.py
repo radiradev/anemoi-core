@@ -79,6 +79,22 @@ class AnemoiModelEncProcDec(nn.Module):
         skip_variables = [var for var in self.input_variables if var in self.output_variables]
         self._internal_input_idx = [self.input_variables.index(var) for var in skip_variables]
         self._internal_output_idx = [self.output_variables.index(var) for var in skip_variables]
+
+        #Fake data_indices to be used in Forecaster
+        self.data_indices = DotDict(
+            {
+                "internal_model": {
+                    "input": {
+                        "full": self.input_variables,
+                        "name_to_index": self.name_to_index_input,
+                    },
+                    "output": {
+                        "full": self.output_variables,
+                        "name_to_index": self.name_to_index_output,
+                    }
+                }
+            }
+        )
         #-------------------------------------------------------------------------#
 
         self.data_indices = data_indices
