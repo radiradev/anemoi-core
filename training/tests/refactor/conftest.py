@@ -24,32 +24,41 @@ def new_config() -> DictConfig:
             },
         },
         "dataloader": {
-            "limit_batches": {
-                "training": None,
-                "validation": None,
-                "test": 20
+            "training": {
+                "start": None, 
+                "end": 2018,
+                "num_workers": 8,
+                "batch_size": 2,
+                "limit_batches": None,
+                "prefetch_factor": 2,
+                "pin_memory": True,
+                "persistent_workers": True,
             },
-            "training": {"start": None, "end": 2018},
-            "validation": {"start": 2019, "end": 2019},
-            "test": {"start": 2020, "end": None},
-            "pin_memory": True,
-            "prefetch_factor": 2,
+            "validation": {
+                "start": 2019, 
+                "end": 2019,
+                "num_workers": 8,
+                "batch_size": 4,
+                "limit_batches": None,
+                "prefetch_factor": 2,
+                "pin_memory": True,
+                "persistent_workers": True,
+            },
+            "test": {
+                "start": 2020,
+                "end": None,
+                "num_workers": 8,
+                "batch_size": 4,
+                "limit_batches": 20,
+                "prefetch_factor": 2,
+                "pin_memory": True,
+                "persistent_workers": True,
+            },
             "grid_indices": {
                 "_target_": "anemoi.training.data.grid_indices.FullGrid",
                 "nodes_name": "data"
             },
             "read_group_size": 1,
-            "num_workers": {
-                "training": 8,
-                "validation": 8,
-                "test": 8,
-            },
-            "batch_size":{
-                "training": 2,
-                "validation": 4,
-                "test": 4,
-            }
-
         },
         "model": {
             "model": {
