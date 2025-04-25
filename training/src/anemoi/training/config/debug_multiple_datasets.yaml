@@ -1,15 +1,15 @@
 defaults:
-- data: zarr
-- dataloader: native_grid
-- datamodule: single
+- data: data_handlers
+- dataloader: multiple
+- datamodule: multiple
 - diagnostics: evaluation
 - hardware: example
 - graph: multi_scale
 - model: refactored_graphtransformer
-- training: default
+- training: refactored_default
 - _self_
 
-no_validation: False
+config_validation: False
 
 ### This file is for local experimentation.
 ##  When you commit your changes, assign the new features and keywords
@@ -19,11 +19,21 @@ no_validation: False
 #   num_gpus_per_node: 1
 
 diagnostics:
+  log:
+    wandb:
+      entity: None
+    mlflow:
+      enabled: False
+      tracking_uri: None
   plot:
     callbacks: []
 hardware:
   files:
-    graph: ???
+    dataset: aifs-od-an-oper-0001-mars-o96-2016-2023-6h-v6
+    graph: "debug.pt"
+  paths:
+    data: None
+    output: ${oc.env:HPCPERM}/aifs/refactor/
   accelerator: auto
   num_gpus_per_node: 1
   num_nodes: 1

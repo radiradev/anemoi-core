@@ -163,7 +163,7 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
 
     def _get_dataloaders(self, stage: Stage) -> dict[str, DataLoader]:
         data_readers = AnemoiDataReaders(self.data_handlers, self.data_splits[stage])
-        datasets = {
+        self.datasets = {
             name: NativeGridDataset(
                 data_reader=self.add_trajectory_ids(data_reader),
                 relative_date_indices=self.relative_date_indices(),
@@ -172,12 +172,21 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
             )
             for name, data_reader in data_readers.items()
         }
-        dataloader_config = self.config.dataloader[stage.value]
-        dataloader_config.pop("start")
-        dataloader_config.pop("end")
-        dataloader_config.pop("limit_batches")
         data_loaders = {
-            name: DataLoader(dataset, worker_init_fn=worker_init_func, **dataloader_config)
+            name: DataLoader(
+                dataset, 
+                batch_size=self.config.dataloader.batch_size[stage.value],
+                # number of worker processes
+                num_workers=self.config.dataloader.num_workers[stage.value],
+                # use of pinned memory can speed up CPU-to-GPU data transfers
+                # see https://pytorch.org/docs/stable/notes/cuda.html#cuda-memory-pinning
+                pin_memory=self.config.dataloader.pin_memory,
+                # worker initializer
+                worker_init_fn=worker_init_func,
+                # prefetch batches
+                prefetch_factor=self.config.dataloader.prefetch_factor,
+                persistent_workers=True,
+            )
             for name, dataset in datasets.items()
         }
         return data_loaders
