@@ -1,7 +1,9 @@
+import pytest
 import pytorch_lightning as pl
 import torch
+from omegaconf import DictConfig
+
 from anemoi.training.data.datamodule import AnemoiMultipleDatasetsDataModule
-import pytest 
 
 
 class FakeModel(pl.LightningModule):
@@ -13,10 +15,6 @@ class FakeModel(pl.LightningModule):
         return self.linear(x)
 
     def training_step(self, batch: dict[str, torch.Tensor], batch_idx: int):
-        # Log or test only the first batch
-        print("🔍 First training batch:")
-        print(batch)
-
         # Example test/assertions
         assert isinstance(batch, dict), "Batch should be a dict"
         raise ValueError(f"First batch returned: {batch}")
@@ -25,7 +23,7 @@ class FakeModel(pl.LightningModule):
         return torch.optim.Adam(self.parameters(), lr=1e-3)
 
 
-def test_main(new_config):
+def test_main(new_config: DictConfig):
     datamodule = AnemoiMultipleDatasetsDataModule(new_config, None)
     trainer = pl.Trainer()
     trainer.fit(FakeModel(), datamodule=datamodule)

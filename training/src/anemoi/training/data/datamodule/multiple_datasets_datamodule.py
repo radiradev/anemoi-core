@@ -18,10 +18,13 @@ import pytorch_lightning as pl
 from hydra.utils import instantiate
 from torch.utils.data import DataLoader
 
-from anemoi.datasets.data import open_dataset
 from anemoi.models.data_indices.collection import IndexCollection
+from anemoi.training.data.data_handlers import AnemoiDataReaders
+from anemoi.training.data.data_handlers import DataHandlers
+from anemoi.training.data.data_handlers import DataSplits
+from anemoi.training.data.data_handlers import ModelSample
+from anemoi.training.data.data_handlers import Stage
 from anemoi.training.data.dataset import NativeGridDataset
-from anemoi.training.data.data_handlers import DataHandlers, ModelSample, DataSplits, AnemoiDataReaders, Stage
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.utils.worker_init import worker_init_func
 from anemoi.utils.dates import frequency_to_seconds
@@ -127,7 +130,7 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
             self.config.dataloader.grid_indices,
             reader_group_size=reader_group_size,
         )
-        #grid_indices.setup(self.graph_data)
+        # grid_indices.setup(self.graph_data)
         return grid_indices
 
     @cached_property
@@ -166,16 +169,16 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
                 relative_date_indices=self.relative_date_indices(),
                 grid_indices=self.grid_indices,
                 label=stage,
-            ) for name, data_reader in data_readers.items()
+            )
+            for name, data_reader in data_readers.items()
         }
         dataloader_config = self.config.dataloader[stage.value]
         dataloader_config.pop("start")
         dataloader_config.pop("end")
         dataloader_config.pop("limit_batches")
         data_loaders = {
-            name: DataLoader(
-                dataset, worker_init_fn=worker_init_func, **dataloader_config
-            ) for name, dataset in datasets.items()
+            name: DataLoader(dataset, worker_init_fn=worker_init_func, **dataloader_config)
+            for name, dataset in datasets.items()
         }
         return data_loaders
 

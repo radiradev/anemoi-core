@@ -1,10 +1,11 @@
-from anemoi.training.data.datamodule import AnemoiMultipleDatasetsDataModule
-
 import pytest
 import torch
+from omegaconf import DictConfig
+
+from anemoi.training.data.datamodule import AnemoiMultipleDatasetsDataModule
 
 
-def test_datamodule(new_config):
+def test_datamodule(new_config: DictConfig):
     datamodule = AnemoiMultipleDatasetsDataModule(new_config, None)
     datamodule.prepare_data()
     datamodule.setup(stage="fit")
