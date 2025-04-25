@@ -32,12 +32,16 @@ class BaseGridIndices(ABC):
     def __init__(self, nodes_name: str, reader_group_size: int) -> None:
         self.nodes_name = nodes_name
         self.reader_group_size = reader_group_size
+        self.grid_size = None
 
     def setup(self, graph: HeteroData) -> None:
         self.grid_size = self.compute_grid_size(graph)
 
     def split_seq_in_shards(self, reader_group_rank: int) -> tuple[int, int]:
         """Get the indices to split a sequence into equal size shards."""
+        if self.grid_size is None:
+            return slice(0, None)
+
         grid_shard_size = self.grid_size // self.reader_group_size
         grid_start = reader_group_rank * grid_shard_size
         if reader_group_rank == self.reader_group_size - 1:

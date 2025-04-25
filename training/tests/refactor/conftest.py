@@ -6,6 +6,8 @@ def new_config() -> DictConfig:
     return DictConfig(
     {
         "data": {
+            "frequency": "6h",
+            "timestep": "6h",
             "data_handlers": {
                 "era5": {
                     "dataset": "aifs-od-an-oper-0001-mars-o96-2016-2023-6h-v6",
@@ -19,7 +21,35 @@ def new_config() -> DictConfig:
                         }
                     }
                 }
+            },
+        },
+        "dataloader": {
+            "limit_batches": {
+                "training": None,
+                "validation": None,
+                "test": 20
+            },
+            "training": {"start": None, "end": 2018},
+            "validation": {"start": 2019, "end": 2019},
+            "test": {"start": 2020, "end": None},
+            "pin_memory": True,
+            "prefetch_factor": 2,
+            "grid_indices": {
+                "_target_": "anemoi.training.data.grid_indices.FullGrid",
+                "nodes_name": "data"
+            },
+            "read_group_size": 1,
+            "num_workers": {
+                "training": 8,
+                "validation": 8,
+                "test": 8,
+            },
+            "batch_size":{
+                "training": 2,
+                "validation": 4,
+                "test": 4,
             }
+
         },
         "model": {
             "model": {
@@ -54,5 +84,13 @@ def new_config() -> DictConfig:
                 }
             }
         },
+        "training": {
+            "multistep_input": 2,
+            "rollout": {
+                "start": 1, 
+                "epoch_increment": 0,
+                "max": 1,
+            }
+        }
     }
     )

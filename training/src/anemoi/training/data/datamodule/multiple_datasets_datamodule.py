@@ -21,6 +21,7 @@ from torch.utils.data import DataLoader
 from anemoi.datasets.data import open_dataset
 from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.training.data.dataset import NativeGridDataset
+from anemoi.training.data.data_handlers import DataHandlers, ModelSample
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.utils.worker_init import worker_init_func
 from anemoi.utils.dates import frequency_to_seconds
@@ -34,6 +35,39 @@ if TYPE_CHECKING:
 
     from anemoi.training.data.grid_indices import BaseGridIndices
     from anemoi.training.schemas.base_schema import BaseSchema
+
+
+
+
+class DataSplits(dict):
+    # TODO: Use timestamps??
+    def __init__(self, config: dict[str, dict]):
+        self.training = config.training
+        self.validation = config.validation
+        self.test = config.test
+
+        # Set the training end date if not specified
+        if self.training.end is None:
+            LOGGER.info(
+                "No end date specified for training data, setting default before validation start date %s.",
+                self.validation.start - 1,
+            )
+            self.training.end = self.validation.start - 1
+
+        if not self.training.end < self.validation.start:
+            LOGGER.warning(
+                "Training end date %s is not before validation start date %s.",
+                self.training.end,
+                self.validation.start,
+            )
+
+        assert self.training.end < self.test.start, (
+            f"Training end date {self.training.end} is not before test start date {self.test.start}"
+        )
+        assert self.validation.end < self.test.start, (
+            f"Validation end date {self.validation.end} is not before test start date {self.test.start}"
+        )
+
 
 
 class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
@@ -53,13 +87,11 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         self.config = config
         self.graph_data = graph_data
 
-        # Set the training end date if not specified
-        if self.config.dataloader.training.end is None:
-            LOGGER.info(
-                "No end date specified for training data, setting default before validation start date %s.",
-                self.config.dataloader.validation.start - 1,
-            )
-            self.config.dataloader.training.end = self.config.dataloader.validation.start - 1
+        self.data_handlers = DataHandlers(config.data.data_handlers)
+        self.model_sample = ModelSample(config.model.model.input, config.model.model.output)
+        self.data_handlers.set_variables(self.model_sample)
+
+        self.data_splits = DataSplits(config.dataloader)
 
         if not self.config.dataloader.pin_memory:
             LOGGER.info("Data loader memory pinning disabled.")
@@ -132,7 +164,7 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
             self.config.dataloader.grid_indices,
             reader_group_size=reader_group_size,
         )
-        grid_indices.setup(self.graph_data)
+        #grid_indices.setup(self.graph_data)
         return grid_indices
 
     @cached_property
@@ -163,43 +195,12 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         )
         return timestep // frequency
 
-    @cached_property
-    def ds_train(self) -> NativeGridDataset:
-        return self._get_dataset(
-            open_dataset(self.config.dataloader.training),
-            label="train",
-        )
-
-    @cached_property
-    def ds_valid(self) -> NativeGridDataset:
-        if not self.config.dataloader.training.end < self.config.dataloader.validation.start:
-            LOGGER.warning(
-                "Training end date %s is not before validation start date %s.",
-                self.config.dataloader.training.end,
-                self.config.dataloader.validation.start,
-            )
-        return self._get_dataset(
-            open_dataset(self.config.dataloader.validation),
-            shuffle=False,
-            val_rollout=self.config.dataloader.validation_rollout,
-            label="validation",
-        )
-
-    @cached_property
-    def ds_test(self) -> NativeGridDataset:
-        assert self.config.dataloader.training.end < self.config.dataloader.test.start, (
-            f"Training end date {self.config.dataloader.training.end} is not before"
-            f"test start date {self.config.dataloader.test.start}"
-        )
-        assert self.config.dataloader.validation.end < self.config.dataloader.test.start, (
-            f"Validation end date {self.config.dataloader.validation.end} is not before"
-            f"test start date {self.config.dataloader.test.start}"
-        )
-        return self._get_dataset(
-            open_dataset(self.config.dataloader.test),
-            shuffle=False,
-            label="test",
-        )
+    def _get_datasets(self, stage: str) -> dict[str, NativeGridDataset]:
+        return {
+            name: self._get_dataset(
+                dh.get_dataset(**getattr(self.data_splits, stage))
+            ) for name, dh in self.data_handlers.items()
+        }
 
     def _get_dataset(
         self,
@@ -207,7 +208,7 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         shuffle: bool = True,
         val_rollout: int = 1,
         label: str = "generic",
-    ) -> dict[str, NativeGridDataset]:
+    ) -> NativeGridDataset:
 
         data_reader = self.add_trajectory_ids(data_reader)  # NOTE: Functionality to be moved to anemoi datasets
 
@@ -219,11 +220,11 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
             label=label,
         )
 
-    def _get_dataloaders(self, data_handlers: dict[str, NativeGridDataset], stage: str) -> dict[str, DataLoader]:
+    def _get_dataloaders(self, stage: str) -> dict[str, DataLoader]:
         assert stage in {"training", "validation", "test"}
         return {
             name: DataLoader(
-                data_handler,
+                dataset,
                 batch_size=self.config.dataloader.batch_size[stage],
                 # number of worker processes
                 num_workers=self.config.dataloader.num_workers[stage],
@@ -235,14 +236,14 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
                 # prefetch batches
                 prefetch_factor=self.config.dataloader.prefetch_factor,
                 persistent_workers=True,
-            ) for name, data_handler in data_handlers.items()
+            ) for name, dataset in self._get_datasets(stage).items()
         }
 
     def train_dataloader(self) -> dict[str, DataLoader]:
-        return self._get_dataloaders(self.ds_train, "training")
+        return self._get_dataloaders("training")
 
     def val_dataloader(self) -> dict[str, DataLoader]:
-        return self._get_dataloaders(self.ds_valid, "validation")
+        return self._get_dataloaders("validation")
 
     def test_dataloader(self) -> dict[str, DataLoader]:
-        return self._get_dataloaders(self.ds_test, "test")
+        return self._get_dataloaders("test")
