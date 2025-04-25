@@ -381,7 +381,7 @@ class GraphEnsForecaster(GraphForecaster):
         for i in range(len(mloss)):
             mloss[i] *= 1.0 / self.rollout
 
-        return loss, mloss_next, metrics, y_preds, _ens_ic
+        return loss, mloss, metrics, y_preds, _ens_ic
 
     def training_step(self, batch: tuple[torch.Tensor, ...], batch_idx: int) -> torch.Tensor | dict:
         """Run one training step.
