@@ -105,7 +105,7 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
         return x_out
 
     def forward(
-        self, x: torch.Tensor, fcstep: int = 1, model_comm_group: Optional[ProcessGroup] = None, **kwargs
+        self, x: torch.Tensor, *, fcstep: int, model_comm_group: Optional[ProcessGroup] = None, **kwargs
     ) -> torch.Tensor:
         """Forward operator.
 
