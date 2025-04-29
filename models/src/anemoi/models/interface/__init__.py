@@ -61,6 +61,7 @@ class AnemoiModelInterface(torch.nn.Module):
         metadata: dict,
         supporting_arrays: dict = None,
         truncation_data: dict,
+        inference: bool = False,
     ) -> None:
         super().__init__()
         self.config = config
@@ -72,13 +73,37 @@ class AnemoiModelInterface(torch.nn.Module):
         self.metadata = metadata
         self.supporting_arrays = supporting_arrays if supporting_arrays is not None else {}
         self.data_indices = data_indices
+        self.inference = inference
         self._build_model()
+
+    @property
+    def inference(self):
+        return self._inference
+
+    @inference.setter
+    def inference(self, inference: bool):
+        """Set the inference mode of the model.
+        Parameters
+        ----------
+        inference : bool
+            If True, the model is in inference mode.
+        """
+        self._inference = inference
+        if hasattr(self, "pre_processors") and self.pre_processors is not None:
+            for name in self.pre_processors.processors:
+                self.pre_processors.processors[name].inference = inference
 
     def _build_model(self) -> None:
         """Builds the model and pre- and post-processors."""
         # Instantiate processors
+        # TODO(sara): questions: do we need to pass self.inference here or it is enough to set it to False by default in the init?
         processors = [
-            [name, instantiate(processor, data_indices=self.data_indices, statistics=self.statistics)]
+            [
+                name,
+                instantiate(
+                    processor, data_indices=self.data_indices, statistics=self.statistics, inference=self.inference
+                ),
+            ]
             for name, processor in self.config.data.processors.items()
         ]
 

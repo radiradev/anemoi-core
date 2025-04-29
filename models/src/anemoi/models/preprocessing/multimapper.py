@@ -49,6 +49,7 @@ class Multimapper(BasePreprocessor, ABC):
         config=None,
         data_indices: Optional[IndexCollection] = None,
         statistics: Optional[dict] = None,
+        inference: Optional[bool] = False,
     ) -> None:
         """Initialize the remapper.
 
@@ -61,7 +62,7 @@ class Multimapper(BasePreprocessor, ABC):
         statistics : dict
             Data statistics dictionary
         """
-        super().__init__(config, data_indices, statistics)
+        super().__init__(config, data_indices, statistics, inference)
         self.printed_preprocessor_warning, self.printed_postprocessor_warning = False, False
         self._create_remapping_indices(statistics)
         self._validate_indices()

@@ -29,6 +29,7 @@ class InputNormalizer(BasePreprocessor):
         config=None,
         data_indices: Optional[IndexCollection] = None,
         statistics: Optional[dict] = None,
+        inference: Optional[bool] = False,
     ) -> None:
         """Initialize the normalizer.
 
@@ -41,7 +42,7 @@ class InputNormalizer(BasePreprocessor):
         statistics : dict
             Data statistics dictionary
         """
-        super().__init__(config, data_indices, statistics)
+        super().__init__(config, data_indices, statistics, inference)
 
         name_to_index_training_input = self.data_indices.data.input.name_to_index
 
