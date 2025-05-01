@@ -129,7 +129,9 @@ class BaseImputer(BasePreprocessor, ABC):
         nan_locations = self.nan_locations
 
         # Reset NaN locations for preprocesor in inference.
-        if self.inference:
+        # getattr for backwards compatibility
+        if getattr(self, "inference", False):
+            LOGGER.debug("Imputer: resetting NaN locations for inference.")
             nan_locations = None
 
         # Initialise mask if not cached.
@@ -333,7 +335,9 @@ class CopyImputer(BaseImputer):
         nan_locations = self.nan_locations
 
         # Reset NaN locations for preprocesor in inference.
-        if self.inference:
+        # getattr for backwards compatibility
+        if getattr(self, "inference", False):
+            LOGGER.debug("Imputer: resetting NaN locations for inference.")
             nan_locations = None
 
         # Initialise mask if not cached.
