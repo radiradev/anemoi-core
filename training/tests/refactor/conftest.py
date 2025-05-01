@@ -11,7 +11,30 @@ def new_config() -> DictConfig:
                 "timestep": "6h",
                 "data_handlers": {
                     "era5": {
-                        "dataset": "aifs-od-an-oper-0001-mars-o96-2016-2023-6h-v6",
+                        "training_dataset": {
+                            "dataset": {
+                                # "dataset": ... from era5.dataset
+                                "start": None,
+                                "end": 2018,
+                            }
+                        },
+                        "validation_dataset": {
+                            "dataset": {
+                                # "dataset": ...
+                                "start": 2019,
+                                "end": 2019,
+                            },
+                            "processors": {...}
+                        },
+                        "test_dataset": {
+                            "dataset": {
+                                # "dataset": ...
+                                "start": 2019,
+                                "end": 2019,
+                            },
+                            "processors": {...}
+                        },
+                        "dataset": "aifs-ea-an-oper-0001-mars-o96-2016-2023-6h-v6",
                         "processors": {
                             "normalizer": {
                                 "_target_": "anemoi.models.preprocessing.normalizer.InputNormalizer",
@@ -22,18 +45,6 @@ def new_config() -> DictConfig:
                 },
             },
             "dataloader": {
-                "training": {
-                    "start": None,
-                    "end": 2018,
-                },
-                "validation": {
-                    "start": 2019,
-                    "end": 2019,
-                },
-                "test": {
-                    "start": 2020,
-                    "end": None,
-                },
                 "prefetch_factor": 2,
                 "pin_memory": True,
                 "grid_indices": {
@@ -58,24 +69,32 @@ def new_config() -> DictConfig:
                 }
             },
             "model": {
-                "model": {
+                "sample_providers": {
                     "input": {
-                        "era5": [
-                            "cos_latitude",
-                            "cos_longitude",
-                            "sin_latitude",
-                            "sin_longitude",
-                            "10u",
-                            "10v",
-                            "2t",
-                            "2d",
-                            "q_100",
-                            "q_300",
-                            "q_700",
-                            "q_1000",
-                        ],
+                        "variables": {
+                            "era5": [
+                                "cos_latitude",
+                                "cos_longitude",
+                                "sin_latitude",
+                                "sin_longitude",
+                                "10u",
+                                "10v",
+                                "2t",
+                                "2d",
+                                "q_100",
+                                "q_300",
+                                "q_700",
+                                "q_1000",
+                            ],
+                        }, 
+                        "steps": 2,
                     },
-                    "output": {"era5": ["10u", "10v", "2t", "2d", "q_100", "q_300", "q_700", "q_1000", "tp"]},
+                    "output": {
+                        "variable": {
+                            "era5": ["10u", "10v", "2t", "2d", "q_100", "q_300", "q_700", "q_1000", "tp"]
+                        },
+                        "steps": 1
+                    },
                 },
             },
             "training": {

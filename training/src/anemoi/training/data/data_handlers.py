@@ -25,59 +25,25 @@ class ModelSample:
         return self.output_sample[key]
 
 
-@dataclass
-class RangeSplit:
-    start: str = None
-    end: str = None
-
-    def to_dict(self) -> dict:
-        return dict(start=self.start, end=self.end)
-
-
 class Stage(Enum):
     TRAINING = "training"
     VALIDATION = "validation"
     TEST = "test"
 
 
-class DataSplits(dict):
-    # TODO: Use timestamps??
-    def __init__(self, config: dict[str, dict]):
-        for stage in Stage:
-            self[stage] = RangeSplit(start=config[stage.value].start, end=config[stage.value].end)
-
-        self.check_training_end_specified()
-        self.check_overlapping_stages()
-
-    def check_overlapping_stages(self) -> None:
-        if not self[Stage.TRAINING].end < self[Stage.VALIDATION].start:
-            LOGGER.warning(
-                "Training end date %s is not before validation start date %s.",
-                self[Stage.TRAINING].end,
-                self[Stage.VALIDATION].start,
-            )
-
-        assert (
-            self[Stage.TRAINING].end < self[Stage.TEST].start
-        ), f"Training end date {self[Stage.TRAINING].end} is not before test start date {self[Stage.TEST].start}"
-        assert (
-            self[Stage.VALIDATION].end < self[Stage.TEST].start
-        ), f"Validation end date {self[Stage.VALIDATION].end} is not before test start date {self[Stage.TEST].start}"
-
-    def check_training_end_specified(self) -> None:
-        # Set the training end date if not specified
-        if self[Stage.TRAINING].end is None:
-            LOGGER.info(
-                "No end date specified for training data, setting default before validation start date %s.",
-                self[Stage.VALIDATION].start - 1,
-            )
-            self[Stage.TRAINING].end = self[Stage.VALIDATION].start - 1
-
-
 class DataHandlers(dict):
     def __init__(self, config: dict[str, dict]):
         for name, kwargs in config.items():
             self[name] = DataHandler(**kwargs)
+
+    def check_no_overlap(self, other: "DataHandlers") -> None:
+        for key, dh in self.items():
+            if other[key].start_date < dh.end_date:
+                raise ValueError()
+            
+            # TODO: What do we want to check ???
+            # no_overlap vs is_completely_before 
+
 
     def set_variables(self, model_sample: ModelSample) -> None:
         for name in self.keys():
@@ -87,24 +53,51 @@ class DataHandlers(dict):
             )
 
 
-class AnemoiDataReaders(dict):
-    def __init__(self, data_handlers: DataHandlers, stage_range: RangeSplit):
-        for name, data_handler in data_handlers.items():
-            self[name] = data_handler.get_dataset(stage_range)
-
-
 class BaseDataHandler:
     def __init__(self, dataset: str | dict, processors: list | None = None):
-        self._dataset = dataset
+        self._dataset = open_dataset(dataset)
         self.variables = None
         self.processors = processors
-
-    def get_dataset(self, range: RangeSplit) -> "anemoi.datasets.data.dataset.Dataset":
-        return open_dataset(self._dataset, select=self.variables, **range.to_dict())
-
-    def set_variables(self, input_variables: list[str], output_variables: list[str]) -> None:
-        self.variables = list(set(input_variables + output_variables))
 
 
 class DataHandler(BaseDataHandler):
     pass
+
+class SelectedDataHandler(BaseDataHandler):
+    def __init__(self, dh, select=None):
+        self._dataset = open_dataset(dh._dataset, select=select)
+        self.processors = dh.processors
+
+
+def select(data_handler, select=None):
+    if select is None:
+        return data_handler
+    return SelectedDataHandler(data_handler, select=select)
+
+
+class SampleProvider:
+    def __init__(self, kwargs: dict, datahandlers: "DataHandlers"):
+
+        self._variables = {}
+        self._data_handlers = {}
+
+        for key, variables in kwargs.items():
+            if key not in datahandlers:
+                raise ValueError(f"Unknown data handler: {key}, should be one of {list(datahandlers.keys())}")
+            
+            assert isinstance(variables, (list, tuple)), f"Select must be a list or tuple, not {type(variables)}"
+            self._variables[key] = variables
+            self._data_handlers[key] = select(datahandlers[key], variables)
+
+    def __getitem__(self, i):
+        sample = {}
+
+        for k, dh in self._data_handlers.items():
+            v = dh[i]
+
+            actual = v.shape[0]
+            expected = len(self._variables[k])
+            assert actual == expected, f"Variable {k} has shape {actual} != {expected}, {v.shape}"
+            sample[k] = v
+
+        return sample
