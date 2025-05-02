@@ -72,6 +72,7 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
 
         # Create data handler for training, validation and testing.
         data_handlers = {}
+        self.sample_providers = {}
         self.datasets = {}
 
         for stage in Stage:
@@ -81,11 +82,9 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
             dhs = DataHandlers(dh_configs)
             data_handlers[stage] = dhs
 
-            sample_providers = {
+            self.sample_providers[stage] = {
                 key: SampleProvider(provider, dhs) for key, provider in config.model.sample_providers.items()
             }
-
-            self.datasets[stage] = {k: NativeGridMultDataset(v) for k, v in sample_providers.items()}
 
         #data_handlers[stage.TRAINING].check_no_overlap(data_handlers[stage.VALIDATION])
         #data_handlers[stage.TRAINING].check_no_overlap(data_handlers[stage.TEST])
@@ -193,7 +192,7 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
     def _get_dataloaders(self, stage: Stage) -> dict[str, DataLoader]:
         data_loaders = {
             name: DataLoader(
-                dataset, 
+                NativeGridMultDataset(sample_provider), 
                 batch_size=self.config.dataloader.batch_size[stage.value],
                 # number of worker processes
                 num_workers=self.config.dataloader.num_workers[stage.value],
@@ -206,7 +205,7 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
                 prefetch_factor=self.config.dataloader.prefetch_factor,
                 persistent_workers=True,
             )
-            for name, dataset in self.datasets[stage].items()
+            for name, sample_provider in self.sample_providers[stage].items()
         }
         return data_loaders
 

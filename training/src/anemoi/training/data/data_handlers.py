@@ -1,6 +1,7 @@
 import logging
 from enum import Enum
 import torch
+import einops
 from anemoi.datasets.data import open_dataset
 from torch.utils.data import IterableDataset
 
@@ -72,17 +73,17 @@ class SampleProvider:
             self._data_handlers[key] = select(datahandlers[key], variables)
             self._steps[key] = provider_config["steps"]
 
-    def __getitem__(self, i: int) -> dict[str, torch.Tensor]:
-        sample = {}
+    @property
+    def keys(self) -> list[str]:
+        return list(self._data_handlers.keys())
 
-        for k, dh in self._data_handlers.items():
-            time_indices = list(i + s for s in self._steps[k])
-            x = dh.dataset[time_indices]
-            x = einops.rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
-            self.ensemble_dim = 1
-            sample[k] = torch.from_numpy(x)
-
-        return sample
+    def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
+        source, i = index
+        time_indices = list(i + s for s in self._steps[source])
+        x = self._data_handlers[source]._dataset[time_indices, :, :, :]
+        x = einops.rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
+        self.ensemble_dim = 1
+        return torch.from_numpy(x)
     
 
 class NativeGridMultDataset(IterableDataset):
@@ -96,7 +97,22 @@ class NativeGridMultDataset(IterableDataset):
         self.data = data_reader
         self.shuffle = shuffle
 
-    def __iter__(self) -> torch.Tensor:
+    def per_worker_init(self, n_workers: int, worker_id: int) -> None:
+        """Called by worker_init_func on each copy of dataset.
+
+        This initialises after the worker process has been spawned.
+
+        Parameters
+        ----------
+        n_workers : int
+            Number of workers
+        worker_id : int
+            Worker ID
+
+        """
+        self.worker_id = worker_id
+
+    def __iter__(self) -> dict[str, torch.Tensor]:
         """Return an iterator over the dataset.
 
         The datasets are retrieved by anemoi.datasets from anemoi datasets. This iterator yields
@@ -106,4 +122,7 @@ class NativeGridMultDataset(IterableDataset):
         now. (Until the code is "ensemble native".)
         """
         for i in list(range(20, 30)):
-            x = self.data[i]
+            x = {}
+            for key in self.data.keys:
+                x[key] = self.data[key, i]
+            yield x
