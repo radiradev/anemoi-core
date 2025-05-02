@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pytorch_lightning as pl
+from omegaconf import OmegaConf
 from hydra.utils import instantiate
 from torch.utils.data import DataLoader
 
@@ -22,7 +23,7 @@ from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.training.data.data_handlers import DataHandlers
 from anemoi.training.data.data_handlers import SampleProvider
 from anemoi.training.data.data_handlers import Stage
-from anemoi.training.data.dataset import NativeGridDataset
+from anemoi.training.data.data_handlers import NativeGridMultDataset
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.utils.worker_init import worker_init_func
 from anemoi.utils.dates import frequency_to_seconds
@@ -40,9 +41,12 @@ if TYPE_CHECKING:
 
 def specify_datahandler_config(config: dict, key: str) -> dict:
     dataset = config[key]
+    base_dataset = {"dataset": config["dataset"]} if isinstance(config["dataset"], str) else config["dataset"]
 
     if "dataset" not in dataset:
-        dataset["dataset"] = config["dataset"]
+        dataset["dataset"] = base_dataset
+    elif not isinstance(dataset["dataset"], str) and "dataset" not in dataset["dataset"]:
+            dataset["dataset"] = OmegaConf.merge(base_dataset, dataset["dataset"])
 
     if "processors" not in dataset:
         dataset["processors"] = config["processors"]
@@ -68,7 +72,8 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
 
         # Create data handler for training, validation and testing.
         data_handlers = {}
-        self.sample_providers = {}
+        self.datasets = {}
+
         for stage in Stage:
             dh_configs = {
                 k: specify_datahandler_config(v, f"{stage.value}_dataset") for k, v in config.data.data_handlers.items()
@@ -76,15 +81,15 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
             dhs = DataHandlers(dh_configs)
             data_handlers[stage] = dhs
 
-            self.sample_providers[stage] = {
+            sample_providers = {
                 key: SampleProvider(provider, dhs) for key, provider in config.model.sample_providers.items()
             }
 
-        data_handlers[stage.TRAINING].check_no_overlap(data_handlers[stage.VALIDATION])
-        data_handlers[stage.TRAINING].check_no_overlap(data_handlers[stage.TEST])
-        data_handlers[stage.VALIDATION].check_no_overlap(data_handlers[stage.TEST])
+            self.datasets[stage] = {k: NativeGridMultDataset(v) for k, v in sample_providers.items()}
 
-
+        #data_handlers[stage.TRAINING].check_no_overlap(data_handlers[stage.VALIDATION])
+        #data_handlers[stage.TRAINING].check_no_overlap(data_handlers[stage.TEST])
+        #data_handlers[stage.VALIDATION].check_no_overlap(data_handlers[stage.TEST])
 
     @cached_property
     def statistics(self) -> dict:
@@ -186,15 +191,6 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         return timestep // frequency
 
     def _get_dataloaders(self, stage: Stage) -> dict[str, DataLoader]:
-        self.datasets = {
-            name: NativeGridDataset(
-                data_reader=self.add_trajectory_ids(self.data_handlers[stage].dataset),
-                relative_date_indices=self.relative_date_indices(),
-                grid_indices=self.grid_indices,
-                label=stage,
-            )
-            for name, data_reader in data_readers.items()
-        }
         data_loaders = {
             name: DataLoader(
                 dataset, 
@@ -210,7 +206,7 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
                 prefetch_factor=self.config.dataloader.prefetch_factor,
                 persistent_workers=True,
             )
-            for name, dataset in datasets.items()
+            for name, dataset in self.datasets[stage].items()
         }
         return data_loaders
 

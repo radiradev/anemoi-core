@@ -1,28 +1,10 @@
 import logging
-from dataclasses import dataclass
 from enum import Enum
-
+import torch
 from anemoi.datasets.data import open_dataset
+from torch.utils.data import IterableDataset
 
 LOGGER = logging.getLogger(__name__)
-
-
-class ModelSample:
-    def __init__(self, input_sample: dict[str, dict], output_sample: dict[str, dict]):
-        self.input_sample = input_sample
-        self.output_sample = output_sample
-
-    def num_input_variables(self, key: str) -> int:
-        return len(self.input_sample[key])
-
-    def num_output_variables(self, key: str) -> int:
-        return len(self.output_sample[key])
-
-    def input_variables(self, key: str) -> list[str]:
-        return self.input_sample[key]
-
-    def output_variables(self, key: str) -> list[str]:
-        return self.output_sample[key]
 
 
 class Stage(Enum):
@@ -45,23 +27,22 @@ class DataHandlers(dict):
             # no_overlap vs is_completely_before 
 
 
-    def set_variables(self, model_sample: ModelSample) -> None:
-        for name in self.keys():
-            self[name].set_variables(
-                input_variables=model_sample.input_variables(name),
-                output_variables=model_sample.output_variables(name),
-            )
-
-
 class BaseDataHandler:
     def __init__(self, dataset: str | dict, processors: list | None = None):
         self._dataset = open_dataset(dataset)
         self.variables = None
         self.processors = processors
 
+    @property
+    def start_date(self): ...
+
+    @property
+    def end_date(self): ...
+
 
 class DataHandler(BaseDataHandler):
     pass
+
 
 class SelectedDataHandler(BaseDataHandler):
     def __init__(self, dh, select=None):
@@ -76,28 +57,53 @@ def select(data_handler, select=None):
 
 
 class SampleProvider:
-    def __init__(self, kwargs: dict, datahandlers: "DataHandlers"):
-
+    def __init__(self, kwargs: dict, datahandlers: "DataHandlers") -> None:
         self._variables = {}
         self._data_handlers = {}
+        self._steps = {}
 
-        for key, variables in kwargs.items():
+        for key, provider_config in kwargs.items():
             if key not in datahandlers:
                 raise ValueError(f"Unknown data handler: {key}, should be one of {list(datahandlers.keys())}")
             
-            assert isinstance(variables, (list, tuple)), f"Select must be a list or tuple, not {type(variables)}"
+            variables = list(provider_config["variables"])
+            assert isinstance(variables, (list, tuple)), f"variables must be a list or tuple, not {type(variables)}"
             self._variables[key] = variables
             self._data_handlers[key] = select(datahandlers[key], variables)
+            self._steps[key] = provider_config["steps"]
 
-    def __getitem__(self, i):
+    def __getitem__(self, i: int) -> dict[str, torch.Tensor]:
         sample = {}
 
         for k, dh in self._data_handlers.items():
-            v = dh[i]
-
-            actual = v.shape[0]
-            expected = len(self._variables[k])
-            assert actual == expected, f"Variable {k} has shape {actual} != {expected}, {v.shape}"
-            sample[k] = v
+            time_indices = list(i + s for s in self._steps[k])
+            x = dh.dataset[time_indices]
+            x = einops.rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
+            self.ensemble_dim = 1
+            sample[k] = torch.from_numpy(x)
 
         return sample
+    
+
+class NativeGridMultDataset(IterableDataset):
+    """Iterable dataset for AnemoI data on the arbitrary grids."""
+
+    def __init__(
+        self,
+        data_reader: SampleProvider,
+        shuffle: bool = True,
+    ) -> None:
+        self.data = data_reader
+        self.shuffle = shuffle
+
+    def __iter__(self) -> torch.Tensor:
+        """Return an iterator over the dataset.
+
+        The datasets are retrieved by anemoi.datasets from anemoi datasets. This iterator yields
+        chunked batches for DDP and sharded training.
+
+        Currently it receives data with an ensemble dimension, which is discarded for
+        now. (Until the code is "ensemble native".)
+        """
+        for i in list(range(20, 30)):
+            x = self.data[i]

@@ -24,7 +24,7 @@ def new_config() -> DictConfig:
                                 "start": 2019,
                                 "end": 2019,
                             },
-                            "processors": {...}
+                           # "processors": {...}
                         },
                         "test_dataset": {
                             "dataset": {
@@ -32,9 +32,9 @@ def new_config() -> DictConfig:
                                 "start": 2019,
                                 "end": 2019,
                             },
-                            "processors": {...}
+                            #"processors": {...}
                         },
-                        "dataset": "aifs-ea-an-oper-0001-mars-o96-2016-2023-6h-v6",
+                        "dataset": "aifs-od-an-oper-0001-mars-o96-2016-2023-6h-v6",
                         "processors": {
                             "normalizer": {
                                 "_target_": "anemoi.models.preprocessing.normalizer.InputNormalizer",
@@ -71,8 +71,8 @@ def new_config() -> DictConfig:
             "model": {
                 "sample_providers": {
                     "input": {
-                        "variables": {
-                            "era5": [
+                        "era5": {
+                            "variables": [
                                 "cos_latitude",
                                 "cos_longitude",
                                 "sin_latitude",
@@ -85,20 +85,19 @@ def new_config() -> DictConfig:
                                 "q_300",
                                 "q_700",
                                 "q_1000",
-                            ],
-                        }, 
-                        "steps": 2,
+                            ], 
+                            "steps": [-1, 0],
+                        },
                     },
                     "output": {
-                        "variable": {
-                            "era5": ["10u", "10v", "2t", "2d", "q_100", "q_300", "q_700", "q_1000", "tp"]
+                        "era5": {
+                            "variables": ["10u", "10v", "2t", "2d", "q_100", "q_300", "q_700", "q_1000", "tp"],
+                            "steps": [1]
                         },
-                        "steps": 1
                     },
                 },
             },
             "training": {
-                "multistep_input": 2,
                 "rollout": {
                     "start": 1,
                     "epoch_increment": 0,
