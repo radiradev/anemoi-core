@@ -26,17 +26,17 @@ class BaseImputer(BasePreprocessor, ABC):
 
     If not stated otherwise, the imputers assume that in the training dataset the NaN locations
     for each variables are fixed.
-    The intenede behaviour is the following:
+    The intended behaviour is the following:
 
-    In training and validation:
+    In training and validation (self.inference_mode = False):
 
     - NaN locations must be fixed. In the first forward pass the NaN locations are retrieved from the batch
     - transform (preprocessor): NaN locations do not need to be recalculated as their position is fixed
     - inverse_transform (postprocessor): at the fixed NaN locations the NaNs are put back into place
 
-    In inference:
+    In inference (self.inference_mode = True):
 
-    - We cannot ensure that NaN locations are fixed. Missing only one NaN in the input data could cause the model prediction to fail which should be avoided. Therefor, the NaN locations are recalculated in every forward pass.
+    - We cannot ensure that NaN locations are fixed. Missing only one NaN in the input data could cause the model prediction to fail which should be avoided. Therefore, the NaN locations are recalculated in every forward pass.
     - transform (preprocessor): We recalculate the NaN locations in every forward pass. The cached NaN locations must not be overwritten!
     - inverse_transform (postprocessor): Same behavious as in training/validation. Cached NaN locations from training are used to put NaNs into place.
     """
