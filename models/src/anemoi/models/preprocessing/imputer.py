@@ -22,14 +22,31 @@ LOGGER = logging.getLogger(__name__)
 
 
 class BaseImputer(BasePreprocessor, ABC):
-    """Base class for Imputers."""
+    """Base class for Imputers.
+
+    If not stated otherwise, the imputers assume that in the training dataset the NaN locations
+    for each variables are fixed.
+    The intenede behaviour is the following:
+
+    In training and validation:
+
+    - NaN locations must be fixed. In the first forward pass the NaN locations are retrieved from the batch
+    - transform (preprocessor): NaN locations do not need to be recalculated as their position is fixed
+    - inverse_transform (postprocessor): at the fixed NaN locations the NaNs are put back into place
+
+    In inference:
+
+    - We cannot ensure that NaN locations are fixed. Missing only one NaN in the input data could cause the model prediction to fail which should be avoided. Therefor, the NaN locations are recalculated in every forward pass.
+    - transform (preprocessor): We recalculate the NaN locations in every forward pass. The cached NaN locations must not be overwritten!
+    - inverse_transform (postprocessor): Same behavious as in training/validation. Cached NaN locations from training are used to put NaNs into place.
+    """
 
     def __init__(
         self,
         config=None,
         data_indices: Optional[IndexCollection] = None,
         statistics: Optional[dict] = None,
-        inference: Optional[bool] = False,
+        inference_mode: Optional[bool] = False,
     ) -> None:
         """Initialize the imputer.
 
@@ -41,8 +58,10 @@ class BaseImputer(BasePreprocessor, ABC):
             Data indices for input and output variables
         statistics : dict
             Data statistics dictionary
+        inference_mode : bool
+            If True, the processor is in inference mode. Default is False.
         """
-        super().__init__(config, data_indices, statistics, inference)
+        super().__init__(config, data_indices, statistics, inference_mode)
 
         self.nan_locations = None
         # weight imputed values with zero in loss calculation
@@ -128,10 +147,10 @@ class BaseImputer(BasePreprocessor, ABC):
         # work with copy of cached nan_nanlocations to avoid modifying the cached one
         nan_locations = self.nan_locations
 
-        # Reset NaN locations for preprocesor in inference.
+        # Reset NaN locations for preprocesor in inference mode.
         # getattr for backwards compatibility
-        if getattr(self, "inference", False):
-            LOGGER.debug("Imputer: resetting NaN locations for inference.")
+        if getattr(self, "inference_mode", False):
+            LOGGER.debug("Imputer: resetting copy of NaN locations for inference mode.")
             nan_locations = None
 
         # Initialise mask if not cached.
@@ -140,7 +159,7 @@ class BaseImputer(BasePreprocessor, ABC):
             # Get NaN locations
             nan_locations = self.get_nans(x)
 
-        # Cache NaN locations for training and postprocessing and set loss mask
+        # Cache NaN locations for training and postprocessing and set loss mask in first forward pass
         if self.nan_locations is None:
             self.nan_locations = nan_locations
 
@@ -148,7 +167,7 @@ class BaseImputer(BasePreprocessor, ABC):
             self.loss_mask_training = torch.ones(
                 (x.shape[-2], len(self.data_indices.model.output.name_to_index)), device=x.device
             )  # shape (grid, n_outputs)
-            # for all variables that are imputed and part of the model output, set the loss weight to zero
+            # for all variables that are imputed and part of the model output, set the loss weight to zero at NaN location
             for idx_src, idx_dst in zip(self.index_training_input, self.index_inference_output):
                 if idx_dst is not None:
                     self.loss_mask_training[:, idx_dst] = (~nan_locations[:, idx_src]).int()
@@ -211,9 +230,9 @@ class InputImputer(BaseImputer):
         config=None,
         data_indices: Optional[IndexCollection] = None,
         statistics: Optional[dict] = None,
-        inference: Optional[bool] = False,
+        inference_mode: Optional[bool] = False,
     ) -> None:
-        super().__init__(config, data_indices, statistics, inference)
+        super().__init__(config, data_indices, statistics, inference_mode)
 
         self._create_imputation_indices(statistics)
 
@@ -241,9 +260,9 @@ class ConstantImputer(BaseImputer):
         config=None,
         data_indices: Optional[IndexCollection] = None,
         statistics: Optional[dict] = None,
-        inference: Optional[bool] = False,
+        inference_mode: Optional[bool] = False,
     ) -> None:
-        super().__init__(config, data_indices, statistics, inference)
+        super().__init__(config, data_indices, statistics, inference_mode)
 
         self._create_imputation_indices()
 
@@ -265,9 +284,9 @@ class CopyImputer(BaseImputer):
         config=None,
         data_indices: Optional[IndexCollection] = None,
         statistics: Optional[dict] = None,
-        inference: Optional[bool] = False,
+        inference_mode: Optional[bool] = False,
     ) -> None:
-        super().__init__(config, data_indices, statistics, inference)
+        super().__init__(config, data_indices, statistics, inference_mode)
 
         self._create_imputation_indices()
 
@@ -336,8 +355,8 @@ class CopyImputer(BaseImputer):
 
         # Reset NaN locations for preprocesor in inference.
         # getattr for backwards compatibility
-        if getattr(self, "inference", False):
-            LOGGER.debug("Imputer: resetting NaN locations for inference.")
+        if getattr(self, "inference_mode", False):
+            LOGGER.debug("Imputer: resetting NaN locations in inference mode.")
             nan_locations = None
 
         # Initialise mask if not cached.
@@ -430,9 +449,9 @@ class DynamicInputImputer(DynamicMixin, InputImputer):
         config=None,
         data_indices: Optional[IndexCollection] = None,
         statistics: Optional[dict] = None,
-        inference: Optional[bool] = False,
+        inference_mode: Optional[bool] = False,
     ) -> None:
-        InputImputer.__init__(self, config, data_indices, statistics, inference)
+        InputImputer.__init__(self, config, data_indices, statistics, inference_mode)
         warnings.warn(
             "You are using a dynamic Imputer: NaN values will not be present in the model predictions. \
                       The model will be trained to predict imputed values. This might deteriorate performances."
@@ -447,9 +466,9 @@ class DynamicConstantImputer(DynamicMixin, ConstantImputer):
         config=None,
         data_indices: Optional[IndexCollection] = None,
         statistics: Optional[dict] = None,
-        inference: Optional[bool] = False,
+        inference_mode: Optional[bool] = False,
     ) -> None:
-        ConstantImputer.__init__(self, config, data_indices, statistics, inference)
+        ConstantImputer.__init__(self, config, data_indices, statistics, inference_mode)
         warnings.warn(
             "You are using a dynamic Imputer: NaN values will not be present in the model predictions. \
                       The model will be trained to predict imputed values. This might deteriorate performances."
@@ -464,9 +483,9 @@ class DynamicCopyImputer(DynamicMixin, CopyImputer):
         config=None,
         data_indices: Optional[IndexCollection] = None,
         statistics: Optional[dict] = None,
-        inference: Optional[bool] = False,
+        inference_mode: Optional[bool] = False,
     ) -> None:
-        CopyImputer.__init__(self, config, data_indices, statistics, inference)
+        CopyImputer.__init__(self, config, data_indices, statistics, inference_mode)
         warnings.warn(
             "You are using a dynamic Imputer: NaN values will not be present in the model predictions. \
                       The model will be trained to predict imputed values. This might deteriorate performances."

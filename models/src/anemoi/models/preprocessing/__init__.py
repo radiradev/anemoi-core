@@ -27,7 +27,7 @@ class BasePreprocessor(nn.Module):
         config=None,
         data_indices: Optional[IndexCollection] = None,
         statistics: Optional[dict] = None,
-        inference: Optional[bool] = False,
+        inference_mode: Optional[bool] = False,
     ) -> None:
         """Initialize the preprocessor.
 
@@ -39,8 +39,8 @@ class BasePreprocessor(nn.Module):
             Data indices for input and output variables
         statistics : dict
             Data statistics dictionary
-        inference : bool
-            If True, the processor is in inference mode
+        inference_mode : bool
+            If True, the processor is in inference mode. Default is False.
 
         Attributes
         ----------
@@ -54,8 +54,8 @@ class BasePreprocessor(nn.Module):
             Data indices for input and output variables
         remap : dict
             Dictionary of the variables with remapped names in the config
-        inference : bool
-            If True, the processor is in inference mode
+        inference_mode : bool
+            If True, the processor is in inference mode.
         """
 
         super().__init__()
@@ -64,7 +64,7 @@ class BasePreprocessor(nn.Module):
         self.methods = self._invert_key_value_list(self.method_config)
 
         self.data_indices = data_indices
-        self.inference = inference
+        self.inference_mode = inference_mode
 
     @classmethod
     def _process_config(cls, config):

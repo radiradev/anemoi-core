@@ -61,7 +61,7 @@ class AnemoiModelInterface(torch.nn.Module):
         metadata: dict,
         supporting_arrays: dict = None,
         truncation_data: dict,
-        inference: bool = False,
+        inference_mode: bool = False,
     ) -> None:
         super().__init__()
         self.config = config
@@ -73,35 +73,42 @@ class AnemoiModelInterface(torch.nn.Module):
         self.metadata = metadata
         self.supporting_arrays = supporting_arrays if supporting_arrays is not None else {}
         self.data_indices = data_indices
-        self.inference = inference
+        self.inference_mode = inference_mode
         self._build_model()
 
     @property
-    def inference(self):
-        return self._inference
+    def inference_mode(self):
+        return self._inference_mode
 
-    @inference.setter
-    def inference(self, inference: bool):
+    @inference_mode.setter
+    def inference_mode(self, inference_mode: bool):
         """Set the inference mode of the model.
+
+        This method sets the inference mode of the model and its pre- and post-processors.
+        Preprocessors handling NaNs have different behaviour in inference mode as they need to account
+        for possibly inconsistent NaN locations in the data.
+
         Parameters
         ----------
-        inference : bool
+        inference_mode : bool
             If True, the model is in inference mode.
         """
-        self._inference = inference
+        self._inference_mode = inference_mode
         if hasattr(self, "pre_processors") and self.pre_processors is not None:
             for name in self.pre_processors.processors:
-                self.pre_processors.processors[name].inference = inference
+                self.pre_processors.processors[name].inference_mode = inference_mode
 
     def _build_model(self) -> None:
         """Builds the model and pre- and post-processors."""
         # Instantiate processors
-        # TODO(sara): questions: do we need to pass self.inference here or it is enough to set it to False by default in the init?
         processors = [
             [
                 name,
                 instantiate(
-                    processor, data_indices=self.data_indices, statistics=self.statistics, inference=self.inference
+                    processor,
+                    data_indices=self.data_indices,
+                    statistics=self.statistics,
+                    inference_mode=self.inference_mode,
                 ),
             ]
             for name, processor in self.config.data.processors.items()

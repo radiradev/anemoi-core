@@ -310,13 +310,7 @@ def test_inference_imputer(imputer_fixture, data_fixture, request):
     x, expected = request.getfixturevalue(data_fixture)
     imputer = request.getfixturevalue(imputer_fixture)
 
-    # force inference mask to True
-    imputer.inference = True
-
-    # Check inference flag
-    print(imputer.training)
-    assert imputer.inference, "Imputer is not set to inference mode."
-
+    # simulate training mode and set nan locations
     expected_mask = torch.isnan(x)
     transformed = imputer.transform(x, in_place=False)
     assert torch.allclose(transformed, expected, equal_nan=True), "Transform does not handle NaNs correctly."
@@ -324,11 +318,15 @@ def test_inference_imputer(imputer_fixture, data_fixture, request):
     assert torch.allclose(restored, x, equal_nan=True), "Inverse transform does not restore NaNs correctly."
     assert torch.equal(imputer.nan_locations, expected_mask), "Mask not saved correctly after first run."
 
+    # force inference mask to True
+    imputer.inference_mode = True
+
+    # Check inference flag
+    assert imputer.inference_mode, "Imputer is not set to inference mode."
+
     # change nan locations
     x2 = x.roll(-1, dims=0)
     expected2 = expected.roll(-1, dims=0)
-
-    assert torch.equal(imputer.nan_locations, expected_mask), "Mask not saved correctly after first run."
 
     assert not torch.allclose(x, x2, equal_nan=True), "Failed to modify the input data."
     assert not torch.allclose(expected, expected2, equal_nan=True), "Failed to modify the expected data."
