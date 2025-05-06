@@ -160,9 +160,13 @@ class BaseImputer(BasePreprocessor, ABC):
         # work with reference to cached nan_nanlocations
         nan_locations = self.nan_locations
 
+        # Ensure the user is running inference from a version of anemoi-inference that sets the inference_mode attribute
+        assert hasattr(
+            self, "inference_mode"
+        ), "Inference mode is not available. This could mean you are using an outdated anemoi-inference."
+
         # Reset the NaN locations for preprocesor in inference mode.
-        # getattr for backwards compatibility
-        if getattr(self, "inference_mode", False):
+        if self.inference_mode:
             LOGGER.debug("Imputer: resetting copy of NaN locations for inference mode.")
             # work with copy of cached nan_nanlocations to avoid modifying the cached one
             # 1. remove reference to cached one
@@ -364,9 +368,13 @@ class CopyImputer(BaseImputer):
         # work with reference to cached nan_nanlocations
         nan_locations = self.nan_locations
 
+        # Ensure the user is running inference from a version of anemoi-inference that sets the inference_mode attribute
+        assert hasattr(
+            self, "inference_mode"
+        ), "Inference mode is not available. This could mean you are using an outdated anemoi-inference."
+
         # Reset the NaN locations for preprocesor in inference mode.
-        # getattr for backwards compatibility
-        if getattr(self, "inference_mode", False):
+        if self.inference_mode:
             LOGGER.debug("Imputer: resetting copy of NaN locations for inference mode.")
             # work with copy of cached nan_nanlocations to avoid modifying the cached one
             # 1. remove reference to cached one
