@@ -144,24 +144,9 @@ class BaseImputer(BasePreprocessor, ABC):
         if not in_place:
             x = x.clone()
 
-        # work with copy of cached nan_nanlocations to avoid modifying the cached one
-        nan_locations = self.nan_locations
-
-        # Reset NaN locations for preprocesor in inference mode.
-        # getattr for backwards compatibility
-        if getattr(self, "inference_mode", False):
-            LOGGER.debug("Imputer: resetting copy of NaN locations for inference mode.")
-            nan_locations = None
-
-        # Initialise mask if not cached.
-        if nan_locations is None:
-
-            # Get NaN locations
-            nan_locations = self.get_nans(x)
-
         # Cache NaN locations for training and postprocessing and set loss mask in first forward pass
         if self.nan_locations is None:
-            self.nan_locations = nan_locations
+            self.nan_locations = self.get_nans(x)
 
             # Initialize training loss mask to weigh imputed values with zeroes once
             self.loss_mask_training = torch.ones(
@@ -170,7 +155,20 @@ class BaseImputer(BasePreprocessor, ABC):
             # for all variables that are imputed and part of the model output, set the loss weight to zero at NaN location
             for idx_src, idx_dst in zip(self.index_training_input, self.index_inference_output):
                 if idx_dst is not None:
-                    self.loss_mask_training[:, idx_dst] = (~nan_locations[:, idx_src]).int()
+                    self.loss_mask_training[:, idx_dst] = (~self.nan_locations[:, idx_src]).int()
+
+        # work with reference to cached nan_nanlocations
+        nan_locations = self.nan_locations
+
+        # Reset the NaN locations for preprocesor in inference mode.
+        # getattr for backwards compatibility
+        if getattr(self, "inference_mode", False):
+            LOGGER.debug("Imputer: resetting copy of NaN locations for inference mode.")
+            # work with copy of cached nan_nanlocations to avoid modifying the cached one
+            # 1. remove reference to cached one
+            nan_locations = None
+            # 2. get current NaN locations
+            nan_locations = self.get_nans(x)
 
         # Choose correct index based on number of variables
         if x.shape[-1] == self.num_training_input_vars:
@@ -350,35 +348,31 @@ class CopyImputer(BaseImputer):
         if not in_place:
             x = x.clone()
 
-        # work with copy of cached nan_nanlocations to avoid modifying the cached one
-        nan_locations = self.nan_locations
-
-        # Reset NaN locations for preprocesor in inference.
-        # getattr for backwards compatibility
-        if getattr(self, "inference_mode", False):
-            LOGGER.debug("Imputer: resetting NaN locations in inference mode.")
-            nan_locations = None
-
-        # Initialise mask if not cached.
-        if nan_locations is None:
-
-            # Get NaN locations
-            nan_locations = self.get_nans(x)
-
-        # Initialize nan mask once
+        # Cache NaN locations for training and postprocessing and set loss mask in first forward pass
         if self.nan_locations is None:
-
-            # Get NaN locations
             self.nan_locations = self.get_nans(x)
 
             # Initialize training loss mask to weigh imputed values with zeroes once
             self.loss_mask_training = torch.ones(
                 (x.shape[-2], len(self.data_indices.model.output.name_to_index)), device=x.device
             )  # shape (grid, n_outputs)
-            # for all variables that are imputed and part of the model output, set the loss weight to zero
+            # for all variables that are imputed and part of the model output, set the loss weight to zero at NaN location
             for idx_src, idx_dst in zip(self.index_training_input, self.index_inference_output):
                 if idx_dst is not None:
                     self.loss_mask_training[:, idx_dst] = (~self.nan_locations[:, idx_src]).int()
+
+        # work with reference to cached nan_nanlocations
+        nan_locations = self.nan_locations
+
+        # Reset the NaN locations for preprocesor in inference mode.
+        # getattr for backwards compatibility
+        if getattr(self, "inference_mode", False):
+            LOGGER.debug("Imputer: resetting copy of NaN locations for inference mode.")
+            # work with copy of cached nan_nanlocations to avoid modifying the cached one
+            # 1. remove reference to cached one
+            nan_locations = None
+            # 2. get current NaN locations
+            nan_locations = self.get_nans(x)
 
         # Choose correct index based on number of variables
         if x.shape[-1] == self.num_training_input_vars:
