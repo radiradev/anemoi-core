@@ -82,7 +82,7 @@ output:
     output_mask: null
     variable_loss_scaling:
       default: 1
-      pl: 
+      pl:
         q: 0.6
         t: 6
         u: 0.8
@@ -115,7 +115,7 @@ output:
       scalars_to_apply: ['variable']
       metrics:
         - 'all'
-    
+
     metrics:
       - z_500
       - t_850
@@ -124,6 +124,4 @@ output:
 
 
 submodules_to_freeze: []
-    
-
 

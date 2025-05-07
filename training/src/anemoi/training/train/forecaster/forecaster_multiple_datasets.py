@@ -26,9 +26,9 @@ from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.utils.checkpoint import checkpoint
 
 from anemoi.models.interface import AnemoiModelInterface
+from anemoi.training.losses.dict import DictLoss
 from anemoi.training.losses.utils import grad_scaler
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
-from anemoi.training.losses.dict import DictLoss
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.schemas.base_schema import convert_to_omegaconf
 from anemoi.training.schemas.training import LossScalingSchema  # noqa: TC001
@@ -86,12 +86,14 @@ class GraphForecasterMultiDataset(pl.LightningModule):
 
         graph_data = graph_data.to(self.device)
 
-        self.datasets = ["era5"] # TODO: Placeholder, should come from config / datahandler
+        self.datasets = ["era5"]  # TODO: Placeholder, should come from config / datahandler
 
         # TODO: Handle supporting arrays for multiple output masks (multiple outputs)
         # (It is handled in the loss function, but not the version here that is sent to model for supporting_arrays)
         if config.training.output[self.datasets[0]].output_mask is not None:
-            self.output_mask = Boolean1DMask(graph_data[config.graph.data][config.training.output[self.datasets[0]].output_mask])
+            self.output_mask = Boolean1DMask(
+                graph_data[config.graph.data][config.training.output[self.datasets[0]].output_mask],
+            )
         else:
             self.output_mask = NoOutputMask()
 
@@ -106,15 +108,15 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         )
         self.config = config
         self.data_indices = data_indices
-        self.model_data_indices = {self.datasets[0]: self.model.model.data_indices} # TODO: generalize
-        
+        self.model_data_indices = {self.datasets[0]: self.model.model.data_indices}  # TODO: generalize
+
         self.save_hyperparameters()
 
-        self.latlons_data = graph_data[config.graph.data].x #TODO: Generalize, link graph key to DataHandler key
-        
+        self.latlons_data = graph_data[config.graph.data].x  # TODO: Generalize, link graph key to DataHandler key
+
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
-        self.updated_loss_mask = False #TODO: Handle this when we introduce rollout_step
+        self.updated_loss_mask = False  # TODO: Handle this when we introduce rollout_step
 
         loss_dict, self.metrics_dict = self.get_dict_loss_functions(
             config=config,
@@ -331,45 +333,42 @@ class GraphForecasterMultiDataset(pl.LightningModule):
     def get_node_weights(config: DictConfig, graph_data: HeteroData) -> torch.Tensor:
         node_weighting = instantiate(config.node_loss_weights)
         return node_weighting.weights(graph_data)
-    
+
     def get_dict_loss_functions(
-            self,
-            config: BaseSchema,
-            graph_data: HeteroData,
+        self,
+        config: BaseSchema,
+        graph_data: HeteroData,
     ) -> tuple[torch.nn.ModuleDict, torch.nn.ModuleDict]:
-        
+
         self.val_metric_ranges = {}
         self.internal_metric_ranges = {}
         loss_dict = torch.nn.ModuleDict()
         metrics_dict = torch.nn.ModuleDict()
-        
+
         for output, loss_config in config.training.output.items():
             if loss_config.output_mask is not None:
                 output_mask = Boolean1DMask(graph_data[config.graph.data][loss_config.output_mask])
             else:
                 output_mask = NoOutputMask()
-            
+
             node_weights = self.get_node_weights(loss_config, graph_data)
             node_weights = output_mask.apply(node_weights, dim=0, fill_value=0.0)
 
             variable_scaling = self.get_variable_scaling(
-                loss_config.variable_loss_scaling,
-                loss_config.pressure_level_scaler,
-                self.model_data_indices[output]
+                loss_config.variable_loss_scaling, loss_config.pressure_level_scaler, self.model_data_indices[output],
             )
 
             self.internal_metric_ranges[output], self.val_metric_ranges[output] = self.get_val_metric_ranges(
-                loss_config, 
-                self.model_data_indices[output]
+                loss_config, self.model_data_indices[output],
             )
 
-            limited_area_mask = torch.ones((1,)) 
+            limited_area_mask = torch.ones((1,))
             # TODO: Add support for stretched grid masking.
             # Not sure whether we want the masking to be applied to all outputs
             # which would be the default case since it checks the mesh for StretchedTriNodes
-            
+
             loss_kwargs = {"node_weights": node_weights}
-            
+
             # Scalars to include in the loss function, must be of form (dim, scalar)
             # Use -1 for the variable dimension, -2 for the latlon dimension
             # Add mask multiplying NaN locations with zero. At this stage at [[1]].
@@ -389,7 +388,7 @@ class GraphForecasterMultiDataset(pl.LightningModule):
             if not isinstance(loss_dict[output], BaseWeightedLoss):
                 error_msg = f"Loss function must be a `BaseWeightedLoss`, not a {type(loss_dict[output]).__name__!r}"
                 raise TypeError(error_msg)
-            
+
             if config.training.loss_gradient_scaling:
                 loss_dict[output].register_full_backward_hook(grad_scaler, prepend=False)
 
@@ -652,24 +651,24 @@ class GraphForecasterMultiDataset(pl.LightningModule):
                     )
 
         return metrics
-    
+
     def training_step(
-        self, 
+        self,
         batch: tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]],
         batch_idx: int,
-        ) -> torch.Tensor:
+    ) -> torch.Tensor:
         batch_input, batch_target = batch
         train_losses, _ = self._step(batch_input, batch_target, batch_idx)
         combined_loss = sum(train_losses.values())
 
         self.log(
-            f"train_wmse",
+            "train_wmse",
             combined_loss,
             on_epoch=True,
             on_step=True,
             prog_bar=True,
             logger=self.logger_enabled,
-            batch_size=batch_input[self.datasets[0]].shape[0],   
+            batch_size=batch_input[self.datasets[0]].shape[0],
             sync_dist=True,
         )
 
@@ -699,14 +698,14 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         self,
         batch: tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]],
         batch_idx: int,
-        ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         batch_input, batch_target = batch
         with torch.no_grad():
             val_losses, pred = self._step(batch_input, batch_target, batch_idx, validation_mode=True)
         combined_loss = sum(val_losses.values())
 
         self.log(
-            f"val_wmse",
+            "val_wmse",
             combined_loss,
             on_epoch=True,
             on_step=True,

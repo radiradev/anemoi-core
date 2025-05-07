@@ -65,7 +65,7 @@ class AnemoiModelEncProcDec(nn.Module):
 
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
 
-        #---------TODO: organize these in a ModelIndex object?---------------------#
+        # ---------TODO: organize these in a ModelIndex object?---------------------#
         self.input_data_name = list(input.keys())[0]
         self.input_variables = input[self.input_data_name]
         self.num_input_channels = len(self.input_variables)
@@ -80,7 +80,7 @@ class AnemoiModelEncProcDec(nn.Module):
         self._internal_input_idx = [self.input_variables.index(var) for var in skip_variables]
         self._internal_output_idx = [self.output_variables.index(var) for var in skip_variables]
 
-        #Fake data_indices to be used in Forecaster
+        # Fake data_indices to be used in Forecaster
         self.data_indices = DotDict(
             {
                 "internal_model": {
@@ -91,15 +91,15 @@ class AnemoiModelEncProcDec(nn.Module):
                     "output": {
                         "full": self.output_variables,
                         "name_to_index": self.name_to_index_output,
-                    }
+                    },
                 }
             }
         )
-        #-------------------------------------------------------------------------#
+        # -------------------------------------------------------------------------#
 
         self.data_indices = data_indices
         self.statistics = statistics
-        
+
         # read config.model.layer_kernels to get the implementation for certain layers
         self.layer_kernels_encoder = load_layer_kernels(model_config.model.layer_kernels.get("encoder", {}))
         self.layer_kernels_decoder = load_layer_kernels(model_config.model.layer_kernels.get("decoder", {}))
@@ -163,7 +163,7 @@ class AnemoiModelEncProcDec(nn.Module):
                     cfg,
                     name_to_index=self.name_to_index_output,
                     statistics=self.statistics,
-                    name_to_index_stats=self.data_indices.data.input.name_to_index, #Need to find a solution for this if we want to remove data_indices
+                    name_to_index_stats=self.data_indices.data.input.name_to_index,  # Need to find a solution for this if we want to remove data_indices
                 )
                 for cfg in getattr(model_config.model, "bounding", [])
             ]

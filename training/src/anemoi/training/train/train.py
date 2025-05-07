@@ -93,7 +93,7 @@ class AnemoiTrainer:
         self._check_dry_run()
 
         # Check for dry run, i.e. run id without data
-        #self._log_information()
+        # self._log_information()
 
     @cached_property
     def datamodule(self) -> Any:
@@ -103,9 +103,9 @@ class AnemoiTrainer:
             convert_to_omegaconf(self.config),
             self.graph_data,
         )
-        #self.config.data.num_features = len(datamodule.ds_train.data.variables)
-        #LOGGER.info("Number of data variables: %s", str(len(datamodule.ds_train.data.variables)))
-        #LOGGER.debug("Variables: %s", str(datamodule.ds_train.data.variables))
+        # self.config.data.num_features = len(datamodule.ds_train.data.variables)
+        # LOGGER.info("Number of data variables: %s", str(len(datamodule.ds_train.data.variables)))
+        # LOGGER.debug("Variables: %s", str(datamodule.ds_train.data.variables))
         return datamodule
 
     @cached_property
@@ -185,7 +185,7 @@ class AnemoiTrainer:
         """Provide the model instance."""
         kwargs = {
             "config": self.config,
-            #"data_indices": self.data_indices,
+            # "data_indices": self.data_indices,
             "graph_data": self.graph_data,
             "truncation_data": self.truncation_data,
             "metadata": self.metadata,

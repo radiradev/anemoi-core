@@ -5,7 +5,7 @@ cpu_offload: False
 
 sample_providers:
   input:
-    era5: 
+    era5:
     - "cos_latitude"
     - "cos_longitude"
     - "sin_latitude"
@@ -50,7 +50,7 @@ sample_providers:
     - "z_700"
     - "z_1000"
   output:
-    era5: 
+    era5:
     - "z"
     - "sp"
     - "msl"

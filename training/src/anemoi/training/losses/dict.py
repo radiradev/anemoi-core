@@ -10,11 +10,12 @@
 import torch.nn as nn
 from torch import Tensor
 
+
 class DictLoss(nn.Module):
     """Wrapper for a dictionary of loss-fuctions that operate on different outputs."""
 
     def __init__(
-        self, 
+        self,
         loss_dict: nn.ModuleDict,
     ) -> None:
         super().__init__()
@@ -25,8 +26,8 @@ class DictLoss(nn.Module):
         self,
         pred: dict[str, Tensor],
         target: dict[str, Tensor],
-        squash: bool = True, # TODO Generalise this per output?
-        ) -> dict[str, Tensor]:
+        squash: bool = True,  # TODO Generalise this per output?
+    ) -> dict[str, Tensor]:
         out = {}
         for output, loss in self.loss_dict.items():
             out[output] = loss(pred[output], target[output], squash)

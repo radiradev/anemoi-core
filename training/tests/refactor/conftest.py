@@ -45,10 +45,16 @@ def new_config() -> DictConfig:
                 },
             },
             "dataloader": {
+                "sampler": {
+                    "_target_": "anemoi.training.data.sampler.AnemoiSampler",
+                    "start": 2015,
+                    "frequency": "6H",
+                    "end": 2022,
+                },
                 "prefetch_factor": 2,
                 "pin_memory": True,
                 "grid_indices": {
-                    "_target_": "anemoi.training.data.grid_indices.FullGrid", 
+                    "_target_": "anemoi.training.data.grid_indices.FullGrid",
                     "nodes_name": "data"
                 },
                 "read_group_size": 1,
@@ -85,7 +91,7 @@ def new_config() -> DictConfig:
                                 "q_300",
                                 "q_700",
                                 "q_1000",
-                            ], 
+                            ],
                             "steps": [-1, 0],
                         },
                     },
@@ -95,6 +101,10 @@ def new_config() -> DictConfig:
                             "steps": [1]
                         },
                     },
+                    # era5 : 06, 12, 18, 24
+                    # reg1 : 08, 10, 12, 14, 16, 18
+                    # steps: [0, 1]
+                    # steps: [0, 1, 2, 3]
                 },
             },
             "training": {
