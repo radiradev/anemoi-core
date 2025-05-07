@@ -2,7 +2,7 @@ defaults:
 - data: zarr_single_snow
 - dataloader: native_grid_single_snow
 - datamodule: single
-- diagnostics: evaluation
+- diagnostics: evaluation_snow
 - hardware: slurm
 - graph: encoder_decoder_only_single
 - model: transformer_single_snow

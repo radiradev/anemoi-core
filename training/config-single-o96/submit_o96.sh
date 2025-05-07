@@ -25,7 +25,7 @@
 
 # generic settings
 
-GITDIR=/perm/daep/projects/anemoi-core/feature-single01/training/config-single
+GITDIR=/perm/daep/projects/anemoi-core/feature-single01/training/config-single-o96
 WORKDIR=$GITDIR
 cd $WORKDIR
 

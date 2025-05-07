@@ -16,6 +16,9 @@ parameters:
 - sp
 - tp
 - cp
+- sf
+- sd
+- snowc
 
 # Sample index
 sample_idx: 0
@@ -73,7 +76,9 @@ callbacks:
     - 2t
     - 10u
     - 10v
-
+    - sf
+    - snowc
+    - sd
   - _target_: anemoi.training.diagnostics.callbacks.plot.PlotHistogram
     sample_idx: ${diagnostics.plot.sample_idx}
     every_n_batches: ${diagnostics.plot.frequency.batch}
@@ -84,3 +89,6 @@ callbacks:
     - 2t
     - 10u
     - 10v
+    - sd
+    - snowc
+    - sf
