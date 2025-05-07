@@ -306,8 +306,7 @@ class AnemoiModelEncProcDec(nn.Module):
             use_reentrant=use_reentrant,
         )
 
-    def forward(self, batch: dict[str, Tensor], model_comm_group: Optional[ProcessGroup] = None) -> dict[str, Tensor]:
-        x = batch[self.input_data_name]
+    def forward(self, x: Tensor, *, model_comm_group: Optional[ProcessGroup] = None, **kwargs) -> Tensor:
         batch_size = x.shape[0]
         ensemble_size = x.shape[2]
 
@@ -344,4 +343,4 @@ class AnemoiModelEncProcDec(nn.Module):
 
         x_out = self._assemble_output(x_out, x_skip, batch_size, ensemble_size, x.dtype)
 
-        return {self.output_data_name: x_out}
+        return x_out
