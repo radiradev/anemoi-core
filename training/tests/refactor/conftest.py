@@ -11,29 +11,6 @@ def new_config() -> DictConfig:
                 "timestep": "6h",
                 "data_handlers": {
                     "era5": {
-                        "training_dataset": {
-                            "dataset": {
-                                # "dataset": ... from era5.dataset
-                                "start": None,
-                                "end": 2018,
-                            }
-                        },
-                        "validation_dataset": {
-                            "dataset": {
-                                # "dataset": ...
-                                "start": 2019,
-                                "end": 2019,
-                            },
-                           # "processors": {...}
-                        },
-                        "test_dataset": {
-                            "dataset": {
-                                # "dataset": ...
-                                "start": 2019,
-                                "end": 2019,
-                            },
-                            #"processors": {...}
-                        },
                         "dataset": "aifs-od-an-oper-0001-mars-o96-2016-2023-6h-v6",
                         "processors": {
                             "normalizer": {
@@ -46,13 +23,25 @@ def new_config() -> DictConfig:
             },
             "dataloader": {
                 "sampler": {
-                    "_target_": "anemoi.training.data.sampler.AnemoiSampler",
-                    "start": 2015,
-                    "frequency": "6H",
-                    "end": 2022,
+                    "training": {
+                        "start": 2015,
+                        "frequency": "6H",
+                        "end": 2018,
+                    },
+                    "validation": {
+                        "start": 2019,
+                        "frequency": "6H",
+                        "end": 2020,
+                    },
+                    "test": {
+                        "start": 2021,
+                        "frequency": "6H",
+                        "end": 2022,
+                    },
                 },
                 "prefetch_factor": 2,
                 "pin_memory": True,
+                "persistent_workers": True,
                 "grid_indices": {
                     "_target_": "anemoi.training.data.grid_indices.FullGrid",
                     "nodes_name": "data"

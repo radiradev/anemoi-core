@@ -22,8 +22,9 @@ from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.training.data.data_handlers import DataHandlers
 from anemoi.training.data.data_handlers import NativeGridMultDataset
 from anemoi.training.data.data_handlers import SampleProvider
-from anemoi.training.data.data_handlers import Stage
-from anemoi.training.data.utils import specify_datahandler_config
+from anemoi.training.data.utils import get_dataloader_config
+from anemoi.training.data.sampler import AnemoiSampler
+from anemoi.training.data.utils import SamplerProviderName
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.utils.worker_init import worker_init_func
 from anemoi.utils.dates import frequency_to_seconds
@@ -31,12 +32,12 @@ from anemoi.utils.dates import frequency_to_seconds
 LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
 
     from torch_geometric.data import HeteroData
 
     from anemoi.training.data.grid_indices import BaseGridIndices
     from anemoi.training.schemas.base_schema import BaseSchema
+
 
 
 class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
@@ -55,115 +56,56 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         self.config = config
         self.graph_data = graph_data
 
-        # Create data handler for training, validation and testing.
-        data_handlers = {}
-        self.sample_providers = {}
-        self.datasets = {}
-        self.sampler = {}
+        # Create data handlers            
+        dhs = DataHandlers(config.data.data_handlers)
+        self.sample_providers = {
+            key: SampleProvider(provider, dhs) for key, provider in config.model.sample_providers.items()
+        }
 
-        for stage in Stage:
-            dh_configs = {
-                k: specify_datahandler_config(v, f"{stage.value}_dataset") for k, v in config.data.data_handlers.items()
-            }
-            dhs = DataHandlers(dh_configs)
-            data_handlers[stage] = dhs
+        # Create samplers
+        self.train_sampler = AnemoiSampler(**config.dataloader.sampler.training)
+        self.val_sampler = AnemoiSampler(**config.dataloader.sampler.validation)
+        self.test_sampler = AnemoiSampler(**config.dataloader.sampler.test)
+        
+        self.train_sampler.set_valid_indices(self.sample_providers)
+        self.val_sampler.set_valid_indices(self.sample_providers)
+        self.test_sampler.set_valid_indices(self.sample_providers)
 
-            self.sample_providers[stage] = {
-                key: SampleProvider(provider, dhs) for key, provider in config.model.sample_providers.items()
-            }
-            self.sampler[stage] = instantiate(config.dataloader.sampler)
-            self.sampler[stage].set_valid_indices(self.sample_providers[stage])
+        dl_keys_to_ignore = ["sampler", "read_group_size", "grid_indices", "limit_batches"]
+        self.train_dataloader_config = get_dataloader_config(config.dataloader, "training", keys_to_ignore=dl_keys_to_ignore)
+        self.val_dataloader_config = get_dataloader_config(config.dataloader, "validation", keys_to_ignore=dl_keys_to_ignore)
+        self.test_dataloader_config = get_dataloader_config(config.dataloader, "test", keys_to_ignore=dl_keys_to_ignore)
 
         # data_handlers[stage.TRAINING].check_no_overlap(data_handlers[stage.VALIDATION])
         # data_handlers[stage.TRAINING].check_no_overlap(data_handlers[stage.TEST])
         # data_handlers[stage.VALIDATION].check_no_overlap(data_handlers[stage.TEST])
 
     @cached_property
-    def statistics(self) -> dict:
-        return self.ds_train.statistics
-
-    @cached_property
-    def metadata(self) -> dict:
-        return self.ds_train.metadata
-
-    @cached_property
-    def supporting_arrays(self) -> dict:
-        return self.ds_train.supporting_arrays | self.grid_indices.supporting_arrays
-
-    @cached_property
     def data_indices(self) -> IndexCollection:
         return IndexCollection(self.config, self.ds_train.name_to_index)
 
-    @cached_property
-    def grid_indices(self) -> type[BaseGridIndices]:
-        reader_group_size = self.config.dataloader.read_group_size
-
-        grid_indices = instantiate(
-            self.config.dataloader.grid_indices,
-            reader_group_size=reader_group_size,
-        )
-        # grid_indices.setup(self.graph_data)
-        return grid_indices
-
-    @cached_property
-    def timeincrement(self) -> int:
-        """Determine the step size relative to the data frequency."""
-        try:
-            frequency = frequency_to_seconds(self.config.data.frequency)
-        except ValueError as e:
-            msg = f"Error in data frequency, {self.config.data.frequency}"
-            raise ValueError(msg) from e
-
-        try:
-            timestep = frequency_to_seconds(self.config.data.timestep)
-        except ValueError as e:
-            msg = f"Error in timestep, {self.config.data.timestep}"
-            raise ValueError(msg) from e
-
-        assert timestep % frequency == 0, (
-            f"Timestep ({self.config.data.timestep} == {timestep}) isn't a "
-            f"multiple of data frequency ({self.config.data.frequency} == {frequency})."
-        )
-
-        LOGGER.info(
-            "Timeincrement set to %s for data with frequency, %s, and timestep, %s",
-            timestep // frequency,
-            frequency,
-            timestep,
-        )
-        return timestep // frequency
-
-    def _get_dataloaders(self, stage: Stage) -> dict[str, DataLoader]:  # dict[str, dict[str, DataLoader]]
-        # data_handlers : dict[str, DataHandlers]  ---> train/val/test | era5/cerra/...
-        # sample_providers: dict[str, dict[str, SampleProviders]]  ---> train/val/test | input/output | era5/cerra/...
-        # datasets:         dict[str, dict[str, NativeGridMultDatasets(inherits from IterableDataset)]]  ---> train/val/test | input/output | era5/cerra/...
-        # dataloader: dict[str, torch.DataLoader]
-        # datamodule: AnemoiMultipleDatasetsDataModule(pl.LightningDataModule)
-        # samplers: dict[str, AnemoiSampler] for stage
+    def _get_dataloaders(
+        self,
+        sample_providers: dict[SamplerProviderName, SampleProvider],
+        sampler: AnemoiSampler,
+        **kwargs: dict,
+    ) -> dict[SamplerProviderName, DataLoader]:
         data_loaders = {
             name: DataLoader(
-                NativeGridMultDataset(sample_provider, self.sampler[stage]),
-                batch_size=self.config.dataloader.batch_size[stage.value],
-                # number of worker processes
-                num_workers=self.config.dataloader.num_workers[stage.value],
-                # use of pinned memory can speed up CPU-to-GPU data transfers
-                # see https://pytorch.org/docs/stable/notes/cuda.html#cuda-memory-pinning
-                pin_memory=self.config.dataloader.pin_memory,
+                NativeGridMultDataset(sample_provider, sampler),
                 # worker initializer
                 worker_init_fn=worker_init_func,
-                # prefetch batches
-                prefetch_factor=self.config.dataloader.prefetch_factor,
-                persistent_workers=True,
+                **kwargs
             )
-            for name, sample_provider in self.sample_providers[stage].items()
+            for name, sample_provider in sample_providers.items()
         }
         return data_loaders
 
     def train_dataloader(self) -> dict[str, DataLoader]:
-        return self._get_dataloaders(Stage.TRAINING)
+        return self._get_dataloaders(self.sample_providers, self.train_sampler, **self.train_dataloader_config)
 
     def val_dataloader(self) -> dict[str, DataLoader]:
-        return self._get_dataloaders(Stage.VALIDATION)
+        return self._get_dataloaders(self.sample_providers, self.val_sampler, **self.val_dataloader_config)
 
     def test_dataloader(self) -> dict[str, DataLoader]:
-        return self._get_dataloaders(Stage.TEST)
+        return self._get_dataloaders(self.sample_providers, self.test_sampler, **self.test_dataloader_config)

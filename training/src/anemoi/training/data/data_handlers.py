@@ -163,8 +163,5 @@ class NativeGridMultDataset(IterableDataset):
         """
         valid_indices = self.sampler.valid_time_indices
 
-        if self.shuffle:
-            valid_indices = self.rng.choice(valid_indices, size=len(valid_indices), replace=False)
-
         for i in valid_indices:
             yield self.data[i]
