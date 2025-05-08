@@ -38,8 +38,6 @@ class BasePreprocessor(nn.Module):
             Data indices for input and output variables
         statistics : dict
             Data statistics dictionary
-        data_indices : dict
-            Data indices for input and output variables
 
         Attributes
         ----------
@@ -139,7 +137,7 @@ class BasePreprocessor(nn.Module):
 class Processors(nn.Module):
     """A collection of processors."""
 
-    def __init__(self, processors: list, inverse: bool = False) -> None:
+    def __init__(self, processors: list[BasePreprocessor], inverse: bool = False) -> None:
         """Initialize the processors.
 
         Parameters

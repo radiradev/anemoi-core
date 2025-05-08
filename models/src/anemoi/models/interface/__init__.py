@@ -15,6 +15,7 @@ from hydra.utils import instantiate
 from torch.distributed.distributed_c10d import ProcessGroup
 from torch_geometric.data import HeteroData
 
+from anemoi.training.data.data_handlers import SampleProvider
 from anemoi.models.preprocessing import Processors
 from anemoi.utils.config import DotDict
 
@@ -55,11 +56,10 @@ class AnemoiModelInterface(torch.nn.Module):
         self,
         *,
         config: DotDict,
+        sample_provider: SampleProvider,
         graph_data: HeteroData,
-        statistics: dict,
-        data_indices: dict,
+        #data_indices: dict,
         metadata: dict,
-        supporting_arrays: dict = None,
         truncation_data: dict,
     ) -> None:
         super().__init__()
@@ -67,31 +67,28 @@ class AnemoiModelInterface(torch.nn.Module):
         self.id = str(uuid.uuid4())
         self.multi_step = self.config.training.multistep_input
         self.graph_data = graph_data
-        self.statistics = statistics
         self.truncation_data = truncation_data
         self.metadata = metadata
-        self.supporting_arrays = supporting_arrays if supporting_arrays is not None else {}
-        self.data_indices = data_indices
+        #self.data_indices = data_indices
         self._build_model()
 
     def _build_model(self) -> None:
         """Builds the model and pre- and post-processors."""
         # Instantiate processors
-        processors = [
-            [name, instantiate(processor, data_indices=self.data_indices, statistics=self.statistics)]
-            for name, processor in self.config.data.processors.items()
-        ]
+        input_preprocessors = self.sample_provider.input_processors()
+        target_processors = self.sample_provider.target_processors()
 
         # Assign the processor list pre- and post-processors
-        self.pre_processors = Processors(processors)
-        self.post_processors = Processors(processors, inverse=True)
+        self.input_pre_processors = Processors(input_preprocessors)
+        self.target_pre_processors = Processors(target_processors)
+        self.target_post_processors = Processors(target_processors, inverse=True)
 
         # Instantiate the model
         self.model = instantiate(
             self.config.model.model,
             model_config=self.config,
-            data_indices=self.data_indices,
-            statistics=self.statistics,
+            sample_provider=self.sample_provider,
+            #data_indices=self.data_indices,
             graph_data=self.graph_data,
             truncation_data=self.truncation_data,
             _recursive_=False,  # Disables recursive instantiation by Hydra

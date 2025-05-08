@@ -33,11 +33,6 @@ def new_config() -> DictConfig:
                         "frequency": "6H",
                         "end": 2020,
                     },
-                    "test": {
-                        "start": 2021,
-                        "frequency": "6H",
-                        "end": 2022,
-                    },
                 },
                 "prefetch_factor": 2,
                 "pin_memory": True,
@@ -50,51 +45,48 @@ def new_config() -> DictConfig:
                 "num_workers": {
                     "training": 8,
                     "validation": 8,
-                    "test": 8
                 },
                 "batch_size":{
                     "training": 2,
                     "validation": 4,
-                    "test": 4
                 },
                 "limit_batches": {
                     "training": None,
                     "validation": None,
-                    "test": 20
                 }
             },
             "model": {
-                "sample_providers": {
-                    "input": {
-                        "era5": {
-                            "variables": [
-                                "cos_latitude",
-                                "cos_longitude",
-                                "sin_latitude",
-                                "sin_longitude",
-                                "10u",
-                                "10v",
-                                "2t",
-                                "2d",
-                                "q_100",
-                                "q_300",
-                                "q_700",
-                                "q_1000",
-                            ],
-                            "steps": [-1, 0],
-                        },
+                "input_provider": {
+                    "era5": {
+                        "variables": [
+                            "cos_latitude",
+                            "cos_longitude",
+                            "sin_latitude",
+                            "sin_longitude",
+                            "10u",
+                            "10v",
+                            "2t",
+                            "2d",
+                            "q_100",
+                            "q_300",
+                            "q_700",
+                            "q_1000",
+                        ],
+                        "steps": [-1, 0],
                     },
-                    "output": {
-                        "era5": {
-                            "variables": ["10u", "10v", "2t", "2d", "q_100", "q_300", "q_700", "q_1000", "tp"],
-                            "steps": [1]
-                        },
-                    },
-                    # era5 : 06, 12, 18, 24
-                    # reg1 : 08, 10, 12, 14, 16, 18
-                    # steps: [0, 1]
-                    # steps: [0, 1, 2, 3]
                 },
+                "target_provider": {
+                    "era5": {
+                        "variables": ["10u", "10v", "2t", "2d", "q_100", "q_300", "q_700", "q_1000", "tp"],
+                        "steps": [1]
+                    },
+                },
+                "model": {
+                    "_target_": "anemoi.models.models.AnemoiMultiModel"
+                },
+                "encoder": {"_target_": "anemoi.models.layers.mapper.GraphTransformerForwardMapper"},
+                "processor": {"_target_": "anemoi.models.layers.processor.GraphTransformerProcessor"},
+                "decoder": {"_target_": "anemoi.models.layers.mapper.GraphTransformerBackwardMapper"},
             },
             "training": {
                 "rollout": {

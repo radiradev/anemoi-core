@@ -11,12 +11,63 @@ import pandas as pd
 from datetime import datetime
 
 
-class SamplerProviderName(str):
+class RecordProviderName(str):
     pass
 
 
 class DataHandlerName(str):
     pass
+
+
+class SourceSpec:
+
+    def __init__(self, variables: list[str], steps: list[int]) -> None:
+        self.variables = variables
+        self.steps = steps
+    
+    @property
+    def num_variables(self) -> int:
+        return len(self.variables)
+    
+    @property
+    def num_steps(self) -> int:
+        return len(steps)
+
+
+class RecordSpec(dict):
+    @property
+    def record_names(self) -> list[str]:
+        return list(self.keys())
+
+    @property
+    def num_variables(self) -> dict[str, int]:
+        return {name: spec.num_variables for name, spec in self.items()}
+
+    @property
+    def num_steps(self) -> dict[str, int]:
+        return {name: spec.num_steps for name, spec in self.items()}
+
+
+class SampleSpec(dict):
+    @property
+    def input_names(self) -> list[str]:
+        return self["input"].record_names
+
+    @property
+    def target_names(self) -> list[str]:
+        return self["target"].record_names
+
+    @property
+    def num_variables(self) -> dict[str, dict[str, int]]:
+        return {name: spec.num_variables for name, spec in self.items()}
+
+    @property
+    def num_steps(self) -> dict[str, dict[str, int]]:
+        return {name: spec.num_steps for name, spec in self.items()}
+    
+    @property
+    def num_channels(self) -> dict[str, dict[str, int]]:
+        return {name: spec.num_steps * spec.num_variables for name, spec in self.items()} 
 
 
 def parse_date(date: str | int) -> datetime:

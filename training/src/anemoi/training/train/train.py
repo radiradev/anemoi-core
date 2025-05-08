@@ -186,12 +186,9 @@ class AnemoiTrainer:
         kwargs = {
             "config": self.config,
             # "data_indices": self.data_indices,
+            "sample_provider": self.datamodule.sample_provider,
             "graph_data": self.graph_data,
-            "truncation_data": self.truncation_data,
             "metadata": self.metadata,
-            "statistics": self.datamodule.statistics,
-            "statistics_tendencies": self.datamodule.statistics_tendencies,
-            "supporting_arrays": self.supporting_arrays,
         }
 
         model_task = get_class(self.config.training.model_task)

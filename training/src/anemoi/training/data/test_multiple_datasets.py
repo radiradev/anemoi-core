@@ -76,7 +76,7 @@ def select(data_handler, select=None):
     return SelectedDataHandler(data_handler, select=select)
 
 
-class SampleProvider:
+class RecordProvider:
     def __init__(self, kwargs, datahandlers):
 
         self._variables = {}
@@ -107,8 +107,8 @@ if __name__ == "__main__":
 
     class Tester:
         def __init__(self, config, datahandlers):
-            self.input = SampleProvider(config["input"], datahandlers)
-            self.output = SampleProvider(config["output"], datahandlers)
+            self.input = RecordProvider(config["input"], datahandlers)
+            self.output = RecordProvider(config["output"], datahandlers)
 
         def getdata(self, i):
             input = self.input[i]

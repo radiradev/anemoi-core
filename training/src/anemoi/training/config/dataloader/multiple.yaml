@@ -1,6 +1,16 @@
 prefetch_factor: 2
 pin_memory: True
 
+sampler:
+  training:
+    start: 2015
+    end: 2018
+    frequency: 6H
+  validation:
+    start: 2019
+    end: 2020
+    frequency: 6H
+
 # ============
 # read_group_size:
 #   Form subgroups of model comm groups that read data together.

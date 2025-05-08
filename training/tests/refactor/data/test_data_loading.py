@@ -12,13 +12,9 @@ def test_datamodule(new_config: DictConfig):
 
     train_loaders = datamodule.train_dataloader()
 
-    assert isinstance(train_loaders, dict)
+    assert isinstance(train_loaders, torch.utils.data.DataLoader)
 
-    batch = {}
-    for name, dl in train_loaders.items():
-        assert isinstance(name, str)
-        assert isinstance(dl, torch.utils.data.DataLoader)
-        batch[name] = next(iter(dl))
+    batch = next(iter(train_loaders))
 
     assert isinstance(batch, dict)
 

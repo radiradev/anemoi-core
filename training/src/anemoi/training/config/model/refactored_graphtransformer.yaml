@@ -3,9 +3,10 @@ num_channels: 1024
 cpu_offload: False
 #output_mask: null # moved this to config.training to have one mask per output
 
-sample_providers:
-  input:
-    era5:
+
+input_provider:
+  era5:
+    variables:
     - "cos_latitude"
     - "cos_longitude"
     - "sin_latitude"
@@ -49,8 +50,10 @@ sample_providers:
     - "z_300"
     - "z_700"
     - "z_1000"
-  output:
-    era5:
+    steps: [-1, 0]
+target_provider:
+  era5:
+    variables:
     - "z"
     - "sp"
     - "msl"
@@ -86,9 +89,10 @@ sample_providers:
     - "z_700"
     - "z_1000"
     - "tp"
+    steps: [1]
 
 model:
-  _target_: anemoi.models.models.encoder_processor_decoder.AnemoiModelEncProcDec
+  _target_: anemoi.models.models.AnemoiMultiModel
 
 
 

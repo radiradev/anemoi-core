@@ -2,14 +2,16 @@ import logging
 import random
 from datetime import timedelta
 from enum import Enum
-
+from omegaconf import DictConfig
 import einops
 import numpy as np
 import torch
+from typing import Type
 from torch.utils.data import IterableDataset
 
 from anemoi.datasets.data import open_dataset
-from anemoi.training.data.utils import DataHandlerName
+from anemoi.training.data.sampler import AnemoiSampler
+from anemoi.training.data.utils import DataHandlerName, SourceSpec, SampleSpec, RecordSpec
 
 LOGGER = logging.getLogger(__name__)
 
@@ -22,8 +24,18 @@ class Stage(Enum):
 
 class DataHandlers(dict):
     def __init__(self, config: dict[str, dict]):
-        for name, kwargs in config.items():
-            self[name] = DataHandler(**kwargs)
+        for name, data_hanlder in config.items():
+            if isinstance(data_hanlder, BaseDataHandler):
+                self[name] = data_hanlder
+            else:
+                self[name] = DataHandler(**data_hanlder)
+
+    @property
+    def name_to_index(self) -> dict:
+        return {key: data_handler.name_to_index for key, data_handler in self.items()}
+
+    def processors(self) -> dict[str, list["BaseProcessor"]]:
+        return {dh_name: data_handler.processors() for dh_name, data_handler in self.items()}
 
     def check_no_overlap(self, other: "DataHandlers") -> None:
         for key, dh in self.items():
@@ -35,10 +47,18 @@ class DataHandlers(dict):
 
 
 class BaseDataHandler:
-    def __init__(self, dataset: str | dict, processors: list | None = None):
+    def __init__(self, dataset: str | dict, processors: DictConfig | None = None):
         self._dataset = open_dataset(dataset)
         self.variables = None
-        self.processors = processors
+        self._processors = processors
+
+    @property
+    def name_to_index(self):
+        return self._dataset.name_to_index
+
+    def processors(self) -> list:
+        # return [[name, instantiate(processor)] for name, processor in self._processors.items()]
+        return []
 
     @property
     def frequency(self) -> timedelta:
@@ -69,11 +89,11 @@ def select(data_handler, select=None):
     return SelectedDataHandler(data_handler, select=select)
 
 
-class SampleProvider:
+class RecordProvider:
     def __init__(self, kwargs: dict, datahandlers: "DataHandlers") -> None:
         self._variables = {}
-        self._data_handlers = {}
         self._steps = {}
+        _data_handlers = {}
 
         for key, provider_config in kwargs.items():
             if key not in datahandlers:
@@ -81,25 +101,36 @@ class SampleProvider:
 
             variables = list(provider_config["variables"])
             assert isinstance(variables, (list, tuple)), f"variables must be a list or tuple, not {type(variables)}"
-            self._variables[key] = variables
-            self._data_handlers[key] = select(datahandlers[key], variables)
             self._steps[key] = (
                 list(provider_config["steps"])
                 if isinstance(provider_config["steps"], int)
                 else provider_config["steps"]
             )
+            _data_handlers[key] = select(datahandlers[key], variables)
+
+        self.data_handlers = DataHandlers(_data_handlers)
 
     @property
     def keys(self) -> list[DataHandlerName]:
-        return list(self._data_handlers.keys())
+        return list(self.data_handlers.keys())
+    
+    @property
+    def record_spec(self) -> RecordSpec:
+        spec = {}
+        for name, data_handler in self.data_handlers.items():
+            spec[name] = SourceSpec(data_handler.variables, self._steps[name])
+        return RecordSpec({spec})
+
+    def processors(self) -> list["BaseProcessor"]:
+        return self.data_handlers.processors()
 
     def get_sample_coverage(self) -> dict[DataHandlerName, tuple[np.datetime64, np.datetime64, timedelta]]:
         coverage = {}
         for dh_key in self.keys:
             coverage[dh_key] = (
-                self._data_handlers[dh_key].start_date,
-                self._data_handlers[dh_key].end_date,
-                self._data_handlers[dh_key].frequency,
+                self.data_handlers[dh_key].start_date,
+                self.data_handlers[dh_key].end_date,
+                self.data_handlers[dh_key].frequency,
             )
         return coverage
 
@@ -112,11 +143,36 @@ class SampleProvider:
     def __getitem__(self, i: int) -> dict[DataHandlerName, torch.Tensor]:
         sample = {}
         for dh_name, dh_steps in self.get_steps(i).items():
-            x = self._data_handlers[dh_name]._dataset[dh_steps, :, :, :]
+            x = self.data_handlers[dh_name]._dataset[dh_steps, :, :, :]
             x = einops.rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
             self.ensemble_dim = 1
             sample[dh_name] = torch.from_numpy(x)
         return sample
+
+
+class SampleProvider:
+    def __init__(
+        self,
+        provider_config: DictConfig,
+        data_handlers: DataHandlers,
+    ) -> None:
+        self.input = RecordProvider(provider_config.input_provider, data_handlers)
+        self.target = RecordProvider(provider_config.target_provider, data_handlers)
+    
+    def input_processors(self) -> list["BaseProcessor"]:
+        return self.input.processors()
+    
+    def target_processors(self) -> list["BaseProcessor"]:
+        return self.target.processors()
+
+    @property
+    def sample_spec(self) -> SampleSpec:
+        return SampleSpec({
+            "input": self.target.record_spec, "target": self.target.record_spec
+        })
+
+    def __getitem__(self, i: int) -> dict[DataHandlerName, torch.Tensor]:
+        return {"input": self.input[i], "target": self.target[i]}
 
 
 class NativeGridMultDataset(IterableDataset):
@@ -124,13 +180,14 @@ class NativeGridMultDataset(IterableDataset):
 
     def __init__(
         self,
-        data_reader: SampleProvider,
-        sampler: "BaseAnemoiSampler",
+        sample_provider: SampleProvider,
+        sampler_config: DictConfig,
         shuffle: bool = True,
     ) -> None:
-        self.data = data_reader
-        self.sampler = sampler
+        self.sample_provider = sample_provider
         self.shuffle = shuffle
+
+        self.sampler = AnemoiSampler(sample_provider.input, sample_provider.target, **sampler_config)
 
     def per_worker_init(self, n_workers: int, worker_id: int) -> None:
         """Called by worker_init_func on each copy of dataset.
@@ -164,4 +221,4 @@ class NativeGridMultDataset(IterableDataset):
         valid_indices = self.sampler.valid_time_indices
 
         for i in valid_indices:
-            yield self.data[i]
+            yield self.sample_provider[i]
