@@ -13,9 +13,7 @@ import logging
 from functools import cached_property
 from typing import TYPE_CHECKING
 
-import numpy as np
 import pytorch_lightning as pl
-from hydra.utils import instantiate
 from torch.utils.data import DataLoader
 
 from anemoi.models.data_indices.collection import IndexCollection
@@ -23,11 +21,8 @@ from anemoi.training.data.data_handlers import DataHandlers
 from anemoi.training.data.data_handlers import NativeGridMultDataset
 from anemoi.training.data.data_handlers import SampleProvider
 from anemoi.training.data.utils import get_dataloader_config
-from anemoi.training.data.sampler import AnemoiSampler
-from anemoi.training.data.utils import RecordProviderName
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.utils.worker_init import worker_init_func
-from anemoi.utils.dates import frequency_to_seconds
 
 LOGGER = logging.getLogger(__name__)
 
@@ -35,9 +30,7 @@ if TYPE_CHECKING:
 
     from torch_geometric.data import HeteroData
 
-    from anemoi.training.data.grid_indices import BaseGridIndices
     from anemoi.training.schemas.base_schema import BaseSchema
-
 
 
 class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
@@ -56,19 +49,27 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         self.config = config
         self.graph_data = graph_data
 
-        # Create data handlers            
+        # Create data handlers
         dhs = DataHandlers(config.data.data_handlers)
-        
+
         # Create Sampler provider
         self.sample_provider = SampleProvider(config.model, dhs)
 
         # Create datasets
-        self.train_dataset = NativeGridMultDataset(self.sample_provider, sampler_config=config.dataloader.sampler.training)
-        self.val_dataset = NativeGridMultDataset(self.sample_provider, sampler_config=config.dataloader.sampler.validation)
+        self.train_dataset = NativeGridMultDataset(
+            self.sample_provider, sampler_config=config.dataloader.sampler.training,
+        )
+        self.val_dataset = NativeGridMultDataset(
+            self.sample_provider, sampler_config=config.dataloader.sampler.validation,
+        )
 
         dl_keys_to_ignore = ["sampler", "read_group_size", "grid_indices", "limit_batches"]
-        self.train_dataloader_config = get_dataloader_config(config.dataloader, "training", keys_to_ignore=dl_keys_to_ignore)
-        self.val_dataloader_config = get_dataloader_config(config.dataloader, "validation", keys_to_ignore=dl_keys_to_ignore)
+        self.train_dataloader_config = get_dataloader_config(
+            config.dataloader, "training", keys_to_ignore=dl_keys_to_ignore,
+        )
+        self.val_dataloader_config = get_dataloader_config(
+            config.dataloader, "validation", keys_to_ignore=dl_keys_to_ignore,
+        )
 
         # data_handlers[stage.TRAINING].check_no_overlap(data_handlers[stage.VALIDATION])
         # data_handlers[stage.TRAINING].check_no_overlap(data_handlers[stage.TEST])

@@ -37,23 +37,20 @@ def new_config() -> DictConfig:
                 "prefetch_factor": 2,
                 "pin_memory": True,
                 "persistent_workers": True,
-                "grid_indices": {
-                    "_target_": "anemoi.training.data.grid_indices.FullGrid",
-                    "nodes_name": "data"
-                },
+                "grid_indices": {"_target_": "anemoi.training.data.grid_indices.FullGrid", "nodes_name": "data"},
                 "read_group_size": 1,
                 "num_workers": {
                     "training": 8,
                     "validation": 8,
                 },
-                "batch_size":{
+                "batch_size": {
                     "training": 2,
                     "validation": 4,
                 },
                 "limit_batches": {
                     "training": None,
                     "validation": None,
-                }
+                },
             },
             "model": {
                 "input_provider": {
@@ -78,12 +75,10 @@ def new_config() -> DictConfig:
                 "target_provider": {
                     "era5": {
                         "variables": ["10u", "10v", "2t", "2d", "q_100", "q_300", "q_700", "q_1000", "tp"],
-                        "steps": [1]
+                        "steps": [1],
                     },
                 },
-                "model": {
-                    "_target_": "anemoi.models.models.AnemoiMultiModel"
-                },
+                "model": {"_target_": "anemoi.models.models.AnemoiMultiModel"},
                 "encoder": {"_target_": "anemoi.models.layers.mapper.GraphTransformerForwardMapper"},
                 "processor": {"_target_": "anemoi.models.layers.processor.GraphTransformerProcessor"},
                 "decoder": {"_target_": "anemoi.models.layers.mapper.GraphTransformerBackwardMapper"},

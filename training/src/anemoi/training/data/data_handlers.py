@@ -2,19 +2,21 @@ import logging
 import random
 from datetime import timedelta
 from enum import Enum
-from omegaconf import DictConfig
+
 import einops
 import numpy as np
 import torch
-from hydra.utils import instantiate
-from typing import Type
-from anemoi.models.data_indices.collection import IndexCollection
-from anemoi.models.preprocessing.normalizer import InputNormalizer
+from omegaconf import DictConfig
 from torch.utils.data import IterableDataset
 
 from anemoi.datasets.data import open_dataset
+from anemoi.models.data_indices.collection import IndexCollection
+from anemoi.models.preprocessing.normalizer import InputNormalizer
 from anemoi.training.data.sampler import AnemoiSampler
-from anemoi.training.data.utils import DataHandlerName, SourceSpec, SampleSpec, RecordSpec
+from anemoi.training.data.utils import DataHandlerName
+from anemoi.training.data.utils import RecordSpec
+from anemoi.training.data.utils import SampleSpec
+from anemoi.training.data.utils import SourceSpec
 
 LOGGER = logging.getLogger(__name__)
 
@@ -58,20 +60,24 @@ class BaseDataHandler:
     @property
     def name_to_index(self):
         return self._dataset.name_to_index
-    
 
     def processors(self) -> list:
         data_indices = IndexCollection(
-            DictConfig({"data": {"forcing": None, "diagnostic": None}}), self._dataset.name_to_index
+            DictConfig({"data": {"forcing": None, "diagnostic": None}}), self._dataset.name_to_index,
         )
         return [
-            ["normalizer", InputNormalizer({"default": "mean-std"}, data_indices=data_indices, statistics=self._dataset.statistics)]
+            [
+                "normalizer",
+                InputNormalizer(
+                    {"default": "mean-std"}, data_indices=data_indices, statistics=self._dataset.statistics,
+                ),
+            ],
         ]
-        #return [
+        # return [
         #    [
         #        name, instantiate(processor, data_indices=data_indices, statistics=self._dataset.statistics)
         #    ] for name, processor in self._processors.items()
-        #]
+        # ]
 
     @property
     def frequency(self) -> timedelta:
@@ -126,7 +132,7 @@ class RecordProvider:
     @property
     def keys(self) -> list[DataHandlerName]:
         return list(self.data_handlers.keys())
-    
+
     @property
     def record_spec(self) -> RecordSpec:
         spec = {}
@@ -171,18 +177,16 @@ class SampleProvider:
     ) -> None:
         self.input = RecordProvider(provider_config.input_provider, data_handlers)
         self.target = RecordProvider(provider_config.target_provider, data_handlers)
-    
+
     def input_processors(self) -> list["BaseProcessor"]:
         return self.input.processors()
-    
+
     def target_processors(self) -> list["BaseProcessor"]:
         return self.target.processors()
 
     @property
     def sample_spec(self) -> SampleSpec:
-        return SampleSpec({
-            "input": self.input.record_spec, "target": self.target.record_spec
-        })
+        return SampleSpec({"input": self.input.record_spec, "target": self.target.record_spec})
 
     def __getitem__(self, i: int) -> dict[DataHandlerName, torch.Tensor]:
         return {"input": self.input[i], "target": self.target[i]}
@@ -289,7 +293,7 @@ class NativeGridMultDataset(IterableDataset):
 
         """
         self.worker_id = worker_id
-        base_seed = 2025 # get_base_seed()
+        base_seed = 2025  # get_base_seed()
 
         torch.manual_seed(base_seed)
         random.seed(base_seed)

@@ -6,9 +6,11 @@
 # In applying this licence, ECMWF does not waive the privileges and immunities
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
-from omegaconf import OmegaConf, DictConfig
-import pandas as pd
 from datetime import datetime
+
+import pandas as pd
+from omegaconf import DictConfig
+from omegaconf import OmegaConf
 
 
 class RecordProviderName(str):
@@ -24,11 +26,11 @@ class SourceSpec:
     def __init__(self, variables: list[str], steps: list[int]) -> None:
         self.variables = variables
         self.steps = steps
-    
+
     @property
     def num_variables(self) -> int:
         return len(self.variables)
-    
+
     @property
     def num_steps(self) -> int:
         return len(self.steps)
@@ -46,10 +48,10 @@ class RecordSpec(dict):
     @property
     def num_steps(self) -> dict[str, int]:
         return {name: spec.num_steps for name, spec in self.items()}
-    
+
     @property
     def num_channels(self) -> dict[str, int]:
-        return {name: spec.num_steps * spec.num_variables for name, spec in self.items()} 
+        return {name: spec.num_steps * spec.num_variables for name, spec in self.items()}
 
 
 class SampleSpec(dict):
@@ -68,10 +70,10 @@ class SampleSpec(dict):
     @property
     def num_steps(self) -> dict[str, dict[str, int]]:
         return {name: spec.num_steps for name, spec in self.items()}
-    
+
     @property
     def num_channels(self) -> dict[str, dict[str, int]]:
-        return {name: spec.num_channels for name, spec in self.items()} 
+        return {name: spec.num_channels for name, spec in self.items()}
 
 
 def parse_date(date: str | int) -> datetime:
@@ -88,7 +90,7 @@ def specify_datahandler_config(config: dict, key: str) -> dict:
     if "dataset" not in dataset:
         dataset["dataset"] = base_dataset
     elif not isinstance(dataset["dataset"], str) and "dataset" not in dataset["dataset"]:
-            dataset["dataset"] = OmegaConf.merge(base_dataset, dataset["dataset"])
+        dataset["dataset"] = OmegaConf.merge(base_dataset, dataset["dataset"])
 
     if "processors" not in dataset:
         dataset["processors"] = config["processors"]
@@ -101,7 +103,7 @@ def get_dataloader_config(config: DictConfig, field: str, keys_to_ignore: list =
     for key, value in config.items():
         if key in keys_to_ignore:
             continue
-        elif isinstance(value, str):
+        if isinstance(value, str):
             cfg[key] = value
         elif isinstance(value, DictConfig) and key in value:
             cfg[key] = value[key]

@@ -7,29 +7,32 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
-from abc import ABC, abstractmethod
-from anemoi.training.data.utils import parse_date
-import pandas as pd
+from abc import ABC
+from abc import abstractmethod
 from functools import cached_property
+
 import numpy as np
+import pandas as pd
+
+from anemoi.training.data.utils import parse_date
 
 
 class BaseAnemoiSampler(ABC):
     """Base AnemoiSampler class"""
+
     def __init__(
         self,
-        input_provider: "RecordProvider" ,
+        input_provider: "RecordProvider",
         target_provider: "RecordProvider",
     ) -> None:
         self.valid_time_indices = self.compute_valid_indices(input_provider, target_provider)
 
     @abstractmethod
     def compute_valid_indices(
-        self, 
+        self,
         input_provider: "RecordProvider",
         target_provider: "RecordProvider",
-    ) -> list[int]:
-        ...
+    ) -> list[int]: ...
 
 
 class AnemoiSampler(BaseAnemoiSampler):
@@ -37,7 +40,7 @@ class AnemoiSampler(BaseAnemoiSampler):
 
     def __init__(
         self,
-        input_provider: "RecordProvider" ,
+        input_provider: "RecordProvider",
         target_provider: "RecordProvider",
         frequency: str,
         start: str | int,
@@ -53,10 +56,10 @@ class AnemoiSampler(BaseAnemoiSampler):
     def time_values(self) -> np.array:
         """Time indices"""
         time_values = pd.date_range(start=self.start, end=self.end, freq=self.frequency)
-        return np.array(time_values, dtype='datetime64[ns]')
+        return np.array(time_values, dtype="datetime64[ns]")
 
     def compute_valid_indices(
-        self, 
+        self,
         input_provider: "RecordProvider",
         target_provider: "RecordProvider",
     ) -> list[int]:
@@ -64,7 +67,7 @@ class AnemoiSampler(BaseAnemoiSampler):
 
         This method set the valid refernce indices for sampling.
         """
-        # TODO: Handle missing data
+        # TODO: Handle missing data
         valid_time_indices = np.full(len(self.time_values), True)
 
         for sample_provider in [input_provider, target_provider]:
@@ -79,6 +82,5 @@ class AnemoiSampler(BaseAnemoiSampler):
                 is_within_range = (self.time_values >= min_valid_time) & (self.time_values <= max_valid_time)
                 valid_time_indices &= is_within_range
 
-        return [100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300]  
+        return [100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300]
         # return list(np.where(valid_time_indices)[0])
- 
