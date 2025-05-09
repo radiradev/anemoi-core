@@ -18,7 +18,7 @@ from torch_geometric.data import HeteroData
 from anemoi.training.data.data_handlers import SampleProvider
 from anemoi.models.preprocessing import Processors
 from anemoi.utils.config import DotDict
-
+from anemoi.models.models.mult_encoder_processor_decoder import AnemoiMultiModel
 
 class AnemoiModelInterface(torch.nn.Module):
     """An interface for Anemoi models.
@@ -60,15 +60,14 @@ class AnemoiModelInterface(torch.nn.Module):
         graph_data: HeteroData,
         #data_indices: dict,
         metadata: dict,
-        truncation_data: dict,
     ) -> None:
         super().__init__()
         self.config = config
         self.id = str(uuid.uuid4())
-        self.multi_step = self.config.training.multistep_input
+        self.sample_provider = sample_provider
         self.graph_data = graph_data
-        self.truncation_data = truncation_data
         self.metadata = metadata
+        self.supporting_arrays = {}
         #self.data_indices = data_indices
         self._build_model()
 
@@ -79,19 +78,19 @@ class AnemoiModelInterface(torch.nn.Module):
         target_processors = self.sample_provider.target_processors()
 
         # Assign the processor list pre- and post-processors
-        self.input_pre_processors = Processors(input_preprocessors)
-        self.target_pre_processors = Processors(target_processors)
-        self.target_post_processors = Processors(target_processors, inverse=True)
+        self.input_pre_processors = Processors(input_preprocessors["era5"])
+        self.target_pre_processors = Processors(target_processors["era5"])
+        self.target_post_processors = Processors(target_processors["era5"], inverse=True)
 
         # Instantiate the model
-        self.model = instantiate(
-            self.config.model.model,
+        self.model = AnemoiMultiModel(
+            #self.config.model.model,
             model_config=self.config,
             sample_provider=self.sample_provider,
             #data_indices=self.data_indices,
             graph_data=self.graph_data,
-            truncation_data=self.truncation_data,
-            _recursive_=False,  # Disables recursive instantiation by Hydra
+            #truncation_data=self.truncation_data,
+            #_recursive_=False,  # Disables recursive instantiation by Hydra
         )
 
         # Use the forward method of the model directly

@@ -39,7 +39,6 @@ class AnemoiMultiModel(nn.Module):
         sample_provider: SampleProvider,
         model_config: DotDict,
         graph_data: HeteroData,
-        truncation_data: dict,
     ) -> None:
         """Initializes the graph neural network.
 
@@ -62,10 +61,10 @@ class AnemoiMultiModel(nn.Module):
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
         
         self.latent_residual_connection = True
-        self.use_residual_connection = ["era5"]
+        self.use_residual_connection = [] #["era5"]
         data_trainable_params = 0
 
-        sample_spec = sample_provider.sample_spec.num_channels
+        sample_spec = sample_provider.sample_spec
         self.input_channels: dict[str, int] = sample_spec.num_channels["input"]
         self.target_channels: dict[str, int] = sample_spec.num_channels["target"]
         self.input_names: list[str] = sample_spec.input_names
@@ -73,8 +72,8 @@ class AnemoiMultiModel(nn.Module):
 
         # read config.model.layer_kernels to get the implementation for certain layers
         self.layer_kernels_encoder = load_layer_kernels(model_config.model.layer_kernels.get("encoder", {}))
-        self.layer_kernels_decoder = load_layer_kernels(model_config.model.layer_kernels.get("decoder", {}))
         self.layer_kernels_processor = load_layer_kernels(model_config.model.layer_kernels.get("processor", {}))
+        self.layer_kernels_decoder = load_layer_kernels(model_config.model.layer_kernels.get("decoder", {}))
 
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
 
@@ -83,7 +82,7 @@ class AnemoiMultiModel(nn.Module):
         for input_name in self.input_names:
             self.encoders[input_name] = instantiate(
                 model_config.model.encoder,
-                in_channels_src=self.input_channels[input_name],
+                in_channels_src=self.node_attributes.attr_ndims[input_name] + self.input_channels[input_name],
                 in_channels_dst=self.node_attributes.attr_ndims[self._graph_name_hidden],
                 hidden_dim=self.num_channels,
                 sub_graph=self._graph_data[(self._graph_name_data, "to", self._graph_name_hidden)],
@@ -108,7 +107,7 @@ class AnemoiMultiModel(nn.Module):
             self.decoders[target_name] = instantiate(
                 model_config.model.decoder,
                 in_channels_src=self.num_channels,
-                in_channels_dst=self.target_channels[target_name],
+                in_channels_dst=self.node_attributes.attr_ndims[input_name] + self.input_channels[input_name],
                 hidden_dim=self.num_channels,
                 out_channels_dst=self.target_channels[target_name],
                 sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_data)],
@@ -235,6 +234,7 @@ class AnemoiMultiModel(nn.Module):
                 shard_shapes=(shard_shapes_input_data, shard_shapes_hidden),
                 model_comm_group=model_comm_group,
             )
+
         return x_data_latent, x_hidden_latent, x_data_skip
 
     def merge_latents(self, latents: dict[str, torch.Tensor]) -> torch.Tensor:
@@ -299,7 +299,7 @@ class AnemoiMultiModel(nn.Module):
     def forward(
         self, x: dict[str, Tensor], *, model_comm_group: Optional[ProcessGroup] = None, **kwargs
     ) -> dict[str, Tensor]:
-        batch_size = 2
+        batch_size = x["era5"].shape[0]
         ensemble_size = 1
 
         x_hidden = self.node_attributes(self._graph_name_hidden, batch_size=batch_size)
