@@ -112,7 +112,7 @@ class BaseLoss(nn.Module, ABC):
         if squash:
             out = self.avg_function(out, dim=-1)
 
-        return self.sum_function(out, dim=(0, 1, 2))
+        return self.sum_function(out, dim=(0, 1, 2, 3))
 
     @property
     def name(self) -> str:

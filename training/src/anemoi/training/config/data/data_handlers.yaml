@@ -37,14 +37,14 @@ normalizer:
   # "Std" normalization is preferred here over "mean-std" to avoid shifting of the
   # zero value in the normalized space.
   std:
-  - "tp"
+  #- "tp"
   # - "cp"
 
   min-max:
   max:
-  - "sdor"
-  - "slor"
-  - "z"
+  #- "sdor"
+  #- "slor"
+  #- "z"
   none:
   - "cos_latitude"
   - "cos_longitude"

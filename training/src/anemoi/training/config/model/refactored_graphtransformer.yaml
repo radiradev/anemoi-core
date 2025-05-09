@@ -19,7 +19,6 @@ input_provider:
     - "z"
     - "sp"
     - "msl"
-    - "sst"
     - "sdor"
     - "slor"
     - "10u"
@@ -57,7 +56,6 @@ target_provider:
     - "z"
     - "sp"
     - "msl"
-    - "sst"
     - "sdor"
     - "slor"
     - "10u"
@@ -92,7 +90,7 @@ target_provider:
     steps: [1]
 
 model:
-  _target_: anemoi.models.models.AnemoiMultiModel
+  _target_: anemoi.models.models.mult_encoder_processor_decoder.AnemoiMultiModel
 
 
 
@@ -176,11 +174,11 @@ decoder:
 
 
 trainable_parameters:
-  data: 8
-  hidden: 8
-  data2hidden: 8
-  hidden2data: 8
-  hidden2hidden: 8 # GNN and GraphTransformer Processor only
+  data: 0
+  hidden: 0
+  data2hidden: 0
+  hidden2data: 0
+  hidden2hidden: 0 # GNN and GraphTransformer Processor only
 
 
 attributes:

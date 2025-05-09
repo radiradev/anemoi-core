@@ -79,4 +79,6 @@ class AnemoiSampler(BaseAnemoiSampler):
                 is_within_range = (self.time_values >= min_valid_time) & (self.time_values <= max_valid_time)
                 valid_time_indices &= is_within_range
 
-        return list(np.where(valid_time_indices)[0])
+        return [100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300]  
+        # return list(np.where(valid_time_indices)[0])
+ 

@@ -79,7 +79,7 @@ class GraphForecasterMultiDataset(pl.LightningModule):
 
         # TODO: Handle supporting arrays for multiple output masks (multiple outputs)
         # (It is handled in the loss function, but not the version here that is sent to model for supporting_arrays)
-        self.output_mask = instantiate(config.model_dump(by_alias=True).model.output_mask, graph_data=graph_data)
+        #self.output_mask = instantiate(config.model_dump(by_alias=True).model.output_mask, graph_data=graph_data)
 
         self.model = AnemoiModelInterface(
             #data_indices=data_indices,
@@ -117,19 +117,19 @@ class GraphForecasterMultiDataset(pl.LightningModule):
 
         self.loss = get_loss_function(
             config.model_dump(by_alias=True).training.training_loss,
-            scalers=self.scalers,
+            scalers={}, #self.scalers,
         #    data_indices=self.data_indices,
         )
-        p#rint_variable_scaling(self.loss, data_indices)
+        #print_variable_scaling(self.loss, data_indices)
 
-        self.metrics = torch.nn.ModuleDict(
-            {
-                metric_name: get_loss_function(val_metric_config, scalers=self.scalers, data_indices=self.data_indices)
-                for metric_name, val_metric_config in config.model_dump(
-                    by_alias=True,
-                ).training.validation_metrics.items()
-            },
-        )
+        self.metrics = torch.nn.ModuleDict({})
+        #    {
+        #        metric_name: get_loss_function(val_metric_config, scalers=self.scalers, data_indices=self.data_indices)
+        #        for metric_name, val_metric_config in config.model_dump(
+        #            by_alias=True,
+        #        ).training.validation_metrics.items()
+        #    },
+        #)
         if config.training.loss_gradient_scaling:
             self.loss.register_full_backward_hook(grad_scaler, prepend=False)
 
@@ -167,7 +167,7 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         self.reader_group_rank = 0
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.model(x, self.model_comm_group)
+        return self.model(x, model_comm_group=self.model_comm_group)
 
     def define_delayed_scalers(self) -> None:
         """Update delayed scalers such as the loss weights mask for imputed variables."""
@@ -264,8 +264,8 @@ class GraphForecasterMultiDataset(pl.LightningModule):
 
         """
         # for validation not normalized in-place because remappers cannot be applied in-place
-        batch["input"] = self.model.input_pre_processors(batch["input"], in_place=not validation_mode)
-        batch["target"] = self.model.target_pre_processors(batch["target"], in_place=not validation_mode)
+        batch["input"] = {"era5": self.model.input_pre_processors(batch["input"]["era5"], in_place=not validation_mode)}
+        batch["target"] = {"era5": self.model.target_pre_processors(batch["target"]["era5"], in_place=not validation_mode)}
 
         # Delayed scalers need to be initialized after the pre-processors once
         if False: #self.is_first_step:
@@ -278,7 +278,7 @@ class GraphForecasterMultiDataset(pl.LightningModule):
             y_pred = self(batch["input"])
 
             # y includes the auxiliary variables, so we must leave those out when computing the loss
-            loss = checkpoint(self.loss, y_pred, batch["target"], use_reentrant=False) if training_mode else None
+            loss = checkpoint(self.loss, y_pred["era5"], batch["target"]["era5"], use_reentrant=False) if training_mode else None
 
             #x = self.advance_input(x, y_pred, batch, rollout_step)
 
@@ -374,8 +374,8 @@ class GraphForecasterMultiDataset(pl.LightningModule):
             validation metrics and predictions
         """
         metrics = {}
-        y_postprocessed = self.model.post_processors(y, in_place=False)
-        y_pred_postprocessed = self.model.post_processors(y_pred, in_place=False)
+        y_postprocessed = {"era5": self.model.target_post_processors(y["era5"], in_place=False)}
+        y_pred_postprocessed = {"era5": self.model.target_post_processors(y_pred["era5"], in_place=False)}
 
         for metric_name, metric in self.metrics.items():
             if not isinstance(metric, BaseLoss):
@@ -409,7 +409,7 @@ class GraphForecasterMultiDataset(pl.LightningModule):
             on_step=True,
             prog_bar=True,
             logger=self.logger_enabled,
-            batch_size=batch.shape[0],
+            #batch_size=batch.shape[0],
             sync_dist=True,
         )
         self.log(
@@ -457,7 +457,7 @@ class GraphForecasterMultiDataset(pl.LightningModule):
             on_step=True,
             prog_bar=True,
             logger=self.logger_enabled,
-            batch_size=batch.shape[0],
+            #batch_size=batch.shape[0],
             sync_dist=True,
         )
 

@@ -31,7 +31,7 @@ class SourceSpec:
     
     @property
     def num_steps(self) -> int:
-        return len(steps)
+        return len(self.steps)
 
 
 class RecordSpec(dict):
@@ -46,6 +46,10 @@ class RecordSpec(dict):
     @property
     def num_steps(self) -> dict[str, int]:
         return {name: spec.num_steps for name, spec in self.items()}
+    
+    @property
+    def num_channels(self) -> dict[str, int]:
+        return {name: spec.num_steps * spec.num_variables for name, spec in self.items()} 
 
 
 class SampleSpec(dict):
@@ -67,7 +71,7 @@ class SampleSpec(dict):
     
     @property
     def num_channels(self) -> dict[str, dict[str, int]]:
-        return {name: spec.num_steps * spec.num_variables for name, spec in self.items()} 
+        return {name: spec.num_channels for name, spec in self.items()} 
 
 
 def parse_date(date: str | int) -> datetime:
