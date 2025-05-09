@@ -12,7 +12,6 @@ import logging
 from typing import Optional
 
 import einops
-import numpy as np
 import torch
 from hydra.utils import instantiate
 from torch import Tensor
@@ -21,10 +20,10 @@ from torch.distributed.distributed_c10d import ProcessGroup
 from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 
-from anemoi.training.data.data_handlers import SampleProvider
 from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.layers.graph import NamedNodesAttributes
 from anemoi.models.layers.utils import load_layer_kernels
+from anemoi.training.data.data_handlers import SampleProvider
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -59,9 +58,9 @@ class AnemoiMultiModel(nn.Module):
         self.num_channels = model_config.model.num_channels
 
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
-        
+
         self.latent_residual_connection = True
-        self.use_residual_connection = [] #["era5"]
+        self.use_residual_connection = []  # ["era5"]
         data_trainable_params = 0
 
         sample_spec = sample_provider.sample_spec
@@ -119,7 +118,7 @@ class AnemoiMultiModel(nn.Module):
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
         # TODO: Bring bounding back
         self.boundings = nn.ModuleList([])
-        #self.boundings = nn.ModuleList(
+        # self.boundings = nn.ModuleList(
         #    [
         #        instantiate(
         #            cfg,
@@ -129,11 +128,9 @@ class AnemoiMultiModel(nn.Module):
         #        )
         #        for cfg in getattr(model_config.model, "bounding", [])
         #    ]
-        #)
+        # )
 
-    def _assemble_input(
-        self, name: str, x: torch.Tensor, batch_size: int
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def _assemble_input(self, name: str, x: torch.Tensor, batch_size: int) -> tuple[torch.Tensor, torch.Tensor]:
         # x.shape: (batch_size, multi_step, ens_dim, grid_size, num_vars)
 
         # normalize and add data positional info (lat/lon)
@@ -149,9 +146,7 @@ class AnemoiMultiModel(nn.Module):
 
         return x_data_latent, x_skip
 
-    def _assemble_target(
-        self, name: str, x: torch.Tensor, batch_size: int
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def _assemble_target(self, name: str, x: torch.Tensor, batch_size: int) -> tuple[torch.Tensor, torch.Tensor]:
         return self.node_attributes(name, batch_size=batch_size)
 
     def _disassemble_target(
@@ -214,7 +209,7 @@ class AnemoiMultiModel(nn.Module):
 
     def encode(
         self,
-        x: dict[str, torch.Tensor], 
+        x: dict[str, torch.Tensor],
         shard_shapes_hidden: tuple[list],
         batch_size: int,
         model_comm_group: Optional[ProcessGroup] = None,
@@ -243,7 +238,7 @@ class AnemoiMultiModel(nn.Module):
 
     def decode(
         self,
-        x: dict[str, torch.Tensor], 
+        x: dict[str, torch.Tensor],
         shard_shapes_hidden: tuple[list],
         batch_size: int,
         ensemble_size: int,
@@ -258,7 +253,9 @@ class AnemoiMultiModel(nn.Module):
             else:
                 x_target_latent = self._assemble_target(name, x_target_data, batch_size)
 
-            shard_shapes_target_data = get_shape_shards(x_target_latent, 0, model_comm_group) # This may be passed when name in x_target_data
+            shard_shapes_target_data = get_shape_shards(
+                x_target_latent, 0, model_comm_group
+            )  # This may be passed when name in x_target_data
 
             x_out[name] = self._run_mapper(
                 self.decoders[name],
@@ -272,7 +269,9 @@ class AnemoiMultiModel(nn.Module):
 
         return x_out
 
-    def residual_connection(self, x: dict[str, torch.Tensor], x_skips: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    def residual_connection(
+        self, x: dict[str, torch.Tensor], x_skips: dict[str, torch.Tensor]
+    ) -> dict[str, torch.Tensor]:
         y = {}
         for tensor_name, pred in x.items():
             # residual connection (just for the prognostic variables)
@@ -280,7 +279,7 @@ class AnemoiMultiModel(nn.Module):
                 # TODO: Implement residual connection
                 assert False, "Residual Connection NOT IMPLEMENTED yet."
                 pred[..., self._internal_output_idx] += x_skip[..., self._internal_input_idx]
-            
+
             y[tensor_name] = pred
 
         return y
@@ -306,10 +305,10 @@ class AnemoiMultiModel(nn.Module):
         shard_shapes_hidden = get_shape_shards(x_hidden, 0, model_comm_group)
 
         x_data_latent, x_hidden_latent, x_data_skip = self.encode(
-            (x, x_hidden), 
+            (x, x_hidden),
             shard_shapes_hidden=shard_shapes_hidden,
             batch_size=batch_size,
-            model_comm_group=model_comm_group
+            model_comm_group=model_comm_group,
         )
 
         x_hidden_latent = self.merge_latents(x_hidden_latent)
@@ -325,13 +324,13 @@ class AnemoiMultiModel(nn.Module):
             x_latent_proc = x_latent_proc + x_hidden_latent
 
         x_out = self.decode(
-            (x_hidden_latent, x_data_latent), 
+            (x_hidden_latent, x_data_latent),
             shard_shapes_hidden=shard_shapes_hidden,
             batch_size=batch_size,
             ensemble_size=ensemble_size,
-            model_comm_group=model_comm_group
+            model_comm_group=model_comm_group,
         )
-        
+
         x_out = self.residual_connection(x_out, x_data_skip)
         x_out = self.bound(x_out)
 

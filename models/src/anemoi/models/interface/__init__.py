@@ -15,10 +15,11 @@ from hydra.utils import instantiate
 from torch.distributed.distributed_c10d import ProcessGroup
 from torch_geometric.data import HeteroData
 
-from anemoi.training.data.data_handlers import SampleProvider
-from anemoi.models.preprocessing import Processors
-from anemoi.utils.config import DotDict
 from anemoi.models.models.mult_encoder_processor_decoder import AnemoiMultiModel
+from anemoi.models.preprocessing import Processors
+from anemoi.training.data.data_handlers import SampleProvider
+from anemoi.utils.config import DotDict
+
 
 class AnemoiModelInterface(torch.nn.Module):
     """An interface for Anemoi models.
@@ -58,7 +59,7 @@ class AnemoiModelInterface(torch.nn.Module):
         config: DotDict,
         sample_provider: SampleProvider,
         graph_data: HeteroData,
-        #data_indices: dict,
+        # data_indices: dict,
         metadata: dict,
     ) -> None:
         super().__init__()
@@ -68,7 +69,7 @@ class AnemoiModelInterface(torch.nn.Module):
         self.graph_data = graph_data
         self.metadata = metadata
         self.supporting_arrays = {}
-        #self.data_indices = data_indices
+        # self.data_indices = data_indices
         self._build_model()
 
     def _build_model(self) -> None:
@@ -84,13 +85,13 @@ class AnemoiModelInterface(torch.nn.Module):
 
         # Instantiate the model
         self.model = AnemoiMultiModel(
-            #self.config.model.model,
+            # self.config.model.model,
             model_config=self.config,
             sample_provider=self.sample_provider,
-            #data_indices=self.data_indices,
+            # data_indices=self.data_indices,
             graph_data=self.graph_data,
-            #truncation_data=self.truncation_data,
-            #_recursive_=False,  # Disables recursive instantiation by Hydra
+            # truncation_data=self.truncation_data,
+            # _recursive_=False,  # Disables recursive instantiation by Hydra
         )
 
         # Use the forward method of the model directly
