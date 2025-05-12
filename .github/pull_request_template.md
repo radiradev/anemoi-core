@@ -50,4 +50,3 @@
 -   [ ] I have added comments to my code, particularly in hard-to-understand areas
 
 <!-- Describe any major updates to the documentation -->
-
