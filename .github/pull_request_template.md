@@ -1,11 +1,14 @@
-## Description
-
+## What changes have been introduced?
 <!-- Provide a brief summary of the changes introduced in this pull request. -->
 
-## Intent and Issue Number
+## What problem does this change solve?
+<!-- Explain the motivation behind the changes and the context in which they are being made. -->
 
-<!-- Explain the motivation behind the changes and the context in which they are being made.
-This may summarize and link to an Issue number this change addresses, ideally in one of the "magic format" such as Closes #XYZ -->
+## What issue or task does this change relate to?
+<!-- This may link to an Issue number this change addresses, ideally in one of the "magic format" such as Closes #XYZ -->
+
+## Additional Review Notes (should be resolved and removed from the PR description before merging)
+<!-- Include any additional information, caveats, or considerations that the reviewer should be aware of. -->
 
 <!-- End of merge commit message -->
 
@@ -48,9 +51,3 @@ This may summarize and link to an Issue number this change addresses, ideally in
 
 <!-- Describe any major updates to the documentation -->
 
-## Additional Review Notes
-
-<!-- Include any additional information, caveats, or considerations that the reviewer should be aware of. -->
-
-## Review Process
-- [ ] Upon merging this PR, please review the commit message and remove any PR checklists. The commit message should provide a clear explanation of the purpose and intent behind the changes introduced in the commit.
