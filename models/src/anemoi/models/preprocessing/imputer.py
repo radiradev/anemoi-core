@@ -133,32 +133,15 @@ class BaseImputer(BasePreprocessor, ABC):
     def get_cached_or_recomputed_nan_locations(self, x: torch.Tensor) -> torch.Tensor:
         """Get the cached or recomputed NaN locations.
 
-        Work with cached or recomputed nan_nanlocations depending on inference mode.
-        If in inference mode, recompute the NaN locations.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input tensor
-
-        Returns
-        -------
-        torch.Tensor
-            NaN locations
+        If in inference mode, recompute the NaN locations, else, use cached one.
         """
-
         # Reset the NaN locations for preprocesor in inference mode.
         if self.inference_mode:
-            LOGGER.debug("Imputer: resetting copy of NaN locations for inference mode.")
-            # work with copy of cached nan_nanlocations to avoid modifying the cached one
-            # 1. remove reference to cached one
-            nan_locations = None
-            # 2. get current NaN locations
-            nan_locations = self.get_nans(x)
-        else:
-            # if not in inferece: work with reference to cached nan_nanlocations
-            nan_locations = self.nan_locations
-        return nan_locations
+            LOGGER.debug("Imputer: recalculating NaN locations for inference mode.")
+            # get current NaN locations
+            return self.get_nans(x)
+        # if not in inference: work with reference to cached nan_locations
+        return self.nan_locations
 
     def fill_with_value(self, x, index, nan_locations: torch.Tensor):
         for idx_src, (idx_dst, value) in zip(self.index_training_input, zip(index, self.replacement)):
