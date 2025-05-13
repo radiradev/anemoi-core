@@ -129,10 +129,10 @@ class BaseImputer(BasePreprocessor, ABC):
         # The mask is only saved for the last two dimensions (grid, variable)
         idx = [slice(0, 1)] * (x.ndim - 2) + [slice(None), slice(None)]
         return torch.isnan(x[idx].squeeze())
-    
+
     def get_cached_or_recomputed_nan_locations(self, x: torch.Tensor) -> torch.Tensor:
         """Get the cached or recomputed NaN locations.
-        
+
         Work with cached or recomputed nan_nanlocations depending on inference mode.
         If in inference mode, recompute the NaN locations.
 
@@ -379,7 +379,7 @@ class CopyImputer(BaseImputer):
             for idx_src, idx_dst in zip(self.index_training_input, self.index_inference_output):
                 if idx_dst is not None:
                     self.loss_mask_training[:, idx_dst] = (~self.nan_locations[:, idx_src]).int()
-        
+
         # Ensure the user is running inference from a version of anemoi-inference that sets the inference_mode attribute
         assert hasattr(
             self, "inference_mode"
