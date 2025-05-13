@@ -110,6 +110,8 @@ class BaseWeightedLoss(nn.Module, ABC):
         if len(self.scalar) == 0:
             return x[subset_indices]
 
+        self.scalar.to(x)
+
         scale_tensor = self.scalar
         if without_scalars is not None and len(without_scalars) > 0:
             if isinstance(without_scalars[0], str):
