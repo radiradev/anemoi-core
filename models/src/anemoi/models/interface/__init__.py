@@ -61,7 +61,6 @@ class AnemoiModelInterface(torch.nn.Module):
         metadata: dict,
         supporting_arrays: dict = None,
         truncation_data: dict,
-        inference_mode: bool = False,
     ) -> None:
         super().__init__()
         self.config = config
@@ -73,7 +72,6 @@ class AnemoiModelInterface(torch.nn.Module):
         self.metadata = metadata
         self.supporting_arrays = supporting_arrays if supporting_arrays is not None else {}
         self.data_indices = data_indices
-        self.inference_mode = inference_mode
         self._build_model()
 
     @property
@@ -108,7 +106,6 @@ class AnemoiModelInterface(torch.nn.Module):
                     processor,
                     data_indices=self.data_indices,
                     statistics=self.statistics,
-                    inference_mode=self.inference_mode,
                 ),
             ]
             for name, processor in self.config.data.processors.items()

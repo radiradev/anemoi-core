@@ -205,6 +205,7 @@ def test_transform_with_nan_inference(imputer_fixture, data_fixture, request):
     """Check that the imputer correctly transforms a tensor with NaNs in inference."""
     x, expected = request.getfixturevalue(data_fixture)
     imputer = request.getfixturevalue(imputer_fixture)
+    assert not imputer.inference_mode, "Inputer.inference_mode default should be inference_mode=False."
     transformed = imputer.transform(x, in_place=False)
     assert torch.allclose(transformed, expected, equal_nan=True), "Transform does not handle NaNs correctly."
     # Split data to "inference size" removing "diagnostics"

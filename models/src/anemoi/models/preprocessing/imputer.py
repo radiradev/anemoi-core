@@ -46,7 +46,6 @@ class BaseImputer(BasePreprocessor, ABC):
         config=None,
         data_indices: Optional[IndexCollection] = None,
         statistics: Optional[dict] = None,
-        inference_mode: Optional[bool] = False,
     ) -> None:
         """Initialize the imputer.
 
@@ -58,10 +57,8 @@ class BaseImputer(BasePreprocessor, ABC):
             Data indices for input and output variables
         statistics : dict
             Data statistics dictionary
-        inference_mode : bool
-            If True, the processor is in inference mode. Default is False.
         """
-        super().__init__(config, data_indices, statistics, inference_mode)
+        super().__init__(config, data_indices, statistics)
 
         self.nan_locations = None
         # weight imputed values with zero in loss calculation
@@ -132,6 +129,36 @@ class BaseImputer(BasePreprocessor, ABC):
         # The mask is only saved for the last two dimensions (grid, variable)
         idx = [slice(0, 1)] * (x.ndim - 2) + [slice(None), slice(None)]
         return torch.isnan(x[idx].squeeze())
+    
+    def get_cached_or_recomputed_nan_locations(self, x: torch.Tensor) -> torch.Tensor:
+        """Get the cached or recomputed NaN locations.
+        
+        Work with cached or recomputed nan_nanlocations depending on inference mode.
+        If in inference mode, recompute the NaN locations.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor
+
+        Returns
+        -------
+        torch.Tensor
+            NaN locations
+        """
+
+        # Reset the NaN locations for preprocesor in inference mode.
+        if self.inference_mode:
+            LOGGER.debug("Imputer: resetting copy of NaN locations for inference mode.")
+            # work with copy of cached nan_nanlocations to avoid modifying the cached one
+            # 1. remove reference to cached one
+            nan_locations = None
+            # 2. get current NaN locations
+            nan_locations = self.get_nans(x)
+        else:
+            # if not in inferece: work with reference to cached nan_nanlocations
+            nan_locations = self.nan_locations
+        return nan_locations
 
     def fill_with_value(self, x, index, nan_locations: torch.Tensor):
         for idx_src, (idx_dst, value) in zip(self.index_training_input, zip(index, self.replacement)):
@@ -157,22 +184,13 @@ class BaseImputer(BasePreprocessor, ABC):
                 if idx_dst is not None:
                     self.loss_mask_training[:, idx_dst] = (~self.nan_locations[:, idx_src]).int()
 
-        # work with reference to cached nan_nanlocations
-        nan_locations = self.nan_locations
-
         # Ensure the user is running inference from a version of anemoi-inference that sets the inference_mode attribute
         assert hasattr(
             self, "inference_mode"
         ), "Inference mode is not available. This could mean you are using an outdated anemoi-inference."
 
-        # Reset the NaN locations for preprocesor in inference mode.
-        if self.inference_mode:
-            LOGGER.debug("Imputer: resetting copy of NaN locations for inference mode.")
-            # work with copy of cached nan_nanlocations to avoid modifying the cached one
-            # 1. remove reference to cached one
-            nan_locations = None
-            # 2. get current NaN locations
-            nan_locations = self.get_nans(x)
+        # work with cached or recomputed nan_nanlocations depending on inference mode
+        nan_locations = self.get_cached_or_recomputed_nan_locations(x)
 
         # Choose correct index based on number of variables
         if x.shape[-1] == self.num_training_input_vars:
@@ -232,9 +250,8 @@ class InputImputer(BaseImputer):
         config=None,
         data_indices: Optional[IndexCollection] = None,
         statistics: Optional[dict] = None,
-        inference_mode: Optional[bool] = False,
     ) -> None:
-        super().__init__(config, data_indices, statistics, inference_mode)
+        super().__init__(config, data_indices, statistics)
 
         self._create_imputation_indices(statistics)
 
@@ -262,9 +279,8 @@ class ConstantImputer(BaseImputer):
         config=None,
         data_indices: Optional[IndexCollection] = None,
         statistics: Optional[dict] = None,
-        inference_mode: Optional[bool] = False,
     ) -> None:
-        super().__init__(config, data_indices, statistics, inference_mode)
+        super().__init__(config, data_indices, statistics)
 
         self._create_imputation_indices()
 
@@ -286,9 +302,8 @@ class CopyImputer(BaseImputer):
         config=None,
         data_indices: Optional[IndexCollection] = None,
         statistics: Optional[dict] = None,
-        inference_mode: Optional[bool] = False,
     ) -> None:
-        super().__init__(config, data_indices, statistics, inference_mode)
+        super().__init__(config, data_indices, statistics)
 
         self._create_imputation_indices()
 
@@ -364,23 +379,14 @@ class CopyImputer(BaseImputer):
             for idx_src, idx_dst in zip(self.index_training_input, self.index_inference_output):
                 if idx_dst is not None:
                     self.loss_mask_training[:, idx_dst] = (~self.nan_locations[:, idx_src]).int()
-
-        # work with reference to cached nan_nanlocations
-        nan_locations = self.nan_locations
-
+        
         # Ensure the user is running inference from a version of anemoi-inference that sets the inference_mode attribute
         assert hasattr(
             self, "inference_mode"
         ), "Inference mode is not available. This could mean you are using an outdated anemoi-inference."
 
-        # Reset the NaN locations for preprocesor in inference mode.
-        if self.inference_mode:
-            LOGGER.debug("Imputer: resetting copy of NaN locations for inference mode.")
-            # work with copy of cached nan_nanlocations to avoid modifying the cached one
-            # 1. remove reference to cached one
-            nan_locations = None
-            # 2. get current NaN locations
-            nan_locations = self.get_nans(x)
+        # work with cached or recomputed nan_nanlocations depending on inference mode
+        nan_locations = self.get_cached_or_recomputed_nan_locations(x)
 
         # Choose correct index based on number of variables
         if x.shape[-1] == self.num_training_input_vars:
@@ -451,9 +457,8 @@ class DynamicInputImputer(DynamicMixin, InputImputer):
         config=None,
         data_indices: Optional[IndexCollection] = None,
         statistics: Optional[dict] = None,
-        inference_mode: Optional[bool] = False,
     ) -> None:
-        InputImputer.__init__(self, config, data_indices, statistics, inference_mode)
+        InputImputer.__init__(self, config, data_indices, statistics)
         warnings.warn(
             "You are using a dynamic Imputer: NaN values will not be present in the model predictions. \
                       The model will be trained to predict imputed values. This might deteriorate performances."
@@ -468,9 +473,8 @@ class DynamicConstantImputer(DynamicMixin, ConstantImputer):
         config=None,
         data_indices: Optional[IndexCollection] = None,
         statistics: Optional[dict] = None,
-        inference_mode: Optional[bool] = False,
     ) -> None:
-        ConstantImputer.__init__(self, config, data_indices, statistics, inference_mode)
+        ConstantImputer.__init__(self, config, data_indices, statistics)
         warnings.warn(
             "You are using a dynamic Imputer: NaN values will not be present in the model predictions. \
                       The model will be trained to predict imputed values. This might deteriorate performances."
@@ -485,9 +489,8 @@ class DynamicCopyImputer(DynamicMixin, CopyImputer):
         config=None,
         data_indices: Optional[IndexCollection] = None,
         statistics: Optional[dict] = None,
-        inference_mode: Optional[bool] = False,
     ) -> None:
-        CopyImputer.__init__(self, config, data_indices, statistics, inference_mode)
+        CopyImputer.__init__(self, config, data_indices, statistics)
         warnings.warn(
             "You are using a dynamic Imputer: NaN values will not be present in the model predictions. \
                       The model will be trained to predict imputed values. This might deteriorate performances."

@@ -44,9 +44,8 @@ class Monomapper(BasePreprocessor, ABC):
         config=None,
         data_indices: Optional[IndexCollection] = None,
         statistics: Optional[dict] = None,
-        inference_mode: Optional[bool] = False,
     ) -> None:
-        super().__init__(config, data_indices, statistics, inference_mode)
+        super().__init__(config, data_indices, statistics)
         self._create_remapping_indices(statistics)
         self._validate_indices()
 
