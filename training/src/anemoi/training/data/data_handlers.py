@@ -2,6 +2,7 @@ import logging
 import random
 from datetime import timedelta
 from enum import Enum
+from typing import Literal
 
 import einops
 import numpy as np
@@ -25,6 +26,23 @@ class Stage(Enum):
     TRAINING = "training"
     VALIDATION = "validation"
     TEST = "test"
+
+
+class AnemoiTensor:
+    pass
+
+
+class TorchTensor(torch.Tensor):
+    pass
+
+
+class Record(dict):
+    pass
+
+
+class StackedRecord(dict):
+    pass
+
 
 
 class DataHandlers(dict):
@@ -91,6 +109,14 @@ class BaseDataHandler:
     def end_date(self):
         return self._dataset.end_date
 
+    def __getitem__(self, i) -> AnemoiTensor | TorchTensor:
+        x = self._dataset[i, :, :, :]
+        # TODO: Add logic for obs data to create AnemoiTensor 
+        x = torch.from_numpy(x)
+        x = einops.rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
+        return x
+        
+
 
 class DataHandler(BaseDataHandler):
     pass
@@ -134,7 +160,7 @@ class RecordProvider:
         return list(self.data_handlers.keys())
 
     @property
-    def record_spec(self) -> RecordSpec:
+    def spec(self) -> RecordSpec:
         spec = {}
         for name, data_handler in self.data_handlers.items():
             spec[name] = SourceSpec(data_handler.variables, self._steps[name])
@@ -159,14 +185,12 @@ class RecordProvider:
             steps[dh_key] = [i + l for l in self._steps[dh_key]]
         return steps
 
-    def __getitem__(self, i: int) -> dict[DataHandlerName, torch.Tensor]:
-        sample = {}
+    def __getitem__(self, i: int) -> Record:
+        records = {}
         for dh_name, dh_steps in self.get_steps(i).items():
-            x = self.data_handlers[dh_name]._dataset[dh_steps, :, :, :]
-            x = einops.rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
-            self.ensemble_dim = 1
-            sample[dh_name] = torch.from_numpy(x)
-        return sample
+            records[dh_name] = self.data_handlers[dh_name][dh_steps]
+
+        return records
 
 
 class SampleProvider:
@@ -185,10 +209,10 @@ class SampleProvider:
         return self.target.processors()
 
     @property
-    def sample_spec(self) -> SampleSpec:
-        return SampleSpec({"input": self.input.record_spec, "target": self.target.record_spec})
+    def spec(self) -> SampleSpec:
+        return SampleSpec({"input": self.input.spec, "target": self.target.spec})
 
-    def __getitem__(self, i: int) -> dict[DataHandlerName, torch.Tensor]:
+    def __getitem__(self, i: int) -> dict[Literal["input", "target"], Record]:
         return {"input": self.input[i], "target": self.target[i]}
 
 

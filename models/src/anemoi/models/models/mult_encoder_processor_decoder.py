@@ -61,9 +61,8 @@ class AnemoiMultiModel(nn.Module):
 
         self.latent_residual_connection = True
         self.use_residual_connection = []  # ["era5"]
-        data_trainable_params = 0
 
-        sample_spec = sample_provider.sample_spec
+        sample_spec = sample_provider.spec
         self.input_channels: dict[str, int] = sample_spec.num_channels["input"]
         self.target_channels: dict[str, int] = sample_spec.num_channels["target"]
         self.input_names: list[str] = sample_spec.input_names
