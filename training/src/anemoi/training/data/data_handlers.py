@@ -14,11 +14,11 @@ from anemoi.datasets.data import open_dataset
 from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.models.preprocessing.normalizer import InputNormalizer
 from anemoi.training.data.sampler import AnemoiSampler
-from anemoi.training.data.utils import DataHandlerName
+from anemoi.training.data.utils import GroupName
 from anemoi.training.data.utils import RecordSpec
 from anemoi.training.data.utils import SampleSpec
 from anemoi.training.data.utils import SourceSpec
-
+from anemoi.training.data.structs import AnemoiTensor, TorchTensor, Record, StackedRecord, anemoi_thing
 LOGGER = logging.getLogger(__name__)
 
 
@@ -26,22 +26,6 @@ class Stage(Enum):
     TRAINING = "training"
     VALIDATION = "validation"
     TEST = "test"
-
-
-class AnemoiTensor:
-    pass
-
-
-class TorchTensor(torch.Tensor):
-    pass
-
-
-class Record(dict):
-    pass
-
-
-class StackedRecord(dict):
-    pass
 
 
 
@@ -109,13 +93,8 @@ class BaseDataHandler:
     def end_date(self):
         return self._dataset.end_date
 
-    def __getitem__(self, i) -> AnemoiTensor | TorchTensor:
-        x = self._dataset[i, :, :, :]
-        # TODO: Add logic for obs data to create AnemoiTensor 
-        x = torch.from_numpy(x)
-        x = einops.rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
-        return x
-        
+    def __getitem__(self, i: list[int]) -> AnemoiTensor | TorchTensor:
+        return anemoi_thing(self._dataset[i, :, :, :], dim_type=("int", "tensor"))        
 
 
 class DataHandler(BaseDataHandler):
@@ -156,7 +135,7 @@ class RecordProvider:
         self.data_handlers = DataHandlers(_data_handlers)
 
     @property
-    def keys(self) -> list[DataHandlerName]:
+    def keys(self) -> list[GroupName]:
         return list(self.data_handlers.keys())
 
     @property
@@ -169,7 +148,7 @@ class RecordProvider:
     def processors(self) -> list["BaseProcessor"]:
         return self.data_handlers.processors()
 
-    def get_sample_coverage(self) -> dict[DataHandlerName, tuple[np.datetime64, np.datetime64, timedelta]]:
+    def get_sample_coverage(self) -> dict[GroupName, tuple[np.datetime64, np.datetime64, timedelta]]:
         coverage = {}
         for dh_key in self.keys:
             coverage[dh_key] = (
@@ -179,7 +158,7 @@ class RecordProvider:
             )
         return coverage
 
-    def get_steps(self, i: int) -> dict[DataHandlerName, int | list[int]]:
+    def get_steps(self, i: int) -> dict[GroupName, list[int]]:
         steps = {}
         for dh_key in self.keys:
             steps[dh_key] = [i + l for l in self._steps[dh_key]]
@@ -187,8 +166,8 @@ class RecordProvider:
 
     def __getitem__(self, i: int) -> Record:
         records = {}
-        for dh_name, dh_steps in self.get_steps(i).items():
-            records[dh_name] = self.data_handlers[dh_name][dh_steps]
+        for group_name, dh_steps in self.get_steps(i).items():
+            records[group_name] = self.data_handlers[group_name][dh_steps]
 
         return records
 
@@ -323,7 +302,7 @@ class NativeGridMultDataset(IterableDataset):
         random.seed(base_seed)
         self.rng = np.random.default_rng(seed=base_seed)
 
-    def __iter__(self) -> dict[DataHandlerName, dict[str, torch.Tensor]]:
+    def __iter__(self) -> dict[GroupName, dict[str, torch.Tensor]]:
         """Return an iterator over the dataset.
 
         The datasets are retrieved by anemoi.datasets from anemoi datasets. This iterator yields

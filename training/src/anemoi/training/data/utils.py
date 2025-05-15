@@ -17,7 +17,7 @@ class RecordProviderName(str):
     pass
 
 
-class DataHandlerName(str):
+class GroupName(str):
     pass
 
 
