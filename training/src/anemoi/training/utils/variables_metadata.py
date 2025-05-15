@@ -43,7 +43,7 @@ class ExtractVariableGroupAndLevel:
         assert "default" in self.variable_groups, "Default group not defined in variable_groups"
         self.default_group = self.variable_groups["default"]
 
-        self.metadata_variables = {
+        self.metadata_variables: dict[str, Variable] = {
             name: Variable.from_dict(name, val) for name, val in (metadata_variables or {}).items()
         }
 
@@ -68,8 +68,8 @@ class ExtractVariableGroupAndLevel:
             Variable level, i.e. pressure level or model level
         """
         variable_level = None
-        mars_metadata_available = self.metadata_variables and variable_name in self.metadata_variables
-        if mars_metadata_available:
+
+        if variable_name in self.metadata_variables:
             # if metadata is available: get variable name and level from metadata
             variable_level = self.metadata_variables[variable_name].level
             variable_name = self.metadata_variables[variable_name].name
