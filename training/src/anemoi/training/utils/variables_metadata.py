@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+from anemoi.transform.variables import Variable
+
 
 class ExtractVariableGroupAndLevel:
     """Extract the group and level of a variable from dataset metadata and training-config file.
@@ -27,8 +29,9 @@ class ExtractVariableGroupAndLevel:
     def __init__(
         self,
         variable_groups: dict,
-        metadata_variables: dict | None = None,
+        metadata_variables: dict[str, dict | Variable] | None = None,
     ) -> None:
+
         self.variable_groups = variable_groups
         # turn dictionary around
         self.group_variables = {}
@@ -39,7 +42,10 @@ class ExtractVariableGroupAndLevel:
                 self.group_variables[variable] = group
         assert "default" in self.variable_groups, "Default group not defined in variable_groups"
         self.default_group = self.variable_groups["default"]
-        self.metadata_variables = metadata_variables
+
+        self.metadata_variables = {
+            name: Variable.from_dict(name, val) for name, val in (metadata_variables or {}).items()
+        }
 
     def get_group_variables(self, group_name: str) -> list[str]:
         return self.variable_groups[group_name]
@@ -62,15 +68,11 @@ class ExtractVariableGroupAndLevel:
             Variable level, i.e. pressure level or model level
         """
         variable_level = None
-        mars_metadata_available = (
-            self.metadata_variables
-            and variable_name in self.metadata_variables
-            and self.metadata_variables[variable_name].get("mars")
-        )
-        if mars_metadata_available and self.metadata_variables[variable_name]["mars"].get("param"):
+        mars_metadata_available = self.metadata_variables and variable_name in self.metadata_variables
+        if mars_metadata_available:
             # if metadata is available: get variable name and level from metadata
-            variable_level = self.metadata_variables[variable_name]["mars"].get("levelist")
-            variable_name = self.metadata_variables[variable_name]["mars"]["param"]
+            variable_level = self.metadata_variables[variable_name].level
+            variable_name = self.metadata_variables[variable_name].name
         else:
             # if metadata not available: split variable name into variable name and level
             split = variable_name.split("_")
