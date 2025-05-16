@@ -18,7 +18,7 @@ from anemoi.training.data.utils import GroupName
 from anemoi.training.data.utils import RecordSpec
 from anemoi.training.data.utils import SampleSpec
 from anemoi.training.data.utils import SourceSpec
-from anemoi.training.data.structs import AnemoiTensor, TorchTensor, Record, StackedRecord, anemoi_thing
+from anemoi.training.data.structs import AnemoiTensor, TorchTensor, anemoi_thing
 LOGGER = logging.getLogger(__name__)
 
 
@@ -93,8 +93,8 @@ class BaseDataHandler:
     def end_date(self):
         return self._dataset.end_date
 
-    def __getitem__(self, i: list[int]) -> AnemoiTensor | TorchTensor:
-        return anemoi_thing(self._dataset[i, :, :, :], dim_type=("int", "tensor"))        
+    def __getitem__(self, *args, **kwargs):
+        return self._dataset.__getitem__(*args, **kwargs)   
 
 
 class DataHandler(BaseDataHandler):
@@ -164,12 +164,12 @@ class RecordProvider:
             steps[dh_key] = [i + l for l in self._steps[dh_key]]
         return steps
 
-    def __getitem__(self, i: int) -> Record:
+    def __getitem__(self, i: int) -> "Thing":
         records = {}
         for group_name, dh_steps in self.get_steps(i).items():
-            records[group_name] = self.data_handlers[group_name][dh_steps]
+            records[group_name] = self.data_handlers[group_name][dh_steps, :]
 
-        return records
+        return anemoi_thing(records, dim_type=("str", "int", "tensor"))
 
 
 class SampleProvider:
@@ -191,7 +191,7 @@ class SampleProvider:
     def spec(self) -> SampleSpec:
         return SampleSpec({"input": self.input.spec, "target": self.target.spec})
 
-    def __getitem__(self, i: int) -> dict[Literal["input", "target"], Record]:
+    def __getitem__(self, i: int) -> dict[Literal["input", "target"], "Thing"]:
         return {"input": self.input[i], "target": self.target[i]}
 
 

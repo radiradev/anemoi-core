@@ -23,6 +23,7 @@ from anemoi.training.data.data_handlers import SampleProvider
 from anemoi.training.data.utils import get_dataloader_config
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.utils.worker_init import worker_init_func
+from anemoi.training.data.structs import collate_grouped_things
 
 LOGGER = logging.getLogger(__name__)
 
@@ -80,7 +81,7 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         return IndexCollection(self.config, self.ds_train.name_to_index)
 
     def train_dataloader(self) -> dict[str, DataLoader]:
-        return DataLoader(self.train_dataset, worker_init_fn=worker_init_func, **self.train_dataloader_config)
+        return DataLoader(self.train_dataset, worker_init_fn=worker_init_func, collate_fn=collate_grouped_things, **self.train_dataloader_config)
 
     def val_dataloader(self) -> dict[str, DataLoader]:
-        return DataLoader(self.val_dataset, worker_init_fn=worker_init_func, **self.val_dataloader_config)
+        return DataLoader(self.val_dataset, worker_init_fn=worker_init_func, collate_fn=collate_grouped_things, **self.val_dataloader_config)
