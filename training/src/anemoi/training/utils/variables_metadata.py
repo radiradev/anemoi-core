@@ -161,7 +161,7 @@ class ExtractVariableGroupAndLevel:
             # if metadata is available: get variable name and level from metadata
             return self.metadata_variables[variable_name].level
 
-        return self._crack_variable_name(variable_name)[1]
+        return _crack_variable_name(variable_name)[1]
 
     def get_group_and_level(self, variable_name: str) -> tuple[str, str, int]:
         """Get the group and level of a variable.
