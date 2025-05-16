@@ -12,6 +12,9 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 
+from omegaconf import DictConfig
+from omegaconf import OmegaConf
+
 from anemoi.transform.variables import Variable
 
 LOG = logging.getLogger(__name__)
@@ -60,6 +63,9 @@ class ExtractVariableGroupAndLevel:
         variable_groups: dict[str, GROUP_SPEC | dict[str, GROUP_SPEC]],
         metadata_variables: dict[str, dict | Variable] | None = None,
     ) -> None:
+
+        if isinstance(variable_groups, DictConfig):
+            variable_groups = OmegaConf.to_container(variable_groups, resolve=True)
 
         variable_groups = variable_groups.copy()
 
