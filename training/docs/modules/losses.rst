@@ -154,8 +154,8 @@ temperature fields start with the variable reference `t` followed by the
 level, i.e. `t_500`, `t_850`, etc. Since `t` is specified under variable
 group `pl`, all temperature fields are considered group `pl`.
 
-If the datasets are build from mars the variable reference is extracted
-from metadata, otherwise by splitting the variable name by `_` and
+If the datasets are built from mars the variable reference is extracted
+from metadata, otherwise it is found by splitting the variable name by `_` and
 taking the first part, see class
 `anemoi.training.utils.ExtractVariableGroupAndLevel`.
 
