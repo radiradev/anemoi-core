@@ -95,7 +95,7 @@ class KernelCRPS(BaseLoss):
             return kcrps_.sum() / bs_
 
         # sum only across the batch dimension; enable this to generate per-variable CRPS "maps"
-        loss = kcrps_.sum(dim=0) / bs_
+        loss = kcrps_[:, 0, ...].sum(dim=0) / bs_
         return loss.sum(dim=0)
 
     @property
@@ -198,7 +198,7 @@ class AlmostFairKernelCRPS(BaseLoss):
             return kcrps_.sum() / bs_
 
         # sum only across the batch dimension; enable this to generate per-variable CRPS "maps"
-        loss = kcrps_.sum(dim=0) / bs_
+        loss = kcrps_[:, 0, ...].sum(dim=0) / bs_
         return loss.sum(dim=0)
 
     @property
