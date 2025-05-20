@@ -11,4 +11,3 @@
 <!-- Include any additional information, caveats, or considerations that the reviewer should be aware of. -->
 
 ***As a contributor to the Anemoi framework, please ensure that your changes include unit tests, updates to any affected dependencies and documentation, and have been tested in a parallel setting  (i.e., with multiple GPUs). As a reviewer, you are also responsible for verifying these aspects and requesting changes if they are not adequately addressed.***
-
