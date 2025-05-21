@@ -29,6 +29,7 @@ from anemoi.utils.config import DotDict
 LOGGER = logging.getLogger(__name__)
 
 
+@torch.compile
 class AnemoiModelEncProcDec(nn.Module):
     """Message passing graph neural network."""
 
