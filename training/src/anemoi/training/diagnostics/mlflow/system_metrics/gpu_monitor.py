@@ -9,6 +9,7 @@
 
 import contextlib
 import sys
+import torch
 
 from mlflow.system_metrics.metrics.base_metrics_monitor import BaseMetricsMonitor
 
@@ -16,6 +17,20 @@ with contextlib.suppress(ImportError):
     import pynvml
 with contextlib.suppress(ImportError):
     from pyrsmi import rocml
+
+def parse_memory_stats(device=0):
+    torch.cuda.memory_stats(device=device)
+    stats=torch.cuda.memory_stats(device=device)
+    #need to handle empty dict before memory has been allocated
+    try:
+        active_mem=stats['active_bytes.all.current']
+    except KeyError:
+        active_mem=0
+    try:
+        allocated_mem=stats['allocated_bytes.all.current']
+    except KeyError:
+        allocated_mem=0
+    return active_mem,allocated_mem
 
 
 class GreenGPUMonitor(BaseMetricsMonitor):
@@ -57,6 +72,10 @@ class GreenGPUMonitor(BaseMetricsMonitor):
             # Unlikely for GPUs on the same node to have different total memory
             if i == 0:
                 self._metrics["gpu_memory_total_megabytes"].append(memory.total / 1e6)
+
+            active_mem, alloc_mem = parse_memory_stats(device=i)
+            self._metrics["gpu_memory_active_megabytes"].append(active_mem / 1e6)
+            self._metrics["gpu_memory_alloc_megabytes"].append(alloc_mem / 1e6)
 
             # Monitor PCIe usage
             tx_kilobytes = pynvml.nvmlDeviceGetPcieThroughput(handle, pynvml.NVML_PCIE_UTIL_TX_BYTES)
