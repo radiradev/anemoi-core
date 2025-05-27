@@ -17,19 +17,28 @@ class DictLoss(nn.Module):
     def __init__(
         self,
         loss_dict: nn.ModuleDict,
+        scalars: dict[str, int] | None = None,
     ) -> None:
         super().__init__()
         self.loss_dict = loss_dict
         self.outputs = list(loss_dict.keys())
+        self.scalars = scalars if scalars is not None else {}
+
+    @property
+    def name(self) -> str:
+        """Used for logging identification purposes."""
+        return self.__class__.__name__.lower()
 
     def forward(
         self,
         pred: dict[str, Tensor],
         target: dict[str, Tensor],
         squash: bool = True,  # TODO Generalise this per output?
-    ) -> dict[str, Tensor]:
-        out = {}
+    ) -> Tensor:
+        aggregated_loss = 0.0
+        # TODO compute losses in parallel, then aggregate?
+        # If we use the same loss function for all output datasets, we could flatten, concatenate, and then compute the loss in one call
         for output, loss in self.loss_dict.items():
-            out[output] = loss(pred[output], target[output], squash)
+            aggregated_loss += loss(pred[output], target[output], squash) * self.scalars.get(output, 1)
 
-        return out
+        return aggregated_loss
