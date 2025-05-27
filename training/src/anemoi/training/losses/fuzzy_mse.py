@@ -19,10 +19,10 @@ from anemoi.training.losses.weightedloss import BaseWeightedLoss
 LOGGER = logging.getLogger(__name__)
 
 
-class WeightedFuzzyMSELoss(BaseWeightedLoss):
+class WeightedAreaRelatetSortedIntensityLoss(BaseWeightedLoss):
     """Node-weighted fuzzy MSE loss."""
 
-    name = "wmsefuzz"
+    name = "arsil"
 
     def __init__(
         self,
@@ -43,8 +43,107 @@ class WeightedFuzzyMSELoss(BaseWeightedLoss):
         super().__init__(
             node_weights=node_weights,
             ignore_nans=ignore_nans,
-            **kwargs,
         )
+        # register some kwargs as properties
+        for key in ["num_neighbors", "depth"]:
+            if key in kwargs: setattr(self, key, kwargs[key]) 
+
+        # aggregate node_weights to have the correct shape
+        self.node_weights = self._aggregate_node_weights(
+            self.node_weights, 
+            num_neighbors=self.num_neighbors, 
+            depth=self.depth,
+        ) 
+        #TODO: remove original_node_weights and determine node_weights
+        # of correct shape only once, of no change of depth during run time necessary
+        # self.register_buffer("original_node_weights", node_weights, persistent=True)
+
+    def _aggregate(self,
+                  x: torch.Tensor, 
+                  num_neighbors:int = 4,
+                  depth: int = 1,
+                  sort: bool = False,
+                  top_level: bool = True,
+    ) -> torch.Tensor:
+        """aggregates and sorts features in a local area 
+
+        Parameters
+        ----------
+        x : torch.Tensor    
+            Either pred or target shape (bs, ensemble, lat*lon, n_outputs)
+            or (ensemble, lat*lon, n_outputs)
+        num_neighbors : int 
+            number of neighbors to be aggregated in one super-location
+        depth : int 
+            number of aggreatation steps -> depth of recursion
+        sort : bool 
+            debugging setting -> sort=False -> aggreatation has no effect
+        top_level : bool
+            Determines whether recursive routine is on outer most level
+
+        Returns
+        -------
+        x: torch.Tensor 
+            aggregated/reshaped pred or target
+            shape : (bs, ensemble, lat*lon/num_neighbors, num_neighbors, n_outputs)
+            or    : (ensemble, lat*lon/num_neighbors, num_neighbors, n_outputs)
+        """
+        # determine if batch dimension present
+        no_batch = True if top_level and len(x.shape)==3 else False
+        # if no batch dimension create trivial 
+        if no_batch: x = x.unsqueeze(0)
+
+        # go deeper in recursion?
+        if depth > 1:
+            x = self._aggregate(x, num_neighbors, depth=depth - 1, top_level=False)
+            depth -= 1
+
+        # aggretate via reshaping (4 rows always grouped spatially by construction)
+        N = x.shape[2]
+        latent = x.shape[3] if len(x.shape) > 4 else 1
+        N_target = N // num_neighbors
+        x = x.reshape(x.shape[0], x.shape[1], N_target, num_neighbors * latent, x.shape[-1])
+        if sort: x, _ = torch.sort(x, dim=-2)
+
+        # remove batch dimension if trivial
+        if no_batch: x = x.squeeze(0)
+
+        return x 
+
+    def _aggregate_node_weights(self,
+                                x: torch.Tensor,
+                                num_neighbors: int = 4,
+                                depth: int = 1,
+    ) -> torch.Tensor:
+        """applies spatial aggregation to node_weights
+
+        Parameters
+        ----------
+        x : torch.Tensor    
+            node_weights shape (lat*lon) or (lat*lon/N, N)
+        num_neighbors : int 
+            number of neighbors to be aggregated in one super-location
+        depth : int 
+            number of aggreatation steps -> depth of recursion
+        sort : bool 
+            debugging setting -> sort=False -> aggreatation has no effect
+
+        Returns
+        -------
+        x: torch.Tensor 
+            aggregated/reshaped pred or target
+            shape : (lat*lon/Nnneigh, num_neighbors)
+
+        """
+
+        if depth > 1:
+            x = self._aggregate_node_weights(x, num_neighbors, depth=depth - 1)
+            depth -= 1
+        N = x.shape[0]
+        latent = x.shape[1] if len(x.shape) > 1 else 1
+        N_target = N // num_neighbors
+        x = x.reshape(N_target, num_neighbors * latent)
+        return x
 
     def forward(
         self,
@@ -75,6 +174,23 @@ class WeightedFuzzyMSELoss(BaseWeightedLoss):
         torch.Tensor
             Weighted MSE loss
         """
+
+        # do aggretation
+        pred = self._aggregate(pred, num_neighbors=self.num_neighbors, depth=self.depth, sort=True) 
+        target = self._aggregate(target, num_neighbors=self.num_neighbors, depth=self.depth, sort=True)
+
+        #TODO: original_node_weights should become unneccary of no regular change
+        # of depth is neede, otherwise just determine reshpaed node_weights once
+        # Further the sorting of node_weights is not uniquely defined, since pred 
+        # and target are sorted differently -> solution: define coarse node_weights
+        # appropriate for target resolution where loss is defined deterministically
+        # self.node_weights = self._aggregate_node_weights(
+        #     self.original_node_weights, 
+        #     num_neighbors=self.num_neighbors, 
+        #     depth=depth,
+        #     sort=False,
+        # ) 
+
         out = torch.square(pred - target)
         out = self.scale(out, scalar_indices, without_scalars=without_scalars)
         return self.scale_by_node_weights(out, squash)

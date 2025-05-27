@@ -155,6 +155,7 @@ class ImplementedLossesUsingBaseLossSchema(str, Enum):
     kcrps = "anemoi.training.losses.kcrps.KernelCRPS"
     afkcrps = "anemoi.training.losses.kcrps.AlmostFairKernelCRPS"
     limited_mse = "anemoi.training.losses.limitedarea.WeightedMSELossLimitedArea"
+    arsil = "anemoi.training.losses.fuzzy_mse.WeightedAreaRelatetSortedIntensityLoss"
 
 
 class BaseLossSchema(BaseModel):
@@ -190,6 +191,14 @@ class WeightedMSELossLimitedAreaSchema(BaseLossSchema):
     wmse_contribution: bool = False
     "Whether to compute the contribution to the MSE or not."
 
+class WeightedAreaRelatetSortedIntensityLossSchema(BaseLossSchema):
+    num_neighbors: int 
+    "Number of neighbor nodes used in spatial aggregation"
+    depth: int
+    """depth of the recursive coarsening/aggreation prodecure.
+    Equals number of coarsening steps.
+    """
+    
 
 class CombinedLossSchema(BaseLossSchema):
     target_: Literal["anemoi.training.losses.combined.CombinedLoss"] = Field(..., alias="_target_")
@@ -227,6 +236,7 @@ LossSchemas = Union[
     CombinedLossSchema,
     KernelCRPSSchema,
     AlmostFairKernelCRPSSchema,
+    WeightedAreaRelatetSortedIntensityLossSchema,
 ]
 
 
