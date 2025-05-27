@@ -44,7 +44,7 @@ model:
   num_channels: 128
 dataloader:
   limit_batches:
-    training: 100
-    validation: 100
+    training: 2
+    validation: 2
 training:
-  max_epochs: 5
+  max_epochs: 2
