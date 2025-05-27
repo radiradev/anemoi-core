@@ -18,7 +18,6 @@ from anemoi.training.data.utils import GroupName
 from anemoi.training.data.utils import RecordSpec
 from anemoi.training.data.utils import SampleSpec
 from anemoi.training.data.utils import SourceSpec
-from anemoi.training.data.structs import AnemoiTensor, TorchTensor, anemoi_thing
 LOGGER = logging.getLogger(__name__)
 
 
@@ -164,12 +163,12 @@ class RecordProvider:
             steps[dh_key] = [i + l for l in self._steps[dh_key]]
         return steps
 
-    def __getitem__(self, i: int) -> "Thing":
+    def __getitem__(self, i: int) -> dict[GroupName, list[torch.Tensor]]:
         records = {}
         for group_name, dh_steps in self.get_steps(i).items():
             records[group_name] = self.data_handlers[group_name][dh_steps, :]
 
-        return anemoi_thing(records, dim_type=("str", "int", "tensor"))
+        return records
 
 
 class SampleProvider:
