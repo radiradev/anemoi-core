@@ -22,8 +22,10 @@ GROUP_SPEC = str | list[str] | bool
 
 
 @lru_cache
-def _crack_variable_name(variable_name: str) -> tuple[str, str]:
-    """Crack the variable name into variable name and level.
+def _crack_variable_name(variable_name: str) -> tuple[str, str | None]:
+    """Attempt to crack the variable name into parameter name and level.
+    
+    If cannot split, will return variable_name unchanged, and None
 
     Parameters
     ----------
@@ -32,10 +34,12 @@ def _crack_variable_name(variable_name: str) -> tuple[str, str]:
 
     Returns
     -------
-    variable_name : str
-        Variable reference which corresponds to the variable name without the variable level
-    variable_level : str
-        Variable level, i.e. pressure level or model level
+    parameter : str
+        Parameter reference which corresponds to the variable_name without the variable level.
+        If cannot be split, will be variable_name unchanged.
+    variable_level : str | None
+        Variable level, i.e. pressure level or model level.
+        If cannot be split, will be None.
     """
     split = variable_name.split("_")
     if len(split) > 1 and split[-1].isdigit():
