@@ -380,6 +380,8 @@ def plot_histogram(
         ax[plot_idx].set_title(variable_name)
         ax[plot_idx].set_xlabel(variable_name)
         ax[plot_idx].set_ylabel("Density")
+        if any(x in variable_name for x in ["sd", "snow", "stl", "swvl"]):
+            ax[plot_idx].set_yscale("log")
         ax[plot_idx].legend()
         ax[plot_idx].set_aspect("auto", adjustable=None)
 
@@ -598,7 +600,7 @@ def plot_flat_sample(
         norms[1] = norm
         norms[2] = norm
 
-    if sum(input_) != 0:
+    if np.nansum(input_) != 0:
         # prognostic fields: plot input and increment as well
         data[0] = input_
         data[4] = pred - input_
@@ -612,6 +614,7 @@ def plot_flat_sample(
 
         else:
             norm_error = TwoSlopeNorm(vmin=np.nanmin(combined_error), vcenter=0.0, vmax=np.nanmax(combined_error))
+            # norm_error = TwoSlopeNorm(vcenter=0.0)
             norms[0] = norm
             norms[4] = norm_error
             norms[5] = norm_error
