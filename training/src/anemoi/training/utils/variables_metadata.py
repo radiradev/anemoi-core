@@ -178,8 +178,8 @@ class ExtractVariableGroupAndLevel:
             return self.metadata_variables[variable_name].level
 
         return _crack_variable_name(variable_name)[1]
-
-    def get_group_and_level(self, variable_name: str) -> tuple[str, str, int]:
+    
+    def get_group_and_level(self, variable_name: str) -> tuple[str, str, int | None]:
         """Get the group and level of a variable.
 
         Parameters
@@ -191,9 +191,12 @@ class ExtractVariableGroupAndLevel:
         -------
         group : str
             Group of the variable given in the training-config file.
-        variable_name : str
-            Variable reference which corresponds to the variable name without the variable level
-        variable_level : str
-            Variable level, i.e. pressure level or model level
+        parameter : str
+            Parameter reference which corresponds to the variable_name without the variable level.
+            If cannot be split, will be variable_name unchanged.
+        variable_level : int | None
+            Variable level, i.e. pressure level or model level.
+            If variable_name cannot be split, will be None.
         """
         return self.get_group(variable_name), self.get_param(variable_name), self.get_level(variable_name)
+
