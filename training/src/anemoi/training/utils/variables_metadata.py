@@ -24,7 +24,7 @@ GROUP_SPEC = str | list[str] | bool
 @lru_cache
 def _crack_variable_name(variable_name: str) -> tuple[str, str | None]:
     """Attempt to crack the variable name into parameter name and level.
-    
+
     If cannot split, will return variable_name unchanged, and None
 
     Parameters
