@@ -46,6 +46,7 @@ class BaseImputer(BasePreprocessor, ABC):
         self.nan_locations = None
         # weight imputed values with zero in loss calculation
         self.loss_mask_training = None
+        self.apply_in_rollout_training = True
 
     def _validate_indices(self):
         assert len(self.index_training_input) == len(self.index_inference_input) <= len(self.replacement), (
@@ -118,6 +119,25 @@ class BaseImputer(BasePreprocessor, ABC):
             if idx_dst is not None:
                 x[..., idx_dst][self._expand_subset_mask(x, idx_src)] = value
         return x
+
+    def transform_in_rollout(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
+        """Impute missing values in the input tensor."""
+        if not in_place:
+            x = x.clone()
+
+        # Choose correct index based on number of variables
+        if x.shape[-1] == self.num_training_input_vars:
+            index = self.index_training_input
+        elif x.shape[-1] == self.num_inference_input_vars:
+            index = self.index_inference_input
+        else:
+            raise ValueError(
+                f"Input tensor ({x.shape[-1]}) does not match the training "
+                f"({self.num_training_input_vars}) or inference shape ({self.num_inference_input_vars})",
+            )
+
+        # Replace values
+        return self.fill_with_value(x, index)
 
     def transform(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
         """Impute missing values in the input tensor."""

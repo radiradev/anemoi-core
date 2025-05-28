@@ -38,8 +38,6 @@ class BasePreprocessor(nn.Module):
             Data indices for input and output variables
         statistics : dict
             Data statistics dictionary
-        data_indices : dict
-            Data indices for input and output variables
 
         Attributes
         ----------
@@ -102,7 +100,7 @@ class BasePreprocessor(nn.Module):
             for variable in variables
         }
 
-    def forward(self, x, in_place: bool = True, inverse: bool = False) -> Tensor:
+    def forward(self, x, in_place: bool = True, inverse: bool = False, in_rollout_training: bool = False) -> Tensor:
         """Process the input tensor.
 
         Parameters
@@ -119,14 +117,39 @@ class BasePreprocessor(nn.Module):
         torch.Tensor
             Processed tensor
         """
-        if inverse:
+        # in rollout training, we use the transform_in_rollout and inverse_transform_in_rollout methods
+        # to process the input tensor when advancing the step, otherwise we use the transform and inverse_transform methods
+        if in_rollout_training and inverse:
+            return self.inverse_transform_in_rollout(x)
+        elif in_rollout_training and (not inverse):
+            return self.transform_in_rollout(x)
+        elif (not in_rollout_training) and inverse:
             return self.inverse_transform(x, in_place=in_place)
-        return self.transform(x, in_place=in_place)
+        else:  # (not in_rollout_training) and (not inverse)
+            return self.transform(x, in_place=in_place)
 
     def transform(self, x, in_place: bool = True) -> Tensor:
         """Process the input tensor."""
         if not in_place:
             x = x.clone()
+        return x
+
+    def transform_in_rollout(self, x) -> Tensor:
+        """Process the input tensor in a rollout.
+
+        This method is used to preprocess the input tensor in rollout training.
+        By default, it is the identity function as most preprocessors do not need to be reapplied (for example normalizers).
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor
+
+        Returns
+        -------
+        torch.Tensor
+            Processed tensor
+        """
         return x
 
     def inverse_transform(self, x, in_place: bool = True) -> Tensor:
@@ -135,11 +158,29 @@ class BasePreprocessor(nn.Module):
             x = x.clone()
         return x
 
+    def inverse_transform_in_rollout(self, x) -> Tensor:
+        """Inverse process the input tensor in a rollout.
+
+        This method is used to postprocess the output tensor in rollout training.
+        By default, it is the identity function.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor
+
+        Returns
+        -------
+        torch.Tensor
+            Processed tensor
+        """
+        return x
+
 
 class Processors(nn.Module):
     """A collection of processors."""
 
-    def __init__(self, processors: list, inverse: bool = False) -> None:
+    def __init__(self, processors: list, inverse: bool = False, in_rollout_training=False) -> None:
         """Initialize the processors.
 
         Parameters
@@ -151,6 +192,7 @@ class Processors(nn.Module):
 
         self.inverse = inverse
         self.first_run = True
+        self.in_rollout_training = in_rollout_training
 
         if inverse:
             # Reverse the order of processors for inverse transformation
@@ -178,7 +220,7 @@ class Processors(nn.Module):
             Processed tensor
         """
         for processor in self.processors.values():
-            x = processor(x, in_place=in_place, inverse=self.inverse)
+            x = processor(x, in_place=in_place, inverse=self.inverse, in_rollout_training=self.in_rollout_training)
 
         if self.first_run:
             self.first_run = False
