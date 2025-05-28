@@ -46,7 +46,6 @@ class NoiseInjector(nn.Module):
             noise_channels_dim,
             layer_kernels=layer_kernels,
             n_extra_layers=-1,
-            activation="GELU",
             final_activation=False,
             layer_norm=True,
         )
