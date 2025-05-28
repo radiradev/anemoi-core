@@ -135,7 +135,11 @@ class ExtractVariableGroupAndLevel:
         return self.default_group
 
     def get_param(self, variable_name: str) -> str:
-        """Get the parameter of a variable.
+        """Get the parameter from a variable_name.
+        
+        Tries to use the metadata, but if not given
+        will attempt to crack the name. If cannot
+        crack will be the variable_name unchanged.
 
         Parameters
         ----------
@@ -146,6 +150,8 @@ class ExtractVariableGroupAndLevel:
         -------
         param : str
             Parameter of the variable.
+            Either from the metadata or cracked
+            name.
         """
         if variable_name in self.metadata_variables:
             # if metadata is available: get variable name and level from metadata
