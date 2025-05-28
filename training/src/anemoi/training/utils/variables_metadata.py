@@ -136,7 +136,7 @@ class ExtractVariableGroupAndLevel:
 
     def get_param(self, variable_name: str) -> str:
         """Get the parameter from a variable_name.
-        
+
         Tries to use the metadata, but if not given
         will attempt to crack the name. If cannot
         crack will be the variable_name unchanged.
@@ -178,7 +178,7 @@ class ExtractVariableGroupAndLevel:
             return self.metadata_variables[variable_name].level
 
         return _crack_variable_name(variable_name)[1]
-    
+
     def get_group_and_level(self, variable_name: str) -> tuple[str, str, int | None]:
         """Get the group and level of a variable.
 
@@ -199,4 +199,3 @@ class ExtractVariableGroupAndLevel:
             If variable_name cannot be split, will be None.
         """
         return self.get_group(variable_name), self.get_param(variable_name), self.get_level(variable_name)
-
