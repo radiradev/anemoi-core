@@ -25,8 +25,7 @@ class BasePreprocessor(nn.Module):
     def __init__(
         self,
         config=None,
-        data_indices: Optional[IndexCollection] = None,
-        statistics: Optional[dict] = None,
+        dataset: Optional = None,
     ) -> None:
         """Initialize the preprocessor.
 
@@ -58,7 +57,7 @@ class BasePreprocessor(nn.Module):
         self.default, self.remap, self.method_config = self._process_config(config)
         self.methods = self._invert_key_value_list(self.method_config)
 
-        self.data_indices = data_indices
+        self.dataset = dataset
 
     @classmethod
     def _process_config(cls, config):
