@@ -23,7 +23,6 @@ from anemoi.training.data.data_handlers import SampleProvider
 from anemoi.training.data.utils import get_dataloader_config
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.utils.worker_init import worker_init_func
-from anemoi.training.data.structs import collate_grouped_things
 
 LOGGER = logging.getLogger(__name__)
 
@@ -58,18 +57,24 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
 
         # Create datasets
         self.train_dataset = NativeGridMultDataset(
-            self.sample_provider, sampler_config=config.dataloader.sampler.training,
+            self.sample_provider,
+            sampler_config=config.dataloader.sampler.training,
         )
         self.val_dataset = NativeGridMultDataset(
-            self.sample_provider, sampler_config=config.dataloader.sampler.validation,
+            self.sample_provider,
+            sampler_config=config.dataloader.sampler.validation,
         )
 
         dl_keys_to_ignore = ["sampler", "read_group_size", "grid_indices", "limit_batches"]
         self.train_dataloader_config = get_dataloader_config(
-            config.dataloader, "training", keys_to_ignore=dl_keys_to_ignore,
+            config.dataloader,
+            "training",
+            keys_to_ignore=dl_keys_to_ignore,
         )
         self.val_dataloader_config = get_dataloader_config(
-            config.dataloader, "validation", keys_to_ignore=dl_keys_to_ignore,
+            config.dataloader,
+            "validation",
+            keys_to_ignore=dl_keys_to_ignore,
         )
 
         # data_handlers[stage.TRAINING].check_no_overlap(data_handlers[stage.VALIDATION])

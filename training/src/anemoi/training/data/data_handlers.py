@@ -18,6 +18,7 @@ from anemoi.training.data.utils import GroupName
 from anemoi.training.data.utils import RecordSpec
 from anemoi.training.data.utils import SampleSpec
 from anemoi.training.data.utils import SourceSpec
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -25,7 +26,6 @@ class Stage(Enum):
     TRAINING = "training"
     VALIDATION = "validation"
     TEST = "test"
-
 
 
 class DataHandlers(dict):
@@ -78,7 +78,7 @@ class BaseDataHandler:
         return self._dataset.end_date
 
     def __getitem__(self, *args, **kwargs):
-        return self._dataset.__getitem__(*args, **kwargs)   
+        return self._dataset.__getitem__(*args, **kwargs)
 
 
 class DataHandler(BaseDataHandler):
@@ -151,7 +151,10 @@ class RecordProvider:
     def __getitem__(self, i: int) -> dict[GroupName, list[torch.Tensor]]:
         records = {}
         for group_name, dh_steps in self.get_steps(i).items():
-            records[group_name] = self.data_handlers[group_name][dh_steps, :]
+            x = self.data_handlers[group_name][dh_steps, :, :, :]
+            x = einops.rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
+            self.ensemble_dim = 1
+            records[group_name] = torch.from_numpy(x)
 
         return records
 

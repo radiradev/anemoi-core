@@ -20,7 +20,7 @@ from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.utils.checkpoint import checkpoint
 
 from anemoi.models.interface import AnemoiModelInterface
-from anemoi.training.data.utils import DataHandlerName
+from anemoi.training.data.data_handlers import SampleProvider
 from anemoi.training.data.utils import RecordProviderName
 from anemoi.training.losses import get_loss_function
 from anemoi.training.losses.base import BaseLoss
@@ -224,7 +224,7 @@ class GraphForecasterMultiDataset(pl.LightningModule):
 
     def rollout_step(
         self,
-        batch: dict[RecordProviderName, dict[DataHandlerName, torch.Tensor]],
+        batch: dict[RecordProviderName, dict[str, torch.Tensor]],
         rollout: int | None = None,
         training_mode: bool = True,
         validation_mode: bool = False,
@@ -272,7 +272,6 @@ class GraphForecasterMultiDataset(pl.LightningModule):
             # y includes the auxiliary variables, so we must leave those out when computing the loss
             loss = checkpoint(self.loss, y_pred, batch["target"], use_reentrant=False) if training_mode else None
 
-
             # x = self.advance_input(x, y_pred, batch, rollout_step)
 
             metrics_next = {}
@@ -282,7 +281,7 @@ class GraphForecasterMultiDataset(pl.LightningModule):
 
     def _step(
         self,
-        batch: dict[RecordProviderName, dict[DataHandlerName, torch.Tensor]],
+        batch: dict[RecordProviderName, dict[str, torch.Tensor]],
         batch_idx: int,
         validation_mode: bool = False,
     ) -> tuple[dict[str, torch.Tensor], dict[str, Mapping[str, torch.Tensor]], dict[str, torch.Tensor]]:
@@ -299,7 +298,7 @@ class GraphForecasterMultiDataset(pl.LightningModule):
             training_mode=True,
             validation_mode=validation_mode,
         ):
-            loss += loss_next
+            loss += loss_next.sum()  # TODO figure out what happened here, should be a scalar
             metrics.update(metrics_next)
             y_preds.extend(y_preds_next)
 

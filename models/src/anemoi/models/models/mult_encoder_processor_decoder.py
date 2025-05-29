@@ -22,7 +22,6 @@ from torch_geometric.data import HeteroData
 
 from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.layers.graph import NamedNodesAttributes
-from anemoi.models.layers.utils import load_layer_kernels
 from anemoi.training.data.data_handlers import SampleProvider
 from anemoi.utils.config import DotDict
 
@@ -68,11 +67,6 @@ class AnemoiMultiModel(nn.Module):
         self.input_names: list[str] = sample_spec.input_names
         self.target_names: list[str] = sample_spec.target_names
 
-        # read config.model.layer_kernels to get the implementation for certain layers
-        self.layer_kernels_encoder = load_layer_kernels(model_config.model.layer_kernels.get("encoder", {}))
-        self.layer_kernels_processor = load_layer_kernels(model_config.model.layer_kernels.get("processor", {}))
-        self.layer_kernels_decoder = load_layer_kernels(model_config.model.layer_kernels.get("decoder", {}))
-
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
 
         # Encoder data -> hidden
@@ -80,23 +74,23 @@ class AnemoiMultiModel(nn.Module):
         for input_name in self.input_names:
             self.encoders[input_name] = instantiate(
                 model_config.model.encoder,
+                _recursive_=False,
                 in_channels_src=self.node_attributes.attr_ndims[input_name] + self.input_channels[input_name],
                 in_channels_dst=self.node_attributes.attr_ndims[self._graph_name_hidden],
                 hidden_dim=self.num_channels,
                 sub_graph=self._graph_data[(self._graph_name_data, "to", self._graph_name_hidden)],
                 src_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
                 dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-                layer_kernels=self.layer_kernels_encoder,
             )
 
         # Processor hidden -> hidden
         self.processor = instantiate(
             model_config.model.processor,
+            _recursive_=False,
             num_channels=self.num_channels,
             sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_hidden)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-            layer_kernels=self.layer_kernels_processor,
         )
 
         # Decoder hidden -> data
@@ -104,6 +98,7 @@ class AnemoiMultiModel(nn.Module):
         for target_name in self.target_names:
             self.decoders[target_name] = instantiate(
                 model_config.model.decoder,
+                _recursive_=False,
                 in_channels_src=self.num_channels,
                 in_channels_dst=self.node_attributes.attr_ndims[input_name] + self.input_channels[input_name],
                 hidden_dim=self.num_channels,
@@ -111,7 +106,6 @@ class AnemoiMultiModel(nn.Module):
                 sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_data)],
                 src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
                 dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
-                layer_kernels=self.layer_kernels_decoder,
             )
 
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
@@ -332,5 +326,4 @@ class AnemoiMultiModel(nn.Module):
 
         x_out = self.residual_connection(x_out, x_data_skip)
         x_out = self.bound(x_out)
-
         return x_out
