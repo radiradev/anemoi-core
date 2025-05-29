@@ -17,12 +17,10 @@ class DictLoss(nn.Module):
     def __init__(
         self,
         loss_dict: nn.ModuleDict,
-        scalars: dict[str, int] | None = None,
     ) -> None:
         super().__init__()
         self.loss_dict = loss_dict
         self.outputs = list(loss_dict.keys())
-        self.scalars = scalars if scalars is not None else {}
 
     @property
     def name(self) -> str:
@@ -39,6 +37,6 @@ class DictLoss(nn.Module):
         # TODO compute losses in parallel, then aggregate?
         # If we use the same loss function for all output datasets, we could flatten, concatenate, and then compute the loss in one call
         for output, loss in self.loss_dict.items():
-            aggregated_loss += loss(pred[output], target[output], squash) * self.scalars.get(output, 1)
+            aggregated_loss += loss(pred[output], target[output], squash)
 
         return aggregated_loss
