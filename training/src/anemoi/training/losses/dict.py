@@ -22,14 +22,21 @@ class DictLoss(nn.Module):
         self.loss_dict = loss_dict
         self.outputs = list(loss_dict.keys())
 
+    @property
+    def name(self) -> str:
+        """Used for logging identification purposes."""
+        return self.__class__.__name__.lower()
+
     def forward(
         self,
         pred: dict[str, Tensor],
         target: dict[str, Tensor],
         squash: bool = True,  # TODO Generalise this per output?
-    ) -> dict[str, Tensor]:
-        out = {}
+    ) -> Tensor:
+        aggregated_loss = 0.0
+        # TODO compute losses in parallel, then aggregate?
+        # If we use the same loss function for all output datasets, we could flatten, concatenate, and then compute the loss in one call
         for output, loss in self.loss_dict.items():
-            out[output] = loss(pred[output], target[output], squash)
+            aggregated_loss += loss(pred[output], target[output], squash)
 
-        return out
+        return aggregated_loss

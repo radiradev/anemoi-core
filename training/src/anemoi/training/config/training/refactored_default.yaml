@@ -74,14 +74,15 @@ lr:
   min: 3e-7 #Not scaled by #GPU
 # loss function for the model
 training_loss:
-  # loss class to initialise
-  _target_: anemoi.training.losses.MSELoss
-  # Scalers to include in loss calculation
-  # A selection of available scalers are listed in training/scalers.
-  # '*' is a valid entry to use all `scalers` given, if a scaler is to be excluded
-  # add `!scaler_name`, i.e. ['*', '!scaler_1'], and `scaler_1` will not be added.
-  scalers: []
-  ignore_nans: False
+  # loss classes to initialise
+  era5:
+    _target_: anemoi.training.losses.MSELoss
+    # Scalers to include in loss calculation
+    # A selection of available scalers are listed in training/scalers.
+    # '*' is a valid entry to use all `scalers` given, if a scaler is to be excluded
+    # add `!scaler_name`, i.e. ['*', '!scaler_1'], and `scaler_1` will not be added.
+    scalers: []
+    ignore_nans: False
 
 # Validation metrics calculation,
 # This may be a list, in which case all metrics will be calculated

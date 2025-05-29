@@ -37,7 +37,6 @@ if TYPE_CHECKING:
     from torch_geometric.data import HeteroData
 
 
-
 LOGGER = logging.getLogger(__name__)
 
 
@@ -108,7 +107,7 @@ class GraphForecasterMultiDataset(pl.LightningModule):
 
         self.loss = get_loss_function(
             config.model_dump(by_alias=True).training.training_loss,
-            scalers={},  # self.scalers,
+            # scalers={},  # self.scalers,
             #    data_indices=self.data_indices,
         )
         # print_variable_scaling(self.loss, data_indices)
@@ -271,11 +270,8 @@ class GraphForecasterMultiDataset(pl.LightningModule):
             y_pred = self(batch["input"])
 
             # y includes the auxiliary variables, so we must leave those out when computing the loss
-            loss = (
-                checkpoint(self.loss, y_pred["era5"], batch["target"]["era5"], use_reentrant=False)
-                if training_mode
-                else None
-            )
+            loss = checkpoint(self.loss, y_pred, batch["target"], use_reentrant=False) if training_mode else None
+
 
             # x = self.advance_input(x, y_pred, batch, rollout_step)
 

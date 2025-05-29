@@ -15,7 +15,6 @@ from typing import Optional
 import numpy as np
 import torch
 
-from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.models.preprocessing import BasePreprocessor
 
 LOGGER = logging.getLogger(__name__)
@@ -27,8 +26,7 @@ class InputNormalizer(BasePreprocessor):
     def __init__(
         self,
         config=None,
-        data_indices: Optional[IndexCollection] = None,
-        statistics: Optional[dict] = None,
+        dataset: Optional = None,
     ) -> None:
         """Initialize the normalizer.
 
@@ -41,9 +39,10 @@ class InputNormalizer(BasePreprocessor):
         statistics : dict
             Data statistics dictionary
         """
-        super().__init__(config, data_indices, statistics)
+        super().__init__(config, dataset)
 
-        name_to_index_training_input = self.data_indices.data.input.name_to_index
+        name_to_index_training_input = dataset.name_to_index
+        statistics = dataset.statistics
 
         minimum = statistics["minimum"]
         maximum = statistics["maximum"]
@@ -60,6 +59,8 @@ class InputNormalizer(BasePreprocessor):
         for idx, new_stats in statistics_remap.items():
             minimum[idx], maximum[idx], mean[idx], stdev[idx] = new_stats
 
+        # TODO check that this works when normalization is not applied to forcing variables
+        # print(f"InputNormalizer: name_to_index_training_input = {name_to_index_training_input}")
         self._validate_normalization_inputs(name_to_index_training_input, minimum, maximum, mean, stdev)
 
         _norm_add = np.zeros((minimum.size,), dtype=np.float32)
@@ -103,8 +104,8 @@ class InputNormalizer(BasePreprocessor):
         # register buffer - this will ensure they get copied to the correct device(s)
         self.register_buffer("_norm_mul", torch.from_numpy(_norm_mul), persistent=True)
         self.register_buffer("_norm_add", torch.from_numpy(_norm_add), persistent=True)
-        self.register_buffer("_input_idx", data_indices.data.input.full, persistent=True)
-        self.register_buffer("_output_idx", self.data_indices.data.output.full, persistent=True)
+        # self.register_buffer("_input_idx", data_indices.data.full, persistent=True)
+        # self.register_buffer("_output_idx", self.data_indices.data.output.full, persistent=True)
 
     def _validate_normalization_inputs(self, name_to_index_training_input: dict, minimum, maximum, mean, stdev):
         assert len(self.methods) == sum(len(v) for v in self.method_config.values()), (
@@ -160,8 +161,6 @@ class InputNormalizer(BasePreprocessor):
 
         if data_index is not None:
             x.mul_(self._norm_mul[data_index]).add_(self._norm_add[data_index])
-        elif x.shape[-1] == len(self._input_idx):
-            x.mul_(self._norm_mul[self._input_idx]).add_(self._norm_add[self._input_idx])
         else:
             x.mul_(self._norm_mul).add_(self._norm_add)
 
@@ -199,8 +198,6 @@ class InputNormalizer(BasePreprocessor):
         # hence, we mask out the forcing indices
         if data_index is not None:
             x.subtract_(self._norm_add[data_index]).div_(self._norm_mul[data_index])
-        elif x.shape[-1] == len(self._output_idx):
-            x.subtract_(self._norm_add[self._output_idx]).div_(self._norm_mul[self._output_idx])
         else:
             x.subtract_(self._norm_add).div_(self._norm_mul)
         return x

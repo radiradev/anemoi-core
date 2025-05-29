@@ -7,12 +7,12 @@ from typing import Literal
 import einops
 import numpy as np
 import torch
+from hydra.utils import instantiate
 from omegaconf import DictConfig
 from torch.utils.data import IterableDataset
 
 from anemoi.datasets.data import open_dataset
-from anemoi.models.data_indices.collection import IndexCollection
-from anemoi.models.preprocessing.normalizer import InputNormalizer
+from anemoi.models.preprocessing import BasePreprocessor
 from anemoi.training.data.sampler import AnemoiSampler
 from anemoi.training.data.utils import GroupName
 from anemoi.training.data.utils import RecordSpec
@@ -40,7 +40,7 @@ class DataHandlers(dict):
     def name_to_index(self) -> dict:
         return {key: data_handler.name_to_index for key, data_handler in self.items()}
 
-    def processors(self) -> dict[str, list["BaseProcessor"]]:
+    def processors(self) -> dict[str, list[BasePreprocessor]]:
         return {dh_name: data_handler.processors() for dh_name, data_handler in self.items()}
 
     def check_no_overlap(self, other: "DataHandlers") -> None:
@@ -63,22 +63,7 @@ class BaseDataHandler:
         return self._dataset.name_to_index
 
     def processors(self) -> list:
-        data_indices = IndexCollection(
-            DictConfig({"data": {"forcing": None, "diagnostic": None}}), self._dataset.name_to_index,
-        )
-        return [
-            [
-                "normalizer",
-                InputNormalizer(
-                    {"default": "mean-std"}, data_indices=data_indices, statistics=self._dataset.statistics,
-                ),
-            ],
-        ]
-        # return [
-        #    [
-        #        name, instantiate(processor, data_indices=data_indices, statistics=self._dataset.statistics)
-        #    ] for name, processor in self._processors.items()
-        # ]
+        return [[name, instantiate(processor, dataset=self._dataset)] for name, processor in self._processors.items()]
 
     @property
     def frequency(self) -> timedelta:
@@ -144,7 +129,7 @@ class RecordProvider:
             spec[name] = SourceSpec(data_handler.variables, self._steps[name])
         return RecordSpec(spec)
 
-    def processors(self) -> list["BaseProcessor"]:
+    def processors(self) -> list[BasePreprocessor]:
         return self.data_handlers.processors()
 
     def get_sample_coverage(self) -> dict[GroupName, tuple[np.datetime64, np.datetime64, timedelta]]:
@@ -180,10 +165,10 @@ class SampleProvider:
         self.input = RecordProvider(provider_config.input_provider, data_handlers)
         self.target = RecordProvider(provider_config.target_provider, data_handlers)
 
-    def input_processors(self) -> list["BaseProcessor"]:
+    def input_processors(self) -> list[BasePreprocessor]:
         return self.input.processors()
 
-    def target_processors(self) -> list["BaseProcessor"]:
+    def target_processors(self) -> list[BasePreprocessor]:
         return self.target.processors()
 
     @property
