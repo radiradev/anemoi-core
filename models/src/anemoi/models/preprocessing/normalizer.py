@@ -59,8 +59,6 @@ class InputNormalizer(BasePreprocessor):
         for idx, new_stats in statistics_remap.items():
             minimum[idx], maximum[idx], mean[idx], stdev[idx] = new_stats
 
-        # TODO check that this works when normalization is not applied to forcing variables
-        # print(f"InputNormalizer: name_to_index_training_input = {name_to_index_training_input}")
         self._validate_normalization_inputs(name_to_index_training_input, minimum, maximum, mean, stdev)
 
         _norm_add = np.zeros((minimum.size,), dtype=np.float32)

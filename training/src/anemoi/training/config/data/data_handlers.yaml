@@ -37,8 +37,8 @@ normalizer:
   # "Std" normalization is preferred here over "mean-std" to avoid shifting of the
   # zero value in the normalized space.
   std:
-  # - "tp"
-  # - "cp"
+  - "tp"
+  - "cp"
 
   min-max:
   max:
@@ -46,16 +46,16 @@ normalizer:
   - "slor"
   - "z"
   none:
-  # - "cos_latitude"
-  # - "cos_longitude"
-  # - "sin_latitude"
-  # - "sin_longitude"
-  # - "cos_julian_day"
-  # - "cos_local_time"
-  # - "sin_julian_day"
-  # - "sin_local_time"
-  # - "insolation"
-  # - "lsm"
+  - "cos_latitude"
+  - "cos_longitude"
+  - "sin_latitude"
+  - "sin_longitude"
+  - "cos_julian_day"
+  - "cos_local_time"
+  - "sin_julian_day"
+  - "sin_local_time"
+  - "insolation"
+  - "lsm"
 
 imputer:
   default: "none"

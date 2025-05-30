@@ -1,3 +1,4 @@
+import copy
 import logging
 import random
 from datetime import timedelta
@@ -9,6 +10,7 @@ import numpy as np
 import torch
 from hydra.utils import instantiate
 from omegaconf import DictConfig
+from omegaconf import ListConfig
 from torch.utils.data import IterableDataset
 
 from anemoi.datasets.data import open_dataset
@@ -86,16 +88,36 @@ class DataHandler(BaseDataHandler):
 
 
 class SelectedDataHandler(BaseDataHandler):
-    def __init__(self, dh, select=None):
+    def __init__(self, dh, select=None, processor_config: DictConfig | None = None):
         self._dataset = open_dataset(dh._dataset, select=select)
         self.variables = select
-        self._processors = dh._processors
+        self._processors = processor_config
 
 
-def select(data_handler, select=None):
+def select(data_handler, select: list[str] | None =None):
     if select is None:
         return data_handler
-    return SelectedDataHandler(data_handler, select=select)
+    return SelectedDataHandler(
+        data_handler,
+        select=select,
+        processor_config=_select_variables_from_processors(data_handler._processors, select=select),
+    )
+
+
+def _select_variables_from_processors(processor_config: DictConfig, select: list[str] | None = None) -> DictConfig:
+    if select is None:
+        return processor_config
+
+    filtered_config = copy.deepcopy(processor_config)
+
+    for processor in filtered_config.values():
+        config = processor.get("config", {})
+        for key, value in config.items():
+            if key == "default":
+                continue
+            if isinstance(value, ListConfig):
+                config[key] = [v for v in value if v in select]
+    return filtered_config
 
 
 class RecordProvider:
@@ -115,7 +137,7 @@ class RecordProvider:
                 else provider_config["steps"]
             )
             _data_handlers[key] = select(datahandlers[key], variables)
-
+            print("record provider", key, _data_handlers[key].variables)
         self.data_handlers = DataHandlers(_data_handlers)
 
     @property
