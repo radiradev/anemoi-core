@@ -10,6 +10,7 @@
 
 import pytest
 import torch
+
 from _pytest.fixtures import SubRequest
 from omegaconf import DictConfig
 from torch_geometric.data import HeteroData

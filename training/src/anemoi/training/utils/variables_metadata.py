@@ -14,11 +14,12 @@ from functools import lru_cache
 
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
+from typing import Union
 
 from anemoi.transform.variables import Variable
 
 LOG = logging.getLogger(__name__)
-GROUP_SPEC = str | list[str] | bool
+GROUP_SPEC = Union[str, list[str], bool]
 
 
 @lru_cache
