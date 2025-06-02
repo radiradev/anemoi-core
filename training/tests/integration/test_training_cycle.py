@@ -12,8 +12,8 @@ import os
 from pathlib import Path
 
 import pytest
-
 from omegaconf import DictConfig
+
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.train.train import AnemoiTrainer
 from anemoi.utils.testing import skip_if_offline
