@@ -265,6 +265,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
         authentication: bool | None = None,
         log_hyperparams: bool | None = True,
         on_resume_create_child: bool | None = True,
+        nest_forked_run: bool | None = False,
     ) -> None:
         """Initialize the AnemoiMLflowLogger.
 
@@ -300,6 +301,8 @@ class AnemoiMLflowLogger(MLFlowLogger):
             Whether to log hyperparameters, by default True
         on_resume_create_child: bool | None, optional
             Whether to create a child run when resuming a run, by default False
+        nest_forked_run: bool | None, optional
+            Whether a forked run should also be displayed as nested in mlflow
         """
         self._resumed = resumed
         self._forked = forked
@@ -327,6 +330,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
             fork_run_id=fork_run_id,
             tracking_uri=tracking_uri,
             on_resume_create_child=on_resume_create_child,
+            nest_forked_run=nest_forked_run,
         )
         # Before creating the run we need to overwrite the tracking_uri and save_dir if offline
         if offline:
@@ -386,6 +390,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
         fork_run_id: str,
         tracking_uri: str,
         on_resume_create_child: bool,
+        nest_forked_run: bool, 
     ) -> tuple[str | None, str, dict[str, Any]]:
         run_id = None
         tags = {"projectName": project_name}
@@ -443,6 +448,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
                 run = mlflow_client.get_run(parent_run_id)
                 self._check_server2server_lineage(run)
                 self._check_dry_run(run)
+                if nest_forked_run: tags["mlflow.parentRunId"] = parent_run_id
 
         if not run_name:
             import uuid

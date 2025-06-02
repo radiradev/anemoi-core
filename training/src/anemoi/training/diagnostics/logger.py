@@ -87,6 +87,7 @@ def get_mlflow_logger(config: BaseSchema) -> None:
         log_hyperparams=log_hyperparams,
         authentication=config.diagnostics.log.mlflow.authentication,
         on_resume_create_child=config.diagnostics.log.mlflow.on_resume_create_child,
+        nested=config.diagnostics.log.mlflow.nested,
     )
     config_params = OmegaConf.to_container(convert_to_omegaconf(config), resolve=True)
 

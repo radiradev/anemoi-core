@@ -54,6 +54,7 @@ log:
     terminal: True
     run_name: null # If set to null, the run name will be the a random UUID
     on_resume_create_child: True
+    nest_forked_run: False 
     expand_hyperparams: # Which keys in hyperparams to expand
       - config
     http_max_retries: 35
