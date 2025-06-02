@@ -11,10 +11,10 @@ from __future__ import annotations
 
 import logging
 from functools import lru_cache
+from typing import Union
 
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
-from typing import Union
 
 from anemoi.transform.variables import Variable
 
