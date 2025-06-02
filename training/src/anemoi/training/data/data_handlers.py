@@ -39,8 +39,12 @@ class DataHandlers(dict):
                 self[name] = DataHandler(**data_hanlder)
 
     @property
-    def name_to_index(self) -> dict:
+    def name_to_index(self) -> dict[GroupName, dict[str, int]]:
         return {key: data_handler.name_to_index for key, data_handler in self.items()}
+
+    @property
+    def statistics(self) -> dict[GroupName, dict[str, torch.Tensor]]:
+        return {key: data_handler.statistics for key, data_handler in self.items()}
 
     def processors(self) -> dict[str, list[BasePreprocessor]]:
         return {dh_name: data_handler.processors() for dh_name, data_handler in self.items()}
@@ -66,6 +70,10 @@ class BaseDataHandler:
 
     def processors(self) -> list:
         return [[name, instantiate(processor, dataset=self._dataset)] for name, processor in self._processors.items()]
+
+    @property
+    def statistics(self) -> dict[str, torch.Tensor]:
+        return self._dataset.statistics
 
     @property
     def frequency(self) -> timedelta:
@@ -141,8 +149,16 @@ class RecordProvider:
         self.data_handlers = DataHandlers(_data_handlers)
 
     @property
-    def keys(self) -> list[GroupName]:
+    def group_names(self) -> list[GroupName]:
         return list(self.data_handlers.keys())
+
+    @property
+    def name_to_index(self) -> dict[GroupName, dict[str, int]]:
+        return self.data_handlers.name_to_index
+
+    @property
+    def statistics(self) -> dict[GroupName, dict[str, torch.Tensor]]:
+        return self.data_handlers.statistics
 
     @property
     def spec(self) -> RecordSpec:
@@ -200,7 +216,7 @@ class SampleProvider:
     def spec(self) -> SampleSpec:
         return SampleSpec({"input": self.input.spec, "target": self.target.spec})
 
-    def __getitem__(self, i: int) -> dict[Literal["input", "target"], "Thing"]:
+    def __getitem__(self, i: int) -> dict[Literal["input", "target"], dict[GroupName, dict[str, torch.Tensor]]]:
         return {"input": self.input[i], "target": self.target[i]}
 
 

@@ -115,9 +115,9 @@ class AnemoiMultiModel(nn.Module):
         #    [
         #        instantiate(
         #            cfg,
-        #            name_to_index=self.name_to_index_output,
-        #            statistics=self.statistics,
-        #            name_to_index_stats=self.data_indices.data.input.name_to_index,  # Need to find a solution for this if we want to remove data_indices
+        #            name_to_index=sample_provider.target.name_to_index,
+        #            statistics=sample_provider.input.statistics,
+        #            name_to_index_stats=sample_provider.input.name_to_index,
         #        )
         #        for cfg in getattr(model_config.model, "bounding", [])
         #    ]

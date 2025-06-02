@@ -178,6 +178,7 @@ bounding: #These are applied in order
   - _target_: anemoi.models.layers.bounding.ReluBounding #[0, infinity)
     variables:
     - tp
+    # - era5.tp # it would be nice to support this
 
   # [OPTIONAL] Bound cp (convective precipitation) as a fraction of tp.
   # This guarantees that cp is physically consistent with tp by restricting cp
