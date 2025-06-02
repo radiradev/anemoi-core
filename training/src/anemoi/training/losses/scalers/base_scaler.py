@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from anemoi.training.utils.enums import OutputTensorDim
 from anemoi.training.utils.enums import TensorDim
 
 if TYPE_CHECKING:
@@ -28,7 +29,7 @@ SCALER_DTYPE = tuple[tuple[int], np.ndarray]
 class BaseScaler(ABC):
     """Base class for all loss scalers."""
 
-    scale_dims: tuple[TensorDim] = None
+    scale_dims: tuple[TensorDim | OutputTensorDim] = None
 
     def __init__(self, norm: str | None = None) -> None:
         """Initialise BaseScaler.
@@ -46,7 +47,7 @@ class BaseScaler(ABC):
             "unit-mean",
         ], f"{self.__class__.__name__}.norm must be one of: None, unit-sum, l1, unit-mean"
         assert self.scale_dims is not None, f"Class {self.__class__.__name__} must define 'scale_dims'"
-        if isinstance(self.scale_dims, TensorDim):
+        if isinstance(self.scale_dims, (TensorDim, OutputTensorDim)):
             self.scale_dims = (self.scale_dims,)
 
     @abstractmethod
