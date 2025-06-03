@@ -23,8 +23,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def print_variable_scaling(loss: BaseLoss, data_indices: IndexCollection) -> dict[str, float]:
-    """
-    Log the final variable scaling for each variable in the model and return the scaling values.
+    """Log the final variable scaling for each variable in the model.
 
     Parameters
     ----------
@@ -42,7 +41,7 @@ def print_variable_scaling(loss: BaseLoss, data_indices: IndexCollection) -> dic
     log_text = "Final Variable Scaling: "
     scaling_values = {}
 
-    for idx, name in enumerate(data_indices.internal_model.output.name_to_index.keys()):
+    for idx, name in enumerate(data_indices.model.output.name_to_index.keys()):
         value = float(variable_scaling[idx])
         log_text += f"{name}: {value:.4g}, "
         scaling_values[name] = value
