@@ -22,7 +22,7 @@ from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.khop_edges import sort_edges_1hop_sharding
 from anemoi.models.distributed.shapes import change_channels_in_shape
 from anemoi.models.distributed.shapes import get_shape_shards
-from anemoi.models.layers.chunk import GNNProcessorChunk
+from anemoi.models.layers.chunk import GNNProcessorChunk, PointMLPProcessorChunk
 from anemoi.models.layers.chunk import GraphTransformerProcessorChunk
 from anemoi.models.layers.chunk import TransformerProcessorChunk
 from anemoi.models.layers.graph import TrainableTensor
@@ -85,6 +85,50 @@ class BaseProcessor(nn.Module, ABC):
         x = self.run_layers((x,), *args, **kwargs)
         return x
 
+
+class PointMLP(BaseProcessor):
+    def __init__(
+        self, 
+        *,
+        num_layers: int,
+        num_channels: int,
+        num_chunks: int,
+        mlp_hidden_ratio: int,
+        cpu_offload: bool = False,
+        dropout_p: float = None,
+        layer_kernels: DotDict,
+        **kwargs,
+    ):
+        super().__init__(
+            num_layers=num_layers,
+            num_channels=num_channels,
+            num_chunks=num_chunks,
+            cpu_offload=cpu_offload,
+            layer_kernels=layer_kernels,
+        )
+
+        self.build_layers(
+            PointMLPProcessorChunk,
+            num_channels=num_channels,
+            num_layers=self.chunk_size,
+            layer_kernels=self.layer_factory,
+            mlp_hidden_ratio=mlp_hidden_ratio,
+            dropout_p=dropout_p,
+        )
+
+        self.offload_layers(cpu_offload)
+
+    def forward(
+        self,
+        x: Tensor,
+        batch_size: int,
+        shard_shapes: tuple[tuple[int], tuple[int]],
+        model_comm_group: Optional[ProcessGroup] = None,
+        *args,
+        **kwargs,
+    ) -> Tensor:
+        return x
+    
 
 class TransformerProcessor(BaseProcessor):
     """Transformer Processor."""
