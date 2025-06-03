@@ -172,7 +172,7 @@ class RecordProvider:
 
     def get_sample_coverage(self) -> dict[GroupName, tuple[np.datetime64, np.datetime64, timedelta]]:
         coverage = {}
-        for dh_key in self.keys:
+        for dh_key in self.group_names:
             coverage[dh_key] = (
                 self.data_handlers[dh_key].start_date,
                 self.data_handlers[dh_key].end_date,
@@ -182,7 +182,7 @@ class RecordProvider:
 
     def get_steps(self, i: int) -> dict[GroupName, list[int]]:
         steps = {}
-        for dh_key in self.keys:
+        for dh_key in self.group_names:
             steps[dh_key] = [i + l for l in self._steps[dh_key]]
         return steps
 
