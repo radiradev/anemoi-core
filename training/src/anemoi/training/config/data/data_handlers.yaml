@@ -21,6 +21,15 @@ data_handlers:
       #   _target_: anemoi.models.preprocessing.remapper.Remapper
       #   _convert_: all
       #   config: ${data.remapper}
+  amsr2: 
+    dataset: 
+      dataset: ${hardware.files.dataset}
+      select: ['amsr2_h180.*']
+      "window": "(-6h, 0]",
+  airs: 
+    dataset: 
+      dataset: ${hardware.files.dataset}
+      select: ['aqua_airs_radiances.*']
 
 
 normalizer:

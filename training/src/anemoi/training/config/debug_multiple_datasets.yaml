@@ -34,6 +34,7 @@ hardware:
   paths:
     data: None
     output: ${oc.env:HPCPERM}/aifs/refactor/
+    obs_dataset: ???
   accelerator: auto
   num_gpus_per_node: 1
   num_nodes: 1

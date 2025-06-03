@@ -50,6 +50,24 @@ input_provider:
     - "z_700"
     - "z_1000"
     steps: [-1, 0]
+  amsr2:
+    variables:
+    - rawbt_1
+    - rawbt_2
+    - rawbt_3
+    - azimuth
+    - cos_vaa
+    - cos_sza
+    steps: [-1]
+  airs:
+    variables:
+    - rawbt_1
+    - rawbt_40
+    - rawbt_221
+    - solar_zenith
+    - cos_vza
+    - cos_sza
+    steps: [-1]
 target_provider:
   era5:
     variables:
