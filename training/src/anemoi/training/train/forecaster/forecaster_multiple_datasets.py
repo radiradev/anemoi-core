@@ -254,10 +254,8 @@ class GraphForecasterMultiDataset(pl.LightningModule):
 
         """
         # for validation not normalized in-place because remappers cannot be applied in-place
-        batch["input"] = {"era5": self.model.input_pre_processors(batch["input"]["era5"], in_place=not validation_mode)}
-        batch["target"] = {
-            "era5": self.model.target_pre_processors(batch["target"]["era5"], in_place=not validation_mode),
-        }
+        batch["input"] = self.model.input_pre_processors(batch["input"], in_place=not validation_mode)
+        batch["target"] = self.model.target_pre_processors(batch["target"], in_place=not validation_mode)
 
         # Delayed scalers need to be initialized after the pre-processors once
         if False:  # self.is_first_step:

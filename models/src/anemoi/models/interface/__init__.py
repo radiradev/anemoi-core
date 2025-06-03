@@ -79,9 +79,9 @@ class AnemoiModelInterface(torch.nn.Module):
         target_processors = self.sample_provider.target_processors()
 
         # Assign the processor list pre- and post-processors
-        self.input_pre_processors = Processors(input_preprocessors["era5"])
-        self.target_pre_processors = Processors(target_processors["era5"])
-        self.target_post_processors = Processors(target_processors["era5"], inverse=True)
+        self.input_pre_processors = Processors(input_preprocessors)
+        self.target_pre_processors = Processors(target_processors)
+        self.target_post_processors = Processors(target_processors, inverse=True)
 
         # Instantiate the model
         self.model = AnemoiMultiModel(

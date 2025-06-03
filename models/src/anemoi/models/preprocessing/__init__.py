@@ -133,7 +133,7 @@ class BasePreprocessor(nn.Module):
         return x
 
 
-class Processors(nn.Module):
+class _Processors(nn.Module):
     """A collection of processors."""
 
     def __init__(self, processors: list[BasePreprocessor], inverse: bool = False) -> None:
@@ -189,3 +189,21 @@ class Processors(nn.Module):
             assert not torch.isnan(
                 x
             ).any(), f"NaNs ({torch.isnan(x).sum()}) found in processed tensor after {self.__class__.__name__}."
+
+
+class Processors(nn.Module):
+    def __init__(self, processors: dict[str, list[BasePreprocessor]], inverse: bool = False) -> None:
+
+        self.dic = {k: _Processors(v, inverse) for k, v in processors.items()}
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.dic})"
+
+    def forward(self, x, in_place: bool = True):
+        assert isinstance(x, dict)
+        if in_place:
+            for k in x.keys():
+                x[k] = self.dic[k].forward(x[k], in_place=in_place)
+            return x
+        else:
+            return {k: self.dic[k].forward(x[k], in_place=in_place) for k in x.keys()}
