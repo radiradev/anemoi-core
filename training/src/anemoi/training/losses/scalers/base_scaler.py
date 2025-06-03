@@ -13,6 +13,7 @@ import logging
 from abc import ABC
 from abc import abstractmethod
 from typing import TYPE_CHECKING
+from typing import Optional
 
 import numpy as np
 
@@ -80,6 +81,18 @@ class BaseScaler(ABC):
             Scaler values
         """
         scaler_values = self.get_scaling_values()
+        scaler_values = self.normalise(scaler_values)
+        scale_dims = tuple(x.value for x in self.scale_dims)
+        return scale_dims, scaler_values
+
+
+class TimeVaryingScaler(BaseScaler):
+
+    @abstractmethod
+    def get_scaling_values(self, lead_time: Optional[int] = None, **kwargs) -> np.ndarray: ...
+
+    def get_time_varying_scaler(self, lead_time: Optional[int] = None, **kwargs) -> SCALER_DTYPE:
+        scaler_values = self.get_scaling_values(lead_time, **kwargs)
         scaler_values = self.normalise(scaler_values)
         scale_dims = tuple(x.value for x in self.scale_dims)
         return scale_dims, scaler_values

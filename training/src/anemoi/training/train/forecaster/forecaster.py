@@ -184,6 +184,15 @@ class GraphForecaster(pl.LightningModule):
             self.scalers[name] = scaler_builder.get_delayed_scaling(model=self.model)
             self.loss.update_scaler(scaler=self.scalers[name][1], name=name)
 
+    def define_time_varying_scaling(self, lead_time: int) -> None:
+        """Update time varying scalers such as lead time decay scaling."""
+        for name, scaler_builder in self.time_varying_scalers.items():
+            self.scalers[name] = scaler_builder.get_scaling_values(lead_time=lead_time)
+            if self.loss.scaler.has_scaler(name):
+                self.loss.update_scaler(scaler=self.scalers[name][1], name=name)
+            else:
+                self.loss.add_scaler(*self.scalers[name], name=name)
+
     def set_model_comm_group(
         self,
         model_comm_group: ProcessGroup,
@@ -299,6 +308,7 @@ class GraphForecaster(pl.LightningModule):
 
             y = batch[:, self.multi_step + rollout_step, ..., self.data_indices.internal_data.output.full]
             # y includes the auxiliary variables, so we must leave those out when computing the loss
+            self.define_time_varying_scaling(rollout_step + 1)
             loss = checkpoint(self.loss, y_pred, y, use_reentrant=False) if training_mode else None
 
             x = self.advance_input(x, y_pred, batch, rollout_step)
