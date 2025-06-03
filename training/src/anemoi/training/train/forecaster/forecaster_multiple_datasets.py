@@ -24,6 +24,7 @@ from anemoi.training.data.data_handlers import SampleProvider
 from anemoi.training.data.utils import RecordProviderName
 from anemoi.training.losses import get_loss_function
 from anemoi.training.losses.base import BaseLoss
+from anemoi.training.losses.dict import DictLoss
 from anemoi.training.losses.scaler_tensor import grad_scaler
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.schemas.base_schema import convert_to_omegaconf
@@ -364,10 +365,14 @@ class GraphForecasterMultiDataset(pl.LightningModule):
             validation metrics and predictions
         """
         metrics = {}
-        y_postprocessed = {"era5": self.model.target_post_processors(y["era5"], in_place=False)}
-        y_pred_postprocessed = {"era5": self.model.target_post_processors(y_pred["era5"], in_place=False)}
+        y_postprocessed = self.model.target_post_processors(y, in_place=False)
+        y_pred_postprocessed = self.model.target_post_processors(y_pred, in_place=False)
 
         for metric_name, metric in self.metrics.items():
+
+            if isinstance(metric, BaseLoss):
+                assert isinstance(metric, DictLoss), type(metric)
+
             if not isinstance(metric, BaseLoss):
                 # If not a loss, we cannot feature scale, so call normally
                 metrics[f"{metric_name}_metric/{rollout_step + 1}"] = metric(y_pred_postprocessed, y_postprocessed)

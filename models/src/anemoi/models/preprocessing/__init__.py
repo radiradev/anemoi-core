@@ -194,13 +194,14 @@ class _Processors(nn.Module):
 class Processors(nn.Module):
     def __init__(self, processors: dict[str, list[BasePreprocessor]], inverse: bool = False) -> None:
 
-        self.dic = {k: _Processors(v, inverse) for k, v in processors.items()}
+        super().__init__()
+        self.dic = nn.ModuleDict({k: _Processors(v, inverse) for k, v in processors.items()})
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.dic})"
 
     def forward(self, x, in_place: bool = True):
-        assert isinstance(x, dict)
+        assert isinstance(x, dict) , type(x)
         if in_place:
             for k in x.keys():
                 x[k] = self.dic[k].forward(x[k], in_place=in_place)
