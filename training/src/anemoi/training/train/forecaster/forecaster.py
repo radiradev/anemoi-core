@@ -106,7 +106,7 @@ class GraphForecaster(pl.LightningModule):
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
         # Instantiate all scalers with the training configuration
-        self.scalers, self.delayed_scaler_builders = create_scalers(
+        self.scalers, self.delayed_scaler_builders, self.time_varying_scalers = create_scalers(
             config.model_dump(by_alias=True).training.scalers,
             group_config=config.model_dump(by_alias=True).training.variable_groups,
             data_indices=data_indices,
