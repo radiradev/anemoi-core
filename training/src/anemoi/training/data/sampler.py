@@ -77,6 +77,8 @@ class AnemoiSampler(BaseAnemoiSampler):
                 prev_steps, future_steps = min(steps), max(steps)
 
                 freq = np.timedelta64(freq_td)
+                start_date = np.datetime64(start_date)
+                end_date = np.datetime64(end_date)
                 min_valid_time = start_date + prev_steps * freq
                 max_valid_time = end_date - future_steps * freq
                 is_within_range = (self.time_values >= min_valid_time) & (self.time_values <= max_valid_time)

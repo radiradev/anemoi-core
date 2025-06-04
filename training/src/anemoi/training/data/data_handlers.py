@@ -60,35 +60,39 @@ class DataHandlers(dict):
 
 class BaseDataHandler:
     def __init__(self, dataset: str | dict, processors: DictConfig | None = None):
-        self._dataset = open_dataset(dataset)
+        self._dataset = dataset
+        self._processors = DictConfig({}) if processors is None else processors
         self.variables = None
-        self._processors = processors
+
+    @property
+    def dataset(self):
+        return open_dataset(self._dataset)
 
     @property
     def name_to_index(self):
         return self._dataset.name_to_index
 
     def processors(self) -> list:
-        return [[name, instantiate(processor, dataset=self._dataset)] for name, processor in self._processors.items()]
+        return [[name, instantiate(processor, dataset=self.dataset)] for name, processor in self._processors.items()]
 
     @property
     def statistics(self) -> dict[str, torch.Tensor]:
-        return self._dataset.statistics
+        return self.dataset.statistics
 
     @property
     def frequency(self) -> timedelta:
-        return self._dataset.frequency
+        return self.dataset.frequency
 
     @property
     def start_date(self):
-        return self._dataset.start_date
+        return self.dataset.start_date
 
     @property
     def end_date(self):
-        return self._dataset.end_date
+        return self.dataset.end_date
 
     def __getitem__(self, *args, **kwargs):
-        return self._dataset.__getitem__(*args, **kwargs)
+        return self.dataset.__getitem__(*args, **kwargs)
 
 
 class DataHandler(BaseDataHandler):
@@ -96,10 +100,9 @@ class DataHandler(BaseDataHandler):
 
 
 class SelectedDataHandler(BaseDataHandler):
-    def __init__(self, dh, select=None, processor_config: DictConfig | None = None):
-        self._dataset = open_dataset(dh._dataset, select=select)
+    def __init__(self, dh: BaseDataHandler, select: list[str] = None, processors: DictConfig | None = None):
+        super().__init__(dh._dataset, processors=processors)
         self.variables = select
-        self._processors = processor_config
 
 
 def select(data_handler, select: list[str] | None =None):
@@ -108,7 +111,7 @@ def select(data_handler, select: list[str] | None =None):
     return SelectedDataHandler(
         data_handler,
         select=select,
-        processor_config=_select_variables_from_processors(data_handler._processors, select=select),
+        processors=_select_variables_from_processors(data_handler._processors, select=select),
     )
 
 
