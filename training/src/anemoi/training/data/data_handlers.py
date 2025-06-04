@@ -113,7 +113,7 @@ def select(data_handler, select: list[str] | None =None):
 
 
 def _select_variables_from_processors(processor_config: DictConfig, select: list[str] | None = None) -> DictConfig:
-    if select is None:
+    if select is None or processor_config is None:
         return processor_config
 
     filtered_config = copy.deepcopy(processor_config)

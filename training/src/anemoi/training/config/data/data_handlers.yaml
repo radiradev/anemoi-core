@@ -25,7 +25,7 @@ data_handlers:
     dataset: 
       dataset: ${hardware.paths.obs_dataset}/obs-2018-11.vz
       select: ['amsr2_h180.*']
-      "window": "(-6h, 0]"
+      #"window": "(-6h, 0]"
   airs: 
     dataset: 
       dataset: ${hardware.paths.obs_dataset}/obs-2018-11.vz
