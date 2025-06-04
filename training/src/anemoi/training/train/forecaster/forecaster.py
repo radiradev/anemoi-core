@@ -215,7 +215,7 @@ class GraphForecaster(pl.LightningModule):
         x = x.roll(-1, dims=1)
 
         # apply rollout-training post-processors to model output variables
-        y_pred = self.model.post_processors_in_rollout_training(y_pred)
+        y_pred = self.model.post_processors(y_pred, in_advance_input=True)
 
         # Get prognostic variables
         x[:, -1, :, :, self.data_indices.internal_model.input.prognostic] = y_pred[
@@ -224,7 +224,7 @@ class GraphForecaster(pl.LightningModule):
         ]
 
         # apply rollout-training pre-processors to model input variables
-        x[:, -1, :, :, self.data_indices.internal_model.input.full] = self.model.pre_processors_in_rollout_training(
+        x[:, -1, :, :, self.data_indices.internal_model.input.full] = self.model.pre_processors(
             x[
                 :,
                 -1,
@@ -232,6 +232,7 @@ class GraphForecaster(pl.LightningModule):
                 :,
                 self.data_indices.internal_model.input.full,
             ],
+            in_advance_input=True,
         )
 
         x[:, -1] = self.output_mask.rollout_boundary(

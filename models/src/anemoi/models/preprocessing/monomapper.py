@@ -115,9 +115,11 @@ class Monomapper(BasePreprocessor, ABC):
             else:
                 raise KeyError[f"Unknown remapping method for {name}: {method}"]
 
-    def transform(self, x, in_place: bool = True) -> torch.Tensor:
+    def transform(self, x, in_place: bool = True, in_advance_input: bool = False) -> torch.Tensor:
         if not in_place:
             x = x.clone()
+        if in_advance_input:
+            return x
         if x.shape[-1] == self.num_training_input_vars:
             idx = self.index_training_input
         elif x.shape[-1] == self.num_inference_input_vars:
@@ -132,9 +134,11 @@ class Monomapper(BasePreprocessor, ABC):
                 x[..., i] = remapper(x[..., i])
         return x
 
-    def inverse_transform(self, x, in_place: bool = True) -> torch.Tensor:
+    def inverse_transform(self, x, in_place: bool = True, in_advance_input: bool = False) -> torch.Tensor:
         if not in_place:
             x = x.clone()
+        if in_advance_input:
+            return x
         if x.shape[-1] == self.num_training_output_vars:
             idx = self.index_training_out
         elif x.shape[-1] == self.num_inference_output_vars:

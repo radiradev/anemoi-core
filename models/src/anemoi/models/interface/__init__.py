@@ -86,9 +86,6 @@ class AnemoiModelInterface(torch.nn.Module):
         self.pre_processors = Processors(processors)
         self.post_processors = Processors(processors, inverse=True)
 
-        self.pre_processors_in_rollout_training = Processors(processors, in_rollout_training=True)
-        self.post_processors_in_rollout_training = Processors(processors, inverse=True, in_rollout_training=True)
-
         # Instantiate the model
         self.model = instantiate(
             self.config.model.model,

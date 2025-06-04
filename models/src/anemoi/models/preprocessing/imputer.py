@@ -46,7 +46,6 @@ class BaseImputer(BasePreprocessor, ABC):
         self.nan_locations = None
         # weight imputed values with zero in loss calculation
         self.loss_mask_training = None
-        self.apply_in_rollout_training = True
 
     def _validate_indices(self):
         assert len(self.index_training_input) == len(self.index_inference_input) <= len(self.replacement), (
@@ -139,10 +138,13 @@ class BaseImputer(BasePreprocessor, ABC):
         # Replace values
         return self.fill_with_value(x, index)
 
-    def transform(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
+    def transform(self, x: torch.Tensor, in_place: bool = True, in_advance_input=False) -> torch.Tensor:
         """Impute missing values in the input tensor."""
         if not in_place:
             x = x.clone()
+
+        if in_advance_input:
+            return self.transform_in_rollout(self, x)
 
         # Reset NaN locations outside of training for validation and inference.
         if not self.training:
@@ -177,10 +179,13 @@ class BaseImputer(BasePreprocessor, ABC):
         # Replace values
         return self.fill_with_value(x, index)
 
-    def inverse_transform(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
+    def inverse_transform(self, x: torch.Tensor, in_place: bool = True, in_advance_input=False) -> torch.Tensor:
         """Impute missing values in the input tensor."""
         if not in_place:
             x = x.clone()
+
+        if in_advance_input:
+            return x
 
         # Replace original nans with nan again
         if x.shape[-1] == self.num_training_output_vars:
@@ -331,39 +336,6 @@ class CopyImputer(BaseImputer):
                 ][self._expand_subset_mask(x, idx_src)]
         return x
 
-    def transform(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
-        """Impute missing values in the input tensor."""
-        if not in_place:
-            x = x.clone()
-
-        # Initialize nan mask once
-        if self.nan_locations is None:
-
-            # Get NaN locations
-            self.nan_locations = self.get_nans(x)
-
-            # Initialize training loss mask to weigh imputed values with zeroes once
-            self.loss_mask_training = torch.ones(
-                (x.shape[-2], len(self.data_indices.model.output.name_to_index)), device=x.device
-            )  # shape (grid, n_outputs)
-            # for all variables that are imputed and part of the model output, set the loss weight to zero
-            for idx_src, idx_dst in zip(self.index_training_input, self.index_inference_output):
-                if idx_dst is not None:
-                    self.loss_mask_training[:, idx_dst] = (~self.nan_locations[:, idx_src]).int()
-
-        # Choose correct index based on number of variables
-        if x.shape[-1] == self.num_training_input_vars:
-            index = self.index_training_input
-        elif x.shape[-1] == self.num_inference_input_vars:
-            index = self.index_inference_input
-        else:
-            raise ValueError(
-                f"Input tensor ({x.shape[-1]}) does not match the training "
-                f"({self.num_training_input_vars}) or inference shape ({self.num_inference_input_vars})",
-            )
-
-        return self.fill_with_value(x, index)
-
 
 class DynamicMixin:
     """Mixin to add dynamic imputation behavior.
@@ -381,10 +353,13 @@ class DynamicMixin:
                 x[..., idx][nan_locations[..., idx]] = value
         return x
 
-    def transform(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
+    def transform(self, x: torch.Tensor, in_place: bool = True, in_advance_input=False) -> torch.Tensor:
         """Impute missing values in the input tensor."""
         if not in_place:
             x = x.clone()
+
+        if in_advance_input:
+            return x
 
         # Initilialize mask every time
         nan_locations = self.get_nans(x)
@@ -406,7 +381,7 @@ class DynamicMixin:
 
         return self.fill_with_value(x, index, nan_locations)
 
-    def inverse_transform(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
+    def inverse_transform(self, x: torch.Tensor, in_place: bool = True, in_advance_input=False) -> torch.Tensor:
         """Impute missing values in the input tensor."""
         return x
 
@@ -477,10 +452,10 @@ class DynamicCopyImputer(DynamicMixin, CopyImputer):
                 x[..., idx][nan_locations[..., idx]] = x[..., indices[value]][nan_locations[..., idx]]
         return x
 
-    def transform(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
+    def transform(self, x: torch.Tensor, in_place: bool = True, in_advance_input=False) -> torch.Tensor:
         """Impute missing values in the input tensor."""
-        return DynamicMixin.transform(self, x, in_place)
+        return DynamicMixin.transform(self, x, in_place, in_advance_input)
 
-    def inverse_transform(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
+    def inverse_transform(self, x: torch.Tensor, in_place: bool = True, in_advance_input=False) -> torch.Tensor:
         """Impute missing values in the input tensor."""
-        return DynamicMixin.inverse_transform(self, x, in_place)
+        return DynamicMixin.inverse_transform(self, x, in_place, in_advance_input)
