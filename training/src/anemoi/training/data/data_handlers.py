@@ -32,11 +32,11 @@ class Stage(Enum):
 
 class DataHandlers(dict):
     def __init__(self, config: dict[str, dict]):
-        for name, data_hanlder in config.items():
-            if isinstance(data_hanlder, BaseDataHandler):
-                self[name] = data_hanlder
+        for name, data_handler in config.items():
+            if isinstance(data_handler, BaseDataHandler):
+                self[name] = data_handler
             else:
-                self[name] = DataHandler(**data_hanlder)
+                self[name] = instantiate(data_handler, name=name)
 
     @property
     def name_to_index(self) -> dict[GroupName, dict[str, int]]:
@@ -56,6 +56,9 @@ class DataHandlers(dict):
 
             # TODO: What do we want to check ???
             # no_overlap vs is_completely_before
+        
+    def __getitem__(self, key: str, *args, **kwargs):
+        return self[key].__getitem__(*args, **kwargs)
 
 
 class BaseDataHandler:
@@ -91,12 +94,23 @@ class BaseDataHandler:
     def end_date(self):
         return self.dataset.end_date
 
-    def __getitem__(self, *args, **kwargs):
+    def __getitem__(self, *args, **kwargs): 
         return self.dataset.__getitem__(*args, **kwargs)
 
 
-class DataHandler(BaseDataHandler):
+class FieldDataHandler(BaseDataHandler):
     pass
+    
+
+class ObsDataHandler(BaseDataHandler):
+    def __getitem__(self, *args, **kwargs):
+        assert len(*args) > 0, "args should be specified"
+        if isinstance(args[0], list):
+            return [self.__getitem__(x, *args[1:], **kwargs) for x in args[0]]
+        elif isinstance(args[0], int):
+            return super().__getitem__(*args, **kwargs)
+        else:
+            raise ValueError()
 
 
 class SelectedDataHandler(BaseDataHandler):
@@ -108,6 +122,7 @@ class SelectedDataHandler(BaseDataHandler):
 def select(data_handler, select: list[str] | None =None):
     if select is None:
         return data_handler
+    
     return SelectedDataHandler(
         data_handler,
         select=select,
@@ -192,7 +207,7 @@ class RecordProvider:
     def __getitem__(self, i: int) -> dict[GroupName, list[torch.Tensor]]:
         records = {}
         for group_name, dh_steps in self.get_steps(i).items():
-            x = self.data_handlers[group_name][dh_steps, :, :, :]
+            x = self.data_handlers[group_name, dh_steps]
             x = einops.rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
             self.ensemble_dim = 1
             records[group_name] = torch.from_numpy(x)

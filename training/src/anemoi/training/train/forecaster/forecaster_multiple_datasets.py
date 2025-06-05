@@ -29,6 +29,11 @@ from anemoi.training.losses.scaler_tensor import grad_scaler
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.schemas.base_schema import convert_to_omegaconf
 from anemoi.training.utils.enums import TensorDim
+from anemoi.graphs.edges import CutOffEdges
+from anemoi.graphs.edges import KNNEdges
+from anemoi.graphs.nodes import LatLonNodes
+from anemoi.utils.config import DotDict
+
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -39,6 +44,42 @@ if TYPE_CHECKING:
 
 
 LOGGER = logging.getLogger(__name__)
+
+class DynamicGraphEditor:
+    """Dynamic Graph Editor"""
+
+    _IN_DATA_NAME: str = "data_in"
+    _OUT_DATA_NAME: str = "data_out"
+
+    def __init__(self, hidden_nodes_name: str, edge_attributes: DotDict):
+        self._hidden_data_nodes_name = hidden_nodes_name
+        self.edge_attributes = edge_attributes
+
+        self.enc_edge_builder = CutOffEdges(self._IN_DATA_NAME, self._hidden_data_nodes_name, cutoff_factor=0.7)
+        self.dec_edge_builder = KNNEdges(self._hidden_data_nodes_name, self._OUT_DATA_NAME, num_nearest_neighbours=5)
+
+    def add_nodes(self, graph: HeteroData, in_latlons: torch.Tensor, out_latlons: torch.Tensor) -> HeteroData:
+        graph = LatLonNodes(
+            latitudes=in_latlons[:, 0], longitudes=in_latlons[:, 1], name=self._IN_DATA_NAME
+        ).update_graph(graph)
+        graph = LatLonNodes(
+            latitudes=out_latlons[:, 0], longitudes=out_latlons[:, 1], name=self._OUT_DATA_NAME
+        ).update_graph(graph)
+        return graph
+
+    def add_edges(self, graph: HeteroData) -> HeteroData:
+        graph = self.enc_edge_builder.update_graph(graph, self.edge_attributes)
+        graph = self.dec_edge_builder.update_graph(graph, self.edge_attributes)
+        return graph
+
+    def update_graph(self, graph: HeteroData, x_latlons: torch.Tensor, y_latlons: torch.Tensor) -> HeteroData:
+        if x_latlons.size() == 0 or y_latlons.size() == 0:
+            return graph
+        
+        graph = graph.copy()
+        graph = self.add_nodes(graph, x_latlons, y_latlons)
+        graph = self.add_edges(graph)
+        return graph.to(x_latlons.device)
 
 
 class GraphForecasterMultiDataset(pl.LightningModule):
@@ -66,7 +107,7 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         """
         super().__init__()
 
-        graph_data = graph_data.to(self.device)
+        self.graph_data = graph_data.to(self.device)
 
         # TODO: Handle supporting arrays for multiple output masks (multiple outputs)
         # (It is handled in the loss function, but not the version here that is sent to model for supporting_arrays)
@@ -79,6 +120,9 @@ class GraphForecasterMultiDataset(pl.LightningModule):
             graph_data=graph_data,
             config=convert_to_omegaconf(config),
         )
+        self.indexer = sample_provider.get_indexer()
+        self.graph_editor = DynamicGraphEditor("hidden", DotDict({}))
+
         self.config = config
         # self.model_data_indices = {self.datasets[0]: self.model.model.data_indices}  # TODO: generalize
 
@@ -265,8 +309,13 @@ class GraphForecasterMultiDataset(pl.LightningModule):
 
         assert rollout in [1, None], "Rollout NOT IMPLEMENTED yet"
         for rollout_step in range(rollout or self.rollout):
+            input_latlons = self.indexer.get_latlons(batch["input"])  # (G, S=1, B, 2)
+            target_latlons = self.indexer.get_latlons(batch["target"])  # (G, S=1, B, 2)
+
+            graph = self.graph_editor.update_graph(self.graph_data, input_latlons, target_latlons)
+
             # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
-            y_pred = self(batch["input"])
+            y_pred = self(batch["input"], graph)
 
             # y includes the auxiliary variables, so we must leave those out when computing the loss
             loss = checkpoint(self.loss, y_pred, batch["target"], use_reentrant=False) if training_mode else None
