@@ -101,7 +101,7 @@ validation_metrics:
 #     pl:
 #        is_pressure_level: True
 # See `anemoi.transform.variables.Variable` for the available metadata.
-# Note that the former formulation of 
+# Note that the former formulation of
 # :
 # variable_groups:
 #  default: sfc
