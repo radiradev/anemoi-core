@@ -18,7 +18,6 @@ from torch.distributed.distributed_c10d import ProcessGroup
 from torch_geometric.data import HeteroData
 
 from anemoi.models.distributed.shapes import get_shape_shards
-from anemoi.models.layers.utils import load_layer_kernels
 from anemoi.models.models import AnemoiModelEncProcDec
 from anemoi.utils.config import DotDict
 
@@ -48,15 +47,14 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
         model_config = DotDict(model_config)
         self.noise_injector = instantiate(
             model_config.model.noise_injector,
+            _recursive_=False,
             num_channels=self.num_channels,
-            layer_kernels=load_layer_kernels(model_config.get("model.layer_kernels.noise_injector", {})),
         )
 
-    def _calculate_input_dim(self, model_config):
-        input_dim = self.multi_step * self.num_input_channels + self.node_attributes.attr_ndims[self._graph_name_data]
-        input_dim += self.num_input_channels_prognostic
-        input_dim += 1
-        return input_dim
+    def _calculate_shapes_and_indices(self, data_indices: dict) -> None:
+        super()._calculate_shapes_and_indices(data_indices)
+        self.input_dim += self.num_input_channels_prognostic
+        self.input_dim += 1
 
     def _assemble_input(self, x, fcstep, bse):
         x_skip = x[:, -1, :, :, self._internal_input_idx]
@@ -116,6 +114,8 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
                 Forecast step
             model_comm_group: Optional[ProcessGroup], optional
                 Model communication group
+            **kwargs: Additional keyword arguments
+
         Returns:
             Output tensor
         """
