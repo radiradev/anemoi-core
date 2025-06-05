@@ -118,12 +118,16 @@ class GraphForecaster(pl.LightningModule):
             metadata["dataset"].get("variables_metadata"),
         )
 
-        self.loss = get_loss_function(config.model_dump(by_alias=True).training.training_loss, scalers=self.scalers)
-        print_variable_scaling(self.loss, data_indices)
+        self.loss = get_loss_function(
+            config.model_dump(by_alias=True).training.training_loss,
+            scalers=self.scalers,
+            data_indices=self.data_indices,
+        )
+        self._scaling_values = print_variable_scaling(self.loss, data_indices)
 
         self.metrics = torch.nn.ModuleDict(
             {
-                metric_name: get_loss_function(val_metric_config, scalers=self.scalers)
+                metric_name: get_loss_function(val_metric_config, scalers=self.scalers, data_indices=self.data_indices)
                 for metric_name, val_metric_config in config.model_dump(
                     by_alias=True,
                 ).training.validation_metrics.items()
@@ -320,7 +324,7 @@ class GraphForecaster(pl.LightningModule):
         ):
             loss += loss_next
             metrics.update(metrics_next)
-            y_preds.extend(y_preds_next)
+            y_preds.append(y_preds_next)
 
         loss *= 1.0 / self.rollout
         return loss, metrics, y_preds
@@ -392,12 +396,12 @@ class GraphForecaster(pl.LightningModule):
         for metric_name, metric in self.metrics.items():
             if not isinstance(metric, BaseLoss):
                 # If not a loss, we cannot feature scale, so call normally
-                metrics[f"{metric_name}/{rollout_step + 1}"] = metric(y_pred_postprocessed, y_postprocessed)
+                metrics[f"{metric_name}_metric/{rollout_step + 1}"] = metric(y_pred_postprocessed, y_postprocessed)
                 continue
 
             for mkey, indices in self.val_metric_ranges.items():
-                metric_step_name = f"{metric_name}/{mkey}/{rollout_step + 1}"
-                if len(metric.scaler.subset_by_dim(TensorDim.VARIABLE)):
+                metric_step_name = f"{metric_name}_metric/{mkey}/{rollout_step + 1}"
+                if len(metric.scaler.subset_by_dim(TensorDim.VARIABLE.value)):
                     exception_msg = (
                         "Validation metrics cannot be scaled over the variable dimension"
                         " in the post processed space."
@@ -451,8 +455,7 @@ class GraphForecaster(pl.LightningModule):
         self.rollout = min(self.rollout, self.rollout_max)
 
     def validation_step(self, batch: torch.Tensor, batch_idx: int) -> None:
-        """
-        Calculate the loss over a validation batch using the training loss function.
+        """Calculate the loss over a validation batch using the training loss function.
 
         Parameters
         ----------
@@ -521,3 +524,10 @@ class GraphForecaster(pl.LightningModule):
         )
 
         return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
+
+    def setup(self, stage: str) -> None:
+        """Lightning hook that is called after model is initialized but before training starts."""
+        # Log variable scaling on rank 0
+        # The two ifs should be separate, but are combined due to pre-commit hook
+        if stage == "fit" and self.trainer.is_global_zero:
+            self.logger.log_hyperparams({"variable_scaling": self._scaling_values})

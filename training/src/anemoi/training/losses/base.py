@@ -19,6 +19,7 @@ import torch
 from torch import nn
 
 from anemoi.training.losses.scaler_tensor import ScaleTensor
+from anemoi.training.utils.enums import TensorDim
 
 LOGGER = logging.getLogger(__name__)
 
@@ -58,11 +59,11 @@ class BaseLoss(nn.Module, ABC):
         self.avg_function = torch.nanmean if ignore_nans else torch.mean
         self.sum_function = torch.nansum if ignore_nans else torch.sum
 
-    @functools.wraps(ScaleTensor.add_scaler, assigned=("__doc__", "__annotations__"))
+    @functools.wraps(ScaleTensor.add_scaler)
     def add_scaler(self, dimension: int | tuple[int], scaler: torch.Tensor, *, name: str | None = None) -> None:
         self.scaler.add_scaler(dimension=dimension, scaler=scaler, name=name)
 
-    @functools.wraps(ScaleTensor.update_scaler, assigned=("__doc__", "__annotations__"))
+    @functools.wraps(ScaleTensor.update_scaler)
     def update_scaler(self, name: str, scaler: torch.Tensor, *, override: bool = False) -> None:
         self.scaler.update_scaler(name=name, scaler=scaler, override=override)
 
@@ -96,6 +97,15 @@ class BaseLoss(nn.Module, ABC):
         if len(self.scaler) == 0:
             return x[subset_indices]
 
+        self.scaler.to(x.device)
+
+        if TensorDim.GRID not in self.scaler:
+            error_msg = (
+                "Scaler tensor must be at least applied to the GRID dimension. "
+                "Please add a scaler here, use `UniformWeights` for simple uniform scaling.",
+            )
+            raise RuntimeError(error_msg)
+
         scale_tensor = self.scaler
         if without_scalers is not None and len(without_scalers) > 0:
             if isinstance(without_scalers[0], str):
@@ -103,16 +113,63 @@ class BaseLoss(nn.Module, ABC):
             else:
                 scale_tensor = self.scaler.without_by_dim(without_scalers)
 
-        scaler = scale_tensor.get_scaler(x.ndim).to(x)
-
+        scaler = scale_tensor.get_scaler(x.ndim)
         scaler = scaler.expand_as(x)
+
         return x[subset_indices] * scaler[subset_indices]
 
-    def reduce(self, out: torch.Tensor, squash: bool = True) -> torch.Tensor:
-        if squash:
-            out = self.avg_function(out, dim=-1)
+    def reduce(
+        self,
+        out: torch.Tensor,
+        squash: bool = True,
+        squash_mode: str = "avg",
+    ) -> torch.Tensor:
+        """Reduce the out of the loss.
 
-        return self.sum_function(out, dim=(0, 1, 2))
+        If `squash` is True, the last dimension is averaged.
+
+        Irrespective of `squash`, the output is reduced over the
+        batch, ensemble and grid dimensions.
+
+        Parameters
+        ----------
+        out : torch.Tensor
+            Difference tensor, of shape TensorDim
+        squash : bool, optional
+            Whether to squash the variable dimension, by default True
+        squash_mode : str, optional
+            Mode to use for squashing the variable dimension, by default "avg"
+            If "avg", the last dimension is averaged.
+            If "sum", the last dimension is summed.
+
+        Returns
+        -------
+        torch.Tensor
+            Reduced output tensor
+
+        Raises
+        ------
+        ValueError
+            If squash_mode is not one of ['avg', 'sum']
+        """
+        if squash:
+            if squash_mode == "avg":
+                out = self.avg_function(out, dim=TensorDim.VARIABLE)
+            elif squash_mode == "sum":
+                out = self.sum_function(out, dim=TensorDim.VARIABLE)
+            else:
+                msg = f"Invalid squash_mode '{squash_mode}'. Supported modes are: 'avg', 'sum'"
+                raise ValueError(msg)
+
+        # here the grid dimension is summed because the normalisation is handled in the node weighting
+        grid_summed = self.sum_function(out, dim=(TensorDim.GRID))
+        return self.avg_function(
+            grid_summed,
+            dim=(
+                TensorDim.BATCH_SIZE,
+                TensorDim.ENSEMBLE_DIM,
+            ),
+        )
 
     @property
     def name(self) -> str:
@@ -129,7 +186,7 @@ class BaseLoss(nn.Module, ABC):
         scaler_indices: tuple[int, ...] | None = None,
         without_scalers: list[str] | list[int] | None = None,
     ) -> torch.Tensor:
-        """Calculates the lat-weighted scaled loss.
+        """Calculates the area-weighted scaled loss.
 
         Parameters
         ----------
@@ -180,7 +237,7 @@ class FunctionalLoss(BaseLoss):
         scaler_indices: tuple[int, ...] | None = None,
         without_scalers: list[str] | list[int] | None = None,
     ) -> torch.Tensor:
-        """Calculates the lat-weighted scaled loss.
+        """Calculates the area-weighted scaled loss.
 
         Parameters
         ----------

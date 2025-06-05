@@ -91,6 +91,73 @@ Scalers can be added as options for the loss functions using the
 excluded add `!scaler_name`, i.e. ``['*', '!scaler_1']``, and
 ``scaler_1`` will not be added.
 
+Tendency Scalers
+================
+
+Tendency scalers allow the scaling of prognostic losses by the standard
+deviation or variance of the variable tendencies (e.g. the 6-hourly
+differences in the data). To floating point precision, this loss scaling
+is equivalent to training on tendencies rather than the forecasts
+themselves. This approach is particularly useful when training models
+that include both slow-evolving variables (e.g., Land/Ocean) and
+fast-evolving variables (e.g., Atmosphere), ensuring balanced
+contributions to the loss function. When using this option, it is
+recommended to set the `general_variable` scaling values close to 1.0
+for all prognostic variables to maintain consistency and avoid
+unintended bias in the training process.
+
+.. code:: yaml
+
+   stdev_tendency:
+      _target_: anemoi.training.losses.scalers.StdevTendencyScaler
+   var_tendency:
+     _target_: anemoi.training.losses.scalers.VarTendencyScaler
+
+Variable Level Scalers
+======================
+
+Variable level scalers allow the user to scale variables by its level,
+i.e. model or pressure levels for upper air variables. The variable
+level scalers are applied to groups that are defined under
+`scalers.variable_groups`.
+
+For a pressure level scaler applied to all pressure level variables the
+configuration would look like this:
+
+.. code:: yaml
+
+   pressure_level:
+      # Variable level scaler to be used
+      _target_: anemoi.training.losses.scalers.ReluVariableLevelScaler
+      group: pl
+      y_intercept: 0.2
+      slope: 0.001
+
+This will scale all variables in the `pl` group by max(0.2, 0.001 *
+level), where `level` is the pressure level of the variable.
+
+Variable Groups
+===============
+
+Define a default group and a list of groups to be used in the variable
+level scalers.
+
+.. code:: yaml
+
+   # Variable groups to be used in the variable level scalers
+   variable_groups:
+      default: sfc
+      pl: [q, t, u, v, w, z]
+
+If working with upper-air variables from variable levels, the
+temperature fields start with the variable reference `t` followed by the
+level, i.e. `t_500`, `t_850`, etc. Since `t` is specified under variable
+group `pl`, all temperature fields are considered group `pl`. If the
+datasets are build from mars the variable reference is etracted from
+metadata, otherwise by splitting the variable name by `_` and taking the
+first part, see class
+`anemoi.training.utils.ExtractVariableGroupAndLevel`.
+
 ********************
  Validation Metrics
 ********************
@@ -132,15 +199,15 @@ By default, only `all` is kept in the normalised space and scaled.
 
 Additionally, you can define your own loss function by subclassing
 ``BaseLoss`` and implementing the ``forward`` method, or by subclassing
-``BaseLoss`` and implementing the ``calculate_difference`` function. The
-latter abstracts the scaling, and node weighting, and allows you to just
-specify the difference calculation.
+``FunctionalLoss`` and implementing the ``calculate_difference``
+function. The latter abstracts the scaling, and node weighting, and
+allows you to just specify the difference calculation.
 
 .. code:: python
 
    from anemoi.training.losses.weightedloss import BaseLoss
 
-   class MyLossFunction(BaseLoss):
+   class MyLossFunction(FunctionalLoss):
       def calculate_difference(self, pred, target):
          return (pred - target) ** 2
 

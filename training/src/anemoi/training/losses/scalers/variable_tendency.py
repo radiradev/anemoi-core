@@ -36,7 +36,6 @@ class BaseTendencyScaler(BaseScaler):
         data_indices: IndexCollection,
         statistics: dict,
         statistics_tendencies: dict,
-        variables: list[str] | None = None,
         norm: str | None = None,
         **kwargs,
     ) -> None:
@@ -58,7 +57,6 @@ class BaseTendencyScaler(BaseScaler):
         self.data_indices = data_indices
         self.statistics = statistics
         self.statistics_tendencies = statistics_tendencies
-        self.variables = variables
 
         if not self.statistics_tendencies:
             warnings.warn("Dataset has no tendency statistics! Are you sure you want to use a tendency scaler?")
@@ -69,22 +67,17 @@ class BaseTendencyScaler(BaseScaler):
     def get_scaling_values(self, **_kwargs) -> np.ndarray:
         variable_level_scaling = np.ones((len(self.data_indices.internal_data.output.full),), dtype=np.float32)
 
-        LOGGER.info("Variable Level Scaling: Applying %s scaling to prognostic variables", self.__class__.__name__)
-
         for key, idx in self.data_indices.internal_model.output.name_to_index.items():
             if (
                 idx in self.data_indices.internal_model.output.prognostic
                 and self.data_indices.data.output.name_to_index.get(key)
             ):
-                if self.variables is not None and key not in self.variables:
-                    continue
                 prog_idx = self.data_indices.data.output.name_to_index[key]
                 variable_stdev = self.statistics["stdev"][prog_idx] if self.statistics_tendencies else 1
                 variable_tendency_stdev = (
                     self.statistics_tendencies["stdev"][prog_idx] if self.statistics_tendencies else 1
                 )
                 scaling = self.get_level_scaling(variable_stdev, variable_tendency_stdev)
-                LOGGER.info("Parameter %s is being scaled by statistic_tendencies by %.2f", key, scaling)
                 variable_level_scaling[idx] *= scaling
 
         return variable_level_scaling

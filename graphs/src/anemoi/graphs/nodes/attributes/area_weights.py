@@ -96,8 +96,8 @@ class PlanarAreaWeights(BaseNodeAttribute):
         Compute the area attributes for each node.
     """
 
-    def get_latlon_coordinates(self, nodes: NodeStorage) -> tuple[torch.Tensor, torch.Tensor]:
-        return nodes.x.cpu().numpy()
+    def get_latlon_coordinates(self, nodes: NodeStorage) -> torch.Tensor:
+        return nodes.x
 
     def _compute_mean_nearest_distance(self, points: np.ndarray) -> float:
         """Compute mean distance to nearest neighbor for each point.
@@ -160,7 +160,7 @@ class PlanarAreaWeights(BaseNodeAttribute):
         return np.concatenate([expanded_hull, np.vstack(boundary_points)])
 
     def get_raw_values(self, nodes: NodeStorage, **kwargs) -> torch.Tensor:
-        points = self.get_latlon_coordinates(nodes)
+        points = self.get_latlon_coordinates(nodes).cpu().numpy()
         resolution = self._compute_mean_nearest_distance(points)
         boundary_points = self._get_boundary_ring(points, resolution)
 
@@ -211,10 +211,11 @@ class MaskedPlanarAreaWeights(PlanarAreaWeights):
         ), f"{self.__class__.__name__} requires a string for 'mask_node_attr_name' variable."
         self.mask_node_attr_name = mask_node_attr_name
 
-    def get_points(self, nodes: NodeStorage) -> torch.Tensor:
-        points = super().get_latlon_coordinates(nodes)
+    def get_raw_values(self, nodes: NodeStorage, **kwargs) -> torch.Tensor:
+        assert self.mask_node_attr_name in nodes, f"Node attribute '{self.mask_node_attr_name}' not found in nodes."
+        attr_values = super().get_raw_values(nodes, **kwargs)
         mask = nodes[self.mask_node_attr_name].squeeze()
-        return points * mask
+        return attr_values * mask
 
 
 class SphericalAreaWeights(BaseNodeAttribute):
