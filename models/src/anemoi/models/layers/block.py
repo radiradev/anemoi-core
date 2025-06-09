@@ -66,18 +66,19 @@ class BaseBlock(nn.Module, ABC):
 
 class PointMLPProcessorBlock(BaseBlock):
     """Point-wise MLP block with MultiHeadSelfAttention and MLPs."""
+
     def __init__(self, *, hidden_dim, layer_kernels: DotDict, dropout_p: float = 0.0):
         super().__init__()
         layers = [
             layer_kernels.Linear(hidden_dim, hidden_dim),
             layer_kernels.LayerNorm(hidden_dim),
-            layer_kernels.Activation()
+            layer_kernels.Activation(),
         ]
         if dropout_p is not None and dropout_p > 0:
             layers.append(nn.Dropout(p=dropout_p))
 
         self.mlp = nn.Sequential(*layers)
-    
+
     def forward(
         self,
         x: Tensor,

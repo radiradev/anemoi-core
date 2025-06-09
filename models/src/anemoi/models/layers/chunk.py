@@ -20,8 +20,9 @@ from torch_geometric.typing import Adj
 from torch_geometric.typing import OptPairTensor
 from torch_geometric.typing import Size
 
-from anemoi.models.layers.block import GraphConvProcessorBlock, PointMLPProcessorBlock
+from anemoi.models.layers.block import GraphConvProcessorBlock
 from anemoi.models.layers.block import GraphTransformerProcessorBlock
+from anemoi.models.layers.block import PointMLPProcessorBlock
 from anemoi.models.layers.block import TransformerProcessorBlock
 from anemoi.models.layers.mlp import MLP
 from anemoi.utils.config import DotDict

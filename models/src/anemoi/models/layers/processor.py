@@ -22,8 +22,9 @@ from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.khop_edges import sort_edges_1hop_sharding
 from anemoi.models.distributed.shapes import change_channels_in_shape
 from anemoi.models.distributed.shapes import get_shape_shards
-from anemoi.models.layers.chunk import GNNProcessorChunk, PointMLPProcessorChunk
+from anemoi.models.layers.chunk import GNNProcessorChunk
 from anemoi.models.layers.chunk import GraphTransformerProcessorChunk
+from anemoi.models.layers.chunk import PointMLPProcessorChunk
 from anemoi.models.layers.chunk import TransformerProcessorChunk
 from anemoi.models.layers.graph import TrainableTensor
 from anemoi.models.layers.mapper import GraphEdgeMixin
@@ -88,7 +89,7 @@ class BaseProcessor(nn.Module, ABC):
 
 class PointMLP(BaseProcessor):
     def __init__(
-        self, 
+        self,
         *,
         num_layers: int,
         num_channels: int,
@@ -128,7 +129,7 @@ class PointMLP(BaseProcessor):
         **kwargs,
     ) -> Tensor:
         return x
-    
+
 
 class TransformerProcessor(BaseProcessor):
     """Transformer Processor."""
