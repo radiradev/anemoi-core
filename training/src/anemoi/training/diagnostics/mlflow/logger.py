@@ -42,6 +42,8 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger(__name__)
 
+MAX_PARAMS_LENGTH = 2000
+
 
 class LogsMonitor:
     """Class for logging terminal output.
@@ -489,6 +491,10 @@ class AnemoiMLflowLogger(MLFlowLogger):
                     LOGGER.warning("Failed to init AMD GPU Monitor: %s", e)
 
         mlflow.enable_system_metrics_logging()
+        # https://mlflow.org/docs/latest/system-metrics/
+        # By default, system metrics are sampled every 10 seconds
+        # we choose to update this to 100 - system metrics are logged every 1 min 30 seconds
+        mlflow.set_system_metrics_sampling_interval(interval=100)
         system_monitor = CustomSystemMetricsMonitor(
             self.run_id,
             resume_logging=self.run_id is not None,
@@ -615,6 +621,11 @@ class AnemoiMLflowLogger(MLFlowLogger):
             )  # Flatten dict with '.' to not break API queries
             if clean_params:
                 expanded_params = clean_config_params(expanded_params)
+
+            LOGGER.info("Logging %s parameters", len(expanded_params))
+
+            if len(expanded_params) > MAX_PARAMS_LENGTH:
+                LOGGER.warning("Logging a large number of parameters to %s", len(expanded_params))
 
             # Truncate parameter values.
             params_list = [Param(key=k, value=str(v)[:truncation_length]) for k, v in expanded_params.items()]
