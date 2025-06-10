@@ -62,8 +62,8 @@ def test_relu_bounding(config, name_to_index, input_tensor):
 
 
 def test_normalized_relu_bounding(config, name_to_index, name_to_index_stats, input_tensor, statistics):
-    min_val=[2.0, 2.0]
-    normalizer=["mean-std", "min-max"]
+    min_val = [2.0, 2.0]
+    normalizer = ["mean-std", "min-max"]
     bounding = NormalizedReluBounding(
         variables=config.variables,
         name_to_index=name_to_index,
