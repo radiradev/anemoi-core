@@ -72,11 +72,23 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
             self.A_up = self.A_up.to(x.device)
             x_skip = self._truncate_fields(x_skip, self.A_up)  # back to high resolution
 
+        # noise inputs here:
+        sigma = torch.ones(x.shape[0], device=x.device, dtype=x.dtype) * 0.05
+        x_pert = self.noise_state(
+            x,
+            einops.rearrange(sigma, "bs -> bs 1 1 1 1"),
+            idx=self._internal_input_idx,
+        )
+        x_skip_pert = self.noise_state(
+            x_skip,
+            einops.repeat(sigma, "bs -> (bs e) 1 1", bs=x.shape[0], e=x.shape[2]),
+        )
+
         # add data positional info (lat/lon)
         x_data_latent = torch.cat(
             (
-                einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
-                einops.rearrange(x_skip, "bse grid vars -> (bse grid) vars"),
+                einops.rearrange(x_pert, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
+                einops.rearrange(x_skip_pert, "bse grid vars -> (bse grid) vars"),
                 self.node_attributes(self._graph_name_data, batch_size=bse),
             ),
             dim=-1,  # feature dimension
@@ -104,7 +116,18 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
             x_out = bounding(x_out)
         return x_out
 
-    def forward(self, x: torch.Tensor, fcstep: int, model_comm_group: Optional[ProcessGroup] = None) -> torch.Tensor:
+    def noise_state(self, x, sigma, idx=None):
+        n = torch.randn_like(x) * sigma
+        if idx is None:
+            mask = torch.ones_like(x)
+        else:
+            mask = torch.zeros_like(x)
+            mask[..., idx] = 1.0
+        return x + n * mask
+
+    def forward(
+        self, x: torch.Tensor, fcstep: int = 1, model_comm_group: Optional[ProcessGroup] = None, **kwargs
+    ) -> torch.Tensor:
         """Forward operator.
 
         Args:

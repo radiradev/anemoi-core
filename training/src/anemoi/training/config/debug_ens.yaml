@@ -23,8 +23,8 @@ diagnostics:
     callbacks: []
 hardware:
   files:
-    truncation: ${data.resolution}-O32-linear.mat.npz
-    truncation_inv: O32-${data.resolution}-linear.mat.npz
+    truncation: ${data.resolution}-o32-linear.mat.npz
+    truncation_inv: o32-${data.resolution}-linear.mat.npz
     graph: graph_anemoi_new_${data.resolution}.pt
     dataset: aifs-ea-an-oper-0001-mars-${data.resolution}-1979-2022-6h-v6.zarr
   accelerator: auto

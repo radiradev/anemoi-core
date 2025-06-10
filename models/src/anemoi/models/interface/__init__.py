@@ -101,7 +101,7 @@ class AnemoiModelInterface(torch.nn.Module):
         self.forward = self.model.forward
 
     def predict_step(
-        self, batch: torch.Tensor, model_comm_group: Optional[ProcessGroup] = None, **kwargs
+        self, batch: torch.Tensor, *args, model_comm_group: Optional[ProcessGroup] = None, **kwargs
     ) -> torch.Tensor:
         """Prediction step for the model.
 
@@ -126,6 +126,6 @@ class AnemoiModelInterface(torch.nn.Module):
             # batch, timesteps, horizonal space, variables
             x = batch[:, 0 : self.multi_step, None, ...]  # add dummy ensemble dimension as 3rd index
 
-            y_hat = self(x, model_comm_group)
+            y_hat = self(x, *args, model_comm_group=model_comm_group, **kwargs)
 
         return self.post_processors(y_hat, in_place=False)
