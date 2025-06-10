@@ -144,6 +144,8 @@ class NormalizedReluBounding(BaseBounding):
                 "The length of the min_val list must match the number of variables in NormalizedReluBounding."
             )
 
+        # Create data index for the variables to be bounded in order from configuration
+        self.data_index = torch.tensor([name_to_index[var] for var in variables], dtype=self.data_index.dtype)
         # Compute normalized min values
         norm_min_val = torch.zeros(len(variables))
         for ii, variable in enumerate(variables):

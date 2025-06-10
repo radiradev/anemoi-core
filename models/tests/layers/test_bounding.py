@@ -62,16 +62,30 @@ def test_relu_bounding(config, name_to_index, input_tensor):
 
 
 def test_normalized_relu_bounding(config, name_to_index, name_to_index_stats, input_tensor, statistics):
+    min_val=[2.0, 2.0]
+    normalizer=["mean-std", "min-max"]
     bounding = NormalizedReluBounding(
         variables=config.variables,
         name_to_index=name_to_index,
-        min_val=[2.0, 2.0],
-        normalizer=["mean-std", "min-max"],
+        min_val=min_val,
+        normalizer=normalizer,
         statistics=statistics,
         name_to_index_stats=name_to_index_stats,
     )
     output = bounding(input_tensor.clone())
     expected_output = torch.tensor([[2.0, 2.0, 3.0], [4.0, 0.1111, 6.0], [2.0, 0.5, 0.5]])
+    assert torch.allclose(output, expected_output, atol=1e-4)
+
+    # test with order of variables in configuration different to input tensor
+    bounding = NormalizedReluBounding(
+        variables=config.variables[::-1],  # reverse order
+        name_to_index=name_to_index,
+        min_val=min_val[::-1],  # reverse order
+        normalizer=normalizer[::-1],  # reverse order
+        statistics=statistics,
+        name_to_index_stats=name_to_index_stats,
+    )
+    output = bounding(input_tensor.clone())
     assert torch.allclose(output, expected_output, atol=1e-4)
 
 
@@ -152,7 +166,7 @@ def test_hydra_instantiate_bounding(config, name_to_index, name_to_index_stats, 
             "_target_": "anemoi.models.layers.bounding.NormalizedLeakyReluBounding",
             "variables": config.variables,
             "min_val": [2.0, 2.0],
-            "normalizer": ["mean-std", "min-max"],
+            "normalizer": ["min-max", "mean-std"],
             "statistics": statistics,
             "name_to_index_stats": name_to_index_stats,
         },
