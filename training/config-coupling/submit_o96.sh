@@ -37,8 +37,5 @@ VENV=/home/daep/PERM/projects/anemoi-core/feature-single01/training/venv
 module load python3
 source ${VENV}/bin/activate
 
-#srun anemoi-training train --config-name=single
-#srun anemoi-training train --config-name=single_snow
-#srun anemoi-training train --config-name=single_small
-#srun anemoi-training train --config-name=single_small_roll
-srun anemoi-training train --config-name=single_land_forced_atmo
+#srun anemoi-training train --config-name=single_land_forced_atmo
+srun anemoi-training train --config-name=single_forced_land

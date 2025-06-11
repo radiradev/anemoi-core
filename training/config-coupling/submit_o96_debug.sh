@@ -37,6 +37,5 @@ VENV=/home/daep/PERM/projects/anemoi-core/feature-single01/training/venv
 module load python3
 source ${VENV}/bin/activate
 
-#srun anemoi-training train --config-name=single dataloader.limit_batches.training=1000
-#srun anemoi-training train --config-name=single_snow dataloader.limit_batches.training=1000
+#srun anemoi-training train --config-name=single_forced_land dataloader.limit_batches.training=1000
 srun anemoi-training train --config-name=single_land_forced_atmo dataloader.limit_batches.training=1000
