@@ -12,6 +12,7 @@ import numpy as np
 import torch
 from hydra.utils import instantiate
 from omegaconf import DictConfig
+from anemoi.utils.config import DotDict
 from omegaconf import ListConfig
 from torch.utils.data import IterableDataset
 
@@ -67,51 +68,29 @@ class AbstractDataHandler: # not so abstract -> rename it
     def processors(self) -> list:
         raise NotImplementedError("Subclasses must implement processors method")
 
+    @property
     def groups(self) -> tuple[str]:
-        return self._groups
+        return self._dataset.groups
 
     def select(self, select: list[str] | None =None):
         if select is None:
             return self
         return SelectedDataHandler(self, select=select)
 
-class UnigroupDataHandler(AbstractDataHandler):
-    def __init__(self, name, config):
-        self._dataset_config = config['dataset']
-        self._processors = config.get('processors', DictConfig({}))
-        self._groups = tuple([name])
 
-    @cached_property
+class FinalDataHandler(AbstractDataHandler):
+    def __init__(self, dataset, processors, default_group: str = "data"):
+        self._dataset_config = dataset
+        self._processors = processors
+        self.default_group = default_group
+
+    @property
     def _dataset(self):
-        return open_dataset(self._dataset_config)
+        ds = open_dataset(self._dataset_config)
+        if not ds.groups:
+            ds = open_dataset(self._dataset_config, set_group=self.default_group)
+        return ds
 
-    @property
-    def name_to_index(self) -> dict[str, int]:
-        return self._dataset
-
-    @property
-    def statistics(self) -> dict[str, torch.Tensor]:
-        return self._dataset.statistics
-
-    @property
-    def frequency(self) -> timedelta:
-        return self._dataset.frequency
-
-    @property
-    def start_date(self):
-        return self._dataset.start_date
-
-    @property
-    def end_date(self):
-        return self._dataset.end_date
-
-    def __getitem__(self, key, *args, **kwargs):
-        if key != self.name:
-            raise KeyError(f"Group {key} not found in data handler. Available groups: {self.groups}")
-        return {self.name: self.dataset.__getitem__(*args, **kwargs)}
-
-    def processors(self):
-        return self._processors
 
 class MultiDataHandler(AbstractDataHandler):
     def __init__(self, data_handlers: list[AbstractDataHandler]):
@@ -204,16 +183,27 @@ class MultiDataHandler(AbstractDataHandler):
             groups.update(new)
         return tuple(groups)
 
-def data_handler_factory(config) -> AbstractDataHandler:
-    if isinstance(config, dict) and config[config.keys()[0]] == 'dict':
-        assert len(config) == 1, "Only one key expected in the config dict"
-        dhs = [UnigroupDataHandler(name = k, config =v) for k, v in config['dict'].items()]
-        return MultiDataHandler(dhs)
 
-    if isinstance(config, list):
+def set_group(config, group: str):
+    config = config.copy()
+    config["dataset"] = {"dataset": config["dataset"], "set_group": group}
+    return config
+
+
+def data_handler_factory(config, top_level: bool = False) -> AbstractDataHandler:
+    if isinstance(config, (dict, DotDict, DictConfig)):
+        if top_level:
+            new_config = [set_group(v, k) for k, v in config.items()]
+            return data_handler_factory(new_config)
+
+        assert "dataset" in config, f"Expected 'dataset' key in data handler.\nconfig,{config}\ntype: {type(config)}"
+        return FinalDataHandler(**config)
+
+    if isinstance(config, (list, tuple, ListConfig)):
         return MultiDataHandler(data_handler_factory(c) for c in config)
+    
+    raise ValueError(f"Data handler config of type {type(config)} is not supported. It should be a list or a dict.")
 
-    return UnigroupDataHandler(name='data',config= config)
 
 class ForwardDataHandler(AbstractDataHandler):
     def __init__(self,forward):
@@ -270,8 +260,6 @@ class SelectedDataHandler(ForwardDataHandler):
 
 
 
-
-
 class RecordProvider:
     def __init__(self, kwargs: dict, datahandlers: "AbstractDataHandler") -> None:
         self._steps = {}
@@ -289,14 +277,14 @@ class RecordProvider:
             assert isinstance(steps, (list, tuple)), f"Steps must be a list or tuple, not {type(steps)}"
             self._steps[key] =steps
 
-            _data_handlers.apjend(dh)
+            _data_handlers.append(dh)
             #print("record provider", key, _data_handlers.variables)
 
         self._data_handlers = MultiDataHandler(_data_handlers)
 
     @property
     def group_names(self) -> list[GroupName]:
-        return list(self._data_handlers.groups
+        return list(self._data_handlers.groups)
 
     @property
     def name_to_index(self) -> dict[GroupName, dict[str, int]]:

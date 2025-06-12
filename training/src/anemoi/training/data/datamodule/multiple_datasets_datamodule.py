@@ -17,7 +17,7 @@ import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
 from anemoi.models.data_indices.collection import IndexCollection
-from anemoi.training.data.data_handlers import DataHandlers
+from anemoi.training.data.data_handlers import data_handler_factory
 from anemoi.training.data.data_handlers import NativeGridMultDataset
 from anemoi.training.data.data_handlers import SampleProvider
 from anemoi.training.data.utils import get_dataloader_config
@@ -50,7 +50,7 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         self.graph_data = graph_data
 
         # Create data handlers
-        dhs = DataHandlers(config.data.data_handlers)
+        dhs = data_handler_factory(config.data.data_handlers, top_level=True)
 
         # Create Sampler provider
         self.sample_provider = SampleProvider(config.model, dhs)
