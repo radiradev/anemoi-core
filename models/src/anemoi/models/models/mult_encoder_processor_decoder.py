@@ -20,7 +20,8 @@ from torch.distributed.distributed_c10d import ProcessGroup
 from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 
-from anemoi.models.distributed.shapes import get_shape_shards
+from anemoi.models.distributed.shapes import apply_shard_shapes
+from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.layers.graph import NamedNodesAttributes
 from anemoi.training.data.data_handlers import SampleProvider
 from anemoi.utils.config import DotDict
@@ -123,6 +124,12 @@ class AnemoiMultiModel(nn.Module):
         #    ]
         # )
 
+    def _get_shard_shapes(self, x, dim=0, shard_shapes_dim=None, model_comm_group=None):
+        if shard_shapes_dim is None:
+            return get_shard_shapes(x, dim, model_comm_group)
+        else:
+            return apply_shard_shapes(x, dim, shard_shapes_dim)
+        
     def _assemble_input(self, name: str, x: torch.Tensor, batch_size: int) -> tuple[torch.Tensor, torch.Tensor]:
         # x.shape: (batch_size, multi_step, ens_dim, grid_size, num_vars)
 
@@ -213,7 +220,7 @@ class AnemoiMultiModel(nn.Module):
         for name, x_input_data in x_data.items():
             x_input_data, x_data_skip[name] = self._assemble_input(name, x_input_data, batch_size)
 
-            shard_shapes_input_data = get_shape_shards(x_input_data, 0, model_comm_group)
+            shard_shapes_input_data = self._get_shard_shapes(x_input_data, 0, model_comm_group=model_comm_group)
 
             x_data_latent[name], x_hidden_latent[name] = self._run_mapper(
                 self.encoders[name],
@@ -246,8 +253,8 @@ class AnemoiMultiModel(nn.Module):
             else:
                 x_target_latent = self._assemble_target(name, x_target_data, batch_size)
 
-            shard_shapes_target_data = get_shape_shards(
-                x_target_latent, 0, model_comm_group
+            shard_shapes_target_data = self._get_shard_shapes(
+                x_target_latent, 0, model_comm_group=model_comm_group
             )  # This may be passed when name in x_target_data
 
             x_out[name] = self._run_mapper(
@@ -295,7 +302,7 @@ class AnemoiMultiModel(nn.Module):
         ensemble_size = 1
 
         x_hidden = self.node_attributes(self._graph_name_hidden, batch_size=batch_size)
-        shard_shapes_hidden = get_shape_shards(x_hidden, 0, model_comm_group)
+        shard_shapes_hidden = self._get_shard_shapes(x_hidden, 0, model_comm_group=model_comm_group)
 
         x_data_latent, x_hidden_latent, x_data_skip = self.encode(
             (x, x_hidden),
