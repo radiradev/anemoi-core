@@ -41,6 +41,10 @@ class AbstractDataHandler: # not so abstract -> rename it
     # TODO: add
     def variables(self) -> list[str]:
         raise NotImplementedError("do we need to implement this?")
+    
+    @property
+    def _dataset(self):
+        raise NotImplementedError("Subclasses must implement _dataset property")
 
     @property
     def name_to_index(self):
@@ -62,15 +66,15 @@ class AbstractDataHandler: # not so abstract -> rename it
     def end_date(self):
         raise NotImplementedError("Subclasses must implement end_date property")
 
+    @property
+    def groups(self) -> tuple[str]:
+        raise NotImplementedError("Subclasses must implement groups property")
+
     def __getitem__(self, key, *args, **kwargs) :
         raise NotImplementedError("Subclasses must implement __getitem__ method")
 
     def processors(self) -> list:
         raise NotImplementedError("Subclasses must implement processors method")
-
-    @property
-    def groups(self) -> tuple[str]:
-        return self._dataset.groups
 
     def select(self, select: list[str] | None =None):
         if select is None:
@@ -78,18 +82,55 @@ class AbstractDataHandler: # not so abstract -> rename it
         return SelectedDataHandler(self, select=select)
 
 
-class FinalDataHandler(AbstractDataHandler):
-    def __init__(self, dataset, processors, default_group: str = "data"):
+class NongroupedDataHandler(AbstractDataHandler):
+    def __init__(self, dataset, processors = None, default_group: str = "data"):
         self._dataset_config = dataset
         self._processors = processors
-        self.default_group = default_group
+        self.name = default_group
 
     @property
     def _dataset(self):
-        ds = open_dataset(self._dataset_config)
-        if not ds.groups:
-            ds = open_dataset(self._dataset_config, set_group=self.default_group)
-        return ds
+        return open_dataset(self._dataset_config)
+    
+    @property
+    def name_to_index(self) -> dict[str, dict]:
+        return {self.name: self._dataset.name_to_index}
+
+    @property
+    def groups(self) -> tuple[str]:
+        return (self.name, )
+
+    @property
+    def statistics(self) -> dict[str, torch.Tensor]:
+        return {self.name: self._dataset.statistics}
+
+    def __getitem__(self, *args, **kwargs) -> dict[GroupName, np.ndarray]:
+        return {self.name: self._dataset.__getitem__(*args, **kwargs)}
+
+
+class GroupedDataHandler(AbstractDataHandler):
+    def __init__(self, dataset, processors = None):
+        self._dataset_config = dataset
+        self._processors = processors
+
+    @property
+    def _dataset(self):
+        return open_dataset(self._dataset_config)
+    
+    @property
+    def name_to_index(self) -> dict[str, dict]:
+        return self._dataset.name_to_index
+
+    @property
+    def groups(self) -> tuple[str]:
+        return self._dataset.groups
+
+    @property
+    def statistics(self) -> dict[str, torch.Tensor]:
+        return self._dataset.statistics
+
+    def __getitem__(self, *args, **kwargs) -> dict[GroupName, np.ndarray]:
+        return self._dataset.__getitem__(*args, **kwargs)
 
 
 class MultiDataHandler(AbstractDataHandler):
@@ -153,7 +194,6 @@ class MultiDataHandler(AbstractDataHandler):
             return dh.__getitem__(*args, **kwargs)[key]
         raise KeyError(f"Group {key} not found in any data handler. Available groups: {self.groups}")
 
-
     def processors(self) -> dict[str, list[BasePreprocessor]]:
         processors = {}
         for data_handler in self._data_handlers:
@@ -197,7 +237,8 @@ def data_handler_factory(config, top_level: bool = False) -> AbstractDataHandler
             return data_handler_factory(new_config)
 
         assert "dataset" in config, f"Expected 'dataset' key in data handler.\nconfig,{config}\ntype: {type(config)}"
-        return FinalDataHandler(**config)
+        assert "_target_" in config, config
+        return instantiate(config, _recursive_=False)
 
     if isinstance(config, (list, tuple, ListConfig)):
         return MultiDataHandler(data_handler_factory(c) for c in config)
