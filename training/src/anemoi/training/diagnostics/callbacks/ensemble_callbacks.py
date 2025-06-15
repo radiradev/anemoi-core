@@ -61,7 +61,6 @@ class BasePerBatchEnsPlotCallback(BasePerBatchPlotCallback):
                 **kwargs,
             )
 
-
 class RolloutEvalEns(RolloutEval):
     """Evaluates the model performance over a (longer) rollout window."""
 
