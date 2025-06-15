@@ -227,12 +227,11 @@ class GraphEnsForecaster(GraphForecaster):
         None
             None
         """
-        # for validation not normalized in-place because remappers cannot be applied in-place
-        batch[0] = self.model.pre_processors(batch[0], in_place=not validation_mode)
+        batch[0] = self.model.pre_processors(batch[0])  # in-place normalization
 
         x = self.ensemble_ic_generator(
             batch[0],
-            self.model.pre_processors(batch[1], in_place=not validation_mode) if len(batch) == 2 else None,
+            self.model.pre_processors(batch[1]) if len(batch) == 2 else None,
         )
         LOGGER.debug("Shapes: batch[0][0].shape = %s, ens_ic.shape = %s", list(batch[0][0].shape), list(x.shape))
 
