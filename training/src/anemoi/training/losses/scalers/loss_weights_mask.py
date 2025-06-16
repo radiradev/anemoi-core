@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from anemoi.training.losses.scalers.base_scaler import BaseUpdatingScalar
+from anemoi.training.losses.scalers.base_scaler import BaseUpdatingScaler
 from anemoi.training.utils.enums import TensorDim
 
 if TYPE_CHECKING:
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
-class NaNMaskScaler(BaseUpdatingScalar):
+class NaNMaskScaler(BaseUpdatingScaler):
 
     scale_dims: tuple[TensorDim] = (TensorDim.GRID, TensorDim.VARIABLE)
 

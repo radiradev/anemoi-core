@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from hydra.utils import instantiate
 
-from anemoi.training.losses.scalers.base_scaler import BaseUpdatingScalar
+from anemoi.training.losses.scalers.base_scaler import BaseUpdatingScaler
 
 if TYPE_CHECKING:
 
@@ -24,12 +24,12 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
-def create_scalers(scalers_config: DotDict, **kwargs) -> tuple[dict[str, SCALER_DTYPE], dict[str, BaseUpdatingScalar]]:
+def create_scalers(scalers_config: DotDict, **kwargs) -> tuple[dict[str, SCALER_DTYPE], dict[str, BaseUpdatingScaler]]:
     scalers, updating_scalars = {}, {}
     for name, config in scalers_config.items():
         scaler_builder = instantiate(config, **kwargs)
 
-        if isinstance(scaler_builder, BaseUpdatingScalar):
+        if isinstance(scaler_builder, BaseUpdatingScaler):
             updating_scalars[name] = scaler_builder
 
         scalers[name] = scaler_builder.get_scaling()

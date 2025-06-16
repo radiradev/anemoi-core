@@ -21,7 +21,7 @@ from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.training.losses import get_loss_function
 from anemoi.training.losses.loss import get_metric_ranges
 from anemoi.training.losses.scalers import create_scalers
-from anemoi.training.losses.scalers.base_scaler import BaseUpdatingScalar
+from anemoi.training.losses.scalers.base_scaler import BaseUpdatingScaler
 from anemoi.training.utils.enums import TensorDim
 from anemoi.training.utils.masks import NoOutputMask
 
@@ -261,8 +261,8 @@ def test_metric_range(fake_data: tuple[DictConfig, IndexCollection]) -> None:
 
 
 @pytest.fixture
-def mock_updating_scalar() -> type[BaseUpdatingScalar]:
-    class UpdatingScalar(BaseUpdatingScalar):
+def mock_updating_scalar() -> type[BaseUpdatingScaler]:
+    class UpdatingScalar(BaseUpdatingScaler):
         """Mock updating scalar for testing."""
 
         scale_dims = (TensorDim.VARIABLE,)
@@ -276,7 +276,7 @@ def mock_updating_scalar() -> type[BaseUpdatingScalar]:
     return UpdatingScalar
 
 
-def test_updating_scalars(mock_updating_scalar: type[BaseUpdatingScalar]) -> None:
+def test_updating_scalars(mock_updating_scalar: type[BaseUpdatingScaler]) -> None:
     """Test that the updating scalar returns the correct values."""
     scalar = mock_updating_scalar()
 

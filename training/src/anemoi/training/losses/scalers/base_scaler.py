@@ -97,7 +97,7 @@ class AvailableCallbacks(StrEnum):
     ON_VALID_BATCH_END = "on_valid_batch_end"
 
 
-class BaseUpdatingScalar(BaseScaler):
+class BaseUpdatingScaler(BaseScaler):
     """Base class for updating scalers.
 
     The updating scalers have a variety of callback methods associated with them,
