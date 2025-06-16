@@ -656,4 +656,4 @@ class GraphForecaster(pl.LightningModule):
         # Log variable scaling on rank 0
         # The two ifs should be separate, but are combined due to pre-commit hook
         if stage == "fit" and self.trainer.is_global_zero:
-            self.logger.log_hyperparams({"variable_scaling": self._scaling_values})
+            self.logger.log_hyperparams({"variable_loss_scaling": self._scaling_values})
