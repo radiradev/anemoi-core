@@ -280,13 +280,13 @@ class GraphForecaster(pl.LightningModule):
         ]
 
         # apply rollout-training pre-processors to model input variables
-        x[:, -1, :, :, self.data_indices.internal_model.input.full] = self.model.pre_processors(
+        x[:, -1, :, :, self.data_indices.model.input.full] = self.model.pre_processors(
             x[
                 :,
                 -1,
                 :,
                 :,
-                self.data_indices.internal_model.input.full,
+                self.data_indices.model.input.full,
             ],
             in_advance_input=True,
         )

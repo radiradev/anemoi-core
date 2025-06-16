@@ -119,10 +119,8 @@ class BaseImputer(BasePreprocessor, ABC):
                 x[..., idx_dst][self._expand_subset_mask(x, idx_src)] = value
         return x
 
-    def transform_in_rollout(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
+    def transform_in_rollout(self, x: torch.Tensor) -> torch.Tensor:
         """Impute missing values in the input tensor."""
-        if not in_place:
-            x = x.clone()
 
         # Choose correct index based on number of variables
         if x.shape[-1] == self.num_training_input_vars:
@@ -144,7 +142,7 @@ class BaseImputer(BasePreprocessor, ABC):
             x = x.clone()
 
         if in_advance_input:
-            return self.transform_in_rollout(self, x)
+            return self.transform_in_rollout(x)
 
         # Reset NaN locations outside of training for validation and inference.
         if not self.training:
