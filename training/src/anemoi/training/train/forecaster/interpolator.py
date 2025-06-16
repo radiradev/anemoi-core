@@ -18,7 +18,7 @@ from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 
 from anemoi.models.data_indices.collection import IndexCollection
-from anemoi.training.losses.scalers.base_scaler import AVAILABLE_CALLBACKS
+from anemoi.training.losses.scalers.base_scaler import AvailableCallbacks
 from anemoi.training.train.forecaster import GraphForecaster
 
 LOGGER = logging.getLogger(__name__)
@@ -100,13 +100,13 @@ class GraphInterpolator(GraphForecaster):
 
         # Delayed scalers need to be initialized after the pre-processors once
         if self.is_first_step:
-            self.update_scalars(callback=AVAILABLE_CALLBACKS.ON_TRAINING_START)
+            self.update_scalars(callback=AvailableCallbacks.ON_TRAINING_START)
             self.is_first_step = False
         self.update_scalars(
             callback=(
-                AVAILABLE_CALLBACKS.ON_TRAIN_BATCH_START
+                AvailableCallbacks.ON_TRAIN_BATCH_START
                 if not validation_mode
-                else AVAILABLE_CALLBACKS.ON_VALID_BATCH_START
+                else AvailableCallbacks.ON_VALID_BATCH_START
             ),
         )
 

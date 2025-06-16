@@ -17,7 +17,7 @@ import torch
 from torch.utils.checkpoint import checkpoint
 
 from anemoi.models.distributed.graph import gather_tensor
-from anemoi.training.losses.scalers.base_scaler import AVAILABLE_CALLBACKS
+from anemoi.training.losses.scalers.base_scaler import AvailableCallbacks
 from anemoi.training.utils.inicond import EnsembleInitialConditions
 
 from .forecaster import GraphForecaster
@@ -239,13 +239,13 @@ class GraphEnsForecaster(GraphForecaster):
 
         # Scalers which are delayed need to be initialized after the pre-processors
         if self.is_first_step:
-            self.update_scalars(callback=AVAILABLE_CALLBACKS.ON_TRAINING_START)
+            self.update_scalars(callback=AvailableCallbacks.ON_TRAINING_START)
             self.is_first_step = False
         self.update_scalars(
             callback=(
-                AVAILABLE_CALLBACKS.ON_TRAIN_BATCH_START
+                AvailableCallbacks.ON_TRAIN_BATCH_START
                 if not validation_mode
-                else AVAILABLE_CALLBACKS.ON_VALID_BATCH_START
+                else AvailableCallbacks.ON_VALID_BATCH_START
             ),
         )
 

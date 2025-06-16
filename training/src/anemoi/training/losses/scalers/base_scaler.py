@@ -10,9 +10,9 @@
 from __future__ import annotations
 
 import logging
+import sys
 from abc import ABC
 from abc import abstractmethod
-from enum import StrEnum
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -21,6 +21,15 @@ from anemoi.training.utils.enums import TensorDim
 
 if TYPE_CHECKING:
     from anemoi.models.interface import AnemoiModelInterface
+
+if sys.version_info < (3, 11):
+    from enum import Enum
+
+    class StrEnum(str, Enum):
+        pass
+
+else:
+    from enum import StrEnum
 
 LOGGER = logging.getLogger(__name__)
 SCALER_DTYPE = tuple[tuple[int], np.ndarray]
@@ -184,7 +193,7 @@ class BaseUpdatingScaler(BaseScaler):
 
         Parameters
         ----------
-        callback : AVAILABLE_CALLBACKS
+        callback : AvailableCallbacks
             The callback method to use for getting the scaling values.
         **kwargs : dict
             Additional keyword arguments to pass to the callback method.
