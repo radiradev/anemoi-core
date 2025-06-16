@@ -55,7 +55,6 @@ class Postprocessor(BasePreprocessor):
 
     def _create_imputation_indices(
         self,
-        statistics=None,
     ):
         """Create the indices for imputation."""
         name_to_index_training_output = self.data_indices.data.output.name_to_index
@@ -98,7 +97,6 @@ class Postprocessor(BasePreprocessor):
         if not in_place:
             x = x.clone()
 
-        # Replace original nans with nan again
         if x.shape[-1] == self.num_training_output_vars:
             index = self.index_training_output
         elif x.shape[-1] == self.num_inference_output_vars:
@@ -146,12 +144,12 @@ class CustomRelu(torch.nn.Module):
         return torch.nn.functional.relu(x - self.threshold) + self.threshold
 
 
-class CustomReluPostprocessor(Postprocessor):
+class NormalizedReluPostprocessor(Postprocessor):
     """Postprocess with a ReLU activation and customizable thresholds.
 
     Expects the config to have keys corresponding to customizable thresholds as lists of variables to impute.:
     ```
-    default: "none"
+    nornmalizer: 'mean-std'
     1:
         - y
     0:
@@ -159,6 +157,7 @@ class CustomReluPostprocessor(Postprocessor):
     3.14:
         - q
     ```
+    Thresholds are in un-normalized space, i.e. the values are not normalized.
     """
 
     def __init__(
@@ -166,16 +165,22 @@ class CustomReluPostprocessor(Postprocessor):
         config=None,
         data_indices: Optional[IndexCollection] = None,
         statistics: Optional[dict] = None,
+        normalizer: str = "none",
     ) -> None:
+
+        self.normalizer = normalizer
+        self.statistics = statistics
+
+        # Validate normalizer input
+        if self.normalizer not in {"none", "mean-std", "min-max", "max", "std"}:
+            raise ValueError(
+                "Normalizer must be one of: 'none', 'mean-std', 'min-max', 'max', 'std' in NormalizedReluBounding."
+            )
+
         super().__init__(config, data_indices, statistics)
-
-        self._create_imputation_indices()
-
-        self._validate_indices()
 
     def _create_imputation_indices(
         self,
-        statistics=None,
     ):
         """Create the indices for imputation."""
         name_to_index_training_output = self.data_indices.data.output.name_to_index
@@ -201,9 +206,28 @@ class CustomReluPostprocessor(Postprocessor):
             self.index_training_output.append(name_to_index_training_output.get(name, None))
             self.index_inference_output.append(name_to_index_inference_output.get(name, None))
 
-            self.postprocessorfunctions.append(CustomRelu(method))
+            stat_index = self.data_indices.data.input.name_to_index[name]
+            normalized_value = method
+            if self.normalizer == "mean-std":
+                mean = self.statistics["mean"][stat_index]
+                std = self.statistics["stdev"][stat_index]
+                normalized_value = (method - mean) / std
+            elif self.normalizer == "min-max":
+                min_stat = self.statistics["minimum"][stat_index]
+                max_stat = self.statistics["maximum"][stat_index]
+                normalized_value = (method - min_stat) / (max_stat - min_stat)
+            elif self.normalizer == "max":
+                max_stat = self.statistics["maximum"][stat_index]
+                normalized_value = method / max_stat
+            elif self.normalizer == "std":
+                std = self.statistics["stdev"][stat_index]
+                normalized_value = method / std
 
-            LOGGER.info(f"CustomReluPostprocessor: applying CustomRelu with thresholf {method} to {name}.")
+            self.postprocessorfunctions.append(CustomRelu(normalized_value))
+
+            LOGGER.info(
+                f"NormalizedReluPostprocessor: applying NormalizedRelu with threshold {normalized_value} after {self.normalizer} normalization to {name}."
+            )
 
 
 class ConditionalZeroPostprocessor(Postprocessor):
@@ -239,7 +263,6 @@ class ConditionalZeroPostprocessor(Postprocessor):
 
     def _create_imputation_indices(
         self,
-        statistics=None,
     ):
         """Create the indices for imputation."""
         name_to_index_training_output = self.data_indices.data.output.name_to_index
