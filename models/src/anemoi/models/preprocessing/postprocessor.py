@@ -157,7 +157,23 @@ class NormalizedReluPostprocessor(Postprocessor):
     3.14:
         - q
     ```
-    Thresholds are in un-normalized space, i.e. the values are not normalized.
+    Thresholds are in un-normalized space. If normalizer is specified, the threshold values are not normalized.
+    This is necessary if in config file the normalizer is specified before the postprocessor, e.g.:
+    ```
+    data:
+        processors:
+          normalizer:
+            _target_: anemoi.models.preprocessing.normalizer.InputNormalizer
+            config:
+              default: "mean-std"
+          normalized_relu_postprocessor:
+            _target_: anemoi.models.preprocessing.postprocessor.NormalizedReluPostprocessor
+            config:
+              271.15:
+              - x1
+              0:
+              - x2
+            normalizer: 'mean-std'
     """
 
     def __init__(
