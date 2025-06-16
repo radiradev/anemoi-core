@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
-def print_variable_scaling(loss: BaseLoss, data_indices: IndexCollection) -> None:
+def print_variable_scaling(loss: BaseLoss, data_indices: IndexCollection) -> dict[str, float]:
     """Log the final variable scaling for each variable in the model.
 
     Parameters
