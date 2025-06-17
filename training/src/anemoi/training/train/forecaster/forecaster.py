@@ -288,7 +288,7 @@ class GraphForecaster(pl.LightningModule):
                 :,
                 self.data_indices.model.input.full,
             ],
-            in_advance_input=True
+            in_advance_input=True,
         )
 
         x[:, -1] = self.output_mask.rollout_boundary(
