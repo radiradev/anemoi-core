@@ -159,13 +159,14 @@ class InputNormalizer(BasePreprocessor):
         torch.Tensor
             _description_
         """
-        if not in_place:
-            x = x.clone()
 
         if in_advance_input:
             # In rollout training, we do not normalize the input data
             # as it is already normalized in the training phase.
             return x
+
+        if not in_place:
+            x = x.clone()
 
         if data_index is not None:
             x.mul_(self._norm_mul[data_index]).add_(self._norm_add[data_index])
@@ -204,13 +205,14 @@ class InputNormalizer(BasePreprocessor):
         torch.Tensor
             Denormalized data
         """
-        if not in_place:
-            x = x.clone()
 
         if in_advance_input:
             # In rollout training, we do not denormalize the input data
             # as it is already normalized in the training phase.
             return x
+
+        if not in_place:
+            x = x.clone()
 
         # Denormalize dynamic or full tensors
         # input and predicted tensors have different shapes

@@ -101,7 +101,7 @@ class BaseImputer(BasePreprocessor, ABC):
             else:
                 raise TypeError(f"Statistics {type(statistics)} is optional and not a dictionary")
 
-            LOGGER.debug(f"Imputer: replacing NaNs in {name} with value {self.replacement[-1]}")
+            LOGGER.info(f"Imputer: replacing NaNs in {name} with value {self.replacement[-1]}")
 
     def _expand_subset_mask(self, x: torch.Tensor, idx_src: int) -> torch.Tensor:
         """Expand the subset of the mask to the correct shape."""
@@ -119,8 +119,11 @@ class BaseImputer(BasePreprocessor, ABC):
                 x[..., idx_dst][self._expand_subset_mask(x, idx_src)] = value
         return x
 
-    def transform_in_rollout(self, x: torch.Tensor) -> torch.Tensor:
+    def transform_in_rollout(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
         """Impute missing values in the input tensor."""
+
+        if not in_place:
+            x = x.clone()
 
         # Choose correct index based on number of variables
         if x.shape[-1] == self.num_training_input_vars:
@@ -138,15 +141,12 @@ class BaseImputer(BasePreprocessor, ABC):
 
     def transform(self, x: torch.Tensor, in_place: bool = True, in_advance_input=False) -> torch.Tensor:
         """Impute missing values in the input tensor."""
-        if not in_place:
-            x = x.clone()
 
         if in_advance_input:
-            return self.transform_in_rollout(x)
+            return self.transform_in_rollout(x, in_place=in_place)
 
-        # Reset NaN locations outside of training for validation and inference.
-        if not self.training:
-            self.nan_locations = None
+        if not in_place:
+            x = x.clone()
 
         # Initialise mask if not cached.
         if self.nan_locations is None:
@@ -179,11 +179,12 @@ class BaseImputer(BasePreprocessor, ABC):
 
     def inverse_transform(self, x: torch.Tensor, in_place: bool = True, in_advance_input=False) -> torch.Tensor:
         """Impute missing values in the input tensor."""
-        if not in_place:
-            x = x.clone()
 
         if in_advance_input:
             return x
+
+        if not in_place:
+            x = x.clone()
 
         # Replace original nans with nan again
         if x.shape[-1] == self.num_training_output_vars:
@@ -353,11 +354,11 @@ class DynamicMixin:
 
     def transform(self, x: torch.Tensor, in_place: bool = True, in_advance_input=False) -> torch.Tensor:
         """Impute missing values in the input tensor."""
-        if not in_place:
-            x = x.clone()
-
         if in_advance_input:
             return x
+
+        if not in_place:
+            x = x.clone()
 
         # Initilialize mask every time
         nan_locations = self.get_nans(x)
