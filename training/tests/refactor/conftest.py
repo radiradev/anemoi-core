@@ -77,11 +77,11 @@ def new_config() -> DictConfig:
                             "q_700",
                             "q_1000",
                         ],
-                        "steps": [1],
+                        "steps": [-1, 0],
                     },
                     "amsr2": {
                         "variables": ["rawbt_1", "rawbt_2", "rawbt_3",],
-                        "steps": [1]
+                        "steps": [0]
                     }
                 },
                 "target_provider": {
