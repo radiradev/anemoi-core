@@ -17,9 +17,9 @@ import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
 from anemoi.models.data_indices.collection import IndexCollection
-from anemoi.training.data.data_handlers import data_handler_factory
-from anemoi.training.data.data_handlers import NativeGridMultDataset
-from anemoi.training.data.data_handlers import SampleProvider
+from anemoi.training.data.refactor.data_handlers import data_handler_factory
+from anemoi.training.data.refactor.dataset import NativeGridMultDataset
+from anemoi.training.data.refactor.providers import SampleProvider
 from anemoi.training.data.utils import get_dataloader_config
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.utils.worker_init import worker_init_func

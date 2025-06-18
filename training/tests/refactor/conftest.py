@@ -11,7 +11,6 @@ def new_config() -> DictConfig:
                 "timestep": "6h",
                 "data_handlers": {
                     "era5": {
-                        "_target_": "anemoi.training.data.data_handlers.NongroupedDataHandler",
                         "dataset": "aifs-od-an-oper-0001-mars-o96-2016-2023-6h-v6",
                         "processors": {
                             "normalizer": {
@@ -21,7 +20,6 @@ def new_config() -> DictConfig:
                         },
                     },
                     "amsr2": {
-                        "_target_": "anemoi.training.data.data_handlers.GroupedDataHandler",
                         ## NOW: Only 1 group is supported for each "key" (dh)
                         "dataset": {
                             "dataset": "/etc/ecmwf/nfs/dh1_home_a/mafp/work/obs/data/vz/obs-2018-11.vz",
@@ -34,7 +32,7 @@ def new_config() -> DictConfig:
             "dataloader": {
                 "sampler": {
                     "training": {
-                        "start": 2015,
+                        "start": 20181101,
                         "frequency": "6H",
                         "end": 2019,
                     },

@@ -2,7 +2,7 @@ import pytest
 import torch
 from omegaconf import DictConfig
 
-from anemoi.training.data.datamodule import AnemoiMultipleDatasetsDataModule
+from anemoi.training.data.refactor.multiple_datasets_datamodule import AnemoiMultipleDatasetsDataModule
 
 
 def test_datamodule(new_config: DictConfig):
