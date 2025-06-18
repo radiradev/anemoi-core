@@ -26,10 +26,10 @@ def convert_to_timedelta(value: str) -> np.timedelta64:
     Arguments
     ---------
     value : str
-        The timedelta string. Options: 1D, 24H, 6H, 1H, 30m, 10m
+        The timedelta string. Options: 1D, 24h, 6h, 1h, 30m, 10m
     """
     time_res = value[-1]
-    num = int(value[:-2])
+    num = int(value[:-1])
     return np.timedelta64(num, time_res)
 
 
@@ -74,6 +74,7 @@ class RecordProvider:
 
             assert len(dh.groups) == 1, dh.groups
             steps = [convert_to_timedelta(v) for v in self._steps[dh.groups[0]]]
+            assert all(steps / freq_td % 1 == 0), f"steps, {self._steps[dh.groups[0]]}, must be multiple of freq, {freq_td}."
             min_valid_time = start_date - min(steps)
             max_valid_time = end_date - max(steps)
             is_within_range = (time_values >= min_valid_time) & (time_values <= max_valid_time)
