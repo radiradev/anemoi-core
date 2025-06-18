@@ -77,7 +77,7 @@ def new_config() -> DictConfig:
                             "q_700",
                             "q_1000",
                         ],
-                        "steps": [-1, 0],
+                        "steps": ["-6H", "0H"],
                     },
                     "amsr2": {
                         "variables": [
@@ -85,13 +85,13 @@ def new_config() -> DictConfig:
                             "rawbt_2",
                             "rawbt_3",
                         ],
-                        "steps": [0],
+                        "steps": ["0H"],
                     },
                 },
                 "target_provider": {
                     "era5": {
                         "variables": ["10u", "10v", "2t", "2d", "q_100", "q_300", "q_700", "q_1000", "tp"],
-                        "steps": [1],
+                        "steps": ["6H"],
                     },
                     "amsr2": {
                         "variables": [
@@ -99,7 +99,7 @@ def new_config() -> DictConfig:
                             "rawbt_2",
                             "rawbt_3",
                         ],
-                        "steps": [1],
+                        "steps": ["6H"],
                     },
                 },
                 "model": {"_target_": "anemoi.models.models.AnemoiMultiModel"},

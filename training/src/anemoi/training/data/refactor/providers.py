@@ -20,6 +20,19 @@ def remove_config_level(config, key: str, default=None):
     return {k: v.get(key, default) for k, v in config.items()}
 
 
+def convert_to_timedelta(value: str) -> np.timedelta64:
+    """Convert string to timedelta.
+    
+    Arguments
+    ---------
+    value : str
+        The timedelta string. Options: 1D, 24H, 6H, 1H, 30m, 10m
+    """
+    time_res = value[-1]
+    num = int(value[:-2])
+    return np.timedelta64(num, time_res)
+
+
 class RecordProvider:
     def __init__(self, kwargs: dict, datahandlers: "AbstractDataHandler") -> None:
         self._data_handlers = datahandlers
@@ -60,7 +73,7 @@ class RecordProvider:
             start_date, end_date, freq_td = dh.start_date, dh.end_date, dh.frequency
 
             assert len(dh.groups) == 1, dh.groups
-            steps = self._steps[dh.groups[0]] * freq_td
+            steps = [convert_to_timedelta(v) for v in self._steps[dh.groups[0]]]
             min_valid_time = start_date - min(steps)
             max_valid_time = end_date - max(steps)
             is_within_range = (time_values >= min_valid_time) & (time_values <= max_valid_time)
