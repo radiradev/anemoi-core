@@ -76,39 +76,18 @@ class AbstractDataHandler: # not so abstract -> rename it
     def processors(self) -> list:
         raise NotImplementedError("Subclasses must implement processors method")
 
-    def select(self, select: list[str] | None =None):
+    def select(self, select: dict[str, list[str]] | None =None):
         if select is None:
             return self
-        return SelectedDataHandler(self, select=select)
+        assert len(self.groups) == 1, self.groups
+        if self.groups[0] not in select:
+            # What should select=None return? all variables or none?
+            return self
+
+        return SelectedDataHandler(self, select=select[self.groups[0]])
 
 
-class NongroupedDataHandler(AbstractDataHandler):
-    def __init__(self, dataset, processors = None, default_group: str = "data"):
-        self._dataset_config = dataset
-        self._processors = processors
-        self.name = default_group
-
-    @property
-    def _dataset(self):
-        return open_dataset(self._dataset_config)
-    
-    @property
-    def name_to_index(self) -> dict[str, dict]:
-        return {self.name: self._dataset.name_to_index}
-
-    @property
-    def groups(self) -> tuple[str]:
-        return (self.name, )
-
-    @property
-    def statistics(self) -> dict[str, torch.Tensor]:
-        return {self.name: self._dataset.statistics}
-
-    def __getitem__(self, *args, **kwargs) -> dict[GroupName, np.ndarray]:
-        return {self.name: self._dataset.__getitem__(*args, **kwargs)}
-
-
-class GroupedDataHandler(AbstractDataHandler):
+class BaseAnemoiDataHandler(AbstractDataHandler):
     def __init__(self, dataset, processors = None):
         self._dataset_config = dataset
         self._processors = processors
@@ -116,14 +95,50 @@ class GroupedDataHandler(AbstractDataHandler):
     @property
     def _dataset(self):
         return open_dataset(self._dataset_config)
+
+    @property
+    def frequency(self) -> np.timedelta64:
+        return np.timedelta64(self._dataset.frequency)
+
+    @property
+    def start_date(self) -> np.datetime64:
+        return np.datetime64(self._dataset.start_date)
+
+    @property
+    def end_date(self) -> np.datetime64:
+        return np.datetime64(self._dataset.end_date)
+
+
+class NongroupedDataHandler(BaseAnemoiDataHandler):
+    def __init__(self, dataset, processors = None, default_group: str = "data"):
+        super().__init__(dataset, processors)
+        assert isinstance(dataset, (dict, DictConfig, DotDict))
+        self.name = dataset.get("set_group", default_group)
+
+    @property
+    def groups(self) -> tuple[str]:
+        return (self.name, )
     
     @property
     def name_to_index(self) -> dict[str, dict]:
         return self._dataset.name_to_index
 
     @property
+    def statistics(self) -> dict[str, torch.Tensor]:
+        return self._dataset.statistics
+
+    def __getitem__(self, *args, **kwargs) -> dict[GroupName, np.ndarray]:
+        return self._dataset.__getitem__(*args, **kwargs)
+
+
+class GroupedDataHandler(BaseAnemoiDataHandler):
+    @property
     def groups(self) -> tuple[str]:
-        return self._dataset.groups
+        return tuple(self._dataset.groups)
+    
+    @property
+    def name_to_index(self) -> dict[str, dict]:
+        return self._dataset.name_to_index
 
     @property
     def statistics(self) -> dict[str, torch.Tensor]:
@@ -135,7 +150,7 @@ class GroupedDataHandler(AbstractDataHandler):
 
 class MultiDataHandler(AbstractDataHandler):
     def __init__(self, data_handlers: list[AbstractDataHandler]):
-        self._data_handlers = data_handlers
+        self._data_handlers = list(data_handlers)
 
     @property
     def name_to_index(self) -> dict[GroupName, dict[str, int]]:
@@ -170,8 +185,8 @@ class MultiDataHandler(AbstractDataHandler):
             raise ValueError("No data handlers available to determine start date.")
         start_dates = [dh.start_date for dh in self._data_handlers]
         if len(set(start_dates)) > 1:
-            raise ValueError("Data handlers have different start dates.")
-        return start_dates[0]
+            LOGGER.warning("Data handlers have different start dates.")
+        return min(start_dates)
 
     @property
     def end_date(self):
@@ -180,10 +195,11 @@ class MultiDataHandler(AbstractDataHandler):
             raise ValueError("No data handlers available to determine end date.")
         end_dates = [dh.end_date for dh in self._data_handlers]
         if len(set(end_dates)) > 1:
-            raise ValueError("Data handlers have different end dates.")
-        return end_dates[0]
+            LOGGER.warning("Data handlers have different end dates.")
+        return max(end_dates)
 
-    def __getitem__(self, key: str, *args, **kwargs):
+    def __getitem__(self, args, **kwargs):
+        key = args[0]
         if key not in self.groups:
             raise KeyError(f"Group {key} not found in data handlers. Available groups: {self.groups}")
 
@@ -191,7 +207,7 @@ class MultiDataHandler(AbstractDataHandler):
         for dh in self._data_handlers:
             if key not in dh.groups:
                 continue
-            return dh.__getitem__(*args, **kwargs)[key]
+            return dh.__getitem__(*args[1:], **kwargs)[key]
         raise KeyError(f"Group {key} not found in any data handler. Available groups: {self.groups}")
 
     def processors(self) -> dict[str, list[BasePreprocessor]]:
@@ -223,6 +239,9 @@ class MultiDataHandler(AbstractDataHandler):
             groups.update(new)
         return tuple(groups)
 
+    def select(self, select: dict[str, list[str]] | None = None):
+        self._data_handlers = [dh.select(select) for dh in self._data_handlers]
+
 
 def set_group(config, group: str):
     config = config.copy()
@@ -249,79 +268,74 @@ def data_handler_factory(config, top_level: bool = False) -> AbstractDataHandler
 class ForwardDataHandler(AbstractDataHandler):
     def __init__(self,forward):
         self._forward = forward
+    @property
     def name_to_index(self) -> dict[str, int]:
         return self._forward.name_to_index
+    @property
     def statistics(self) -> dict[str, torch.Tensor]:
         return self._forward.statistics
+    @property
     def frequency(self) -> timedelta:
         return self._forward.frequency
+    @property
     def start_date(self):
         return self._forward.start_date
+    @property
     def end_date(self):
         return self._forward.end_date
     def __getitem__(self, *args, **kwargs):
         return self._forward.__getitem__(*args, **kwargs)
     def processors(self) -> list[BasePreprocessor]:
         return self._forward.processors()
+    
+    @property
     def groups(self) -> tuple[str]:
-        return self._forward.groups()
+        return self._forward.groups
+
 
 class SelectedDataHandler(ForwardDataHandler):
     def __init__(self, dh: AbstractDataHandler, select: list[str] = None):
         super().__init__(dh)
-        selection = self._parse_select(select)
-        assert isinstance(selection, dict), f"Selection must be a dict of list, not {type(selection)}"
-        assert isinstance(selection[selection.keys()[0]], list), f"Selection values must be lists, not {type(selection[selection.keys()[0]])}"
-        self._selection = selection
-    def _parse_select(self, select):
-        raise NotImplementedError("TODO implement _parse_select")
-        return selection
+        assert isinstance(select, (list, ListConfig)), f"Selection values must be lists, not {type(select)}"
+        self._selection = select
 
     def _select(self, dict_of_dicts: dict[str: dict[str, Any]]) -> dict[str, dict[str, Any]]:
         d = copy.deepcopy(dict_of_dicts)
         # TODO select in dict of dict
         return d
+
+    @property
     def name_to_index(self) -> dict[str, int]:
         return self._select(self._forward.name_to_index)
+
+    @property
     def statistics(self) -> dict[str, torch.Tensor]:
         return self._select(self._forward.statistics)
+
     def processors(self):
         return self._select(self._forward.processors())
+
     def __getitem__(self, *args, **kwargs):
         """Get item from the forward data handler, applying selection if specified."""
         item = self._forward.__getitem__(*args, **kwargs)
         if self._selection is None:
             return item
         return {k: v for k, v in item.items() if k in self._selection}
-    def groups(self) -> tuple[str]:
-        all_groups = self._forward.groups()
-        if self._selection is None:
-            return all_groups
-        return [g for g in all_groups if g in self._selection]
 
+
+def remove_config_level(config, key: str, default = None):
+    return {k: v.get(key, default) for k, v in config.items()}
 
 
 class RecordProvider:
     def __init__(self, kwargs: dict, datahandlers: "AbstractDataHandler") -> None:
-        self._steps = {}
-        _data_handlers = []
-
-        for key, provider_config in kwargs.items():
-            if key not in datahandlers.groups:
-                raise ValueError(f"Unknown group: {key}, should be one of {list(datahandlers.groups)}")
-            selection = dict(key=provider_config["variables"])
-            dh = datahandlers.select(selection)
-
-            steps = provider_config.get("steps",0)
-            if isinstance(steps, int):
-                steps = [steps]
-            assert isinstance(steps, (list, tuple)), f"Steps must be a list or tuple, not {type(steps)}"
-            self._steps[key] =steps
-
-            _data_handlers.append(dh)
-            #print("record provider", key, _data_handlers.variables)
-
-        self._data_handlers = MultiDataHandler(_data_handlers)
+        self._data_handlers = datahandlers
+        
+        steps_config = remove_config_level(kwargs, "steps", default=0)
+        vars_config = remove_config_level(kwargs, "variables", default=[])
+        
+        self._steps = steps_config
+        self._data_handlers.select(vars_config)
 
     @property
     def group_names(self) -> list[GroupName]:
@@ -346,23 +360,22 @@ class RecordProvider:
     def processors(self) -> list[BasePreprocessor]:
         return self._data_handlers.processors()
 
-    def get_sample_coverage(self) -> dict[GroupName, tuple[np.datetime64, np.datetime64, timedelta]]:
-        # Dot we need this, is this just to check the config?
-        coverage = {}
-        for dh_key in self.group_names:
-            coverage[dh_key] = (
-                self._data_handlers[dh_key].start_date,
-                self._data_handlers[dh_key].end_date,
-                self._data_handlers[dh_key].frequency,
-            )
-        return coverage
+    def get_valid_times(self, time_values: np.ndarray) -> np.ndarray:
+        valid_times = np.full(len(time_values), True)
 
-    def get_steps(self, *args, **kwargs):
-        assert False, "use .steps property instead"
+        for dh in self._data_handlers._data_handlers:
+            start_date, end_date, freq_td = dh.start_date, dh.end_date, dh.frequency
 
-    @property
-    def steps(self) -> dict[GroupName, list[int]]:
-        return self._steps
+            assert len(dh.groups) == 1, dh.groups
+            steps = self._steps[dh.groups[0]] * freq_td
+            min_valid_time = start_date - min(steps)
+            max_valid_time = end_date - max(steps)
+            is_within_range = (time_values >= min_valid_time) & (time_values <= max_valid_time)
+            # TODO: Implement functionality for missing values
+            # TODO: Implement "required" tag for dh
+            valid_times &= is_within_range
+
+        return valid_times
 
     def __getitem__(self, i: int) -> dict[GroupName, list[torch.Tensor]]:
         # Get the i-th record for each group, where i is the time index.
@@ -370,10 +383,10 @@ class RecordProvider:
         # The data handlers are expected to return the data in the shape:
         # [C-]G-S-BT
         records = {}
-        for group, steps in self.steps.items():
+        for group, steps in self._steps.items():
             x_s = []
             for step in steps:
-                x = self.data_handlers[group, i + step]
+                x = self._data_handlers[group, i + step]
                 x = einops.rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
                 self.ensemble_dim = 1
                 x = torch.from_numpy(x)
@@ -420,7 +433,8 @@ class NativeGridMultDataset(IterableDataset):
         self.sample_provider = sample_provider
         self.shuffle = shuffle
 
-        self.sampler = AnemoiSampler(sample_provider.input, sample_provider.target, **sampler_config)
+        self.sampler = AnemoiSampler(**sampler_config)
+        self.sampler.set_valid_indices(sample_provider.input, sample_provider.target)
 
         # lazy init
         self.n_samples_per_epoch_total: int = 0

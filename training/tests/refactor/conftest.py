@@ -36,7 +36,7 @@ def new_config() -> DictConfig:
                     "training": {
                         "start": 2015,
                         "frequency": "6H",
-                        "end": 2018,
+                        "end": 2019,
                     },
                     "validation": {
                         "start": 2019,
@@ -79,11 +79,11 @@ def new_config() -> DictConfig:
                             "q_700",
                             "q_1000",
                         ],
-                        "steps": [-1, 0],
+                        "steps": [1],
                     },
                     "amsr2": {
                         "variables": ["rawbt_1", "rawbt_2", "rawbt_3",],
-                        "steps": [0]
+                        "steps": [1]
                     }
                 },
                 "target_provider": {

@@ -19,50 +19,34 @@ from anemoi.training.data.utils import parse_date
 
 class BaseAnemoiSampler(ABC):
     """Base AnemoiSampler class"""
-
-    def __init__(
-        self,
-        input_provider: "RecordProvider",
-        target_provider: "RecordProvider",
-    ) -> None:
-        self.valid_time_indices = self.compute_valid_indices(input_provider, target_provider)
+    def __init__(self):
+        self.valid_time_indices = None
 
     @abstractmethod
-    def compute_valid_indices(
-        self,
-        input_provider: "RecordProvider",
-        target_provider: "RecordProvider",
-    ) -> list[int]: ...
+    def time_values(self) -> np.ndarray: ...
+
+    def valid_time_values(self) -> np.ndarray:
+        return self.time_values[self.valid_time_indices]
+
+    @abstractmethod
+    def set_valid_indices(self, *providers: "RecordProvider") -> list[int]: ...
 
 
 class AnemoiSampler(BaseAnemoiSampler):
     """Sampler"""
 
-    def __init__(
-        self,
-        input_provider: "RecordProvider",
-        target_provider: "RecordProvider",
-        frequency: str,
-        start: str | int,
-        end: str | int,
-    ):
+    def __init__(self, frequency: str, start: str | int, end: str | int):
         self.frequency = frequency
         self.start = parse_date(start)
         self.end = parse_date(end)
 
-        super().__init__(input_provider, target_provider)
-
     @cached_property
-    def time_values(self) -> np.array:
+    def time_values(self) -> np.ndarray:
         """Time indices"""
         time_values = pd.date_range(start=self.start, end=self.end, freq=self.frequency)
         return np.array(time_values, dtype="datetime64[ns]")
 
-    def compute_valid_indices(
-        self,
-        input_provider: "RecordProvider",
-        target_provider: "RecordProvider",
-    ) -> list[int]:
+    def set_valid_indices(self, *providers: "RecordProvider") -> list[int]:
         """Set the valid indices.
 
         This method set the valid refernce indices for sampling.
@@ -70,19 +54,8 @@ class AnemoiSampler(BaseAnemoiSampler):
         # TODO: Handle missing data
         valid_time_indices = np.full(len(self.time_values), True)
 
-        for sample_provider in [input_provider, target_provider]:
-            coverages = sample_provider.get_sample_coverage()
-            for dh_key, (start_date, end_date, freq_td) in coverages.items():
-                steps = sample_provider._steps[dh_key]
-                prev_steps, future_steps = min(steps), max(steps)
+        for record_provider in providers:
+            provider_valid_time_indices = record_provider.get_valid_times(self.time_values)
+            valid_time_indices &= provider_valid_time_indices
 
-                freq = np.timedelta64(freq_td)
-                start_date = np.datetime64(start_date)
-                end_date = np.datetime64(end_date)
-                min_valid_time = start_date + prev_steps * freq
-                max_valid_time = end_date - future_steps * freq
-                is_within_range = (self.time_values >= min_valid_time) & (self.time_values <= max_valid_time)
-                valid_time_indices &= is_within_range
-
-        return [100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300]
-        # return list(np.where(valid_time_indices)[0])
+        self.valid_time_indices = list(np.where(valid_time_indices)[0])
