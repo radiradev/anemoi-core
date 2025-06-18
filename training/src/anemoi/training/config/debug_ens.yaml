@@ -25,6 +25,8 @@ hardware:
   files:
     truncation: ${data.resolution}-O32-linear.mat.npz
     truncation_inv: O32-${data.resolution}-linear.mat.npz
+    # /ec/res4/hpcperm/nesl/inter_mat,
+    truncation_loss: ["filter_o96_w=gaussian_d=8.0x.npz", "filter_o96_w=gaussian_d=4.0x.npz", "filter_o96_w=gaussian_d=2.0x.npz", false]
     graph: graph_anemoi_new_${data.resolution}.pt
     dataset: aifs-ea-an-oper-0001-mars-${data.resolution}-1979-2022-6h-v6.zarr
   accelerator: auto
