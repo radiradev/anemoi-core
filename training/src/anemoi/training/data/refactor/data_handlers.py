@@ -6,26 +6,25 @@ from typing import Any
 
 import numpy as np
 import torch
-from hydra.utils import instantiate
 from omegaconf import DictConfig
-from anemoi.utils.config import DotDict
 from omegaconf import ListConfig
 
 from anemoi.datasets.data import open_dataset
 from anemoi.models.preprocessing import BasePreprocessor
 from anemoi.training.data.utils import GroupName
+from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
 
 
-class AbstractDataHandler: # not so abstract -> rename it
+class AbstractDataHandler:  # not so abstract -> rename it
     def __init__(self, *args, **kwargs):
         pass
 
     # TODO: add
     def variables(self) -> list[str]:
         raise NotImplementedError("do we need to implement this?")
-    
+
     @property
     def _dataset(self):
         raise NotImplementedError("Subclasses must implement _dataset property")
@@ -54,13 +53,13 @@ class AbstractDataHandler: # not so abstract -> rename it
     def groups(self) -> tuple[str]:
         raise NotImplementedError("Subclasses must implement groups property")
 
-    def __getitem__(self, key, *args, **kwargs) :
+    def __getitem__(self, key, *args, **kwargs):
         raise NotImplementedError("Subclasses must implement __getitem__ method")
 
     def processors(self) -> list:
         raise NotImplementedError("Subclasses must implement processors method")
 
-    def select(self, select: dict[str, list[str]] | None =None):
+    def select(self, select: dict[str, list[str]] | None = None):
         if select is None:
             return self
         assert len(self.groups) == 1, self.groups
@@ -100,14 +99,14 @@ class ForwardDataHandler(AbstractDataHandler):
 
     def processors(self) -> list[BasePreprocessor]:
         return self._forward.processors()
-    
+
     @property
     def groups(self) -> tuple[str]:
         return self._forward.groups
 
 
 class AnemoiDataHandler(ForwardDataHandler):
-    def __init__(self, dataset, processors = None):
+    def __init__(self, dataset, processors=None):
         super().__init__(open_dataset(dataset))
         self._dataset_config = dataset
         self._processors = processors
@@ -197,7 +196,7 @@ class MultiDataHandler(AbstractDataHandler):
         return processors
 
     def check_no_overlap(self, other: "DataHandlers") -> None:
-        print('❌ TODO check for overlap')
+        print("❌ TODO check for overlap")
         return
         for key, dh in self.items():
             if other[key].start_date < dh.end_date:
@@ -237,7 +236,7 @@ def data_handler_factory(config, top_level: bool = False) -> AbstractDataHandler
 
     if isinstance(config, (list, tuple, ListConfig)):
         return MultiDataHandler(data_handler_factory(c) for c in config)
-    
+
     raise ValueError(f"Data handler config of type {type(config)} is not supported. It should be a list or a dict.")
 
 
@@ -247,7 +246,7 @@ class SelectedDataHandler(ForwardDataHandler):
         assert isinstance(select, (list, ListConfig)), f"Selection values must be lists, not {type(select)}"
         self._selection = select
 
-    def _select(self, dict_of_dicts: dict[str: dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    def _select(self, dict_of_dicts: dict[str : dict[str, Any]]) -> dict[str, dict[str, Any]]:
         d = copy.deepcopy(dict_of_dicts)
         # TODO select in dict of dict
         return d

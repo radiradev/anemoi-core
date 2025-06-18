@@ -19,6 +19,9 @@ from timm.scheduler import CosineLRScheduler
 from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.utils.checkpoint import checkpoint
 
+from anemoi.graphs.edges import CutOffEdges
+from anemoi.graphs.edges import KNNEdges
+from anemoi.graphs.nodes import LatLonNodes
 from anemoi.models.interface import AnemoiModelInterface
 from anemoi.training.data.data_handlers import SampleProvider
 from anemoi.training.data.utils import RecordProviderName
@@ -29,11 +32,7 @@ from anemoi.training.losses.scaler_tensor import grad_scaler
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.schemas.base_schema import convert_to_omegaconf
 from anemoi.training.utils.enums import TensorDim
-from anemoi.graphs.edges import CutOffEdges
-from anemoi.graphs.edges import KNNEdges
-from anemoi.graphs.nodes import LatLonNodes
 from anemoi.utils.config import DotDict
-
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -44,6 +43,7 @@ if TYPE_CHECKING:
 
 
 LOGGER = logging.getLogger(__name__)
+
 
 class DynamicGraphEditor:
     """Dynamic Graph Editor"""
@@ -60,10 +60,10 @@ class DynamicGraphEditor:
 
     def add_nodes(self, graph: HeteroData, in_latlons: torch.Tensor, out_latlons: torch.Tensor) -> HeteroData:
         graph = LatLonNodes(
-            latitudes=in_latlons[:, 0], longitudes=in_latlons[:, 1], name=self._IN_DATA_NAME
+            latitudes=in_latlons[:, 0], longitudes=in_latlons[:, 1], name=self._IN_DATA_NAME,
         ).update_graph(graph)
         graph = LatLonNodes(
-            latitudes=out_latlons[:, 0], longitudes=out_latlons[:, 1], name=self._OUT_DATA_NAME
+            latitudes=out_latlons[:, 0], longitudes=out_latlons[:, 1], name=self._OUT_DATA_NAME,
         ).update_graph(graph)
         return graph
 
@@ -75,7 +75,7 @@ class DynamicGraphEditor:
     def update_graph(self, graph: HeteroData, x_latlons: torch.Tensor, y_latlons: torch.Tensor) -> HeteroData:
         if x_latlons.size() == 0 or y_latlons.size() == 0:
             return graph
-        
+
         graph = graph.copy()
         graph = self.add_nodes(graph, x_latlons, y_latlons)
         graph = self.add_edges(graph)

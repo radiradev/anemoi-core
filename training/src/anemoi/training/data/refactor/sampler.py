@@ -19,6 +19,7 @@ from anemoi.training.data.utils import parse_date
 
 class BaseAnemoiSampler(ABC):
     """Base AnemoiSampler class"""
+
     def __init__(self):
         self.valid_time_indices = None
 

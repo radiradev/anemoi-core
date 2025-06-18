@@ -23,9 +23,9 @@ def new_config() -> DictConfig:
                         ## NOW: Only 1 group is supported for each "key" (dh)
                         "dataset": {
                             "dataset": "/etc/ecmwf/nfs/dh1_home_a/mafp/work/obs/data/vz/obs-2018-11.vz",
-                            "select": ['amsr2_h180.*']
-                        }
-                    }, 
+                            "select": ["amsr2_h180.*"],
+                        },
+                    },
                     #
                 },
             },
@@ -80,9 +80,13 @@ def new_config() -> DictConfig:
                         "steps": [-1, 0],
                     },
                     "amsr2": {
-                        "variables": ["rawbt_1", "rawbt_2", "rawbt_3",],
-                        "steps": [0]
-                    }
+                        "variables": [
+                            "rawbt_1",
+                            "rawbt_2",
+                            "rawbt_3",
+                        ],
+                        "steps": [0],
+                    },
                 },
                 "target_provider": {
                     "era5": {
@@ -90,9 +94,13 @@ def new_config() -> DictConfig:
                         "steps": [1],
                     },
                     "amsr2": {
-                        "variables": ["rawbt_1", "rawbt_2", "rawbt_3",],
-                        "steps": [1]
-                    }
+                        "variables": [
+                            "rawbt_1",
+                            "rawbt_2",
+                            "rawbt_3",
+                        ],
+                        "steps": [1],
+                    },
                 },
                 "model": {"_target_": "anemoi.models.models.AnemoiMultiModel"},
                 "encoder": {"_target_": "anemoi.models.layers.mapper.GraphTransformerForwardMapper"},

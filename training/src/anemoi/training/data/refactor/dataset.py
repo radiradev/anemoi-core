@@ -1,14 +1,17 @@
-import logging 
+import logging
 import random
+
 import numpy as np
 import torch
 from omegaconf import DictConfig
-from anemoi.training.data.utils import GroupName
-from anemoi.training.data.refactor.sampler import AnemoiSampler
-from anemoi.training.data.refactor.providers import SampleProvider
-
 from torch.utils.data import IterableDataset
+
+from anemoi.training.data.refactor.providers import SampleProvider
+from anemoi.training.data.refactor.sampler import AnemoiSampler
+from anemoi.training.data.utils import GroupName
+
 LOGGER = logging.getLogger(__name__)
+
 
 class NativeGridMultDataset(IterableDataset):
     """Iterable dataset for AnemoI data on the arbitrary grids."""

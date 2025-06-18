@@ -201,7 +201,7 @@ class Processors(nn.Module):
         return f"{self.__class__.__name__}({self.dic})"
 
     def forward(self, x, in_place: bool = True):
-        assert isinstance(x, dict) , type(x)
+        assert isinstance(x, dict), type(x)
         if in_place:
             for k in x.keys():
                 x[k] = self.dic[k].forward(x[k], in_place=in_place)
