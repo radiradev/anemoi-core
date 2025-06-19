@@ -133,4 +133,4 @@ class NativeGridMultDataset(IterableDataset):
         valid_indices = self.sampler.valid_time_indices
 
         for i in valid_indices:
-            yield self.sample_provider[i]
+            yield self.sample_provider[self.sampler.time_values[i]]

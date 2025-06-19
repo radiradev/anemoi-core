@@ -30,23 +30,23 @@ class AbstractDataHandler:  # not so abstract -> rename it
         raise NotImplementedError("Subclasses must implement _dataset property")
 
     @property
-    def name_to_index(self):
+    def name_to_index(self) -> dict[str, dict[str, int]]:
         raise NotImplementedError("Subclasses must implement name_to_index property")
 
     @property
-    def statistics(self) -> dict[str, torch.Tensor]:
+    def statistics(self) -> dict[str, dict[str, torch.Tensor]]:
         raise NotImplementedError("Subclasses must implement statistics property")
 
     @property
-    def frequency(self) -> timedelta:
+    def frequency(self) -> dict[str, np.timedelta64]:
         raise NotImplementedError("Subclasses must implement frequency property")
 
     @property
-    def start_date(self):
+    def start_date(self) -> dict[str, np.datetime64]:
         raise NotImplementedError("Subclasses must implement start_date property")
 
     @property
-    def end_date(self):
+    def end_date(self) -> dict[str, np.datetime64]:
         raise NotImplementedError("Subclasses must implement end_date property")
 
     @property
@@ -75,7 +75,7 @@ class ForwardDataHandler(AbstractDataHandler):
         self._forward = forward
 
     @property
-    def name_to_index(self) -> dict[str, int]:
+    def name_to_index(self) -> dict[str, dict[str, int]]:
         return self._forward.name_to_index
 
     @property
@@ -83,15 +83,15 @@ class ForwardDataHandler(AbstractDataHandler):
         return self._forward.statistics
 
     @property
-    def frequency(self) -> timedelta:
+    def frequency(self) -> dict[str, np.timedelta64]:
         return self._forward.frequency
 
     @property
-    def start_date(self):
+    def start_date(self) -> dict[str, np.datetime64]:
         return self._forward.start_date
 
     @property
-    def end_date(self):
+    def end_date(self) -> dict[str, np.datetime64]:
         return self._forward.end_date
 
     def __getitem__(self, *args, **kwargs):
@@ -99,6 +99,9 @@ class ForwardDataHandler(AbstractDataHandler):
 
     def processors(self) -> list[BasePreprocessor]:
         return self._forward.processors()
+
+    def map_datetime_to_index(self, date: np.datetime64) -> int:
+        return self._forward.map_datetime_to_index(date)
 
     @property
     def groups(self) -> tuple[str]:
@@ -110,18 +113,23 @@ class AnemoiDataHandler(ForwardDataHandler):
         super().__init__(open_dataset(dataset))
         self._dataset_config = dataset
         self._processors = processors
+        assert len(self._forward.groups) == 1, f"ds.groups: {self._forward.groups}"
 
     @property
-    def frequency(self) -> np.timedelta64:
-        return np.timedelta64(super().frequency)
+    def frequency(self) -> dict[str, np.timedelta64]:
+        return {self._forward.groups[0]: np.timedelta64(self._forward.frequency)}
 
     @property
-    def start_date(self) -> np.datetime64:
-        return np.datetime64(super().start_date)
+    def start_date(self) -> dict[str, np.datetime64]:
+        return {self._forward.groups[0]: np.datetime64(self._forward.start_date)}
 
     @property
-    def end_date(self) -> np.datetime64:
-        return np.datetime64(super().end_date)
+    def end_date(self) -> dict[str, np.datetime64]:
+        return {self._forward.groups[0]: np.datetime64(self._forward.end_date)}
+    
+    def map_datetime_to_index(self, date: np.datetime64) -> int:
+        group_name = self._forward.groups[0]
+        return {group_name: int((date - self.start_date[group_name]) / self.frequency[group_name])}
 
 
 class MultiDataHandler(AbstractDataHandler):
@@ -146,35 +154,27 @@ class MultiDataHandler(AbstractDataHandler):
         return stats
 
     @property
-    def frequency(self) -> timedelta:
-        if not self._data_handlers:
-            raise ValueError("No data handlers available to determine frequency.")
-        frequencies = [dh.frequency for dh in self._data_handlers]
-        if len(set(frequencies)) > 1:
-            raise ValueError("Data handlers have different frequencies.")
-        return frequencies[0]
+    def frequency(self) -> dict[GroupName, np.timedelta64]:
+        frequencies = {}
+        for data_handler in self._data_handlers:
+            frequencies.update(data_handler.frequency)
+        return frequencies
 
     @property
-    def start_date(self):
-        # do we need this?
-        if not self._data_handlers:
-            raise ValueError("No data handlers available to determine start date.")
-        start_dates = [dh.start_date for dh in self._data_handlers]
-        if len(set(start_dates)) > 1:
-            LOGGER.warning("Data handlers have different start dates.")
-        return min(start_dates)
+    def start_date(self) -> dict[GroupName, np.datetime64]:
+        start_dates = {}
+        for data_handler in self._data_handlers:
+            start_dates.update(data_handler.start_date)
+        return start_dates
 
     @property
-    def end_date(self):
-        # do we need this?
-        if not self._data_handlers:
-            raise ValueError("No data handlers available to determine end date.")
-        end_dates = [dh.end_date for dh in self._data_handlers]
-        if len(set(end_dates)) > 1:
-            LOGGER.warning("Data handlers have different end dates.")
-        return max(end_dates)
+    def end_date(self) -> dict[GroupName, np.datetime64]:
+        end_dates = {}
+        for data_handler in self._data_handlers:
+            end_dates.update(data_handler.end_date)
+        return end_dates
 
-    def __getitem__(self, args, **kwargs):
+    def __getitem__(self, *args, **kwargs):
         key = args[0]
         if key not in self.groups:
             raise KeyError(f"Group {key} not found in data handlers. Available groups: {self.groups}")
@@ -208,12 +208,20 @@ class MultiDataHandler(AbstractDataHandler):
     def groups(self) -> list[GroupName]:
         """Return the list of group names."""
         groups = set()
-        for dh in self._data_handlers:
-            new = dh.groups
+        for data_handler in self._data_handlers:
+            new = data_handler.groups
             if set(new).intersection(groups):
                 raise ValueError(f"Duplicate group names found: {set(new).intersection(groups)}")
             groups.update(new)
         return tuple(groups)
+    
+    def map_datetime_to_index(self, date: np.datetime64) -> dict[GroupName, int]:
+        indices = {}
+        for data_handler in self._data_handlers:
+            assert len(data_handler.groups) == 1
+            indices.update(data_handler.map_datetime_to_index(date))
+
+        return indices
 
     def select(self, select: dict[str, list[str]] | None = None):
         self._data_handlers = [dh.select(select) for dh in self._data_handlers]
