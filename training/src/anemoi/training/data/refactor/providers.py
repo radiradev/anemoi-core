@@ -84,7 +84,7 @@ class RecordProvider:
 
         return valid_times
 
-    def __getitem__(self, i: int) -> dict[GroupName, list[torch.Tensor]]:
+    def __getitem__(self, i) -> dict[GroupName, list[torch.Tensor]]:
         # Get the i-th record for each group, where i is the time index.
         # i is the time index, which is the same for all groups.
         # The data handlers are expected to return the data in the shape:
@@ -93,7 +93,7 @@ class RecordProvider:
         for group, steps in self._steps.items():
             x_s = []
             for step in steps:
-                x = self._data_handlers[group, i + step]
+                x = self._data_handlers.__getitem__(group, i + step)
                 x = einops.rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
                 self.ensemble_dim = 1
                 x = torch.from_numpy(x)
