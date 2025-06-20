@@ -28,7 +28,7 @@ diagnostics:
       enabled: True
       offline: False  # True  # False
       experiment_name: 'coupling_land'
-      run_name: 'forced_land'
+      run_name: 'forced_land2'
       terminal: True
       authentication: True
   # plot:

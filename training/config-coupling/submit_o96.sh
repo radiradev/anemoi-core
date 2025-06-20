@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --qos=ng
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
-#SBATCH --gpus-per-node=1
+#SBATCH --nodes=2
+#SBATCH --ntasks-per-node=4
+#SBATCH --gpus-per-node=4
 #SBATCH --cpus-per-task=12
 #SBATCH --account=ecrdasca  # ecrdasca  # ecaifs
-#SBATCH --mem=64G
+#SBATCH --mem=220G
 #SBATCH --time=48:00:00
 #SBATCH --output=outputs/coupling-%j.out
 #set -x
@@ -25,7 +25,7 @@
 
 # generic settings
 
-GITDIR=/perm/daep/projects/anemoi-core/feature-single01/training/config-coupling
+GITDIR=/perm/daep/projects/anemoi-core/feature-coupling/training/config-coupling
 WORKDIR=$GITDIR
 cd $WORKDIR
 

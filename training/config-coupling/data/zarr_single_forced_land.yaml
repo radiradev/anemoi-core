@@ -84,18 +84,18 @@ normalizer:
     - "cvl"
     - "cl"
     - "glacier_mask"
-    - "swvl1"
-    - "swvl2"
-    - "swvl3"
+    # - "swvl1"
+    # - "swvl2"
+    # - "swvl3"
     - "snowc"
     - "sd"
 
 imputer:
   default: "none"
   minimum:
-    - "swvl1"
-    - "swvl2"
-    - "swvl3"
+    # - "swvl1"
+    # - "swvl2"
+    # - "swvl3"
     - "ro"
     - "snowc"
     - "sd"
@@ -112,6 +112,9 @@ imputer:
     - "stl1"
     - "stl2"
     - "stl3"
+    - "swvl1"
+    - "swvl2"
+    - "swvl3"
 
 remapper:
   default: "none"
