@@ -27,13 +27,13 @@ class NaNMaskScaler(BaseUpdatingScaler):
 
     scale_dims: tuple[TensorDim] = (TensorDim.BATCH_SIZE, TensorDim.GRID, TensorDim.VARIABLE)
 
-    def on_training_start(self, model: AnemoiModelInterface) -> np.ndarray:
-        """Get loss scaling.
+    def on_train_batch_end(self, model: AnemoiModelInterface) -> None:
+        """Update loss scaling.
 
         Get  mask multiplying NaN locations with zero.
         At this stage, returns a loss slicing mask with all values set to 1.
-        When calling the imputer for the first time, the NaN positions are available.
-        Before first application of loss function, the mask is replaced.
+        Always when calling the imputer, the NaN positions are updated.
+        Before every application of training loss function, the mask is replaced.
         """
         loss_weights_mask = np.ones((1, 1, 1))
         # iterate over all pre-processors and check if they have a loss_mask_training attribute
