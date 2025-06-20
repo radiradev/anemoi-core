@@ -100,7 +100,7 @@ class RecordProvider:
             x_s = []
             dh_i = self._data_handlers.map_datetime_to_index(i)
             for step in steps:
-                x = self._data_handlers.__getitem__(group, dh_i[group] + step)
+                x = self._data_handlers.__getitem__(group, int(dh_i[group] + step))
                 x = einops.rearrange(x, "dates variables ensemble gridpoints -> dates ensemble gridpoints variables")
                 self.ensemble_dim = 1
                 x = torch.from_numpy(x)
