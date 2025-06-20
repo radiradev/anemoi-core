@@ -253,7 +253,7 @@ class AnemoiModelProc(nn.Module):
         shard_shapes_data = get_shape_shards(x_data, 0, model_comm_group)
 
         x_data = self.emb_nodes_src(x_data)
-        
+
         x_out = self.processor(
             x_data,
             batch_size=batch_size,
