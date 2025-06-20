@@ -52,24 +52,21 @@ class AnemoiModelEncProcDec(nn.Module):
             Graph definition
         """
         super().__init__()
-        model_config = DotDict(model_config)
         self._graph_data = graph_data
-        self._graph_name_data = model_config.graph.data
-        self._graph_name_hidden = model_config.graph.hidden
-
-        self._calculate_shapes_and_indices(data_indices)
-        self._assert_matching_indices(data_indices)
         self.data_indices = data_indices
         self.statistics = statistics
+        self._truncation_data = truncation_data
 
+        model_config = DotDict(model_config)
+        self._graph_name_data = model_config.graph.data
+        self._graph_name_hidden = model_config.graph.hidden
         self.multi_step = model_config.training.multistep_input
         self.num_channels = model_config.model.num_channels
 
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
 
-        self._truncation_data = truncation_data
-
-        self.input_dim = self._calculate_input_dim(model_config)
+        self._calculate_shapes_and_indices(data_indices)
+        self._assert_matching_indices(data_indices)
 
         # we can't register these as buffers because DDP does not support sparse tensors
         # these will be moved to the GPU when first used via sefl.interpolate_down/interpolate_up
@@ -198,9 +195,6 @@ class AnemoiModelEncProcDec(nn.Module):
             # bounding performed in the order specified in the config file
             x_out = bounding(x_out)
         return x_out
-
-    def _calculate_input_dim(self, model_config):
-        return self.multi_step * self.num_input_channels + self.node_attributes.attr_ndims[self._graph_name_data]
 
     def _calculate_shapes_and_indices(self, data_indices: dict) -> None:
         self.num_input_channels = len(data_indices.model.input)
