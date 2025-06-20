@@ -65,7 +65,6 @@ class AnemoiModelProc(nn.Module):
         self.data_indices = data_indices
         self.statistics = statistics
 
-
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
 
         self._truncation_data = truncation_data
