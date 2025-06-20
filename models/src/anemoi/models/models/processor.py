@@ -78,8 +78,8 @@ class AnemoiModelProc(nn.Module):
             self.A_up = self._make_truncation_matrix(self._truncation_data["up"])
             LOGGER.info("Truncation: A_up %s", self.A_up.shape)
 
-        self.emb_nodes_src = self.layer_factory.Linear(self.num_input_channels, self.num_channels)
-        self.unemb_nodes_dst = self.layer_factory.Linear(self.num_channels, self.num_output_channels)
+        self.emb_nodes_src = torch.nn.Linear(self.num_input_channels, self.num_channels)
+        self.unemb_nodes_dst = torch.nn.Linear(self.num_channels, self.num_output_channels)
 
         # Processor data -> data
         self.processor = instantiate(
