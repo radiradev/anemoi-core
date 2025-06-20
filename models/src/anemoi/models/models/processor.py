@@ -28,7 +28,7 @@ from anemoi.utils.config import DotDict
 LOGGER = logging.getLogger(__name__)
 
 
-class AnemoiModelEncProcDec(nn.Module):
+class AnemoiModelProc(nn.Module):
     """Message passing graph neural network."""
 
     def __init__(
@@ -81,19 +81,10 @@ class AnemoiModelEncProcDec(nn.Module):
             self.A_up = self._make_truncation_matrix(self._truncation_data["up"])
             LOGGER.info("Truncation: A_up %s", self.A_up.shape)
 
-        # Encoder data -> hidden
-        self.encoder = instantiate(
-            model_config.model.encoder,
-            _recursive_=False,  # Avoids instantiation of layer_kernels here
-            in_channels_src=self.input_dim,
-            in_channels_dst=self.node_attributes.attr_ndims[self._graph_name_hidden],
-            hidden_dim=self.num_channels,
-            sub_graph=self._graph_data[(self._graph_name_data, "to", self._graph_name_hidden)],
-            src_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
-            dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-        )
+        self.emb_nodes_src = self.layer_factory.Linear(self.num_input_channels, self.num_channels)
+        self.unemb_nodes_dst = self.layer_factory.Linear(self.num_channels, self.num_output_channels)
 
-        # Processor hidden -> hidden
+        # Processor data -> data
         self.processor = instantiate(
             model_config.model.processor,
             _recursive_=False,  # Avoids instantiation of layer_kernels here
@@ -101,19 +92,6 @@ class AnemoiModelEncProcDec(nn.Module):
             sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_hidden)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-        )
-
-        # Decoder hidden -> data
-        self.decoder = instantiate(
-            model_config.model.decoder,
-            _recursive_=False,  # Avoids instantiation of layer_kernels here
-            in_channels_src=self.num_channels,
-            in_channels_dst=self.input_dim,
-            hidden_dim=self.num_channels,
-            out_channels_dst=self.num_output_channels,
-            sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_data)],
-            src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-            dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
         )
 
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
@@ -270,36 +248,20 @@ class AnemoiModelEncProcDec(nn.Module):
         batch_size = x.shape[0]
         ensemble_size = x.shape[2]
 
-        x_data_latent, x_skip = self._assemble_input(x, batch_size)
-        x_hidden_latent = self.node_attributes(self._graph_name_hidden, batch_size=batch_size)
+        x_data, x_skip = self._assemble_input(x, batch_size)
 
-        shard_shapes_data = get_shape_shards(x_data_latent, 0, model_comm_group)
-        shard_shapes_hidden = get_shape_shards(x_hidden_latent, 0, model_comm_group)
+        shard_shapes_data = get_shape_shards(x_data, 0, model_comm_group)
 
-        x_data_latent, x_latent = self._run_mapper(
-            self.encoder,
-            (x_data_latent, x_hidden_latent),
+        x_data = self.emb_nodes_src(x_data)
+        
+        x_out = self.processor(
+            x_data,
             batch_size=batch_size,
-            shard_shapes=(shard_shapes_data, shard_shapes_hidden),
+            shard_shapes=shard_shapes_data,
             model_comm_group=model_comm_group,
         )
 
-        x_latent_proc = self.processor(
-            x_latent,
-            batch_size=batch_size,
-            shard_shapes=shard_shapes_hidden,
-            model_comm_group=model_comm_group,
-        )
-
-        x_latent_proc = x_latent_proc + x_latent
-
-        x_out = self._run_mapper(
-            self.decoder,
-            (x_latent_proc, x_data_latent),
-            batch_size=batch_size,
-            shard_shapes=(shard_shapes_hidden, shard_shapes_data),
-            model_comm_group=model_comm_group,
-        )
+        x_out = self.unemb_nodes_dst(x_out)
 
         x_out = self._assemble_output(x_out, x_skip, batch_size, ensemble_size, x.dtype)
 

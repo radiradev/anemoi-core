@@ -8,12 +8,14 @@
 # nor does it submit to any jurisdiction.
 
 from .encoder_processor_decoder import AnemoiModelEncProcDec
+from .processor import AnemoiModelProc
 from .ens_encoder_processor_decoder import AnemoiEnsModelEncProcDec
 from .hierarchical import AnemoiModelEncProcDecHierarchical
 from .interpolator import AnemoiModelEncProcDecInterpolator
 
 __all__ = [
     "AnemoiModelEncProcDec",
+    "AnemoiModelProc",
     "AnemoiEnsModelEncProcDec",
     "AnemoiModelEncProcDecHierarchical",
     "AnemoiModelEncProcDecInterpolator",
