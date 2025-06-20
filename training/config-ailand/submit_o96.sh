@@ -42,4 +42,5 @@ source ${VENV}/bin/activate
 #srun anemoi-training train --config-name=single
 #srun anemoi-training train --config-name=single_snow
 #srun anemoi-training train --config-name=single_small
-srun anemoi-training train --config-name=ailand training.run_id=55032c61586543d0930a0544c3f946c4
+#srun anemoi-training train --config-name=ailand training.run_id=55032c61586543d0930a0544c3f946c4
+srun anemoi-training train --config-name=ailand

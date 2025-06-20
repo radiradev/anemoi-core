@@ -69,7 +69,7 @@ training_loss:
   # add `!scaler_name`, i.e. ['*', '!scaler_1'], and `scaler_1` will not be added.
   #scalers: ['pressure_level', 'general_variable', 'nan_mask_weights', 'node_weights']
   scalers: ['general_variable', 'nan_mask_weights', 'node_weights', 'stdev_tendency']
-  ignore_nans: False
+  ignore_nans: True  # False
 
 # Validation metrics calculation,
 # This may be a list, in which case all metrics will be calculated

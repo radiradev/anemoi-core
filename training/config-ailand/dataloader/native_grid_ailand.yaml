@@ -60,7 +60,7 @@ training:
     frequency: ${data.frequency}
     # drop:  []
     # select: [tp, cp, t_850, z, 10u, 10v, u_850, v_850, q_850, z_850, sdor, slor, lsm, skt, 2t, 2d, sp, insolation]
-    select: [tp, cp, t_850, z, u_850, v_850, q_850, z_850, sdor, slor, lsm, sp, insolation]
+    select: [tp, cp, t_925, z, u_925, v_925, q_925, z_925, sdor, slor, lsm, sp, insolation]
   - dataset: ${hardware.paths.data}/${hardware.files.dataset_land}
     start: null
     end: 2022
@@ -78,7 +78,7 @@ validation:
     frequency: ${data.frequency}
     # drop:  []
     # select: [tp, cp, t_850, z, 10u, 10v, u_850, v_850, q_850, z_850, sdor, slor, lsm, skt, 2t, 2d, sp, insolation]
-    select: [tp, cp, t_850, z, u_850, v_850, q_850, z_850, sdor, slor, lsm, sp, insolation]
+    select: [tp, cp, t_925, z, u_925, v_925, q_925, z_925, sdor, slor, lsm, sp, insolation]
   - dataset: ${hardware.paths.data}/${hardware.files.dataset_land}
     start: 2023
     end: 2023
@@ -99,7 +99,7 @@ test:
     frequency: ${data.frequency}
     # drop:  []
     # select: [tp, cp, t_850, z, 10u, 10v, u_850, v_850, q_850, z_850, sdor, slor, lsm, skt, 2t, 2d, sp, insolation]
-    select: [tp, cp, t_850, z, u_850, v_850, q_850, z_850, sdor, slor, lsm, sp, insolation]
+    select: [tp, cp, t_925, z, u_925, v_925, q_925, z_925, sdor, slor, lsm, sp, insolation]
   - dataset: ${hardware.paths.data}/${hardware.files.dataset_land}
     start: 2022
     end: null

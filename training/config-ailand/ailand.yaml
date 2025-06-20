@@ -34,11 +34,13 @@ diagnostics:
   # plot:
   #   callbacks: []
 model:
+  # model:
+  #   _target_: anemoi.models.models.AnemoiModelProc
   processor:
     _target_: anemoi.models.layers.processor.PointMLP
     num_layers: 4
     num_chunks: 2
-    mlp_hidden_ratio: 4
+    mlp_hidden_ratio: 1  # 4
   num_channels: 128
 dataloader:
   limit_batches:

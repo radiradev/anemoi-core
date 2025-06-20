@@ -1,8 +1,11 @@
 num_channels: 1024
 cpu_offload: False
 
+# model:
+#   _target_: anemoi.models.models.AnemoiModelEncProcDec
+
 model:
-  _target_: anemoi.models.models.AnemoiModelEncProcDec
+  _target_: anemoi.models.models.AnemoiModelProc
 
 layer_kernels:
   # The layer_kernels can be adjusted per model component, but are defined here for convenience.
@@ -80,9 +83,9 @@ bounding: #These are applied in order
     - sd
   - _target_: anemoi.models.layers.bounding.HardtanhBounding #[0, 1)
     variables:
-    - swvl1
-    - swvl2
-    - swvl3
+    # - swvl1
+    # - swvl2
+    # - swvl3
     - snowc
     min_val: 0
     max_val: 1

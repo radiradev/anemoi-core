@@ -123,11 +123,19 @@ class PointMLP(BaseProcessor):
         self,
         x: Tensor,
         batch_size: int,
-        shard_shapes: tuple[tuple[int], tuple[int]],
+        shard_shapes: tuple[tuple[int], ...],
         model_comm_group: Optional[ProcessGroup] = None,
         *args,
         **kwargs,
     ) -> Tensor:
+        shape_nodes = change_channels_in_shape(shard_shapes, self.num_channels)
+        if model_comm_group:
+            assert (
+                model_comm_group.size() == 1 or batch_size == 1
+            ), "Only batch size of 1 is supported when model is sharded accross GPUs"
+
+        (x,) = self.run_layers((x,), shape_nodes, batch_size, model_comm_group, **kwargs)
+
         return x
 
 
