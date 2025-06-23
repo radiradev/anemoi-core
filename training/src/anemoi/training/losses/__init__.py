@@ -16,6 +16,7 @@ from .loss import get_loss_function
 from .mae import MAELoss
 from .mse import MSELoss
 from .rmse import RMSELoss
+from .smooth_l1_loss import SmoothL1Loss
 
 __all__ = [
     "AlmostFairKernelCRPS",
@@ -26,5 +27,6 @@ __all__ = [
     "MAELoss",
     "MSELoss",
     "RMSELoss",
+    "SmoothL1Loss",
     "get_loss_function",
 ]

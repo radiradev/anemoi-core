@@ -49,7 +49,7 @@ normalizer:
   default: "mean-std"
   remap:
     cp: tp
-    sf: tp
+    # sf: tp
   std:
   - "tp"
   - "cp"

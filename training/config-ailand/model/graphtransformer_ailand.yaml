@@ -81,6 +81,19 @@ bounding: #These are applied in order
     variables:
     - ro
     - sd
+  - _target_: anemoi.models.layers.bounding.NormalizedReluBounding #[0, 1)
+    variables:
+    - swvl1
+    - swvl2
+    - swvl3
+    min_val:
+    - 0
+    - 0
+    - 0
+    normalizer:
+    - mean-std
+    - mean-std
+    - mean-std
   - _target_: anemoi.models.layers.bounding.HardtanhBounding #[0, 1)
     variables:
     # - swvl1

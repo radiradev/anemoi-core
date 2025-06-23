@@ -62,12 +62,13 @@ loss_gradient_scaling: False
 # loss function for the model
 training_loss:
   # loss class to initialise
-  _target_: anemoi.training.losses.MSELoss
+  # _target_: anemoi.training.losses.MSELoss
+  _target_: anemoi.training.losses.SmoothL1Loss
   # Scalers to include in loss calculation
   # A selection of available scalers are listed in training/scalers.
   # '*' is a valid entry to use all `scalers` given, if a scaler is to be excluded
   # add `!scaler_name`, i.e. ['*', '!scaler_1'], and `scaler_1` will not be added.
-  #scalers: ['pressure_level', 'general_variable', 'nan_mask_weights', 'node_weights']
+  # scalers: ['pressure_level', 'general_variable', 'nan_mask_weights', 'node_weights']
   scalers: ['general_variable', 'nan_mask_weights', 'node_weights', 'stdev_tendency']
   ignore_nans: True  # False
 

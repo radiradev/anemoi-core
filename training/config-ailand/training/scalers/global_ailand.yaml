@@ -4,6 +4,15 @@ general_variable:
   _target_: anemoi.training.losses.scalers.GeneralVariableLossScaler
   weights:
     default: 1
+    swvl1: 14.48
+    swvl2: 36.72
+    swvl3: 127.89
+    stl1: 3.53
+    stl2: 25.78
+    stl3: 229.35
+    sd: 20.40
+    # ro: 0.025
+
     # q: 0.6 #1
     # t: 6   #1
     # u: 0.8 #0.5

@@ -23,7 +23,7 @@ diagnostics:
       enabled: True
       offline: False  # True  # False
       experiment_name: 'ailand'
-      run_name: 'test-ms1-reduced'
+      run_name: 'test-ms1-reduced-256'
       terminal: True
       authentication: True
   files:
@@ -41,7 +41,7 @@ model:
     num_layers: 4
     num_chunks: 2
     mlp_hidden_ratio: 1  # 4
-  num_channels: 128
+  num_channels: 256  #128
 dataloader:
   limit_batches:
     training: null
