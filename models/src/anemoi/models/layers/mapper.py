@@ -154,9 +154,7 @@ class GraphEdgeMixin:
 
         # explicit cast is needed here to stay in fp16 precision. default_dtype is set in models/encoder_processor_decoder.py
         edge_attr_tensor = (
-            torch.cat([sub_graph[attr] for attr in edge_attributes], axis=1)
-            .type(torch.float16)
-            .to(torch.get_default_dtype())
+            torch.cat([sub_graph[attr] for attr in edge_attributes], axis=1).to(torch.get_default_dtype())
         )
 
         self.edge_dim = edge_attr_tensor.shape[1] + trainable_size
