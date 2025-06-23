@@ -104,23 +104,69 @@ class BaseImputer(BasePreprocessor, ABC):
             LOGGER.debug(f"Imputer: replacing NaNs in {name} with value {self.replacement[-1]}")
 
     def _expand_subset_mask(self, x: torch.Tensor, idx_src: int, nan_locations: torch.Tensor) -> torch.Tensor:
-        """Expand the subset of the mask to the correct shape."""
+        """Expand the subset of the nan location mask to the correct shape.
+
+        The mask is only saved for the first dimension (batch) and the last two dimensions (grid, variable).
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor with shape (batch, time, ..., grid, variable)
+        idx_src : int
+            Index of the source variable in the nan locations mask
+        nan_locations : torch.Tensor
+            Tensor with NaN locations of shape (batch, grid, variable)
+
+        Returns
+        -------
+        torch.Tensor
+            Expanded tensor with NaN locations of shape (batch, time, ..., grid)
+        """
         for i in x.shape[1:-2]:
             nan_locations = nan_locations.unsqueeze(1)
 
         return nan_locations[..., idx_src].expand(-1, *x.shape[1:-2], -1)
 
     def get_nans(self, x: torch.Tensor) -> torch.Tensor:
-        """get NaN mask from data"""
+        """Get NaN mask from data
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor with shape (batch, time, ..., grid, variable)
+
+        Returns
+        -------
+        torch.Tensor
+            Tensor with NaN locations of shape (batch, time, ..., grid)
+        """
         # The mask is only saved for the first two dimension (batch, timestep) and the last two dimensions (grid, variable)
         # For the rest of the dimensions we use the first dimension
         idx = [slice(None), slice(None)] + [0] * (x.ndim - 4) + [slice(None), slice(None)]
         return torch.isnan(x[idx])
 
-    def fill_with_value(self, x, index, nan_locations: torch.Tensor):
+    def fill_with_value(self, x: torch.Tensor, index: list[int], nan_locations: torch.Tensor):
+        """Fill NaN locations in the input tensor with the specified values.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor
+        index : list
+            List of indices for the variables to be imputed
+        nan_locations : torch.Tensor
+            Tensor with NaN locations
+
+        Returns
+        -------
+        torch.Tensor
+            Tensor where NaN locations are filled with the specified values
+        """
+        # Expand the nan locations to match the shape of the input tensor
+        for i in x.shape[2:-2]:
+            nan_locations = nan_locations.unsqueeze(2)
         for idx_src, (idx_dst, value) in zip(index, zip(index, self.replacement)):
             if idx_dst is not None:
-                # if idx_dst >= x.shape[-1] or idx_src >= nan_locations.shape[-1]:
                 x[..., idx_dst][nan_locations[..., idx_src]] = value
         return x
 
@@ -143,11 +189,10 @@ class BaseImputer(BasePreprocessor, ABC):
             # data indices for training input
             index = self.index_training_input
 
-            # set training loss mask to weigh imputed values with zeroes
-            if self.loss_mask_training is None:
-                self.loss_mask_training = torch.ones(
-                    (x.shape[0], x.shape[-2], len(self.data_indices.model.output.name_to_index)), device=x.device
-                )  # shape (batchsize, grid, n_outputs)
+            # set training loss mask to match shape of training input
+            self.loss_mask_training = torch.ones(
+                (x.shape[0], x.shape[-2], len(self.data_indices.model.output.name_to_index)), device=x.device
+            )  # shape (batchsize, grid, n_outputs)
 
             # for all variables that are imputed and part of the model output, set the loss weight to zero at NaN location
             for idx_src, idx_dst in zip(index, self.index_inference_output):
@@ -323,6 +368,8 @@ class CopyImputer(BaseImputer):
             LOGGER.debug(f"Imputer: replacing NaNs in {name} with value coming from variable :{self.replacement[-1]}")
 
     def fill_with_value(self, x, index, nan_locations: torch.Tensor):
+        for i in x.shape[2:-2]:
+            nan_locations = nan_locations.unsqueeze(2)
         # Replace values
         for idx_src, (idx_dst, value) in zip(index, zip(index, self.replacement)):
             if idx_dst is not None:
