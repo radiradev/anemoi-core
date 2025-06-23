@@ -399,15 +399,6 @@ class GraphForecaster(pl.LightningModule):
         for rollout_step in range(rollout or self.rollout):
             # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
             y_pred = self(x)
-            if rollout_step == 0:
-                # when applied here this callback should have a different name
-                self.update_scalars(
-                    callback=(
-                        AvailableCallbacks.ON_TRAIN_BATCH_END
-                        if not validation_mode
-                        else AvailableCallbacks.ON_VALID_BATCH_END
-                    ),
-                )
 
             y = batch[:, self.multi_step + rollout_step, ..., self.data_indices.data.output.full]
             # y includes the auxiliary variables, so we must leave those out when computing the loss
@@ -424,6 +415,12 @@ class GraphForecaster(pl.LightningModule):
             x = self.advance_input(x, y_pred, batch, rollout_step)
 
             yield loss, metrics_next, y_pred
+
+        self.update_scalars(
+            callback=(
+                AvailableCallbacks.ON_TRAIN_BATCH_END if not validation_mode else AvailableCallbacks.ON_VALID_BATCH_END
+            ),
+        )
 
     def on_after_batch_transfer(self, batch: torch.Tensor, _: int) -> torch.Tensor:
         """Assemble batch after transfer to GPU by gathering the batch shards if needed.
