@@ -77,7 +77,7 @@ class AnemoiModelEncProcDec(nn.Module):
         precision_mapping = {
             "16-true": torch.float16,
             "bf16": torch.bfloat16,
-            "16-mixed": torch.float32, #not sure if this is right
+            "16-mixed": torch.float32,  # not sure if this is right
         }
         self.dtype = precision_mapping.get(model_config.training.precision)
         torch.set_default_dtype(self.dtype)
