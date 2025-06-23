@@ -112,15 +112,16 @@ class BaseImputer(BasePreprocessor, ABC):
 
     def get_nans(self, x: torch.Tensor) -> torch.Tensor:
         """get NaN mask from data"""
-        # The mask is only saved for the first dimension (batch) and the last two dimensions (grid, variable)
+        # The mask is only saved for the first two dimension (batch, timestep) and the last two dimensions (grid, variable)
         # For the rest of the dimensions we use the first dimension
-        idx = [slice(None)] + [0] * (x.ndim - 3) + [slice(None), slice(None)]
+        idx = [slice(None), slice(None)] + [0] * (x.ndim - 4) + [slice(None), slice(None)]
         return torch.isnan(x[idx])
 
     def fill_with_value(self, x, index, nan_locations: torch.Tensor):
-        for idx_src, (idx_dst, value) in zip(self.index_training_input, zip(index, self.replacement)):
+        for idx_src, (idx_dst, value) in zip(index, zip(index, self.replacement)):
             if idx_dst is not None:
-                x[..., idx_dst][self._expand_subset_mask(x, idx_src, nan_locations)] = value
+                # if idx_dst >= x.shape[-1] or idx_src >= nan_locations.shape[-1]:
+                x[..., idx_dst][nan_locations[..., idx_src]] = value
         return x
 
     def transform(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
@@ -133,28 +134,36 @@ class BaseImputer(BasePreprocessor, ABC):
         if x.shape[-1] == self.num_training_input_vars:
             # training input
 
-            # cache nan locations from training input
-            self.nan_locations = self.get_nans(x)
+            # get nan locations from training input
+            nan_locations = self.get_nans(x)
+
+            # cache nan locations from training input, reduce time dimension by selecting the first timestep
+            self.nan_locations = nan_locations[:, 0]
 
             # data indices for training input
             index = self.index_training_input
 
-            # Initialize training loss mask to weigh imputed values with zeroes once
-            self.loss_mask_training = torch.ones(
-                (x.shape[0], x.shape[-2], len(self.data_indices.model.output.name_to_index)), device=x.device
-            )  # shape (batchsize, grid, n_outputs)
+            # set training loss mask to weigh imputed values with zeroes
+            if self.loss_mask_training is None:
+                self.loss_mask_training = torch.ones(
+                    (x.shape[0], x.shape[-2], len(self.data_indices.model.output.name_to_index)), device=x.device
+                )  # shape (batchsize, grid, n_outputs)
+
             # for all variables that are imputed and part of the model output, set the loss weight to zero at NaN location
             for idx_src, idx_dst in zip(index, self.index_inference_output):
                 if idx_dst is not None:
                     self.loss_mask_training[..., idx_dst] = (~self.nan_locations[..., idx_src]).int()
+
         elif x.shape[-1] == self.num_inference_input_vars:
             # inference input
 
-            # update nan locations of progonostic variables of inference input
+            # get nan locations from inference input
             nan_locations = self.get_nans(x)
+
+            # update nan locations of progonostic variables of inference input
             self.nan_locations[..., self.data_indices.data.input.prognostic] = nan_locations[
                 ..., self.data_indices.model.input.prognostic
-            ]
+            ][:, 0]
 
             # data indices for training input
             index = self.index_inference_input
@@ -165,7 +174,7 @@ class BaseImputer(BasePreprocessor, ABC):
             )
 
         # Replace values
-        return self.fill_with_value(x, index, self.nan_locations)
+        return self.fill_with_value(x, index, nan_locations)
 
     def inverse_transform(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
         """Impute missing values in the input tensor."""
@@ -313,52 +322,17 @@ class CopyImputer(BaseImputer):
 
             LOGGER.debug(f"Imputer: replacing NaNs in {name} with value coming from variable :{self.replacement[-1]}")
 
-    def fill_with_value(self, x, index):
+    def fill_with_value(self, x, index, nan_locations: torch.Tensor):
         # Replace values
-        for idx_src, (idx_dst, value) in zip(self.index_training_input, zip(index, self.replacement)):
+        for idx_src, (idx_dst, value) in zip(index, zip(index, self.replacement)):
             if idx_dst is not None:
                 assert not torch.isnan(
-                    x[..., self.data_indices.data.input.name_to_index[value]][
-                        self._expand_subset_mask(x, idx_src, self.nan_locations)
-                    ]
-                ).any(), f"NaNs found in {value}."
-                x[..., idx_dst][self._expand_subset_mask(x, idx_src, self.nan_locations)] = x[
+                    x[..., self.data_indices.data.input.name_to_index[value]][nan_locations[..., idx_src]]
+                ).any(), f"NaNs found in variable {value} to be copied."
+                x[..., idx_dst][nan_locations[..., idx_src]] = x[
                     ..., self.data_indices.data.input.name_to_index[value]
-                ][self._expand_subset_mask(x, idx_src, self.nan_locations)]
+                ][nan_locations[..., idx_src]]
         return x
-
-    def transform(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
-        """Impute missing values in the input tensor."""
-        if not in_place:
-            x = x.clone()
-
-        # Initialize nan mask once
-        if self.nan_locations is None:
-
-            # Get NaN locations
-            self.nan_locations = self.get_nans(x)
-
-            # Initialize training loss mask to weigh imputed values with zeroes once
-            self.loss_mask_training = torch.ones(
-                (x.shape[-2], len(self.data_indices.model.output.name_to_index)), device=x.device
-            )  # shape (grid, n_outputs)
-            # for all variables that are imputed and part of the model output, set the loss weight to zero
-            for idx_src, idx_dst in zip(self.index_training_input, self.index_inference_output):
-                if idx_dst is not None:
-                    self.loss_mask_training[:, idx_dst] = (~self.nan_locations[:, idx_src]).int()
-
-        # Choose correct index based on number of variables
-        if x.shape[-1] == self.num_training_input_vars:
-            index = self.index_training_input
-        elif x.shape[-1] == self.num_inference_input_vars:
-            index = self.index_inference_input
-        else:
-            raise ValueError(
-                f"Input tensor ({x.shape[-1]}) does not match the training "
-                f"({self.num_training_input_vars}) or inference shape ({self.num_inference_input_vars})",
-            )
-
-        return self.fill_with_value(x, index)
 
 
 class DynamicMixin:
