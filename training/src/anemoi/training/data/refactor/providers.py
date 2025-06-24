@@ -7,11 +7,12 @@ import torch
 from omegaconf import DictConfig
 
 from anemoi.models.preprocessing import BasePreprocessor
-from anemoi.training.data.refactor.data_handlers import AbstractDataHandler
+from anemoi.training.data.refactor.data_handlers import AbstractDataHandler, BaseProviderOrDataHandler, SelectedDataHandler
 from anemoi.training.data.utils import GroupName
 from anemoi.training.data.utils import RecordSpec
 from anemoi.training.data.utils import SampleSpec
 from anemoi.training.data.utils import SourceSpec
+from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ def remove_config_level(config, key: str, default=None):
 
 def convert_to_timedelta(value: str) -> np.timedelta64:
     """Convert string to timedelta.
-    
+
     Arguments
     ---------
     value : str
@@ -131,5 +132,86 @@ class SampleProvider:
     def spec(self) -> SampleSpec:
         return SampleSpec({"input": self.input.spec, "target": self.target.spec})
 
-    def __getitem__(self, i: np.datetime64) -> dict[Literal["input", "target"], dict[GroupName, dict[str, torch.Tensor]]]:
+    def __getitem__(
+        self, i: np.datetime64
+    ) -> dict[Literal["input", "target"], dict[GroupName, dict[str, torch.Tensor]]]:
         return {"input": self.input[i], "target": self.target[i]}
+
+
+class AbstractSampleProvider(BaseProviderOrDataHandler):
+    pass
+
+
+class InputTargetSampleProvider(AbstractSampleProvider):
+    def __init__(
+        self, input: BaseProviderOrDataHandler, target: BaseProviderOrDataHandler, provider: BaseProviderOrDataHandler
+    ) -> None:
+        super().__init__()
+        self.input = input
+        self.target = target
+
+    def __getitem__(self, i: int):
+        return {
+            "input": self.input[i],
+            "target": self.target[i],
+        }
+
+
+class GroupedSampleProvider(AbstractSampleProvider):
+    def __init__(self, forwards: dict[GroupName, AbstractSampleProvider]) -> None:
+        super().__init__()
+        self.forwards = forwards
+
+    def __getitem__(self, i: int):
+        return {k: v[i] for k, v in self.forwards.items()}
+
+class VariablesSampleProvider(AbstractSampleProvider):
+    def __init__(self, variables: dict, provider: BaseProviderOrDataHandler) -> None:
+        super().__init__()
+        self.provider = provider
+        self.variables = variables
+        self.forward = SelectedDataHandler(provider, select=self.variables)
+
+    def __getitem__(self, i: int):
+        return self.forward[i][self.variables]
+    
+    @property
+    def spec(self) -> SampleSpec:
+        return SampleSpec({k: SourceSpec([v], [self.steps[k]]) for k, v in self.provider.items()})
+
+def sample_provider_factory(*args, **kwargs) -> SampleProvider:
+    if args:
+        print('✅', len(args))
+        print('✅', isinstance(args[0], dict))
+    if args and len(args) == 1 and isinstance(args[0], (dict, DictConfig, DotDict)):
+        for k, v in args[0].items():
+            if k in kwargs:
+                raise ValueError(f"SampleProvider factory does not accept both positional and keyword arguments. {args} {kwargs}")
+            kwargs[k] = v
+
+        args = []
+    if args:
+        raise ValueError(f"SampleProvider factory does not accept positional arguments. {args} {kwargs}")
+    provider = kwargs.pop("provider")
+    assert isinstance(
+        provider, (AbstractDataHandler, AbstractSampleProvider)
+    ), f"data must be an instance of AbstractDataHandler or AbstractSampleProvider, got {type(provider)}"
+
+    if "input" in kwargs and "target" in kwargs:
+        input = sample_provider_factory(kwargs["input"], provider=provider)
+        target = sample_provider_factory(kwargs["target"], provider=provider)
+        return InputTargetSampleProvider(input=input, target=target, provider=provider)
+
+    if "groups" in kwargs:
+        return GroupedSampleProvider(
+            {k: sample_provider_factory(v, provider=provider) for k, v in kwargs["groups"].items()}
+        )
+
+    if "variables" in kwargs:
+        variables = kwargs.pop("variables")
+        return VariablesSampleProvider(variables, provider)
+    
+    if kwargs:
+        raise ValueError(f"not used arguments: {kwargs}. ")
+
+    raise ValueError(f"Cannot create SampleProvider with {kwargs}. ")

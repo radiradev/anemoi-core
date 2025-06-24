@@ -9,7 +9,7 @@ def new_config() -> DictConfig:
             "data": {
                 "frequency": "6h",
                 "timestep": "6h",
-                "data_handlers": {
+                "data_handler": {
                     "era5": {
                         "dataset": "aifs-od-an-oper-0001-mars-o96-2016-2023-6h-v6",
                         "processors": {
@@ -61,47 +61,55 @@ def new_config() -> DictConfig:
                 },
             },
             "model": {
-                "input_provider": {
-                    "era5": {
-                        "variables": [
-                            "cos_latitude",
-                            "cos_longitude",
-                            "sin_latitude",
-                            "sin_longitude",
-                            "10u",
-                            "10v",
-                            "2t",
-                            "2d",
-                            "q_100",
-                            "q_300",
-                            "q_700",
-                            "q_1000",
-                        ],
-                        "steps": ["-6h", "0h"],
-                    },
-                    "amsr2": {
-                        "variables": [
-                            "rawbt_1",
-                            "rawbt_2",
-                            "rawbt_3",
-                        ],
-                        "steps": ["0h"],
+                "sample_structure": {
+                    "groups": {
+                        "era5": {
+                            "variables": [
+                                "era5.cos_latitude",
+                                "era5.sin_latitude",
+                                "era5.10u",
+                                "era5.2t",
+                                "era5.2d",
+                                "era5.q_100",
+                                "era5.q_1000",
+                            ],
+                        },
                     },
                 },
-                "target_provider": {
-                    "era5": {
-                        "variables": ["10u", "10v", "2t", "2d", "q_100", "q_300", "q_700", "q_1000", "tp"],
-                        "steps": ["6h"],
-                    },
-                    "amsr2": {
-                        "variables": [
-                            "rawbt_1",
-                            "rawbt_2",
-                            "rawbt_3",
-                        ],
-                        "steps": ["6h"],
-                    },
-                },
+                # "sample_structure": {
+                #    "input": {
+                #        "groups": {
+                #            "era5": {
+                #                "variables": [
+                #                    "era5.cos_latitude",
+                #                    "era5.sin_latitude",
+                #                    "era5.10u",
+                #                    "era5.2t",
+                #                    "era5.2d",
+                #                    "era5.q_100",
+                #                    "era5.q_1000",
+                #                ],
+                #                "steps": ["-6h", "0h"],
+                #            },
+                #            "amsr2": {
+                #                "variables": ["amsr2.rawbt_1", "amsr2.rawbt_2", "amsr2.rawbt_3"],
+                #                "steps": ["0h"],
+                #            },
+                #        },
+                #    },
+                #    "target": {
+                #        "groups": {
+                #            "era5": {
+                #                "variables": ["era5.10u", "era5.10v", "era5.2t", "era5.q_1000", "era5.tp"],
+                #                "steps": ["6h"],
+                #            },
+                #            "amsr2": {
+                #                "variables": ["amsr2.rawbt_1", "amsr2.rawbt_2", "amsr2.rawbt_3"],
+                #                "steps": ["6h"],
+                #            },
+                #        },
+                #    },
+                # },
                 "model": {"_target_": "anemoi.models.models.AnemoiMultiModel"},
                 "encoder": {"_target_": "anemoi.models.layers.mapper.GraphTransformerForwardMapper"},
                 "processor": {"_target_": "anemoi.models.layers.processor.GraphTransformerProcessor"},

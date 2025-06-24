@@ -17,7 +17,8 @@ from anemoi.utils.config import DotDict
 LOGGER = logging.getLogger(__name__)
 
 
-class AbstractDataHandler:  # not so abstract -> rename it
+
+class BaseProviderOrDataHandler:
     def __init__(self, *args, **kwargs):
         pass
 
@@ -69,6 +70,8 @@ class AbstractDataHandler:  # not so abstract -> rename it
 
         return SelectedDataHandler(self, select=select[self.groups[0]])
 
+class AbstractDataHandler(BaseProviderOrDataHandler):
+    pass
 
 class ForwardDataHandler(AbstractDataHandler):
     def __init__(self, forward):
@@ -179,7 +182,6 @@ class MultiDataHandler(AbstractDataHandler):
         if key not in self.groups:
             raise KeyError(f"Group {key} not found in data handlers. Available groups: {self.groups}")
 
-        item = None
         for dh in self._data_handlers:
             if key not in dh.groups:
                 continue
@@ -251,7 +253,7 @@ def data_handler_factory(config, top_level: bool = False) -> AbstractDataHandler
 class SelectedDataHandler(ForwardDataHandler):
     def __init__(self, dh: AbstractDataHandler, select: list[str] = None):
         super().__init__(dh)
-        assert isinstance(select, (list, ListConfig)), f"Selection values must be lists, not {type(select)}"
+        assert isinstance(select, (list, ListConfig)), f"Selection values must be lists, not {type(select)} {select}"
         self._selection = select
 
     def _select(self, dict_of_dicts: dict[str : dict[str, Any]]) -> dict[str, dict[str, Any]]:
