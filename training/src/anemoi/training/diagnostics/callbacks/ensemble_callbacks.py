@@ -542,7 +542,7 @@ class PlotEnsSample(PlotSample, BasePerBatchEnsPlotCallback):
             ...,
             pl_module.data_indices.data.output.full,
         ].cpu()
-        data = self.post_processors(input_tensor)
+        data = self.post_processors(input_tensor, in_place=False)
 
         output_tensor = self.post_processors(
             torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
