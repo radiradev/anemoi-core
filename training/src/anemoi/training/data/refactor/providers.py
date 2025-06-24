@@ -7,7 +7,9 @@ import torch
 from omegaconf import DictConfig
 
 from anemoi.models.preprocessing import BasePreprocessor
-from anemoi.training.data.refactor.data_handlers import AbstractDataHandler, BaseProviderOrDataHandler, SelectedDataHandler
+from anemoi.training.data.refactor.data_handlers import AbstractDataHandler
+from anemoi.training.data.refactor.data_handlers import BaseProviderOrDataHandler
+from anemoi.training.data.refactor.data_handlers import SelectedDataHandler
 from anemoi.training.data.utils import GroupName
 from anemoi.training.data.utils import RecordSpec
 from anemoi.training.data.utils import SampleSpec
@@ -133,7 +135,8 @@ class SampleProvider:
         return SampleSpec({"input": self.input.spec, "target": self.target.spec})
 
     def __getitem__(
-        self, i: np.datetime64
+        self,
+        i: np.datetime64,
     ) -> dict[Literal["input", "target"], dict[GroupName, dict[str, torch.Tensor]]]:
         return {"input": self.input[i], "target": self.target[i]}
 
@@ -144,7 +147,10 @@ class AbstractSampleProvider(BaseProviderOrDataHandler):
 
 class InputTargetSampleProvider(AbstractSampleProvider):
     def __init__(
-        self, input: BaseProviderOrDataHandler, target: BaseProviderOrDataHandler, provider: BaseProviderOrDataHandler
+        self,
+        input: BaseProviderOrDataHandler,
+        target: BaseProviderOrDataHandler,
+        provider: BaseProviderOrDataHandler,
     ) -> None:
         super().__init__()
         self.input = input
@@ -162,31 +168,37 @@ class GroupedSampleProvider(AbstractSampleProvider):
         super().__init__()
         self.forwards = forwards
 
-    def __getitem__(self, i: int):
-        return {k: v[i] for k, v in self.forwards.items()}
+    def __getitem__(self, i: str | int):
+        if isinstance(i, str):
+            raise NotImplementedError("Accessing by string index is not implemented.")
+            return self.forwards[i]
+
+        if isinstance(i, int):
+            return {k: v[i] for k, v in self.forwards.items()}
+
+        raise TypeError(f"Expected str or int, got {type(i)}")
+
 
 class VariablesSampleProvider(AbstractSampleProvider):
-    def __init__(self, variables: dict, provider: BaseProviderOrDataHandler) -> None:
+    def __init__(self, variables: dict, group: str, provider: BaseProviderOrDataHandler) -> None:
         super().__init__()
         self.provider = provider
         self.variables = variables
-        self.forward = SelectedDataHandler(provider, select=self.variables)
+        self.group = group
+        select = [f"{group}.{v}" for v in variables]
+        self.forward = SelectedDataHandler(provider, select=select)
 
     def __getitem__(self, i: int):
-        return self.forward[i][self.variables]
-    
-    @property
-    def spec(self) -> SampleSpec:
-        return SampleSpec({k: SourceSpec([v], [self.steps[k]]) for k, v in self.provider.items()})
+        return self.forward[i]
+
 
 def sample_provider_factory(*args, **kwargs) -> SampleProvider:
-    if args:
-        print('✅', len(args))
-        print('✅', isinstance(args[0], dict))
     if args and len(args) == 1 and isinstance(args[0], (dict, DictConfig, DotDict)):
         for k, v in args[0].items():
             if k in kwargs:
-                raise ValueError(f"SampleProvider factory does not accept both positional and keyword arguments. {args} {kwargs}")
+                raise ValueError(
+                    f"SampleProvider factory does not accept both positional and keyword arguments. {args} {kwargs}",
+                )
             kwargs[k] = v
 
         args = []
@@ -194,7 +206,8 @@ def sample_provider_factory(*args, **kwargs) -> SampleProvider:
         raise ValueError(f"SampleProvider factory does not accept positional arguments. {args} {kwargs}")
     provider = kwargs.pop("provider")
     assert isinstance(
-        provider, (AbstractDataHandler, AbstractSampleProvider)
+        provider,
+        (AbstractDataHandler, AbstractSampleProvider),
     ), f"data must be an instance of AbstractDataHandler or AbstractSampleProvider, got {type(provider)}"
 
     if "input" in kwargs and "target" in kwargs:
@@ -204,13 +217,15 @@ def sample_provider_factory(*args, **kwargs) -> SampleProvider:
 
     if "groups" in kwargs:
         return GroupedSampleProvider(
-            {k: sample_provider_factory(v, provider=provider) for k, v in kwargs["groups"].items()}
+            {k: sample_provider_factory(v, group=k, provider=provider) for k, v in kwargs["groups"].items()},
         )
 
     if "variables" in kwargs:
+        assert "group" in kwargs, "VariablesSampleProvider requires a 'group' argument."
+        group = kwargs.pop("group")
         variables = kwargs.pop("variables")
-        return VariablesSampleProvider(variables, provider)
-    
+        return VariablesSampleProvider(variables, group=group, provider=provider)
+
     if kwargs:
         raise ValueError(f"not used arguments: {kwargs}. ")
 

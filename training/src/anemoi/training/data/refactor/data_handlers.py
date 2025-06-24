@@ -1,6 +1,5 @@
 import copy
 import logging
-from datetime import timedelta
 from functools import cached_property
 from typing import Any
 
@@ -15,7 +14,6 @@ from anemoi.training.data.utils import GroupName
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
-
 
 
 class BaseProviderOrDataHandler:
@@ -61,7 +59,7 @@ class BaseProviderOrDataHandler:
         raise NotImplementedError("Subclasses must implement processors method")
 
     def select(self, select: dict[str, list[str]] | None = None):
-        if select is None:
+        if not select:
             return self
         assert len(self.groups) == 1, self.groups
         if self.groups[0] not in select:
@@ -70,8 +68,10 @@ class BaseProviderOrDataHandler:
 
         return SelectedDataHandler(self, select=select[self.groups[0]])
 
+
 class AbstractDataHandler(BaseProviderOrDataHandler):
     pass
+
 
 class ForwardDataHandler(AbstractDataHandler):
     def __init__(self, forward):
@@ -129,7 +129,7 @@ class AnemoiDataHandler(ForwardDataHandler):
     @property
     def end_date(self) -> dict[str, np.datetime64]:
         return {self._forward.groups[0]: np.datetime64(self._forward.end_date)}
-    
+
     def map_datetime_to_index(self, date: np.datetime64) -> int:
         group_name = self._forward.groups[0]
         return {group_name: int((date - self.start_date[group_name]) / self.frequency[group_name])}
@@ -177,16 +177,17 @@ class MultiDataHandler(AbstractDataHandler):
             end_dates.update(data_handler.end_date)
         return end_dates
 
-    def __getitem__(self, *args, **kwargs):
-        key = args[0]
-        if key not in self.groups:
-            raise KeyError(f"Group {key} not found in data handlers. Available groups: {self.groups}")
-
-        for dh in self._data_handlers:
-            if key not in dh.groups:
-                continue
-            return dh.__getitem__(*args[1:], **kwargs)[key]
-        raise KeyError(f"Group {key} not found in any data handler. Available groups: {self.groups}")
+    def __getitem__(self, i: int):
+        dic = {}
+        for data_handler in self._data_handlers:
+            item = data_handler[i]
+            if not isinstance(item, dict):
+                item = item.as_dict()
+            for k, value in item.items():
+                if k not in dic:
+                    dic[k] = []
+                dic[k].append(value)
+        return dic
 
     def processors(self) -> dict[str, list[BasePreprocessor]]:
         processors = {}
@@ -216,7 +217,7 @@ class MultiDataHandler(AbstractDataHandler):
                 raise ValueError(f"Duplicate group names found: {set(new).intersection(groups)}")
             groups.update(new)
         return tuple(groups)
-    
+
     def map_datetime_to_index(self, date: np.datetime64) -> dict[GroupName, int]:
         indices = {}
         for data_handler in self._data_handlers:
@@ -226,6 +227,7 @@ class MultiDataHandler(AbstractDataHandler):
         return indices
 
     def select(self, select: dict[str, list[str]] | None = None):
+        assert False, select  # TODO, check this
         self._data_handlers = [dh.select(select) for dh in self._data_handlers]
 
 

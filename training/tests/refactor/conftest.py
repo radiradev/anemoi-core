@@ -19,11 +19,11 @@ def new_config() -> DictConfig:
                             },
                         },
                     },
-                    "amsr2": {
+                    "amsr_h180": {
                         ## NOW: Only 1 group is supported for each "key" (dh)
                         "dataset": {
                             "dataset": "/etc/ecmwf/nfs/dh1_home_a/mafp/work/obs/data/vz/obs-2018-11.vz",
-                            "select": ["amsr2_h180.*"],
+                            "select": ["amsr_h180.*"],
                         },
                     },
                     #
@@ -33,12 +33,12 @@ def new_config() -> DictConfig:
                 "sampler": {
                     "training": {
                         "start": 20181101,
-                        "frequency": "6H",
+                        "frequency": "6h",
                         "end": 2019,
                     },
                     "validation": {
                         "start": 2019,
-                        "frequency": "6H",
+                        "frequency": "6h",
                         "end": 2020,
                     },
                 },
@@ -65,13 +65,13 @@ def new_config() -> DictConfig:
                     "groups": {
                         "era5": {
                             "variables": [
-                                "era5.cos_latitude",
-                                "era5.sin_latitude",
-                                "era5.10u",
-                                "era5.2t",
-                                "era5.2d",
-                                "era5.q_100",
-                                "era5.q_1000",
+                                "cos_latitude",
+                                "sin_latitude",
+                                "10u",
+                                "2t",
+                                "2d",
+                                "q_100",
+                                "q_1000",
                             ],
                         },
                     },
