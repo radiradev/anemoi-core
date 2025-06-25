@@ -176,7 +176,7 @@ def _gather_channels_alltoall(input_: Tensor, shapes: list, group: Optional[Proc
     input_list = [x.contiguous() for x in torch.tensor_split(input_, comm_size, dim=-2)]
 
     # Get total channels from shapes (original shape before channel splitting)
-    channels = [x[-1] for x in shapes]
+    channels = [x.shape[-1] for x in torch.tensor_split(torch.empty(shapes[myrank][-1], device="meta"), comm_size)]
     seq_per_rank = [x.shape[-2] for x in input_list]
 
     output_list = [
