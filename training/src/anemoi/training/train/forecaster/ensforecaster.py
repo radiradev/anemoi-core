@@ -13,10 +13,14 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+import einops
 import torch
 from torch.utils.checkpoint import checkpoint
 
+from anemoi.models.distributed.graph import gather_channels
 from anemoi.models.distributed.graph import gather_tensor
+from anemoi.models.distributed.graph import shard_channels
+from anemoi.models.distributed.shapes import apply_shard_shapes
 from anemoi.training.utils.inicond import EnsembleInitialConditions
 
 from .forecaster import GraphForecaster
@@ -156,6 +160,48 @@ class GraphEnsForecaster(GraphForecaster):
         self.ens_comm_subgroup_num_groups = ens_comm_subgroup_num_groups
         self.ens_comm_subgroup_size = ens_comm_subgroup_size
 
+    def _prepare_for_truncation(
+        self,
+        y_pred_ens: torch.Tensor,
+        y: torch.Tensor,
+        model_comm_group: ProcessGroup,
+    ) -> tuple[torch.Tensor, torch.Tensor, tuple | None]:
+        """Prepare tensors for interpolation/smoothing.
+
+        Args:
+            y_pred_ens: torch.Tensor
+                Ensemble predictions
+            y: torch.Tensor
+                Ground truth
+            model_comm_group: ProcessGroup
+                Model communication group
+
+        Returns
+        -------
+            y_pred_ens_interp: torch.Tensor
+                Predictions for interpolation
+            y_interp: torch.Tensor
+                Ground truth for interpolation
+            shard_info: tuple
+                Shard shapes for later gathering
+        """
+        batch_size, ensemble_size = y_pred_ens.shape[0], y_pred_ens.shape[1]
+
+        y_pred_ens_interp = einops.rearrange(y_pred_ens, "b e g c -> (b e) g c")
+        shard_shapes = apply_shard_shapes(y_pred_ens_interp, self.grid_dim, self.grid_shard_shapes)
+        y_pred_ens_interp = shard_channels(y_pred_ens_interp, shard_shapes, model_comm_group)
+        y_pred_ens_interp = einops.rearrange(
+            y_pred_ens_interp,
+            "(b e) g c -> b e g c",
+            b=batch_size,
+            e=ensemble_size,
+        )
+
+        shard_shapes_y = apply_shard_shapes(y, self.grid_dim, self.grid_shard_shapes)
+        y_interp = shard_channels(y, shard_shapes_y, model_comm_group)
+
+        return y_pred_ens_interp, y_interp, shard_shapes, shard_shapes_y
+
     def gather_and_compute_loss(
         self,
         y_pred: torch.Tensor,
@@ -193,8 +239,7 @@ class GraphEnsForecaster(GraphForecaster):
             y_pred_ens:
                 Predictions if validation mode
         """
-        # gather ensemble members,
-        # full ensemble is only materialised on GPU in checkpointed region
+        # gather ensemble members
         y_pred_ens = gather_tensor(
             y_pred.clone(),  # for bwd because we checkpoint this region
             dim=1,
@@ -202,8 +247,20 @@ class GraphEnsForecaster(GraphForecaster):
             mgroup=ens_comm_subgroup,
         )
 
+        is_multi_scale_loss = any(x is not None for x in self.loss_trunc_matrices)
+        if self.keep_batch_sharded and is_multi_scale_loss:
+            # go to full sequence dimension for interpolation / smoothing
+            y_pred_ens_interp, y_for_interp, shard_shapes, shard_shapes_y = self._prepare_for_truncation(
+                y_pred_ens,
+                y,
+                model_comm_group,
+            )
+        else:
+            y_pred_ens_interp = y_pred_ens
+            y_for_interp = y
+
         loss_inc = []
-        y_preds_ens = []  # better hide this in a checkpointed region? but whole thing is already checkpointed ...
+        y_preds_ens = []
         ys = []
         for i, trunc_matrix in enumerate(self.loss_trunc_matrices):
             LOGGER.debug(
@@ -213,10 +270,14 @@ class GraphEnsForecaster(GraphForecaster):
                 trunc_matrix.device if trunc_matrix is not None else None,
             )
 
-            # interpolate the predictions and the truth to the loss truncation grid
-            y_pred_ens_tmp, y_tmp = self._interp_for_loss(y_pred_ens, y, i)
+            # interpolate / smooth the predictions and the truth for loss computation
+            y_pred_ens_tmp, y_tmp = self._interp_for_loss(y_pred_ens_interp, y_for_interp, i)
 
-            # save for next loss scale, too much mem? check ...
+            if self.keep_batch_sharded and is_multi_scale_loss:
+                y_pred_ens_tmp = gather_channels(y_pred_ens_tmp, shard_shapes, model_comm_group)
+                y_tmp = gather_channels(y_tmp, shard_shapes_y, model_comm_group)
+
+            # save for next loss scale
             y_preds_ens.append(y_pred_ens_tmp)
             ys.append(y_tmp)
 
