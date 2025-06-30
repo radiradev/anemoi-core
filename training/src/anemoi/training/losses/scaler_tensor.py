@@ -62,6 +62,12 @@ def grad_scaler(
 
 
 TENSOR_SPEC = tuple[Union[int, tuple[int]], torch.Tensor]
+"""Scale Tensor specification type.
+
+A tuple of (dimension, tensor) where:
+- dimension can be a single int or a tuple of ints specifying the dimensions the tensor should be applied to.
+- tensor is a torch.Tensor that will be applied to the specified dimensions.
+"""
 
 
 class Shape:
