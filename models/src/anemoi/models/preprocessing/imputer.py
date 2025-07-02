@@ -140,9 +140,9 @@ class BaseImputer(BasePreprocessor, ABC):
         torch.Tensor
             Tensor with NaN locations of shape (batch, time, ..., grid)
         """
-        # The mask is only saved for the first two dimension (batch, timestep) and the last two dimensions (grid, variable)
-        # For the rest of the dimensions we uselect the first element, which is assumed to be the same for all ensemble members.
-        # This means for the ensemble dimension: we assume that the NaN locations are the same for all ensemble members, therefore the first ensemble member is used.
+        # The mask is only saved for the first two dimensions (batch, timestep) and the last two dimensions (grid, variable)
+        # For the rest of the dimensions we select the first element since we assume the nan locations do not change along these dimensions.
+        # This means for the ensemble dimension: we assume that the NaN locations are the same for all ensemble members.
         idx = [slice(None), slice(None)] + [0] * (x.ndim - 4) + [slice(None), slice(None)]
         return torch.isnan(x[idx])
 
