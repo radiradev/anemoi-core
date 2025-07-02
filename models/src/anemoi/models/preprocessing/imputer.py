@@ -141,7 +141,8 @@ class BaseImputer(BasePreprocessor, ABC):
             Tensor with NaN locations of shape (batch, time, ..., grid)
         """
         # The mask is only saved for the first two dimension (batch, timestep) and the last two dimensions (grid, variable)
-        # For the rest of the dimensions we use the first dimension
+        # For the rest of the dimensions we uselect the first element, which is assumed to be the same for all ensemble members.
+        # This means for the ensemble dimension: we assume that the NaN locations are the same for all ensemble members, therefore the first ensemble member is used.
         idx = [slice(None), slice(None)] + [0] * (x.ndim - 4) + [slice(None), slice(None)]
         return torch.isnan(x[idx])
 
@@ -175,15 +176,14 @@ class BaseImputer(BasePreprocessor, ABC):
         if not in_place:
             x = x.clone()
 
-        # recalculate NaN locations every forward pass and cache for backward pass
+        # recalculate NaN locations every forward pass and save for backward pass
+        nan_locations = self.get_nans(x)
+
         # choose correct index based on number of variables which are different for training and inference
         if x.shape[-1] == self.num_training_input_vars:
             # training input
 
-            # get nan locations from training input
-            nan_locations = self.get_nans(x)
-
-            # cache nan locations from training input, reduce time dimension by selecting the first timestep
+            # save nan locations from training input, select first timestep whose nan locations are used for the loss mask and postprocessing
             self.nan_locations = nan_locations[:, 0]
 
             # data indices for training input
@@ -201,9 +201,6 @@ class BaseImputer(BasePreprocessor, ABC):
 
         elif x.shape[-1] == self.num_inference_input_vars:
             # inference input
-
-            # get nan locations from inference input
-            nan_locations = self.get_nans(x)
 
             # update nan locations of progonostic variables of inference input
             self.nan_locations[..., self.data_indices.data.input.prognostic] = nan_locations[
