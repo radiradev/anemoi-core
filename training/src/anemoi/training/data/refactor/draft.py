@@ -39,7 +39,7 @@ class GroupedSample(Sample):
         return {k: v[item] for k, v in self._samples.items()}
 
     def __len__(self):
-        return 118
+        return 118 # ✅✅ TODO provide the correct lenght 
 
     def _build_tree(self, label="GroupedSample"):
         tree = Tree(label)
@@ -85,7 +85,7 @@ class Leaf(Sample):
 
     def __getitem__(self, item):
         self._check_item(item)
-        return Result(self.context, self.group, item, variables=self.variables).load()
+        return Promise(self.context, self.group, item, variables=self.variables).load()
 
     def _build_tree(self, label="Leaf"):
         return Tree(f"{label}  -> {self.group} variables={self.variables}")
@@ -116,7 +116,7 @@ def sample_factory(context, **kwargs):
     assert False, f"Unknown sample type for kwargs {kwargs}"
 
 
-class Result:
+class Promise:
     def __init__(self, context, datahandler_key, args, variables=[]):
         self.context = context
         self.datahandler_key = datahandler_key
@@ -130,7 +130,7 @@ class Result:
         return DataHandler(self.dataset, select=self.variables, group=self.datahandler_key)[self.args]
 
     def __repr__(self):
-        return f"Result({self.dataset} @ {self.datahandler_key}, [{', '.join(self.variables)}], {self.args})"
+        return f"Promise({self.dataset} @ {self.datahandler_key}, [{', '.join(self.variables)}], {self.args})"
 
 
 class DataHandler:
@@ -249,7 +249,7 @@ if __name__ == "__main__":
             return [shorten_numpy(item) for item in structure]
         if isinstance(structure, dict):
             return {k: shorten_numpy(v) for k, v in structure.items()}
-        if isinstance(structure, Result):
+        if isinstance(structure, Promise):
             return str(structure)
         return structure
 
@@ -268,7 +268,7 @@ if __name__ == "__main__":
     s = sample_factory(context=training_context, **sample_config)
     print(s)
 
-    print("🆗 Result")
+    print("🆗 Promise")
     results_structure = s[3]
 
     print(show_json(results_structure))
@@ -285,7 +285,7 @@ if __name__ == "__main__":
             return key
 
     def gather_results(resolver, structure):
-        if isinstance(structure, Result):
+        if isinstance(structure, Promise):
             return resolver.register(structure)
         if isinstance(structure, list):
             return [gather_results(resolver, item) for item in structure]
