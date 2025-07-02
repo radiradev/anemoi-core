@@ -1,0 +1,261 @@
+import json
+import os
+import random
+from typing import Optional
+
+import numpy as np
+import torch
+import yaml
+from torch.utils.data import IterableDataset
+from torch.utils.data import get_worker_info
+
+CONFIG = dict(
+    data=dict(
+        # era5=dict(
+        #     dataset=dict(dataset="aifs-ea-an-oper-0001-mars-o96-1979-2023-6h-v8", set_group="era5"),
+        #     # preprocessors=dict(
+        #     #    tp=[dict(normalizer="mean-std")]),
+        #     # ),
+        # ),
+        snow=dict(dataset="observations-testing-2018-2018-6h-v1-one-month"),
+        metop_a=dict(dataset="observations-testing-2018-2018-6h-v1-one-month"),
+        amsr2_h180=dict(dataset="observations-testing-2018-2018-6h-v1-one-month"),
+    ),
+    sample=dict(
+        GROUPS=dict(
+            input=dict(
+                GROUPS=dict(
+                    # fields=dict(  # "fields" is a user defined key
+                    #     STEPS=dict(
+                    #         _6h=dict(
+                    #             variables=["q_50", "2t"],
+                    #             data="era5",
+                    #         ),
+                    #         _0h=dict(
+                    #             variables=["q_50", "2t"],
+                    #             data="era5",
+                    #         ),
+                    #     ),
+                    # ),
+                    # user-friendly config would be:
+                    # fields=dict(
+                    #     steps=['-6h', '0h'],
+                    #     variables=["q_50", "2t"],
+                    #     data="era5",
+                    # ),
+                    ascat_metop_a=dict(  # "metar" is a user defined key
+                        STEPS=dict(
+                            _6h=dict(
+                                variables=["scatss_1", "scatss_2"],
+                                data="metop_a",
+                            ),
+                        ),
+                    ),
+                    snow=dict(  # "iasi" is a user defined key
+                        STEPS=dict(
+                            _6h=dict(
+                                variables=["sdepth_0"],
+                                data="snow",
+                            ),
+                        ),
+                    ),
+                    amsr2=dict(  # "iasi" is a user defined key
+                        STEPS=dict(
+                            _6h=dict(
+                                variables=["rawbt_1", "rawbt_2", "rawbt_3", "rawbt_4"],
+                                data="amsr2_h180",
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    ),
+)
+
+
+from anemoi.training.data.refactor.draft import sample_factory
+
+
+def show_yaml(structure):
+    return yaml.dump(structure, indent=2, sort_keys=False)
+
+
+def show_json(structure):
+    return json.dumps(structure, indent=2, default=shorten_numpy)
+
+
+def shorten_numpy(structure):
+    if isinstance(structure, np.ndarray):
+        return f"np.array({structure.shape})"
+    return structure
+
+
+def get_base_seed():
+    """Get a base seed for random number generation.
+    This is a placeholder function; replace with actual logic to get a base seed.
+    """
+    return 42  # Example fixed seed, replace with actual logic as needed
+
+
+class DOPDataset(IterableDataset):
+    def __init__(
+        self,
+        # config: dict,
+        shuffle: bool = True,
+        rollout: int = 1,
+        multistep: int = 1,
+        task: str = "training",
+    ) -> None:
+
+        self.shuffle = shuffle
+        # self.config = config
+        self.rollout = rollout
+        self.multistep = multistep
+        self.task = task
+
+        # lazy init
+        self.n_samples_per_epoch_total: int = 0
+        self.n_samples_per_epoch_per_worker: int = 0
+
+        # additional state vars (lazy init)
+        self.n_samples_per_worker = 0
+        self.chunk_index_range: Optional[np.ndarray] = None
+        self.shuffle = shuffle
+        self.rng: Optional[np.random.Generator] = None
+        self.worker_id: int = -1
+
+        # "full" shuffling
+        self.data_indices: Optional[np.ndarray] = None
+
+        self.seed_comm_group_id = 0
+        self.seed_comm_num_groups = 1
+
+        training_context = {
+            "name": "training",
+            "data_config": CONFIG["data"],
+            "start": "2018-11-02",
+            "end": "2018-11-01",
+        }
+
+        self._sample_factory = sample_factory(context=training_context, **CONFIG["sample"])
+
+        self.len = 25  # len(self._sample_factory)
+
+    def __get_sample(self, index: int):
+        """Get a sample from the dataset."""
+        return self._sample_factory[index]
+
+    def per_worker_init(self, n_workers: int, worker_id: int) -> None:
+        """Called by worker_init_func on each copy of dataset.
+
+        This initialises after the worker process has been spawned.
+
+        Parameters
+        ----------
+        n_workers : int
+            Number of workers
+        worker_id : int
+            Worker ID
+        """
+        self.worker_id = worker_id
+
+        # Total number of valid ICs is dataset length minus rollout minus additional multistep inputs
+        len_corrected = self.len - self.rollout - self.multistep + 1
+        self.data_indices = np.arange(len_corrected, dtype=np.uint32)
+
+        # Divide this equally across shards (one shard per group!)
+        shard_size = len_corrected // self.seed_comm_num_groups
+        shard_start = self.seed_comm_group_id * shard_size
+        shard_end = min((self.seed_comm_group_id + 1) * shard_size, self.len - self.rollout - self.multistep + 1)
+
+        shard_len = shard_end - shard_start
+        self.n_samples_per_worker = shard_len // n_workers
+
+        low = shard_start + worker_id * self.n_samples_per_worker
+        high = min(shard_start + (worker_id + 1) * self.n_samples_per_worker, shard_end)
+        self.chunk_index_range = np.arange(low, high, dtype=np.uint32)
+
+        seed = get_base_seed()  # all workers get the same seed (so they all get the same index shuffle)
+        torch.manual_seed(seed)
+        random.seed(seed)
+        self.rng = np.random.default_rng(seed=seed)
+        sanity_rnd = self.rng.random(1)
+        print("Sanity check random number:", sanity_rnd)
+
+    def __iter__(self):
+        if self.shuffle:
+            # do a full shuffle, then get my index range
+            shuffled_data_indices = self.rng.choice(self.data_indices, size=len(self.data_indices) - 1, replace=False)
+            shuffled_chunk_indices = shuffled_data_indices[self.chunk_index_range]
+
+            while True:  # the pl.Trainer will break out of this loop after a fixed number of samples
+                idx = self.rng.choice(shuffled_chunk_indices)
+                idx += 1
+                print(
+                    f"TRAINING: Worker {self.worker_id} (pid {os.getpid()}) fetching sample index {idx} ...",
+                )
+                yield self.__get_sample(idx)
+
+        else:
+            shuffled_chunk_indices = self.data_indices[self.chunk_index_range]
+            # no shuffle, just iterate over the chunk indices
+            for idx in self.chunk_index_range:
+                idx += 1
+                print(
+                    f"VALIDATION: Worker {self.worker_id} (pid {os.getpid()}) fetching sample index {idx} ...",
+                )
+                yield self.__get_sample(idx)
+
+
+def worker_init_func(worker_id: int) -> None:
+    """Configures each dataset worker process.
+
+    Calls WeatherBenchDataset.per_worker_init() on each dataset object.
+
+    Parameters
+    ----------
+    worker_id : int
+        Worker ID
+
+    Raises
+    ------
+    RuntimeError
+        If worker_info is None
+    """
+    worker_info = get_worker_info()  # information specific to each worker process
+    if worker_info is None:
+        print("worker_info is None! Set num_workers > 0 in your dataloader!")
+        raise RuntimeError
+    dataset_obj = worker_info.dataset  # the copy of the dataset held by this worker process.
+    dataset_obj.per_worker_init(
+        n_workers=worker_info.num_workers,
+        worker_id=worker_id,
+    )
+
+
+if __name__ == "__main__":
+
+    ds = DOPDataset(
+        # CONFIG,
+        shuffle=False,
+        rollout=1,
+        multistep=1,
+        task="training",
+    )
+
+    loader_params = {
+        "batch_size": 1,  # must be 1 for the time being
+        "batch_sampler": None,
+        "num_workers": 2,
+        "pin_memory": False,
+        "worker_init_fn": worker_init_func,
+        # "collate_fn": None, # collator_wrapper(return_original_metadata=cfg_.dataloader.return_dates),
+    }
+
+    dl = torch.utils.data.DataLoader(ds, **loader_params, sampler=None)
+
+    for batch_idx, batch in enumerate(dl):
+        print("%s", batch)
+        if batch_idx >= 1:
+            break
