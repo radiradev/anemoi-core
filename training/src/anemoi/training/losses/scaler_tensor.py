@@ -64,6 +64,12 @@ def grad_scaler(
 
 
 TENSOR_SPEC = tuple[Union[int, tuple[int]], torch.Tensor]
+"""Scale Tensor specification type.
+
+A tuple of (dimension, tensor) where:
+- dimension can be a single int or a tuple of ints specifying the dimensions the tensor should be applied to.
+- tensor is a torch.Tensor that will be applied to the specified dimensions.
+"""
 
 
 class Shape:
@@ -313,11 +319,11 @@ class ScaleTensor:
 
         dimension = self.tensors[name][0]
 
-        if not override:
-            self.validate_scaler(dimension, scaler)
-
         original_scaler = self.tensors.pop(name)
         original_dimension = self._specified_dimensions.pop(name)
+
+        if not override:
+            self.validate_scaler(dimension, scaler)
 
         try:
             self.add_scaler(dimension, scaler, name=name)

@@ -239,9 +239,9 @@ class GraphEnsForecaster(GraphForecaster):
 
         # Scalers which are delayed need to be initialized after the pre-processors
         if self.is_first_step:
-            self.update_scalars(callback=AvailableCallbacks.ON_TRAINING_START)
+            self.update_scalers(callback=AvailableCallbacks.ON_TRAINING_START)
             self.is_first_step = False
-        self.update_scalars(
+        self.update_scalers(
             callback=(
                 AvailableCallbacks.ON_TRAIN_BATCH_START
                 if not validation_mode
