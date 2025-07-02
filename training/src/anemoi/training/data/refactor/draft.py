@@ -109,11 +109,12 @@ class Leaf(SampleProvider):
         self._check_item(item)
         dh = DataHandler(self.context, self.group, item, variables=self.variables)
         record = dh.record
+        second = np.timedelta64(1, "s")
         return dict(
             data=record[self.group],
             latitudes=record.latitudes[self.group],
             longitudes=record.longitudes[self.group],
-            timedeltas=record.timedeltas[self.group],
+            timedeltas=record.timedeltas[self.group] // second,
             name_to_index=record.name_to_index[self.group],
         )
 
