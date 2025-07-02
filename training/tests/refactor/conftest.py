@@ -28,17 +28,17 @@ def new_config() -> DictConfig:
                     },
                 },
             },
-            "dataloader": {
-                "sampler": {
-                    "training": {
-                        "start": 2018,
-                        "end": 2019,
-                    },
-                    "validation": {
-                        "start": 2019,
-                        "end": 2020,
-                    },
+            "sampler": {
+                "training": {
+                    "start": 2018,
+                    "end": 2019,
                 },
+                "validation": {
+                    "start": 2019,
+                    "end": 2020,
+                },
+            },
+            "dataloader": {
                 "prefetch_factor": 2,
                 "pin_memory": True,
                 "persistent_workers": True,
@@ -63,18 +63,18 @@ def new_config() -> DictConfig:
                         "groups": {
                             "era5": {
                                 "variables": [
-                                    "era5.cos_latitude",
-                                    "era5.sin_latitude",
-                                    "era5.10u",
-                                    "era5.2t",
-                                    "era5.2d",
-                                    "era5.q_100",
-                                    "era5.q_1000",
+                                    "cos_latitude",
+                                    "sin_latitude",
+                                    "10u",
+                                    "2t",
+                                    "2d",
+                                    "q_100",
+                                    "q_1000",
                                 ],
                                 "steps": ["-6h", "0h"],
                             },
                             "amsr2": {
-                                "variables": ["amsr2.rawbt_1", "amsr2.rawbt_2", "amsr2.rawbt_3"],
+                                "variables": ["rawbt_1", "rawbt_2", "rawbt_3"],
                                 "steps": ["0h"],
                             },
                         },
@@ -82,11 +82,11 @@ def new_config() -> DictConfig:
                     "target": {
                         "groups": {
                             "era5": {
-                                "variables": ["era5.10u", "era5.10v", "era5.2t", "era5.q_1000", "era5.tp"],
+                                "variables": ["10u", "10v", "2t", "q_1000", "tp"],
                                 "steps": ["6h"],
                             },
                             "amsr2": {
-                                "variables": ["amsr2.rawbt_1", "amsr2.rawbt_2", "amsr2.rawbt_3"],
+                                "variables": ["rawbt_1", "rawbt_2", "rawbt_3"],
                                 "steps": ["6h"],
                             },
                         },

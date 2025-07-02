@@ -23,7 +23,7 @@ from anemoi.training.data.refactor.providers import SampleProvider
 from anemoi.training.data.utils import get_dataloader_config
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.utils.worker_init import worker_init_func
-
+from anemoi.training.data.refactor.read_config import get_config_dict
 LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -46,23 +46,23 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         """
         super().__init__()
 
-        self.config = config
+        self.config = get_config_dict(config.data, config.model.sample)
         self.graph_data = graph_data
 
         # Create data handlers
-        dhs = data_handler_factory(config.data.data_handlers, top_level=True)
+        dhs = data_handler_factory(self.config.data.data_handlers, top_level=True)
 
         # Create Sampler provider
-        self.sample_provider = SampleProvider(config.model, dhs)
+        self.sample_provider = SampleProvider(self.config.model, dhs)
 
         # Create datasets
         self.train_dataset = NativeGridMultDataset(
             self.sample_provider,
-            sampler_config=config.dataloader.sampler.training,
+            sampler_config=config.sampler.training,
         )
         self.val_dataset = NativeGridMultDataset(
             self.sample_provider,
-            sampler_config=config.dataloader.sampler.validation,
+            sampler_config=config.sampler.validation,
         )
 
         dl_keys_to_ignore = ["sampler", "read_group_size", "grid_indices", "limit_batches"]
