@@ -35,11 +35,11 @@ class GroupedSample(Sample):
     def __getitem__(self, item):
         self._check_item(item)
         if item == 0:
-            item = item+1 # ✅✅ TODO provide the correct lenght 
+            item = item + 1  # ✅✅ TODO provide the correct lenght
         return {k: v[item] for k, v in self._samples.items()}
 
     def __len__(self):
-        return 118 # ✅✅ TODO provide the correct lenght 
+        return 118  # ✅✅ TODO provide the correct lenght
 
     def _build_tree(self, label="GroupedSample"):
         tree = Tree(label)
@@ -85,7 +85,9 @@ class Leaf(Sample):
 
     def __getitem__(self, item):
         self._check_item(item)
-        return Promise(self.context, self.group, item, variables=self.variables).load()
+        dh = DataHandler(self.context, self.group, item, variables=self.variables)
+        dh = dh.load()
+        return dh
 
     def _build_tree(self, label="Leaf"):
         return Tree(f"{label}  -> {self.group} variables={self.variables}")
@@ -116,7 +118,7 @@ def sample_factory(context, **kwargs):
     assert False, f"Unknown sample type for kwargs {kwargs}"
 
 
-class Promise:
+class DataHandler:
     def __init__(self, context, datahandler_key, args, variables=[]):
         self.context = context
         self.datahandler_key = datahandler_key
@@ -126,47 +128,16 @@ class Promise:
         variables = [f"{datahandler_key}.{v}" for v in variables]
         self.variables = variables
 
+        self.config = dict(dataset=self.dataset, select=self.variables)
+        self.ds = open_dataset(**self.config)
+        self.group = self.datahandler_key
+        print(f"🔍 Opened dataset with config: {self.config}")
+
     def load(self):
-        return DataHandler(self.dataset, select=self.variables, group=self.datahandler_key)[self.args]
+        return self.ds[self.args][self.group]
 
     def __repr__(self):
-        return f"Promise({self.dataset} @ {self.datahandler_key}, [{', '.join(self.variables)}], {self.args})"
-
-
-class DataHandler:
-    def __init__(self, dataset, select, group):
-        self.dataset = dataset
-        self.group = group
-
-        # if isinstance(config, str):
-        #    config = dict(dataset=config)
-        # if isinstance(config["dataset"], str):
-        #    config = dict(dataset=config)
-
-        self.select = select
-        self.config = dict(dataset=self.dataset, select=self.select)
-
-    def is_grouped_dataset(self, ds):
-        from anemoi.datasets.data.records import BaseRecordsDataset
-
-        return isinstance(ds, BaseRecordsDataset)
-
-    @property
-    def ds(self):
-        ds = open_dataset(**self.config)
-        print(f"🔍 Opened dataset with config: {self.config}")
-        return ds
-
-    def __getitem__(self, item):
-        print("✅", self.ds)
-        print(self.ds[self.group])
-        print(item)
-        return self.ds[item][self.group]
-        assert isinstance(data, np.ndarray), f"Expected np.array, got {type(data)}, {type(self.ds)}"
-        return data
-
-    def __str__(self):
-        return f"np.array ds[{self.group}][...] with ds from {self.config} "
+        return f"DataHandler({self.dataset} @ {self.datahandler_key}, [{', '.join(self.variables)}], {self.args})"
 
 
 # TEST ---------------------------------
@@ -249,7 +220,7 @@ if __name__ == "__main__":
             return [shorten_numpy(item) for item in structure]
         if isinstance(structure, dict):
             return {k: shorten_numpy(v) for k, v in structure.items()}
-        if isinstance(structure, Promise):
+        if isinstance(structure, DataHandler):
             return str(structure)
         return structure
 
@@ -268,7 +239,7 @@ if __name__ == "__main__":
     s = sample_factory(context=training_context, **sample_config)
     print(s)
 
-    print("🆗 Promise")
+    print("🆗 DataHandler")
     results_structure = s[3]
 
     print(show_json(results_structure))
@@ -285,7 +256,7 @@ if __name__ == "__main__":
             return key
 
     def gather_results(resolver, structure):
-        if isinstance(structure, Promise):
+        if isinstance(structure, DataHandler):
             return resolver.register(structure)
         if isinstance(structure, list):
             return [gather_results(resolver, item) for item in structure]
