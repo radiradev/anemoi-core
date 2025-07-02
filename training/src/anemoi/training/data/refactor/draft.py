@@ -6,11 +6,16 @@ from rich.console import Console
 from rich.tree import Tree
 
 from anemoi.datasets import open_dataset
+from anemoi.training.data.refactor.utils import convert_to_timedelta
 
 
 class SampleProvider:
     def __init__(self, context):
         self.context = context
+
+    @property
+    def frequency(self):
+        return convert_to_timedelta("6h")  # convert_to_timedelta(self.context.data_config.frequency)
 
     def __repr__(self):
         console = Console(record=True, width=120)
@@ -29,6 +34,7 @@ class SampleProvider:
     def shuffle(self, *args, **kwargs):
         return ShuffledSampleProvider(self, *args, **kwargs)
 
+
 class ShuffledSampleProvider(SampleProvider):
     def __init__(self, sample, seed=None):
         super().__init__(sample.context)
@@ -46,6 +52,7 @@ class ShuffledSampleProvider(SampleProvider):
         subtree = self.sample._build_tree(label=f"SampleProvider: {type(self.sample).__name__}")
         tree.add(subtree)
         return tree
+
 
 class GroupedSampleProvider(SampleProvider):
     def __init__(self, context, dic):
@@ -78,15 +85,10 @@ class StepSampleProvider(SampleProvider):
         self._check_item(item)
         out = []
         for k, v in self._samples.items():
-            if k == "_6h":
-                item = item - 1
-            elif k == "_0h":
-                pass
-            elif k == "p6h":
-                item = item + 1
-            else:
-                raise ValueError(f"Unknown step {k} in StepSampleProvider")
-            out.append(v[item])
+            k = convert_to_timedelta(k)
+            sample_step = k / v.frequency
+            assert sample_step == int(sample_step)
+            out.append(v[item + int(sample_step)])
         return out
 
     def _build_tree(self, label="GroupedSampleProvider"):

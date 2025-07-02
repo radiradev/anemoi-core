@@ -17,13 +17,14 @@ import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
 from anemoi.models.data_indices.collection import IndexCollection
-from anemoi.training.data.refactor.data_handlers import data_handler_factory
 from anemoi.training.data.refactor.dataset import NativeGridMultDataset
-from anemoi.training.data.refactor.providers import SampleProvider
+from anemoi.training.data.refactor.draft import Context
+from anemoi.training.data.refactor.draft import sample_factory
+from anemoi.training.data.refactor.read_config import get_sample_config_dict
 from anemoi.training.data.utils import get_dataloader_config
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.utils.worker_init import worker_init_func
-from anemoi.training.data.refactor.read_config import get_config_dict
+
 LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -45,25 +46,16 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
             Job configuration
         """
         super().__init__()
-
-        self.config = get_config_dict(config.data, config.model.sample)
         self.graph_data = graph_data
 
-        # Create data handlers
-        dhs = data_handler_factory(self.config.data.data_handlers, top_level=True)
+        sample_config = get_sample_config_dict(config.model.sample)
+
+        training_context = Context("training", data_config=config.data.data_handlers, **config.sampler.training)
+        validation_context = Context("validation", data_config=config.data.data_handlers, **config.sampler.validation)
 
         # Create Sampler provider
-        self.sample_provider = SampleProvider(self.config.model, dhs)
-
-        # Create datasets
-        self.train_dataset = NativeGridMultDataset(
-            self.sample_provider,
-            sampler_config=config.sampler.training,
-        )
-        self.val_dataset = NativeGridMultDataset(
-            self.sample_provider,
-            sampler_config=config.sampler.validation,
-        )
+        self.training_samples = sample_factory(context=training_context, **sample_config)
+        self.validation_samples = sample_factory(context=validation_context, **sample_config)
 
         dl_keys_to_ignore = ["sampler", "read_group_size", "grid_indices", "limit_batches"]
         self.train_dataloader_config = get_dataloader_config(
@@ -86,7 +78,9 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         return IndexCollection(self.config, self.ds_train.name_to_index)
 
     def train_dataloader(self) -> dict[str, DataLoader]:
-        return DataLoader(self.train_dataset, worker_init_fn=worker_init_func, **self.train_dataloader_config)
+        dataset = NativeGridMultDataset(self.training_samples)
+        return DataLoader(dataset, worker_init_fn=worker_init_func, **self.train_dataloader_config)
 
     def val_dataloader(self) -> dict[str, DataLoader]:
-        return DataLoader(self.val_dataset, worker_init_fn=worker_init_func, **self.val_dataloader_config)
+        dataset = NativeGridMultDataset(self.validation_samples)
+        return DataLoader(dataset, worker_init_fn=worker_init_func, **self.val_dataloader_config)

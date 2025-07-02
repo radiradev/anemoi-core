@@ -60,10 +60,14 @@ class DynamicGraphEditor:
 
     def add_nodes(self, graph: HeteroData, in_latlons: torch.Tensor, out_latlons: torch.Tensor) -> HeteroData:
         graph = LatLonNodes(
-            latitudes=in_latlons[:, 0], longitudes=in_latlons[:, 1], name=self._IN_DATA_NAME,
+            latitudes=in_latlons[:, 0],
+            longitudes=in_latlons[:, 1],
+            name=self._IN_DATA_NAME,
         ).update_graph(graph)
         graph = LatLonNodes(
-            latitudes=out_latlons[:, 0], longitudes=out_latlons[:, 1], name=self._OUT_DATA_NAME,
+            latitudes=out_latlons[:, 0],
+            longitudes=out_latlons[:, 1],
+            name=self._OUT_DATA_NAME,
         ).update_graph(graph)
         return graph
 

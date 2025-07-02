@@ -1,13 +1,12 @@
 import logging
 import random
+from functools import cached_property
 
 import numpy as np
 import torch
-from omegaconf import DictConfig
 from torch.utils.data import IterableDataset
 
-from anemoi.training.data.refactor.providers import SampleProvider
-from anemoi.training.data.refactor.sampler import AnemoiSampler
+from anemoi.training.data.refactor.draft import SampleProvider
 from anemoi.training.data.utils import GroupName
 
 LOGGER = logging.getLogger(__name__)
@@ -19,14 +18,11 @@ class NativeGridMultDataset(IterableDataset):
     def __init__(
         self,
         sample_provider: SampleProvider,
-        sampler_config: DictConfig,
         shuffle: bool = True,
     ) -> None:
-        self.sample_provider = sample_provider
         self.shuffle = shuffle
 
-        self.sampler = AnemoiSampler(**sampler_config)
-        self.sampler.set_valid_indices(sample_provider.input, sample_provider.target)
+        self.sample_provider = sample_provider
 
         # lazy init
         self.n_samples_per_epoch_total: int = 0
@@ -52,6 +48,11 @@ class NativeGridMultDataset(IterableDataset):
         # Data dimensions
         self.ensemble_dim: int = 2
         self.ensemble_size = 1
+
+    @cached_property
+    def valid_date_indices(self) -> np.ndarray:
+        """Return valid date indices."""
+        return np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
     def set_comm_group_info(
         self,
@@ -112,7 +113,6 @@ class NativeGridMultDataset(IterableDataset):
             Number of workers
         worker_id : int
             Worker ID
-
         """
         self.worker_id = worker_id
         base_seed = 2025  # get_base_seed()
@@ -130,7 +130,14 @@ class NativeGridMultDataset(IterableDataset):
         Currently it receives data with an ensemble dimension, which is discarded for
         now. (Until the code is "ensemble native".)
         """
-        valid_indices = self.sampler.valid_time_indices
+        if False:  # self.shuffle:
+            shuffled_chunk_indices = self.rng.choice(
+                self.valid_date_indices,
+                size=len(self.valid_date_indices),
+                replace=False,
+            )[self.chunk_index_range]
+        else:
+            shuffled_chunk_indices = self.valid_date_indices  # [self.chunk_index_range]
 
-        for i in valid_indices:
-            yield self.sample_provider[self.sampler.time_values[i]]
+        for i in shuffled_chunk_indices:
+            yield self.sample_provider[i]

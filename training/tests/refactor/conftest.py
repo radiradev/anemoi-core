@@ -9,7 +9,7 @@ def new_config() -> DictConfig:
             "data": {
                 "frequency": "6h",
                 "timestep": "6h",
-                "data_handler": {
+                "data_handlers": {
                     "era5": {
                         "dataset": "aifs-od-an-oper-0001-mars-o96-2016-2023-6h-v6",
                         "processors": {
@@ -19,7 +19,7 @@ def new_config() -> DictConfig:
                             },
                         },
                     },
-                    "amsr_h180": {
+                    "amsr2": {
                         ## NOW: Only 1 group is supported for each "key" (dh)
                         "dataset": {
                             "dataset": "/etc/ecmwf/nfs/dh1_home_a/mafp/work/obs/data/vz/obs-2018-11.vz",
