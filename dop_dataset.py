@@ -9,7 +9,6 @@ import yaml
 from torch.utils.data import IterableDataset
 from torch.utils.data import get_worker_info
 
-
 CONFIG = dict(
     data=dict(
         # era5=dict(
@@ -257,6 +256,6 @@ if __name__ == "__main__":
     dl = torch.utils.data.DataLoader(ds, **loader_params, sampler=None)
 
     for batch_idx, batch in enumerate(dl):
-        print.info("%s", batch)
+        print("%s", batch)
         if batch_idx >= 1:
             break

@@ -34,7 +34,12 @@ class GroupedSample(Sample):
 
     def __getitem__(self, item):
         self._check_item(item)
+        if item == 0:
+            item = item+1 # ✅✅ TODO provide the correct lenght 
         return {k: v[item] for k, v in self._samples.items()}
+
+    def __len__(self):
+        return 118
 
     def _build_tree(self, label="GroupedSample"):
         tree = Tree(label)
