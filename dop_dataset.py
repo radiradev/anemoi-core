@@ -67,7 +67,7 @@ CONFIG = dict(
                         STEPS=dict(
                             _6h=dict(
                                 variables=["rawbt_1", "rawbt_2", "rawbt_3", "rawbt_4"],
-                                data="amsr2_h180",
+                                data="amsr_h180",
                             ),
                         ),
                     ),
