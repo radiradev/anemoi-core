@@ -108,14 +108,22 @@ class Leaf(SampleProvider):
     def __getitem__(self, item):
         self._check_item(item)
         dh = DataHandler(self.context, self.group, item, variables=self.variables)
-        dh = dh.load()
-        return dh
+        record = dh.record
+        return dict(
+            data=record[self.group],
+            latitudes=record.latitudes[self.group],
+            longitudes=record.longitudes[self.group],
+            timedeltas=record.timedeltas[self.group],
+            name_to_index=record.name_to_index[self.group],
+        )
 
     def _build_tree(self, label="Leaf"):
         return Tree(f"{label}  -> {self.group} variables={self.variables}")
 
 
 class DataHandler:
+    _record = None
+
     def __init__(self, context, group, args, variables=[]):
         self.context = context
         self.group = group
@@ -129,8 +137,12 @@ class DataHandler:
         self.ds = open_dataset(**self.config)
         print(f"🔍 Opened dataset with config: {self.config}")
 
-    def load(self):
-        return self.ds[self.args][self.group]
+    @property
+    def record(self):
+        if self._record is not None:
+            return self._record
+        self._record = self.ds[self.args]
+        return self._record
 
     def __repr__(self):
         return f"DataHandler({self.dataset} @ {self.group}, [{', '.join(self.variables)}], {self.args})"
