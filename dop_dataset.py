@@ -43,29 +43,29 @@ CONFIG = dict(
                     #     variables=["q_50", "2t"],
                     #     data="era5",
                     # ),
-                    ascat_metop_a=dict(  # "metar" is a user defined key
-                        STEPS=dict(
-                            _6h=dict(
+                    ascat_metop_a=dict(
+                        STEPS={
+                            "-6h": dict(
                                 variables=["scatss_1", "scatss_2"],
                                 data="metop_a",
-                            ),
-                        ),
+                            )
+                        }
                     ),
-                    snow=dict(  # "iasi" is a user defined key
-                        STEPS=dict(
-                            _6h=dict(
+                    snow=dict(
+                        STEPS={
+                            "0h": dict(
                                 variables=["sdepth_0"],
                                 data="snow",
-                            ),
-                        ),
+                            )
+                        },
                     ),
-                    amsr2=dict(  # "iasi" is a user defined key
-                        STEPS=dict(
-                            _6h=dict(
+                    amsr2=dict(
+                        STEPS={
+                            "-6h": dict(
                                 variables=["rawbt_1", "rawbt_2", "rawbt_3", "rawbt_4"],
                                 data="amsr2_h180",
-                            ),
-                        ),
+                            )
+                        },
                     ),
                 ),
             ),

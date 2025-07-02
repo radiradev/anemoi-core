@@ -217,20 +217,20 @@ if __name__ == "__main__":
                         #     data="era5",
                         # ),
                         metop=dict(  # "metar" is a user defined key
-                            STEPS=dict(
-                                _6h=dict(
+                            STEPS={
+                                "-6h": dict(
                                     variables=["scatss_1", "scatss_2"],
                                     data="metop_a",
                                 ),
-                            ),
+                            },
                         ),
                         snow=dict(  # "iasi" is a user defined key
-                            STEPS=dict(
-                                _0h=dict(
+                            STEPS={
+                                "0h": dict(
                                     variables=["sdepth_0"],
                                     data="snow",
                                 ),
-                            ),
+                            },
                         ),
                     ),
                 ),
