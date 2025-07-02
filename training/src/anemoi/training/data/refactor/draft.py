@@ -26,6 +26,26 @@ class Sample:
         if not isinstance(item, (int, np.integer)):
             raise TypeError(f"Not implemented for non-integer indexing {type(item)}")
 
+    def shuffle(self, *args, **kwargs):
+        return ShuffledSample(self, *args, **kwargs)
+
+class ShuffledSample(Sample):
+    def __init__(self, sample, seed=None):
+        super().__init__(sample.context)
+        self.sample = sample
+        self.seed = seed
+
+    def __getitem__(self, item):
+        self.sample._check_item(item)
+        if self.seed is not None:
+            np.random.seed(self.seed + item)
+        return self.sample[item]
+
+    def _build_tree(self, label="ShuffledSample"):
+        tree = Tree(label)
+        subtree = self.sample._build_tree(label=f"Sample: {type(self.sample).__name__}")
+        tree.add(subtree)
+        return tree
 
 class GroupedSample(Sample):
     def __init__(self, context, dic):
