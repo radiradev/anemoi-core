@@ -6,12 +6,9 @@ from typing import Optional
 import numpy as np
 import torch
 import yaml
-from rich.console import Console
-from rich.tree import Tree
 from torch.utils.data import IterableDataset
 from torch.utils.data import get_worker_info
 
-from anemoi.datasets import open_dataset
 
 CONFIG = dict(
     data=dict(
@@ -78,143 +75,7 @@ CONFIG = dict(
 )
 
 
-class Sample:
-    def __init__(self, datahandlers):
-        self.datahandlers = datahandlers
-
-    def __repr__(self):
-        console = Console(record=True, width=120)
-        tree = self._build_tree()
-        with console.capture() as capture:
-            console.print(tree)
-        return capture.get()
-
-    def _build_tree(self, label="Sample"):
-        return Tree(label)
-
-
-class GroupedSample(Sample):
-    def __init__(self, datahandlers, dic):
-        super().__init__(datahandlers)
-        self._samples = {k: sample_factory(**v) for k, v in dic.items()}
-
-    def __getitem__(self, item):
-        return {k: v[item] for k, v in self._samples.items()}
-
-    def _build_tree(self, label="GroupedSample"):
-        tree = Tree(label)
-        for k, v in self._samples.items():
-            subtree = v._build_tree(label=f"{k}: {type(v).__name__}")
-            tree.add(subtree)
-        return tree
-
-
-class StepSample(Sample):
-    def __init__(self, datahandlers, dic):
-        super().__init__(datahandlers)
-        self._samples = {k: sample_factory(**v) for k, v in dic.items()}
-
-    def __getitem__(self, item):
-        out = []
-        for k, v in self._samples.items():
-            if k == "_6h":
-                out.append(v[item - 1])
-            elif k == "_0h":
-                out.append(v[item])
-            elif k == "p6h":
-                out.append(v[item + 1])
-        return out
-
-    def _build_tree(self, label="GroupedSample"):
-        tree = Tree(label)
-        for k, v in self._samples.items():
-            subtree = v._build_tree(label=f"{k}: {type(v).__name__}")
-            tree.add(subtree)
-        return tree
-
-
-class Leaf(Sample):
-    def __init__(self, datahandlers, variables, data):
-        super().__init__(datahandlers)
-        self.data_key = data
-        self.variables = variables
-
-    def __getitem__(self, item):
-        result = Result(self.data_key, item, variables=self.variables)
-        return result.load()
-
-    def _build_tree(self, label="Leaf"):
-        return Tree(f"{label}  -> {self.data_key} variables={self.variables}")
-
-
-def sample_factory(datahandlers=None, **kwargs):
-    kwargs = kwargs.copy()
-    if datahandlers is None:
-        datahandlers = []
-    if "GROUPS" in kwargs:
-        return GroupedSample(datahandlers, kwargs["GROUPS"])
-    if "STEPS" in kwargs:
-        return StepSample(datahandlers, kwargs["STEPS"])
-    if "variables" in kwargs:
-        return Leaf(datahandlers, variables=kwargs["variables"], data=kwargs["data"])
-    assert False, f"Unknown sample type for kwargs {kwargs}"
-
-
-class Result:
-    def __init__(self, datahandler_key, *args, variables=[], **kwargs):
-        cfg = CONFIG["data"][datahandler_key]
-        assert "select" not in cfg, (cfg, variables)
-        variables = [f"{datahandler_key}.{v}" for v in variables]
-        dh = DataHandler(datahandler_key, **cfg, select=variables)
-
-        self.func = dh.__getitem__
-        self.args = args
-        self.kwargs = kwargs
-
-    def load(self):
-        return self.func(*self.args, **self.kwargs)
-
-    def __repr__(self):
-        inside = []
-        inside += [str(arg) for arg in self.args]
-        inside += [f"{k}={v}" for k, v in self.kwargs.items()]
-        return f"Result({self.datahandler}  ({', '.join(inside)})"
-
-
-class DataHandler:
-    def __init__(self, name, **config):
-        self.name = name
-        if isinstance(config, str):
-            config = dict(dataset=config)
-        if isinstance(config["dataset"], str):
-            config = dict(dataset=config)
-
-        self.config = config
-        self._config_str = " ".join(f"{k}={v}" for k, v in config.items())
-
-    def is_grouped_dataset(self, ds):
-        from anemoi.datasets.data.records import BaseRecordsDataset
-
-        return isinstance(ds, BaseRecordsDataset)
-
-    @property
-    def ds(self):
-        ds = open_dataset(**self.config["dataset"])
-        print(f"🔍 Opened dataset {self.name} with config: {self._config_str}")
-        if self.name not in ds.groups:
-            raise ValueError(f"Group '{self.name}' not found in dataset. Available groups: {ds.groups}")
-        ds = ds[self.name]
-        print(f"   Available variables for group '{self.name}': {ds.variables}")
-        return ds
-
-    def __getitem__(self, item):
-        data = self.ds[item]
-        assert isinstance(data, np.ndarray), f"Expected np.array, got {type(data)}, {type(self.ds)}"
-        return data
-        return f"np.array ds[{item}] with ds from {self._config_str} "
-
-    def __str__(self):
-        return f"DataHandler({self._config_str})"
+from anemoi.training.data.refactor.draft import sample_factory
 
 
 def show_yaml(structure):
@@ -271,7 +132,14 @@ class DOPDataset(IterableDataset):
         self.seed_comm_group_id = 0
         self.seed_comm_num_groups = 1
 
-        self._sample_factory = sample_factory(**CONFIG["sample"])
+        training_context = {
+            "name": "training",
+            "data_config": CONFIG["data"],
+            "start": "2018-11-02",
+            "end": "2018-11-01",
+        }
+
+        self._sample_factory = sample_factory(context=training_context, **CONFIG["sample"])
 
         self.len = 25  # len(self._sample_factory)
 
