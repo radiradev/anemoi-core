@@ -92,26 +92,26 @@ class Leaf(Sample):
     def _build_tree(self, label="Leaf"):
         return Tree(f"{label}  -> {self.group} variables={self.variables}")
 
-class DataHandler:
-    def __init__(self, context, datahandler_key, args, variables=[]):
-        self.context = context
-        self.datahandler_key = datahandler_key
-        self.args = args
-        self.dataset = self.context.data_config[self.datahandler_key]["dataset"]
 
-        variables = [f"{datahandler_key}.{v}" for v in variables]
+class DataHandler:
+    def __init__(self, context, group, args, variables=[]):
+        self.context = context
+        self.group = group
+        self.args = args
+        self.dataset = self.context.data_config[self.group]["dataset"]
+
+        variables = [f"{group}.{v}" for v in variables]
         self.variables = variables
 
         self.config = dict(dataset=self.dataset, select=self.variables)
         self.ds = open_dataset(**self.config)
-        self.group = self.datahandler_key
         print(f"🔍 Opened dataset with config: {self.config}")
 
     def load(self):
         return self.ds[self.args][self.group]
 
     def __repr__(self):
-        return f"DataHandler({self.dataset} @ {self.datahandler_key}, [{', '.join(self.variables)}], {self.args})"
+        return f"DataHandler({self.dataset} @ {self.group}, [{', '.join(self.variables)}], {self.args})"
 
 
 class Context:
@@ -137,7 +137,6 @@ def sample_factory(context, **kwargs):
     if "variables" in kwargs:
         return Leaf(context, variables=kwargs["variables"], group=kwargs["data"])
     assert False, f"Unknown sample type for kwargs {kwargs}"
-
 
 
 # TEST ---------------------------------
