@@ -85,6 +85,10 @@ class BaseProcessor(nn.Module, ABC):
         x = self.run_layers((x,), *args, **kwargs)
         return x
 
+class DummyProcessor(BaseProcessor):
+    def forward(self, x: Tensor, *args, **kwargs) -> Tensor:
+        """Example forward pass."""
+        return x
 
 class TransformerProcessor(BaseProcessor):
     """Transformer Processor."""

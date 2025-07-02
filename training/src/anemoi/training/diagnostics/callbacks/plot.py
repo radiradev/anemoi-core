@@ -438,6 +438,7 @@ class LongRolloutPlots(BasePlotCallback):
             ...,
             pl_module.data_indices.data.output.full,
         ].cpu()
+
         data_0 = self.post_processors(input_tensor_0).numpy()
 
         if self.video_rollout:
@@ -972,12 +973,11 @@ class PlotSample(BasePerBatchPlotCallback):
 
         input_tensor = batch[
             self.sample_idx,
-            pl_module.multi_step - 1 : pl_module.multi_step + pl_module.rollout + 1,
+            0:1,
             ...,
             pl_module.data_indices.data.output.full,
         ].cpu()
         data = self.post_processors(input_tensor)
-
         output_tensor = self.post_processors(
             torch.cat(tuple(x[self.sample_idx : self.sample_idx + 1, ...].cpu() for x in outputs[1])),
             in_place=False,
@@ -993,7 +993,7 @@ class PlotSample(BasePerBatchPlotCallback):
                 self.latlons,
                 self.accumulation_levels_plot,
                 data[0, ...].squeeze(),
-                data[rollout_step + 1, ...].squeeze(),
+                data[0, ...].squeeze(),
                 output_tensor[rollout_step, ...],
                 datashader=self.datashader_plotting,
                 precip_and_related_fields=self.precip_and_related_fields,

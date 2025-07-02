@@ -442,6 +442,7 @@ def plot_predicted_multilevel_flat_sample(
         colormaps = {}
 
     for plot_idx, (variable_idx, (variable_name, output_only)) in enumerate(parameters.items()):
+
         xt = x[..., variable_idx].squeeze() * int(output_only)
         yt = y_true[..., variable_idx].squeeze()
         yp = y_pred[..., variable_idx].squeeze()

@@ -90,7 +90,6 @@ class BaseVariableLevelScaler(BaseVariableLossScaler):
             self.variable_metadata_extractor.get_group_specification(self.scaling_group),
         )
         LOGGER.info("with slope = %s and y-intercept/minimum = %s.", self.slope, self.y_intercept)
-
         for variable_name, idx in self.data_indices.model.output.name_to_index.items():
             variable_group, _, variable_level = self.variable_metadata_extractor.get_group_and_level(variable_name)
             if variable_group != self.scaling_group:
