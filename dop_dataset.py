@@ -67,7 +67,7 @@ CONFIG = dict(
                         STEPS=dict(
                             _6h=dict(
                                 variables=["rawbt_1", "rawbt_2", "rawbt_3", "rawbt_4"],
-                                data="amsr_h180",
+                                data="amsr2_h180",
                             ),
                         ),
                     ),
@@ -319,11 +319,12 @@ class DOPDataset(IterableDataset):
     def __iter__(self):
         if self.shuffle:
             # do a full shuffle, then get my index range
-            shuffled_data_indices = self.rng.choice(self.data_indices, size=len(self.data_indices), replace=False)
+            shuffled_data_indices = self.rng.choice(self.data_indices, size=len(self.data_indices) - 1, replace=False)
             shuffled_chunk_indices = shuffled_data_indices[self.chunk_index_range]
 
             while True:  # the pl.Trainer will break out of this loop after a fixed number of samples
                 idx = self.rng.choice(shuffled_chunk_indices)
+                idx += 1
                 print(
                     f"TRAINING: Worker {self.worker_id} (pid {os.getpid()}) fetching sample index {idx} ...",
                 )
@@ -333,6 +334,7 @@ class DOPDataset(IterableDataset):
             shuffled_chunk_indices = self.data_indices[self.chunk_index_range]
             # no shuffle, just iterate over the chunk indices
             for idx in self.chunk_index_range:
+                idx += 1
                 print(
                     f"VALIDATION: Worker {self.worker_id} (pid {os.getpid()}) fetching sample index {idx} ...",
                 )
