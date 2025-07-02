@@ -8,7 +8,7 @@ from rich.tree import Tree
 from anemoi.datasets import open_dataset
 
 
-class Sample:
+class SampleProvider:
     def __init__(self, context):
         self.context = context
 
@@ -19,7 +19,7 @@ class Sample:
             console.print(tree)
         return capture.get()
 
-    def _build_tree(self, label="Sample"):
+    def _build_tree(self, label="SampleProvider"):
         return Tree(label)
 
     def _check_item(self, item):
@@ -27,9 +27,9 @@ class Sample:
             raise TypeError(f"Not implemented for non-integer indexing {type(item)}")
 
     def shuffle(self, *args, **kwargs):
-        return ShuffledSample(self, *args, **kwargs)
+        return ShuffledSampleProvider(self, *args, **kwargs)
 
-class ShuffledSample(Sample):
+class ShuffledSampleProvider(SampleProvider):
     def __init__(self, sample, seed=None):
         super().__init__(sample.context)
         self.sample = sample
@@ -41,13 +41,13 @@ class ShuffledSample(Sample):
             np.random.seed(self.seed + item)
         return self.sample[item]
 
-    def _build_tree(self, label="ShuffledSample"):
+    def _build_tree(self, label="ShuffledSampleProvider"):
         tree = Tree(label)
-        subtree = self.sample._build_tree(label=f"Sample: {type(self.sample).__name__}")
+        subtree = self.sample._build_tree(label=f"SampleProvider: {type(self.sample).__name__}")
         tree.add(subtree)
         return tree
 
-class GroupedSample(Sample):
+class GroupedSampleProvider(SampleProvider):
     def __init__(self, context, dic):
         super().__init__(context)
         self._samples = {k: sample_factory(self.context, **v) for k, v in dic.items()}
@@ -61,7 +61,7 @@ class GroupedSample(Sample):
     def __len__(self):
         return 118  # ✅✅ TODO provide the correct lenght
 
-    def _build_tree(self, label="GroupedSample"):
+    def _build_tree(self, label="GroupedSampleProvider"):
         tree = Tree(label)
         for k, v in self._samples.items():
             subtree = v._build_tree(label=f"{k}: {type(v).__name__}")
@@ -69,7 +69,7 @@ class GroupedSample(Sample):
         return tree
 
 
-class StepSample(Sample):
+class StepSampleProvider(SampleProvider):
     def __init__(self, context, dic):
         super().__init__(context)
         self._samples = {k: sample_factory(context, **v) for k, v in dic.items()}
@@ -85,11 +85,11 @@ class StepSample(Sample):
             elif k == "p6h":
                 item = item + 1
             else:
-                raise ValueError(f"Unknown step {k} in StepSample")
+                raise ValueError(f"Unknown step {k} in StepSampleProvider")
             out.append(v[item])
         return out
 
-    def _build_tree(self, label="GroupedSample"):
+    def _build_tree(self, label="GroupedSampleProvider"):
         tree = Tree(label)
         for k, v in self._samples.items():
             subtree = v._build_tree(label=f"{k}: {type(v).__name__}")
@@ -97,7 +97,7 @@ class StepSample(Sample):
         return tree
 
 
-class Leaf(Sample):
+class Leaf(SampleProvider):
     def __init__(self, context, variables, group):
         super().__init__(context)
         self.group = group
@@ -151,9 +151,9 @@ def sample_factory(context, **kwargs):
     if context is None:
         context = Context()
     if "GROUPS" in kwargs:
-        return GroupedSample(context, kwargs["GROUPS"])
+        return GroupedSampleProvider(context, kwargs["GROUPS"])
     if "STEPS" in kwargs:
-        return StepSample(context, kwargs["STEPS"])
+        return StepSampleProvider(context, kwargs["STEPS"])
     if "variables" in kwargs:
         return Leaf(context, variables=kwargs["variables"], group=kwargs["data"])
     assert False, f"Unknown sample type for kwargs {kwargs}"
@@ -248,7 +248,7 @@ if __name__ == "__main__":
         print(show_yaml(v))
     print("-----------------")
 
-    print("✅ Sample")
+    print("✅ SampleProvider")
     sample_config = CONFIG["sample"]
     training_context = Context(
         "training",
