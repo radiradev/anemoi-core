@@ -57,7 +57,6 @@ class NaNMaskScaler(BaseUpdatingScaler):
                 loss_weights_mask = loss_weights_mask.to(pre_processor.loss_mask_training)
                 loss_weights_mask = loss_weights_mask * pre_processor.loss_mask_training.to(device)
 
-
         return loss_weights_mask
 
     def on_valid_batch_start(self, model: AnemoiModelInterface) -> None:
