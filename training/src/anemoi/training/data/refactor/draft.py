@@ -92,6 +92,27 @@ class Leaf(Sample):
     def _build_tree(self, label="Leaf"):
         return Tree(f"{label}  -> {self.group} variables={self.variables}")
 
+class DataHandler:
+    def __init__(self, context, datahandler_key, args, variables=[]):
+        self.context = context
+        self.datahandler_key = datahandler_key
+        self.args = args
+        self.dataset = self.context.data_config[self.datahandler_key]["dataset"]
+
+        variables = [f"{datahandler_key}.{v}" for v in variables]
+        self.variables = variables
+
+        self.config = dict(dataset=self.dataset, select=self.variables)
+        self.ds = open_dataset(**self.config)
+        self.group = self.datahandler_key
+        print(f"🔍 Opened dataset with config: {self.config}")
+
+    def load(self):
+        return self.ds[self.args][self.group]
+
+    def __repr__(self):
+        return f"DataHandler({self.dataset} @ {self.datahandler_key}, [{', '.join(self.variables)}], {self.args})"
+
 
 class Context:
     def __init__(self, name="no-name", start=None, end=None, data_config=None):
@@ -117,27 +138,6 @@ def sample_factory(context, **kwargs):
         return Leaf(context, variables=kwargs["variables"], group=kwargs["data"])
     assert False, f"Unknown sample type for kwargs {kwargs}"
 
-
-class DataHandler:
-    def __init__(self, context, datahandler_key, args, variables=[]):
-        self.context = context
-        self.datahandler_key = datahandler_key
-        self.args = args
-        self.dataset = self.context.data_config[self.datahandler_key]["dataset"]
-
-        variables = [f"{datahandler_key}.{v}" for v in variables]
-        self.variables = variables
-
-        self.config = dict(dataset=self.dataset, select=self.variables)
-        self.ds = open_dataset(**self.config)
-        self.group = self.datahandler_key
-        print(f"🔍 Opened dataset with config: {self.config}")
-
-    def load(self):
-        return self.ds[self.args][self.group]
-
-    def __repr__(self):
-        return f"DataHandler({self.dataset} @ {self.datahandler_key}, [{', '.join(self.variables)}], {self.args})"
 
 
 # TEST ---------------------------------
