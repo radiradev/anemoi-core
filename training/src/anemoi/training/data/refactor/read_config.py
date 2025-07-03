@@ -34,11 +34,11 @@ CONFIG = dict(
                         ),
                     },
                 ),
-                amsr2=dict(  # "metar" is a user defined key
+                amsr_h180=dict(  # "metar" is a user defined key
                     STEPS={
                         "0h": dict(
                             variables=["rawbt_1", "rawbt_2", "rawbt_3"],
-                            data="amsr2",
+                            data="amsr_h180",
                         ),
                     },
                 ),
@@ -54,11 +54,11 @@ CONFIG = dict(
                         ),
                     },
                 ),
-                amsr2=dict(  # "amsr2" is a user defined key
+                amsr_h180=dict(  # "amsr2" is a user defined key
                     STEPS={
-                        "6H": dict(
+                        "6h": dict(
                             variables=["rawbt_1", "rawbt_2", "rawbt_3"],
-                            data="amsr2",
+                            data="amsr_h180",
                         ),
                     },
                 ),
@@ -81,7 +81,7 @@ DATA_CONFIG = dict(
             ),
         ),
     ),
-    amsr2=dict(
+    amsr_h180=dict(
         ## NOW: Only 1 group is supported for each "key" (dh)
         dataset=dict(
             dataset="/etc/ecmwf/nfs/dh1_home_a/mafp/work/obs/data/vz/obs-2018-11.vz",
@@ -89,6 +89,7 @@ DATA_CONFIG = dict(
         ),
     ),
 )
+
 
 def get_data_config_dict(data) -> Dict:
     return DATA_CONFIG
