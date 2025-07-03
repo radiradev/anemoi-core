@@ -13,6 +13,30 @@ class SampleProvider:
     def __init__(self, context):
         self.context = context
 
+    def __getitem__(self, item):
+        self._check_item(item)
+        return self.get("__getitem__", item)
+        
+    def everything_as_a_dict(self, item):
+        self._check_item(item)
+        return self.get("everything-as-a-dict", item)
+
+    def latitudes(self, item):
+        self._check_item(item)
+        return self.get("latitudes", item)
+
+    def longitudes(self, item):
+        self._check_item(item)
+        return self.get("longitudes", item)
+
+    def timedeltas(self, item):
+        self._check_item(item)
+        return self.get("timedeltas", item)
+
+    def name_to_index(self, item):
+        self._check_item(item)
+        return self.get("name_to_index", item)
+
     @property
     def frequency(self):
         return convert_to_timedelta("6h")  # convert_to_timedelta(self.context.data_config.frequency)
@@ -41,11 +65,11 @@ class ShuffledSampleProvider(SampleProvider):
         self.sample = sample
         self.seed = seed
 
-    def __getitem__(self, item):
+    def get(self, what, item):
         self.sample._check_item(item)
         if self.seed is not None:
             np.random.seed(self.seed + item)
-        return self.sample[item]
+        return self.sample.get(what, item)
 
     def _build_tree(self, label="ShuffledSampleProvider"):
         tree = Tree(label)
@@ -55,15 +79,21 @@ class ShuffledSampleProvider(SampleProvider):
 
 
 class GroupedSampleProvider(SampleProvider):
-    def __init__(self, context, dic):
+    def __init__(self, context, dict, with_attributes=False):
         super().__init__(context)
-        self._samples = {k: sample_factory(self.context, **v) for k, v in dic.items()}
+        self.with_attributes = with_attributes
+        self._samples = {k: sample_factory(self.context, **v) for k, v in dict.items()}
 
-    def __getitem__(self, item):
+    def __getattr__(self, key):
+        if key in self._samples:
+            return self._samples[key]
+        raise AttributeError(f"{type(self).__name__} has no attribute '{key}'")
+
+    def get(self, what, item):
         self._check_item(item)
         if item == 0:
             item = item + 1  # ✅✅ TODO provide the correct lenght
-        return {k: v[item] for k, v in self._samples.items()}
+        return {k: v.get(what, item) for k, v in self._samples.items()}
 
     def __len__(self):
         return 118  # ✅✅ TODO provide the correct lenght
@@ -81,14 +111,14 @@ class StepSampleProvider(SampleProvider):
         super().__init__(context)
         self._samples = {k: sample_factory(context, **v) for k, v in dic.items()}
 
-    def __getitem__(self, item):
+    def get(self, what, item):
         self._check_item(item)
         out = []
         for k, v in self._samples.items():
             k = convert_to_timedelta(k)
             sample_step = k / v.frequency
             assert sample_step == int(sample_step)
-            out.append(v[item + int(sample_step)])
+            out.append(v.get(what, item + int(sample_step)))
         return out
 
     def _build_tree(self, label="GroupedSampleProvider"):
@@ -105,18 +135,57 @@ class Leaf(SampleProvider):
         self.group = group
         self.variables = variables
 
-    def __getitem__(self, item):
+    def get(self, what, item):
         self._check_item(item)
         dh = DataHandler(self.context, self.group, item, variables=self.variables)
         record = dh.record
         second = np.timedelta64(1, "s")
-        return dict(
-            data=record[self.group],
-            latitudes=record.latitudes[self.group],
-            longitudes=record.longitudes[self.group],
-            timedeltas=record.timedeltas[self.group] // second,
-            name_to_index=record.name_to_index[self.group],
-        )
+
+        if w == "everything-as-a-dict":
+            w = ["__getitem__", "latitudes", "longitudes", "timedeltas", "name_to_index"]
+
+
+        data = {}
+        for w in what:
+            if w == "__getitem__":
+                data["data"] = record[self.group]
+            elif w == "latitudes":
+                data["latitudes"] = record.latitudes[self.group]
+            elif w == "longitudes":
+                data["longitudes"] = record.longitudes[self.group]
+            elif w == "timedeltas":
+                data["timedeltas"] = record.timedeltas[self.group] // second
+            elif w == "name_to_index":
+                data["name_to_index"] = record.name_to_index[self.group]
+                data = dict(
+                    data=record[self.group],
+                    latitudes=record.latitudes[self.group],
+                    longitudes=record.longitudes[self.group],
+                    timedeltas=record.timedeltas[self.group] // second,
+                    name_to_index=record.name_to_index[self.group],
+                )
+            else:
+                raise ValueError(f"Unknown request '{w}' for Leaf sample provider")
+
+        if what == "__getitem__":
+            return record[self.group]
+        elif what == "latitudes":
+            return record.latitudes[self.group]
+        elif what == "longitudes":
+            return record.longitudes[self.group]
+        elif what == "timedeltas":
+            return record.timedeltas[self.group] // second
+        elif what == "name_to_index":
+            return record.name_to_index[self.group]
+        elif what == "everything-as-a-dict":
+            return dict(
+                data=record[self.group],
+                latitudes=record.latitudes[self.group],
+                longitudes=record.longitudes[self.group],
+                timedeltas=record.timedeltas[self.group] // second,
+                name_to_index=record.name_to_index[self.group],
+            )
+        raise ValueError(f"Unknown request '{what}' for Leaf sample provider")
 
     def _build_tree(self, label="Leaf"):
         return Tree(f"{label}  -> {self.group} variables={self.variables}")
@@ -136,7 +205,7 @@ class DataHandler:
 
         self.config = dict(dataset=self.dataset, select=self.variables)
         self.ds = open_dataset(**self.config)
-        print(f"🔍 Opened dataset with config: {self.config}")
+        # print(f"🔍 Opened dataset with config: {self.config}")
 
     @property
     def record(self):
@@ -165,8 +234,10 @@ def sample_factory(context, **kwargs):
         context = Context(**context)
     if context is None:
         context = Context()
+    if "dict" in kwargs:
+        return GroupedSampleProvider(context, **kwargs)
     if "GROUPS" in kwargs:
-        return GroupedSampleProvider(context, kwargs["GROUPS"])
+        return GroupedSampleProvider(context, dict=kwargs["GROUPS"])
     if "STEPS" in kwargs:
         return StepSampleProvider(context, kwargs["STEPS"])
     if "variables" in kwargs:
@@ -196,9 +267,10 @@ if __name__ == "__main__":
             # end=...,
         ),
         sample=dict(
-            GROUPS=dict(
+            with_attributes=True,
+            dict=dict(
                 input=dict(
-                    GROUPS=dict(
+                    dict=dict(
                         #                    fields=dict(  # "fields" is a user defined key
                         #                        STEPS=dict(
                         #                            _6h=dict(
@@ -220,8 +292,10 @@ if __name__ == "__main__":
                         metop=dict(  # "metar" is a user defined key
                             STEPS={
                                 "-6h": dict(
+                                    # give_all_things=dict(
                                     variables=["scatss_1", "scatss_2"],
                                     data="metop_a",
+                                    # )
                                 ),
                             },
                         ),
@@ -275,8 +349,13 @@ if __name__ == "__main__":
 
     print("🆗 DataHandler")
     results_structure = s[3]
-
     print(show_json(results_structure))
+
+    print("Latitudes and longitudes:")
+    print(show_json(s.latitudes(3)))
+    print(show_json(s.longitudes(3)))
+    print('❌ Everything as a dict:')
+    print(show_json(s.everything_as_a_dict(3)))
 
     class Resolver:
         def __init__(self):
