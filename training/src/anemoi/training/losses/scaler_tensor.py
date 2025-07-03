@@ -332,16 +332,16 @@ class ScaleTensor(nn.Module):
         dimension = self._tensors[name][0]
 
         original_scaler = self._tensors.pop(name)
-        self._buffers.pop(name, None)
+        original_scaler_buffer = self._buffers.pop(name, None)
 
         if not override:
             self.validate_scaler(dimension, scaler)
 
         try:
-            self.add_scaler(dimension, None, name=name)
-            self.register_buffer(name, scaler, persistent=False)
+            self.add_scaler(dimension, scaler, name=name)
         except ValueError:
             self._tensors[name] = original_scaler
+            self.register_buffer(name, original_scaler_buffer, persistent=False)
             raise
 
     def add(self, new_scalers: dict[str, TENSOR_SPEC] | list[TENSOR_SPEC] | None = None, **kwargs) -> None:
