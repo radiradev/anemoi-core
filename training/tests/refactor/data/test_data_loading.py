@@ -2,36 +2,22 @@ import pytest
 import torch
 from omegaconf import DictConfig
 
-from anemoi.training.data.refactor.data_handlers import data_handler_factory
 from anemoi.training.data.refactor.multiple_datasets_datamodule import AnemoiMultipleDatasetsDataModule
-from anemoi.training.data.refactor.providers import sample_provider_factory
+from anemoi.training.data.refactor.draft import sample_factory, Context
+from anemoi.training.data.refactor.read_config import get_data_config_dict, get_sample_config_dict
 
 
-def _test_datahandler(new_config: DictConfig):
-    config = new_config
-    datahandler = data_handler_factory(config.data.data_handler, top_level=True)
+def test_sampleprovider(new_config: DictConfig):
+    dhs_config = get_data_config_dict(new_config.data.data_handlers)
+    sample_config = get_sample_config_dict(new_config.model.sample)
 
-    # TODO : test morethings here
-    datahandler[0]
-    datahandler.name_to_index
-    datahandler.statistics
-    datahandler.frequency
-    datahandler.start_date
-    datahandler.end_date
-    datahandler.groups
-    datahandler.variables
-    # datahandler.latitudes # not implemented
-    # datahandler.longitudes # not implemented
+    context = Context("training", data_config=dhs_config, start=2019, end=2020)
 
-
-def _test_sampleprovider(new_config: DictConfig):
-    config = new_config
-    datahandler = data_handler_factory(config.data.data_handler, top_level=True)
-    sample_provider = sample_provider_factory(
-        **config.model.sample_structure,
-        provider=datahandler,
-    )
+    sample_provider = sample_factory(context=context, **sample_config)
     sample_provider[0]
+    assert hasattr(sample_provider, "latitudes")
+    assert hasattr(sample_provider, "longitudes")
+    assert hasattr(sample_provider, "timedeltas")
 
 
 def test_datamodule(new_config: DictConfig):
@@ -46,9 +32,16 @@ def test_datamodule(new_config: DictConfig):
     batch = next(iter(train_loaders))
 
     assert isinstance(batch, dict)
-    assert batch["input"]["era5"].shape == (1, 2, 1, 40320, 12)
-    assert batch["target"]["era5"].shape == (1, 1, 1, 40320, 9)
 
+    assert set(batch.keys()) == {"input", "target"}
+
+    assert set(batch["input"].keys()) == {"era5", "amsr_h180"}
+    assert set(batch["target"].keys()) == {"era5", "amsr_h180"}
+
+    assert len(batch["input"]["era5"]) == 2
+    assert len(batch["input"]["amsr_h180"]) == 1
+    assert len(batch["target"]["era5"]) == 1
+    assert len(batch["target"]["amsr_h180"]) == 1
 
 if __name__ == "__main__":
     pytest.main([__file__])

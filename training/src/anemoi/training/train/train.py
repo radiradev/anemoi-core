@@ -202,7 +202,7 @@ class AnemoiTrainer:
         kwargs = {
             "config": self.config,
             # "data_indices": self.data_indices,
-            "sample_provider": self.datamodule.sample_provider,
+            "sample_provider": self.datamodule.training_samples,
             "graph_data": self.graph_data,
             "metadata": self.metadata,
         }

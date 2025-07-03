@@ -22,7 +22,7 @@ from torch_geometric.data import HeteroData
 
 from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.layers.graph import NamedNodesAttributes
-from anemoi.training.data.data_handlers import SampleProvider
+from anemoi.training.data.refactor.draft import SampleProvider
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)

@@ -31,17 +31,17 @@ def new_config() -> DictConfig:
                     },
                 },
             },
-            "sampler": {
-                "training": {
-                    "start": 2018,
-                    "end": 2019,
-                },
-                "validation": {
-                    "start": 2019,
-                    "end": 2020,
-                },
-            },
             "dataloader": {
+                "sampler": {
+                    "training": {
+                        "start": 2018,
+                        "end": 2019,
+                    },
+                    "validation": {
+                        "start": 2019,
+                        "end": 2020,
+                    },
+                },
                 "prefetch_factor": 2,
                 "pin_memory": True,
                 "persistent_workers": True,

@@ -23,7 +23,7 @@ from anemoi.graphs.edges import CutOffEdges
 from anemoi.graphs.edges import KNNEdges
 from anemoi.graphs.nodes import LatLonNodes
 from anemoi.models.interface import AnemoiModelInterface
-from anemoi.training.data.data_handlers import SampleProvider
+from anemoi.training.data.refactor.draft import SampleProvider
 from anemoi.training.data.utils import RecordProviderName
 from anemoi.training.losses import get_loss_function
 from anemoi.training.losses.base import BaseLoss

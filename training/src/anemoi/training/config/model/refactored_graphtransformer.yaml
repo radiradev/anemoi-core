@@ -4,114 +4,115 @@ cpu_offload: False
 #output_mask: null # moved this to config.training to have one mask per output
 
 
-input_provider:
-  era5:
-    variables:
-    - "cos_latitude"
-    - "cos_longitude"
-    - "sin_latitude"
-    - "sin_longitude"
-    - "cos_julian_day"
-    - "cos_local_time"
-    - "sin_julian_day"
-    - "sin_local_time"
-    - "lsm"
-    - "z"
-    - "sp"
-    - "msl"
-    - "sdor"
-    - "slor"
-    - "10u"
-    - "10v"
-    - "2t"
-    - "2d"
-    - "q_100"
-    - "q_300"
-    - "q_700"
-    - "q_1000"
-    - "t_100"
-    - "t_300"
-    - "t_700"
-    - "t_1000"
-    - "u_100"
-    - "u_300"
-    - "u_700"
-    - "u_1000"
-    - "v_100"
-    - "v_300"
-    - "v_700"
-    - "v_1000"
-    - "w_100"
-    - "w_300"
-    - "w_700"
-    - "w_1000"
-    - "z_100"
-    - "z_300"
-    - "z_700"
-    - "z_1000"
-    steps: [-1, 0]
-  amsr2:
-    variables:
-    - rawbt_1
-    - rawbt_2
-    - rawbt_3
-    - azimuth
-    - cos_vaa
-    - cos_sza
-    steps: [-1]
-  airs:
-    variables:
-    - rawbt_1
-    - rawbt_40
-    - rawbt_221
-    - solar_zenith
-    - cos_vza
-    - cos_sza
-    steps: [-1]
-target_provider:
-  era5:
-    variables:
-    - "z"
-    - "sp"
-    - "msl"
-    - "sdor"
-    - "slor"
-    - "10u"
-    - "10v"
-    - "2t"
-    - "2d"
-    - "q_100"
-    - "q_300"
-    - "q_700"
-    - "q_1000"
-    - "t_100"
-    - "t_300"
-    - "t_700"
-    - "t_1000"
-    - "u_100"
-    - "u_300"
-    - "u_700"
-    - "u_1000"
-    - "v_100"
-    - "v_300"
-    - "v_700"
-    - "v_1000"
-    - "w_100"
-    - "w_300"
-    - "w_700"
-    - "w_1000"
-    - "z_100"
-    - "z_300"
-    - "z_700"
-    - "z_1000"
-    - "tp"
-    steps: [1]
-  amsr2:
-    variables:
-    - rawbt_1
-    - rawbt_2
-    - rawbt_3
-    steps: [-1]
+sample:
+  input:
+    era5:
+      variables:
+      - "cos_latitude"
+      - "cos_longitude"
+      - "sin_latitude"
+      - "sin_longitude"
+      - "cos_julian_day"
+      - "cos_local_time"
+      - "sin_julian_day"
+      - "sin_local_time"
+      - "lsm"
+      - "z"
+      - "sp"
+      - "msl"
+      - "sdor"
+      - "slor"
+      - "10u"
+      - "10v"
+      - "2t"
+      - "2d"
+      - "q_100"
+      - "q_300"
+      - "q_700"
+      - "q_1000"
+      - "t_100"
+      - "t_300"
+      - "t_700"
+      - "t_1000"
+      - "u_100"
+      - "u_300"
+      - "u_700"
+      - "u_1000"
+      - "v_100"
+      - "v_300"
+      - "v_700"
+      - "v_1000"
+      - "w_100"
+      - "w_300"
+      - "w_700"
+      - "w_1000"
+      - "z_100"
+      - "z_300"
+      - "z_700"
+      - "z_1000"
+      steps: [-1, 0]
+    amsr2:
+      variables:
+      - rawbt_1
+      - rawbt_2
+      - rawbt_3
+      - azimuth
+      - cos_vaa
+      - cos_sza
+      steps: [-1]
+    airs:
+      variables:
+      - rawbt_1
+      - rawbt_40
+      - rawbt_221
+      - solar_zenith
+      - cos_vza
+      - cos_sza
+      steps: [-1]
+  target:
+    era5:
+      variables:
+      - "z"
+      - "sp"
+      - "msl"
+      - "sdor"
+      - "slor"
+      - "10u"
+      - "10v"
+      - "2t"
+      - "2d"
+      - "q_100"
+      - "q_300"
+      - "q_700"
+      - "q_1000"
+      - "t_100"
+      - "t_300"
+      - "t_700"
+      - "t_1000"
+      - "u_100"
+      - "u_300"
+      - "u_700"
+      - "u_1000"
+      - "v_100"
+      - "v_300"
+      - "v_700"
+      - "v_1000"
+      - "w_100"
+      - "w_300"
+      - "w_700"
+      - "w_1000"
+      - "z_100"
+      - "z_300"
+      - "z_700"
+      - "z_1000"
+      - "tp"
+      steps: [1]
+    amsr2:
+      variables:
+      - rawbt_1
+      - rawbt_2
+      - rawbt_3
+      steps: [-1]
 
 model:
   _target_: anemoi.models.models.mult_encoder_processor_decoder.AnemoiMultiModel

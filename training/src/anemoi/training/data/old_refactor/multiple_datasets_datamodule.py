@@ -51,8 +51,8 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         dhs_config = get_data_config_dict(config.data.data_handlers)
         sample_config = get_sample_config_dict(config.model.sample)
 
-        training_context = Context("training", data_config=dhs_config, **config.dataloader.sampler.training)
-        validation_context = Context("validation", data_config=dhs_config, **config.dataloader.sampler.validation)
+        training_context = Context("training", data_config=dhs_config, **config.sampler.training)
+        validation_context = Context("validation", data_config=dhs_config, **config.sampler.validation)
 
         # Create Sampler provider
         self.training_samples = sample_factory(context=training_context, **sample_config)

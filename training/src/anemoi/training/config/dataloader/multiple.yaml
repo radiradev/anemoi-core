@@ -5,11 +5,9 @@ sampler:
   training:
     start: 2015
     end: 2018
-    frequency: 6H
   validation:
     start: 2019
     end: 2020
-    frequency: 6H
 
 # ============
 # read_group_size:
