@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from typing import Callable
+
 import torch
 
 from anemoi.training.losses.base import FunctionalLoss
