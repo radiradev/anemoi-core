@@ -11,7 +11,10 @@ def new_config() -> DictConfig:
                 "timestep": "6h",
                 "data_handlers": {
                     "era5": {
-                        "dataset": "aifs-od-an-oper-0001-mars-o96-2016-2023-6h-v6",
+                        "dataset": {
+                            # "set_group": "era5",
+                            "dataset": "aifs-od-an-oper-0001-mars-o96-2016-2023-6h-v6",
+                        },
                         "processors": {
                             "normalizer": {
                                 "_target_": "anemoi.models.preprocessing.normalizer.InputNormalizer",

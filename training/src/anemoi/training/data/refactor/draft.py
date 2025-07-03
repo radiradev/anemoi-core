@@ -16,7 +16,7 @@ class SampleProvider:
     def __getitem__(self, item):
         self._check_item(item)
         return self.get("__getitem__", item)
-        
+
     def everything_as_a_dict(self, item):
         self._check_item(item)
         return self.get("everything-as-a-dict", item)
@@ -136,14 +136,23 @@ class Leaf(SampleProvider):
         self.variables = variables
 
     def get(self, what, item):
+        # this may be moved to the Mother class
         self._check_item(item)
+        if isinstance(what, str):
+            if what == "everything-as-a-dict":
+                return self._get("__getitem__", "latitudes", "longitudes", "timedeltas", "name_to_index", item)
+            else:
+                out = self._get(what, item)
+                assert len(out) == 1, f"Expected single item for {what}, got {len(out)}"
+                key = list(out.keys())[0]
+                return out[key]
+        return self._get(*what, item=item)
+
+    def _get(self, *what_and_item):
+        *what, item = what_and_item
         dh = DataHandler(self.context, self.group, item, variables=self.variables)
         record = dh.record
         second = np.timedelta64(1, "s")
-
-        if w == "everything-as-a-dict":
-            w = ["__getitem__", "latitudes", "longitudes", "timedeltas", "name_to_index"]
-
 
         data = {}
         for w in what:
@@ -157,35 +166,9 @@ class Leaf(SampleProvider):
                 data["timedeltas"] = record.timedeltas[self.group] // second
             elif w == "name_to_index":
                 data["name_to_index"] = record.name_to_index[self.group]
-                data = dict(
-                    data=record[self.group],
-                    latitudes=record.latitudes[self.group],
-                    longitudes=record.longitudes[self.group],
-                    timedeltas=record.timedeltas[self.group] // second,
-                    name_to_index=record.name_to_index[self.group],
-                )
             else:
                 raise ValueError(f"Unknown request '{w}' for Leaf sample provider")
-
-        if what == "__getitem__":
-            return record[self.group]
-        elif what == "latitudes":
-            return record.latitudes[self.group]
-        elif what == "longitudes":
-            return record.longitudes[self.group]
-        elif what == "timedeltas":
-            return record.timedeltas[self.group] // second
-        elif what == "name_to_index":
-            return record.name_to_index[self.group]
-        elif what == "everything-as-a-dict":
-            return dict(
-                data=record[self.group],
-                latitudes=record.latitudes[self.group],
-                longitudes=record.longitudes[self.group],
-                timedeltas=record.timedeltas[self.group] // second,
-                name_to_index=record.name_to_index[self.group],
-            )
-        raise ValueError(f"Unknown request '{what}' for Leaf sample provider")
+        return data
 
     def _build_tree(self, label="Leaf"):
         return Tree(f"{label}  -> {self.group} variables={self.variables}")
@@ -354,7 +337,7 @@ if __name__ == "__main__":
     print("Latitudes and longitudes:")
     print(show_json(s.latitudes(3)))
     print(show_json(s.longitudes(3)))
-    print('❌ Everything as a dict:')
+    print("❌ Everything as a dict:")
     print(show_json(s.everything_as_a_dict(3)))
 
     class Resolver:
