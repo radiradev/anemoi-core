@@ -22,9 +22,9 @@ CONFIG = dict(
         amsr2_h180=dict(dataset="observations-testing-2018-2018-6h-v1-one-month"),
     ),
     sample=dict(
-        GROUPS=dict(
+        dictionary=dict(
             input=dict(
-                GROUPS=dict(
+                dictionary=dict(
                     # fields=dict(  # "fields" is a user defined key
                     #     STEPS=dict(
                     #         _6h=dict(

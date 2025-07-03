@@ -63,7 +63,7 @@ def new_config() -> DictConfig:
             "model": {
                 "sample": {
                     "input": {
-                        "groups": {
+                        "dictionary": {
                             "era5": {
                                 "variables": [
                                     "cos_latitude",
@@ -83,7 +83,7 @@ def new_config() -> DictConfig:
                         },
                     },
                     "target": {
-                        "groups": {
+                        "dictionary": {
                             "era5": {
                                 "variables": ["10u", "10v", "2t", "q_1000", "tp"],
                                 "steps": ["6h"],

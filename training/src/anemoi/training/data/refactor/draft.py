@@ -110,10 +110,10 @@ class ShuffledSampleProvider(SampleProvider):
 
 
 class GroupedSampleProvider(SampleProvider):
-    def __init__(self, context: Context, dict: dict, with_attributes: bool = False):
+    def __init__(self, context: Context, dictionary: dict, with_attributes: bool = False):
         super().__init__(context)
         self.with_attributes = with_attributes
-        self._samples = {k: sample_factory(self.context, **v) for k, v in dict.items()}
+        self._samples = {k: sample_factory(self.context, **v) for k, v in dictionary.items()}
 
     def __getattr__(self, key):
         if key in self._samples:
@@ -240,10 +240,10 @@ def sample_factory(context, **kwargs):
         context = Context(**context)
     if context is None:
         context = Context()
-    if "dict" in kwargs:
+    if "dictionary" in kwargs:
         return GroupedSampleProvider(context, **kwargs)
     if "GROUPS" in kwargs:
-        return GroupedSampleProvider(context, dict=kwargs["GROUPS"])
+        return GroupedSampleProvider(context, dictionary=kwargs["GROUPS"])
     if "STEPS" in kwargs:
         return StepSampleProvider(context, kwargs["STEPS"])
     if "variables" in kwargs:
@@ -273,10 +273,9 @@ if __name__ == "__main__":
             # end=...,
         ),
         sample=dict(
-            with_attributes=True,
-            dict=dict(
+            dictionary=dict(
                 input=dict(
-                    dict=dict(
+                    dictionary=dict(
                         #                    fields=dict(  # "fields" is a user defined key
                         #                        STEPS=dict(
                         #                            _6h=dict(
