@@ -134,7 +134,7 @@ class DataHandler:
         variables = [f"{group}.{v}" for v in variables]
         self.variables = variables
 
-        self.config = dict(dataset=self.dataset) # TODO: Bring back, select=self.variables)
+        self.config = dict(dataset=self.dataset, select=self.variables)
         self.ds = open_dataset(**self.config)
         print(f"🔍 Opened dataset with config: {self.config}")
 
