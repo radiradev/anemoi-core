@@ -20,7 +20,7 @@ from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.training.data.refactor.dataset import NativeGridMultDataset
 from anemoi.training.data.refactor.draft import Context
 from anemoi.training.data.refactor.draft import sample_factory
-from anemoi.training.data.refactor.read_config import get_sample_config_dict
+from anemoi.training.data.refactor.read_config import get_sample_config_dict, get_data_config_dict
 from anemoi.training.data.utils import get_dataloader_config
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.utils.worker_init import worker_init_func
@@ -48,10 +48,11 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         super().__init__()
         self.graph_data = graph_data
 
+        dhs_config = get_data_config_dict(config.data.data_handlers)
         sample_config = get_sample_config_dict(config.model.sample)
 
-        training_context = Context("training", data_config=config.data.data_handlers, **config.sampler.training)
-        validation_context = Context("validation", data_config=config.data.data_handlers, **config.sampler.validation)
+        training_context = Context("training", data_config=dhs_config, **config.sampler.training)
+        validation_context = Context("validation", data_config=dhs_config, **config.sampler.validation)
 
         # Create Sampler provider
         self.training_samples = sample_factory(context=training_context, **sample_config)

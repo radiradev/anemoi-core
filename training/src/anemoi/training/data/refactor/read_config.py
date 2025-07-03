@@ -68,5 +68,31 @@ CONFIG = dict(
 )
 
 
+DATA_CONFIG = dict(
+    era5=dict(
+        dataset=dict(
+            dataset="aifs-od-an-oper-0001-mars-o96-2016-2023-6h-v6",
+            set_group="era5" 
+        ),
+        processors=dict(
+            normalizer=dict(
+                _target_="anemoi.models.preprocessing.normalizer.InputNormalizer",
+                config=dict(default="mean-std", std=["tp"]),
+            ),
+        ),
+    ),
+    amsr2=dict(
+        ## NOW: Only 1 group is supported for each "key" (dh)
+        dataset=dict(
+            dataset="/etc/ecmwf/nfs/dh1_home_a/mafp/work/obs/data/vz/obs-2018-11.vz",
+            select=["amsr_h180.*"],
+        ),
+    ),
+)
+
+def get_data_config_dict(data) -> Dict:
+    return DATA_CONFIG
+
+
 def get_sample_config_dict(sample: DictConfig) -> Dict:
     return CONFIG
