@@ -103,6 +103,26 @@ class BaseImputer(BasePreprocessor, ABC):
 
             LOGGER.debug(f"Imputer: replacing NaNs in {name} with value {self.replacement[-1]}")
 
+    def get_nans(self, x: torch.Tensor) -> torch.Tensor:
+        """Get NaN mask from data
+
+        The mask is only saved for the first two dimensions (batch, timestep) and the last two dimensions (grid, variable)
+        For the rest of the dimensions we select the first element since we assume the nan locations do not change along these dimensions.
+        This means for the ensemble dimension: we assume that the NaN locations are the same for all ensemble members.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor with shape (batch, time, ..., grid, variable)
+
+        Returns
+        -------
+        torch.Tensor
+            Tensor with NaN locations of shape (batch, time, ..., grid)
+        """
+        idx = [slice(None), slice(None)] + [0] * (x.ndim - 4) + [slice(None), slice(None)]
+        return torch.isnan(x[idx])
+
     def _expand_subset_mask(self, x: torch.Tensor, idx_src: int, nan_locations: torch.Tensor) -> torch.Tensor:
         """Expand the subset of the nan location mask to the correct shape.
 
@@ -126,25 +146,6 @@ class BaseImputer(BasePreprocessor, ABC):
             nan_locations = nan_locations.unsqueeze(1)
 
         return nan_locations[..., idx_src].expand(-1, *x.shape[1:-2], -1)
-
-    def get_nans(self, x: torch.Tensor) -> torch.Tensor:
-        """Get NaN mask from data
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input tensor with shape (batch, time, ..., grid, variable)
-
-        Returns
-        -------
-        torch.Tensor
-            Tensor with NaN locations of shape (batch, time, ..., grid)
-        """
-        # The mask is only saved for the first two dimensions (batch, timestep) and the last two dimensions (grid, variable)
-        # For the rest of the dimensions we select the first element since we assume the nan locations do not change along these dimensions.
-        # This means for the ensemble dimension: we assume that the NaN locations are the same for all ensemble members.
-        idx = [slice(None), slice(None)] + [0] * (x.ndim - 4) + [slice(None), slice(None)]
-        return torch.isnan(x[idx])
 
     def fill_with_value(self, x: torch.Tensor, index: list[int], nan_locations: torch.Tensor):
         """Fill NaN locations in the input tensor with the specified values.
