@@ -11,9 +11,11 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable
+from typing import TYPE_CHECKING
 
-import torch
+if TYPE_CHECKING:
+    import torch
+    from typing import Callable
 
 from anemoi.training.losses.base import FunctionalLoss
 
@@ -21,9 +23,9 @@ LOGGER = logging.getLogger(__name__)
 
 
 class TorchLoss(FunctionalLoss):
-    """Loss function"""
+    """Loss function."""
 
-    def __init__(self, loss: Callable, ignore_nans: bool = False, **kwargs) -> None:
+    def __init__(self, loss: Callable, ignore_nans: bool = False, **_kwargs) -> None:
         super().__init__(ignore_nans)
         self.loss = loss
         self.name = loss.__class__.__name__.lower().replace("loss", "")
