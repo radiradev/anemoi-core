@@ -75,8 +75,9 @@ class AnemoiModelInterface(torch.nn.Module):
     def _build_model(self) -> None:
         """Builds the model and pre- and post-processors."""
         # Instantiate processors
-        input_preprocessors = self.sample_provider.input_processors()
-        target_processors = self.sample_provider.target_processors()
+        preprocessors = self.sample_provider.processors(0)
+        input_preprocessors = preprocessors["input"]
+        target_processors = preprocessors["target"]
 
         # Assign the processor list pre- and post-processors
         self.input_pre_processors = Processors(input_preprocessors)

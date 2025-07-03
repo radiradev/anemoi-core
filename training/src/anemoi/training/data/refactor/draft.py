@@ -4,13 +4,24 @@ import numpy as np
 import yaml
 from rich.console import Console
 from rich.tree import Tree
+from hydra.utils import instantiate
 
 from anemoi.datasets import open_dataset
 from anemoi.training.data.refactor.utils import convert_to_timedelta
 
 
+class Context:
+    def __init__(self, name="no-name", start=None, end=None, data_config=None):
+        self.selection = dict(start=start, end=end)
+        self.data_config = data_config
+        self.name = name
+
+    def __repr__(self):
+        return f"Context(selection={self.selection})"
+
+
 class SampleProvider:
-    def __init__(self, context):
+    def __init__(self, context: Context):
         self.context = context
 
     def __getitem__(self, item):
@@ -36,6 +47,26 @@ class SampleProvider:
     def name_to_index(self, item):
         self._check_item(item)
         return self.get("name_to_index", item)
+    
+    def statistics(self, item):
+        self._check_item(item)
+        return self.get("statistics", item)
+
+    def processors(self, item):
+        processors = []
+        for k, v in self.context.data_config.items():
+            if not "processors" in v:
+               continue
+
+            for n, p in v["processors"].items():
+                processors.append([
+                    n, 
+                    instantiate(
+                        p, name_to_index_training_input=self.name_to_index(item)[k], statistics=self.statistics(item)[k]
+                    )
+                ])
+
+        return processors
 
     @property
     def frequency(self):
@@ -60,7 +91,7 @@ class SampleProvider:
 
 
 class ShuffledSampleProvider(SampleProvider):
-    def __init__(self, sample, seed=None):
+    def __init__(self, sample: SampleProvider, seed: int = None):
         super().__init__(sample.context)
         self.sample = sample
         self.seed = seed
@@ -79,7 +110,7 @@ class ShuffledSampleProvider(SampleProvider):
 
 
 class GroupedSampleProvider(SampleProvider):
-    def __init__(self, context, dict, with_attributes=False):
+    def __init__(self, context: Context, dict: dict, with_attributes: bool = False):
         super().__init__(context)
         self.with_attributes = with_attributes
         self._samples = {k: sample_factory(self.context, **v) for k, v in dict.items()}
@@ -107,7 +138,7 @@ class GroupedSampleProvider(SampleProvider):
 
 
 class StepSampleProvider(SampleProvider):
-    def __init__(self, context, dic):
+    def __init__(self, context: Context, dic: dict):
         super().__init__(context)
         self._samples = {k: sample_factory(context, **v) for k, v in dic.items()}
 
@@ -130,7 +161,7 @@ class StepSampleProvider(SampleProvider):
 
 
 class Leaf(SampleProvider):
-    def __init__(self, context, variables, group):
+    def __init__(self, context: Context, variables : list[str], group: str):
         super().__init__(context)
         self.group = group
         self.variables = variables
@@ -166,6 +197,8 @@ class Leaf(SampleProvider):
                 data["timedeltas"] = record.timedeltas[self.group] // second
             elif w == "name_to_index":
                 data["name_to_index"] = record.name_to_index[self.group]
+            elif w == "statistics":
+                data["statistics"] = record.statistics[self.group]
             else:
                 raise ValueError(f"Unknown request '{w}' for Leaf sample provider")
         return data
@@ -199,16 +232,6 @@ class DataHandler:
 
     def __repr__(self):
         return f"DataHandler({self.dataset} @ {self.group}, [{', '.join(self.variables)}], {self.args})"
-
-
-class Context:
-    def __init__(self, name="no-name", start=None, end=None, data_config=None):
-        self.selection = dict(start=start, end=end)
-        self.data_config = data_config
-        self.name = name
-
-    def __repr__(self):
-        return f"Context(selection={self.selection})"
 
 
 def sample_factory(context, **kwargs):

@@ -18,6 +18,9 @@ def test_sampleprovider(new_config: DictConfig):
     assert hasattr(sample_provider, "latitudes")
     assert hasattr(sample_provider, "longitudes")
     assert hasattr(sample_provider, "timedeltas")
+    assert hasattr(sample_provider, "processors")
+
+    assert set(sample_provider.processors(0).keys()) == {"input", "target"}
 
 
 def test_datamodule(new_config: DictConfig):

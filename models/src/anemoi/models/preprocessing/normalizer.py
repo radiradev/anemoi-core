@@ -26,6 +26,8 @@ class InputNormalizer(BasePreprocessor):
     def __init__(
         self,
         config=None,
+        name_to_index_training_input=None,
+        statistics=None,
         dataset: Optional = None,
     ) -> None:
         """Initialize the normalizer.
@@ -40,9 +42,6 @@ class InputNormalizer(BasePreprocessor):
             Data statistics dictionary
         """
         super().__init__(config, dataset)
-
-        name_to_index_training_input = dataset.name_to_index
-        statistics = dataset.statistics
 
         minimum = statistics["minimum"]
         maximum = statistics["maximum"]
