@@ -43,7 +43,7 @@ class BaseImputer(BasePreprocessor, ABC):
         """
         super().__init__(config, data_indices, statistics)
 
-        self.register_buffer("nan_locations", None)
+        self.register_buffer("nan_locations", torch.empty(0, dtype=torch.bool))
         # weight imputed values with zero in loss calculation
         self.loss_mask_training = None
 
