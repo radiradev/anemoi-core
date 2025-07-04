@@ -84,6 +84,7 @@ class PointWiseMLPProcessorChunk(BaseProcessorChunk):
 
         self.build_blocks(
             PointWiseMLPProcessorBlock,
+            num_channels=num_channels,
             hidden_dim=(mlp_hidden_ratio * num_channels),
             layer_kernels=layer_kernels,
             dropout_p=dropout_p,
