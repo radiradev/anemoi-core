@@ -40,6 +40,7 @@ class TestPointWiseMLPProcessorBlock:
         layer_kernels = load_layer_kernels({"Activation": {"_target_": activation}})
 
         block = PointWiseMLPProcessorBlock(
+            num_channels=num_channels,
             hidden_dim=hidden_dim,
             dropout_p=dropout_p,
             layer_kernels=layer_kernels,

@@ -74,6 +74,9 @@ class PointWiseMLPProcessorBlock(BaseBlock):
             layer_kernels.LayerNorm(hidden_dim),
             layer_kernels.Activation(),
         ]
+        if num_channels != hidden_dim:
+            layers.append(layer_kernels.Linear(hidden_dim, num_channels))
+
         if dropout_p is not None and dropout_p > 0:
             layers.append(nn.Dropout(p=dropout_p))
 
