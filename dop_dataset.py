@@ -9,69 +9,43 @@ import yaml
 from torch.utils.data import IterableDataset
 from torch.utils.data import get_worker_info
 
-CONFIG = dict(
-    data=dict(
-        # era5=dict(
-        #     dataset=dict(dataset="aifs-ea-an-oper-0001-mars-o96-1979-2023-6h-v8", set_group="era5"),
-        #     # preprocessors=dict(
-        #     #    tp=[dict(normalizer="mean-std")]),
-        #     # ),
-        # ),
-        snow=dict(dataset="observations-testing-2018-2018-6h-v1-one-month"),
-        metop_a=dict(dataset="observations-testing-2018-2018-6h-v1-one-month"),
-        amsr2_h180=dict(dataset="observations-testing-2018-2018-6h-v1-one-month"),
-    ),
-    sample=dict(
-        dictionary=dict(
-            input=dict(
-                dictionary=dict(
-                    # fields=dict(  # "fields" is a user defined key
-                    #     STEPS=dict(
-                    #         _6h=dict(
-                    #             variables=["q_50", "2t"],
-                    #             data="era5",
-                    #         ),
-                    #         _0h=dict(
-                    #             variables=["q_50", "2t"],
-                    #             data="era5",
-                    #         ),
-                    #     ),
-                    # ),
-                    # user-friendly config would be:
-                    # fields=dict(
-                    #     steps=['-6h', '0h'],
-                    #     variables=["q_50", "2t"],
-                    #     data="era5",
-                    # ),
-                    ascat_metop_a=dict(
-                        STEPS={
-                            "-6h": dict(
-                                variables=["scatss_1", "scatss_2"],
-                                data="metop_a",
-                            )
-                        }
-                    ),
-                    snow=dict(
-                        STEPS={
-                            "0h": dict(
-                                variables=["sdepth_0"],
-                                data="snow",
-                            )
-                        },
-                    ),
-                    amsr2=dict(
-                        STEPS={
-                            "-6h": dict(
-                                variables=["rawbt_1", "rawbt_2", "rawbt_3", "rawbt_4"],
-                                data="amsr2_h180",
-                            )
-                        },
-                    ),
-                ),
-            ),
-        ),
-    ),
-)
+CONFIG_YAML = """
+data:
+    # era5:
+    #   dataset:
+    #     dataset: aifs-ea-an-oper-0001-mars-o96-1979-2023-6h-v8
+    #     set_group: era5
+    #   # preprocessors:
+    #   #   tp:
+    #   #     - normalizer: mean-std
+    snow:
+        dataset: observations-testing-2018-2018-6h-v1-one-month
+    metop_a:
+        dataset: observations-testing-2018-2018-6h-v1-one-month
+    amsr2_h180:
+        dataset: observations-testing-2018-2018-6h-v1-one-month
+sample:
+    dictionary:
+        input:
+            dictionary:
+                ascat_metop_a:
+                    tuple:
+                      - timedelta: "-6h"
+                        variables: ["scatss_1", "scatss_2"]
+                        data: metop_a
+                snow:
+                    tuple:
+                      - timedelta: "0h"
+                        variables: ["sdepth_0"]
+                        data: snow
+                amsr2:
+                    tuple:
+                      - timedelta: "-6h"
+                        variables: ["rawbt_1", "rawbt_2", "rawbt_3", "rawbt_4"]
+                        data: amsr2_h180
+"""
+
+CONFIG = yaml.safe_load(CONFIG_YAML)
 
 
 from anemoi.training.data.refactor.draft import sample_factory
