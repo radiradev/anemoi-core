@@ -21,10 +21,10 @@ from torch_geometric.data import HeteroData
 from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.khop_edges import sort_edges_1hop_sharding
 from anemoi.models.distributed.shapes import change_channels_in_shape
-from anemoi.models.distributed.shapes import get_shape_shards
+from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.layers.chunk import GNNProcessorChunk
 from anemoi.models.layers.chunk import GraphTransformerProcessorChunk
-from anemoi.models.layers.chunk import PointMLPProcessorChunk
+from anemoi.models.layers.chunk import PointWiseMLPProcessorChunk
 from anemoi.models.layers.chunk import TransformerProcessorChunk
 from anemoi.models.layers.graph import TrainableTensor
 from anemoi.models.layers.mapper import GraphEdgeMixin
@@ -87,7 +87,7 @@ class BaseProcessor(nn.Module, ABC):
         return x
 
 
-class PointMLP(BaseProcessor):
+class PointWiseMLPProcessor(BaseProcessor):
     def __init__(
         self,
         *,
@@ -96,7 +96,7 @@ class PointMLP(BaseProcessor):
         num_chunks: int,
         mlp_hidden_ratio: int,
         cpu_offload: bool = False,
-        dropout_p: float = None,
+        dropout_p: float = 0.0,
         layer_kernels: DotDict,
         **kwargs,
     ):
@@ -109,7 +109,7 @@ class PointMLP(BaseProcessor):
         )
 
         self.build_layers(
-            PointMLPProcessorChunk,
+            PointWiseMLPProcessorChunk,
             num_channels=num_channels,
             num_layers=self.chunk_size,
             layer_kernels=self.layer_factory,
@@ -440,7 +440,7 @@ class GraphTransformerProcessor(GraphEdgeMixin, BaseProcessor):
 
         edge_index = self._expand_edges(self.edge_index_base, self.edge_inc, batch_size)
 
-        shapes_edge_attr = get_shape_shards(edge_attr, 0, model_comm_group)
+        shapes_edge_attr = get_shard_shapes(edge_attr, 0, model_comm_group)
         edge_attr = shard_tensor(edge_attr, 0, shapes_edge_attr, model_comm_group)
 
         x, edge_attr = self.run_layers(
