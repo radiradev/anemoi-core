@@ -158,9 +158,9 @@ class TimeDeltaShiftedSampleProvider(SampleProvider):
 
 
 class GenericListSampleProvider(SampleProvider):
-    def __init__(self, context: Context, lst: dict):
+    def __init__(self, context: Context, tuple_: dict):
         super().__init__(context)
-        self._samples = tuple(sample_factory(context, **v) for v in lst)
+        self._samples = tuple(sample_factory(context, **v) for v in tuple_)
 
     def get(self, what, item):
         self._check_item(item)
@@ -190,7 +190,7 @@ class ListSampleProvider(GenericListSampleProvider):
 
 class TensorSampleProvider(GenericListSampleProvider):
     def __init__(self, context: Context, tensor: dict):
-        super().__init__(context, lst=tensor)
+        super().__init__(context, tuple_=tensor)
 
     def get(self, what, item):
         lst = super().get(what, item)
@@ -281,9 +281,12 @@ def sample_factory(context, **kwargs):
     if "tensor" in kwargs:
         return TensorSampleProvider(context, **kwargs)
     if "GROUPS" in kwargs:
-        return GroupedSampleProvider(context, dictionary=kwargs["GROUPS"])
+        assert False, "GROUPS is deprecated, use dictionary instead"
     if "STEPS" in kwargs:
-        return ListSampleProvider(context, kwargs["STEPS"])
+        assert False, "STEPS is deprecated, use tuple + timedelta instead"
+    if "tuple" in kwargs:
+        kwargs["tuple_"] = kwargs.pop("tuple")
+        return ListSampleProvider(context, **kwargs)
     if "timedelta" in kwargs:
         return TimeDeltaShiftedSampleProvider(context, **kwargs)
     if "variables" in kwargs:
@@ -293,73 +296,76 @@ def sample_factory(context, **kwargs):
 
 # TEST ---------------------------------
 if __name__ == "__main__":
-    CONFIG = dict(
-        data=dict(
-            era5=dict(
-                dataset=dict(dataset="aifs-ea-an-oper-0001-mars-o96-1979-2023-6h-v8", set_group="era5"),
-                # preprocessors=dict(
-                #    tp=[dict(normalizer="mean-std")]),
-                # ),
-            ),
-            snow=dict(dataset="observations-testing-2018-2018-6h-v0"),
-            metop_a=dict(dataset="observations-testing-2018-2018-6h-v0"),
-        ),
-        training_selection=dict(
-            # start=...,
-            end="2018-11-01",
-        ),
-        validation_selection=dict(
-            start="2018-11-02",
-            # end=...,
-        ),
-        sample=dict(
-            dictionary=dict(
-                input=dict(
-                    dictionary=dict(
-                        fields=dict(  # "fields" is a user defined key
-                            tensor=[
-                                dict(
-                                    timedelta="-6h",
-                                    variables=["q_50", "2t"],
-                                    data="era5",
-                                ),
-                                dict(
-                                    timedelta="0h",
-                                    variables=["q_50", "2t"],
-                                    data="era5",
-                                ),
-                            ],
-                        ),
-                        # user-friendly config would be:
-                        # fields=dict(
-                        #    steps=["-6h", "0h"],
-                        #    variables=["q_50", "2t"],
-                        #    data="era5",
-                        # ),
-                        metop=dict(
-                            STEPS=[
-                                dict(
-                                    timedelta="-6h",
-                                    variables=["scatss_1", "scatss_2"],
-                                    data="metop_a",
-                                ),
-                                dict(
-                                    timedelta="-6h",
-                                    variables=["scatss_1", "scatss_2"],
-                                    data="metop_a",
-                                ),
-                            ]
-                        ),
-                        snow=dict(
-                            timedelta="0h",
-                            variables=["sdepth_0"],
-                            data="snow",
-                        ),
-                    ),
-                ),
-            ),
-        ),
-    )
+    # user-friendly config would be:
+    # fields=dict(
+    #    steps=["-6h", "0h"],
+    #    variables=["q_50", "2t"],
+    #    data="era5",
+    # ),
+    yaml_str = """
+data:
+  era5:
+    dataset:
+      dataset: aifs-ea-an-oper-0001-mars-o96-1979-2023-6h-v8
+      set_group: era5
+      # processors: ...
+  snow:
+    dataset: observations-testing-2018-2018-6h-v0
+  metop_a:
+    dataset: observations-testing-2018-2018-6h-v0
+
+training_selection:
+  # start=...
+  end: "2018-11-01"
+
+validation_selection:
+  start: "2018-11-02"
+  # end=...
+
+sample:
+  dictionary:
+    input:
+      dictionary:
+        fields:
+          tensor:
+            - timedelta: "-6h"
+              variables: ["q_50", "2t"]
+              data: era5
+            - timedelta: "0h"
+              variables: ["q_50", "2t"]
+              data: era5
+        metop:
+          tuple:
+            - timedelta: "-6h"
+              variables: ["scatss_1", "scatss_2"]
+              data: metop_a
+            - timedelta: "+6h"
+              variables: ["scatss_1", "scatss_2"]
+              data: metop_a
+        snow:
+          timedelta: "0h"
+          variables: ["sdepth_0"]
+          data: snow
+        mixed:
+          tuple:
+            - dictionary:
+                thing:
+                  variables: ["q_50"]
+                  data: era5
+                another:
+                  variables: ["sdepth_0"]
+                  data: snow
+            - variables: ["sdepth_0"]
+              data: snow
+
+        # user friendly config would be:
+        # snow:
+        #   timedeltas: ["0h", "+6h"]
+        #   variables: ["sdepth_0"]
+        #   data: snow
+"""
+
+    CONFIG = yaml.safe_load(yaml_str)
 
     def show_yaml(structure):
         return yaml.dump(structure, indent=2, sort_keys=False)
