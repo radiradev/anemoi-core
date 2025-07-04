@@ -24,7 +24,8 @@ LOGGER = logging.getLogger(__name__)
 
 class TestPointWiseMLPProcessorBlock:
     @given(
-        hidden_dim=st.integers(min_value=1, max_value=100),
+        num_channels=st.integers(min_value=1, max_value=64),
+        mlp_hidden_ratio=st.integers(min_value=1, max_value=16),
         activation=st.sampled_from(
             [
                 "torch.nn.ReLU",
@@ -34,7 +35,8 @@ class TestPointWiseMLPProcessorBlock:
         dropout_p=st.floats(min_value=0.0, max_value=1.0),
     )
     @settings(max_examples=10)
-    def test_init(self, hidden_dim, activation, dropout_p):
+    def test_init(self, num_channels, mlp_hidden_ratio, activation, dropout_p):
+        hidden_dim = num_channels * mlp_hidden_ratio
         layer_kernels = load_layer_kernels({"Activation": {"_target_": activation}})
 
         block = PointWiseMLPProcessorBlock(
@@ -47,7 +49,8 @@ class TestPointWiseMLPProcessorBlock:
         assert isinstance(block.mlp, nn.Sequential)
 
     @given(
-        hidden_dim=st.integers(min_value=1, max_value=100),
+        num_channels=st.integers(min_value=1, max_value=64),
+        mlp_hidden_ratio=st.integers(min_value=1, max_value=16),
         activation=st.sampled_from(
             [
                 "torch.nn.ReLU",
@@ -63,18 +66,21 @@ class TestPointWiseMLPProcessorBlock:
     @settings(max_examples=10)
     def test_forward_output(
         self,
-        hidden_dim,
+        num_channels,
+        mlp_hidden_ratio,
         activation,
         shapes,
         batch_size,
         dropout_p,
     ):
+        hidden_dim = num_channels * mlp_hidden_ratio
         kwargs = dict()
         if "GLU" in activation:
             kwargs["dim"] = hidden_dim
         layer_kernels = load_layer_kernels({"Activation": {"_target_": activation, **kwargs}})
 
         block = PointWiseMLPProcessorBlock(
+            num_channels=num_channels,
             hidden_dim=hidden_dim,
             dropout_p=dropout_p,
             layer_kernels=layer_kernels,
