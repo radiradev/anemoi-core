@@ -22,7 +22,7 @@ from torch_geometric.typing import Size
 
 from anemoi.models.layers.block import GraphConvProcessorBlock
 from anemoi.models.layers.block import GraphTransformerProcessorBlock
-from anemoi.models.layers.block import PointMLPProcessorBlock
+from anemoi.models.layers.block import PointWiseMLPProcessorBlock
 from anemoi.models.layers.block import TransformerProcessorBlock
 from anemoi.models.layers.mlp import MLP
 from anemoi.utils.config import DotDict
@@ -69,7 +69,7 @@ class BaseProcessorChunk(nn.Module, ABC):
     ) -> Tensor: ...
 
 
-class PointMLPProcessorChunk(BaseProcessorChunk):
+class PointWiseMLPProcessorChunk(BaseProcessorChunk):
     """Wraps point-wise MLP blocks for checkpointing in Processor."""
 
     def __init__(
@@ -83,7 +83,7 @@ class PointMLPProcessorChunk(BaseProcessorChunk):
         super().__init__(num_channels=num_channels, num_layers=num_layers)
 
         self.build_blocks(
-            PointMLPProcessorBlock,
+            PointWiseMLPProcessorBlock,
             hidden_dim=(mlp_hidden_ratio * num_channels),
             layer_kernels=layer_kernels,
             dropout_p=dropout_p,

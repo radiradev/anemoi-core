@@ -64,7 +64,7 @@ class BaseBlock(nn.Module, ABC):
     ) -> tuple[torch.Tensor, torch.Tensor]: ...
 
 
-class PointMLPProcessorBlock(BaseBlock):
+class PointWiseMLPProcessorBlock(BaseBlock):
     """Point-wise MLP block with MultiHeadSelfAttention and MLPs."""
 
     def __init__(self, *, hidden_dim, layer_kernels: DotDict, dropout_p: float = 0.0):
