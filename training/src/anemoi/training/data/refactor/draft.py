@@ -2,10 +2,12 @@ import json
 
 import numpy as np
 import yaml
+from hydra.utils import instantiate
 from rich.console import Console
 from rich.tree import Tree
-from hydra.utils import instantiate
+
 from anemoi.datasets import open_dataset
+from anemoi.utils.dates import frequency_to_string
 from anemoi.utils.dates import frequency_to_timedelta
 
 
@@ -26,6 +28,9 @@ class SampleProvider:
     def __getitem__(self, item):
         self._check_item(item)
         return self.get("__getitem__", item)
+
+    def __len__(self):
+        return len(self.range)
 
     def latitudes(self, item):
         self._check_item(item)
@@ -63,13 +68,7 @@ class SampleProvider:
         return capture.get()
 
     def _build_tree(self, label=None):
-        if label is None:
-            label = self.label
-        return Tree(label)
-
-    @property
-    def label(self):
-        return self.__class__.__name__
+        raise NotImplementedError("Subclasses must implement _build_tree method")
 
     def _check_item(self, item):
         if not isinstance(item, (int, np.integer)):
@@ -91,17 +90,16 @@ class ShuffledSampleProvider(SampleProvider):
             self.idx = np.random.permutation(self.idx)
 
     def get(self, what, item):
-        self.sample._check_item(item)
         return self.sample.get(what, self.idx[item])
 
-    def _build_tree(self, label="ShuffledSampleProvider"):
-        tree = Tree(label)
-        subtree = self.sample._build_tree(label=f"SampleProvider: {type(self.sample).__name__}")
+    def _build_tree(self, label="Shuffled", prefix=""):
+        tree = Tree(prefix + label)
+        subtree = self.sample._build_tree(label="SampleProvider")
         tree.add(subtree)
         return tree
 
 
-class GroupedSampleProvider(SampleProvider):
+class DictSampleProvider(SampleProvider):
     def __init__(self, context: Context, dictionary: dict, with_attributes: bool = False):
         super().__init__(context)
         self.with_attributes = with_attributes
@@ -113,20 +111,36 @@ class GroupedSampleProvider(SampleProvider):
         raise AttributeError(f"{type(self).__name__} has no attribute '{key}'")
 
     def get(self, what, item):
-        self._check_item(item)
         if item == 0:
             item = item + 1  # ✅✅ TODO provide the correct lenght
         return {k: v.get(what, item) for k, v in self._samples.items()}
 
-    def __len__(self):
-        return 118  # ✅✅ TODO provide the correct lenght
+    @property
+    def range(self):
+        start = max(s.range.start for s in self._samples.values())
+        end = min(s.range.end for s in self._samples.values())
+        return Range(start, end)
 
-    def _build_tree(self, label="GroupedSampleProvider"):
-        tree = Tree(label)
+    def _build_tree(self, label="dict", prefix=""):
+        tree = Tree(prefix + label)
         for k, v in self._samples.items():
-            subtree = v._build_tree(label=f"{k}: {v.label}")
+            subtree = v._build_tree(prefix=f'"{k}" : ')
             tree.add(subtree)
         return tree
+
+
+class Range:
+    def __init__(self, start, end, step=1):
+        # start and end are included
+        self.start = start
+        self.end = end
+        self.step = step
+
+    def __len__(self):
+        return self.end - self.start
+
+    def __repr__(self):
+        return f"Range({self.start}, {self.end})"
 
 
 class TimeDeltaShiftedSampleProvider(SampleProvider):
@@ -136,15 +150,38 @@ class TimeDeltaShiftedSampleProvider(SampleProvider):
         self._sample = sample_factory(context, **kwargs)
 
     def compute_new_item(self, item, what=None):
-        return item + int(self.timedelta / self._sample.frequency)
+        if item is None:
+            return None
+        return item + self.shift_item
+
+    @property
+    def range(self):
+        start = max(self._sample.range.start + self.shift_item, 0)
+        end = min(self._sample.range.end + self.shift_item, len(self._sample))
+        return Range(start, end)
+
+    @property
+    def shift_item(self):
+        # assert something here ?
+        shift = self.timedelta // self._sample.frequency
+        assert isinstance(shift, int), f"Shift must be an integer, got {shift} ({type(shift)})"
+        return shift
 
     def get(self, what, item):
-        self._check_item(item)
         new_item = self.compute_new_item(item, what)
         return self._sample.get(what, new_item)
 
-    def _build_tree(self, label="TimeDeltaShiftedSampleProvider"):
-        return Tree(f"{label} {self.timedelta} -> {type(self._sample).__name__}")
+    def _build_tree(self, prefix=""):
+        txt = frequency_to_string(self.timedelta)
+        if self.timedelta <= np.timedelta64(0, "s"):
+            txt = f"[green]{txt}[/green]"
+        else:
+            txt = f"[red]{txt}[/red]"
+
+        tree = Tree(f"{prefix} ⏱️  {txt}")
+        subtree = self._sample._build_tree()
+        tree.add(subtree)
+        return tree
 
 
 class GenericListSampleProvider(SampleProvider):
@@ -152,12 +189,16 @@ class GenericListSampleProvider(SampleProvider):
         super().__init__(context)
         self._samples = tuple(sample_factory(context, **v) for v in tuple_)
 
+    @property
+    def range(self):
+        start = max(s.range.start for s in self._samples)
+        end = min(s.range.end for s in self._samples)
+        return Range(start, end)
+
     def get(self, what, item):
-        self._check_item(item)
         return tuple(v.get(what, item) for v in self._samples)
 
     #    def get(self, what, item):
-    #        self._check_item(item)
     #        out = []
     #        for k, v in self._samples.items():
     #            k = frequency_to_timedelta(k)
@@ -166,16 +207,21 @@ class GenericListSampleProvider(SampleProvider):
     #            out.append(v.get(what, item + int(sample_step)))
     #        return out
 
-    def _build_tree(self, label="Tuple"):
-        tree = Tree(label)
+    def _build_tree(self, label="GenericTuple", prefix=""):
+        tree = Tree(prefix + label)
         for v in self._samples:
-            subtree = v._build_tree(label=f"{type(v).__name__}")
+            subtree = v._build_tree()
             tree.add(subtree)
         return tree
 
 
 class ListSampleProvider(GenericListSampleProvider):
-    pass
+    def _build_tree(self, label="tuple", prefix=""):
+        tree = Tree(prefix + "🔗 " + label)
+        for v in self._samples:
+            subtree = v._build_tree()
+            tree.add(subtree)
+        return tree
 
 
 class TensorSampleProvider(GenericListSampleProvider):
@@ -187,16 +233,25 @@ class TensorSampleProvider(GenericListSampleProvider):
         assert isinstance(lst, (list, tuple)), f"Expected list or tuple, got {type(lst)}"
         return np.stack(tuple(lst))
 
+    def _build_tree(self, label="Tensor", prefix=""):
+        tree = Tree(prefix + "🔢 " + label)
+        for v in self._samples:
+            subtree = v._build_tree()
+            tree.add(subtree)
+        return tree
 
-class Leaf(SampleProvider):
+
+class Request(SampleProvider):
     def __init__(self, context: Context, variables: list[str], group: str):
         super().__init__(context)
         self.group = group
         self.variables = variables
 
+    def _build_tree(self, label="Request", prefix=""):
+        return Tree(f"{prefix}✉️  {label}({self.group}:{'/'.join(self.variables)})")
+
     def get(self, what, item):
         # this may be moved to the Mother class
-        self._check_item(item)
         if isinstance(what, str):
             out = self._get(what, item)
             assert len(out) == 1, f"Expected single item for {what}, got {len(out)}"
@@ -204,11 +259,16 @@ class Leaf(SampleProvider):
             return out[key]
         return self._get(*what, item=item)
 
+    @property
+    def range(self):
+        dh = DataHandler(self.context, self.group, None, variables=self.variables)
+        return Range(0, len(dh))
+
     def _get(self, *what_and_item):
         *what, item = what_and_item
         dh = DataHandler(self.context, self.group, item, variables=self.variables)
-        record = dh.record
-        second = np.timedelta64(1, "s")
+        if item is not None:
+            record = dh.record
 
         data = {}
         for w in what:
@@ -219,6 +279,7 @@ class Leaf(SampleProvider):
             elif w == "longitudes":
                 data["longitudes"] = record.longitudes[self.group]
             elif w == "timedeltas":
+                second = np.timedelta64(1, "s")
                 data["timedeltas"] = record.timedeltas[self.group] // second
             elif w == "name_to_index":
                 data["name_to_index"] = record.name_to_index[self.group]
@@ -228,20 +289,18 @@ class Leaf(SampleProvider):
                 processor_configs = self.context.data_config[self.group].get("processors", {})
                 data["processors"] = [
                     [
-                        n, 
+                        n,
                         instantiate(
-                            p, 
-                            name_to_index_training_input=record.name_to_index[self.group], 
-                            statistics=record.statistics[self.group]
-                        )
-                    ] for n, p in processor_configs.items()
+                            p,
+                            name_to_index_training_input=record.name_to_index[self.group],
+                            statistics=record.statistics[self.group],
+                        ),
+                    ]
+                    for n, p in processor_configs.items()
                 ]
             else:
-                raise ValueError(f"Unknown request '{w}' for Leaf sample provider")
+                raise ValueError(f"Unknown request '{w}' for Request sample provider")
         return data
-
-    def _build_tree(self, label="Leaf"):
-        return Tree(f"{label}  -> {self.group} variables={self.variables}")
 
 
 class DataHandler:
@@ -261,6 +320,9 @@ class DataHandler:
         # print(f"🔍 Opened dataset with config: {self.config}")
         self.frequency = frequency_to_timedelta(self.ds.frequency)
 
+    def __len__(self):
+        return len(self.ds)
+
     @property
     def record(self):
         if self._record is not None:
@@ -269,7 +331,10 @@ class DataHandler:
         return self._record
 
     def __repr__(self):
-        return f"DataHandler({self.dataset} @ {self.group}, [{', '.join(self.variables)}], {self.args})"
+        out = f"Request {self.dataset} @ {self.group} [{', '.join(self.variables)}]"
+        if self.args is not None:
+            out += f", args={self.args}"
+        return out
 
 
 def sample_factory(context, **kwargs):
@@ -279,7 +344,7 @@ def sample_factory(context, **kwargs):
     if context is None:
         context = Context()
     if "dictionary" in kwargs:
-        return GroupedSampleProvider(context, **kwargs)
+        return DictSampleProvider(context, **kwargs)
     if "tensor" in kwargs:
         return TensorSampleProvider(context, **kwargs)
     if "GROUPS" in kwargs:
@@ -292,7 +357,7 @@ def sample_factory(context, **kwargs):
     if "timedelta" in kwargs:
         return TimeDeltaShiftedSampleProvider(context, **kwargs)
     if "variables" in kwargs:
-        return Leaf(context, variables=kwargs["variables"], group=kwargs["data"])
+        return Request(context, variables=kwargs["variables"], group=kwargs["data"])
     assert False, f"Unknown sample type for kwargs {kwargs}"
 
 
@@ -333,32 +398,35 @@ sample:
             - timedelta: "-6h"
               variables: ["q_50", "2t", "t_850"]
               data: era5
-            - timedelta: "0h"
+            - timedelta: "+12h"
               variables: ["q_50", "2t", "t_850"]
               data: era5
+        snow1:
+          variables: ["sdepth_0"]
+          data: snow
+        snow2:
+          timedelta: "+6h"
+          variables: ["sdepth_0"]
+          data: snow
         metop:
           tuple:
-            - timedelta: "-6h"
+            - timedelta: "-12h"
               variables: ["scatss_1", "scatss_2"]
               data: metop_a
             - timedelta: "+6h"
               variables: ["scatss_1", "scatss_2"]
               data: metop_a
-        snow:
-          timedelta: "6h"
-          variables: ["sdepth_0"]
-          data: snow
-        mixed:
-          tuple:
-            - dictionary:
-                thing:
-                  variables: ["q_50"]
-                  data: era5
-                another:
-                  variables: ["sdepth_0"]
-                  data: snow
-            - variables: ["sdepth_0"]
-              data: snow
+        #mixed:
+        #  tuple:
+        #    - dictionary:
+        #        thing:
+        #          variables: ["q_50"]
+        #          data: era5
+        #        another:
+        #          variables: ["sdepth_0"]
+        #          data: snow
+        #    - variables: ["sdepth_0"]
+        #      data: snow
 
         # user friendly config would be:
         # snow:
@@ -410,6 +478,11 @@ sample:
     print("Latitudes and longitudes:")
     print(show_json(s.latitudes(3)))
     print(show_json(s.longitudes(3)))
+
+    # for x in [s, s.input, s.input.fields, s.input.metop, s.input.snow]:
+    #    print()
+    #    print("__len__:", len(x))
+    #    print(x)
 
     class Resolver:
         def __init__(self):
