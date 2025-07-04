@@ -41,7 +41,7 @@ def test_datamodule(new_config: DictConfig):
     assert set(batch["input"].keys()) == {"era5", "amsr_h180"}
     assert set(batch["target"].keys()) == {"era5", "amsr_h180"}
 
-    assert len(batch["input"]["era5"]) == 2
+    assert batch["input"]["era5"].shape[0] == 2
     assert len(batch["input"]["amsr_h180"]) == 1
     assert len(batch["target"]["era5"]) == 1
     assert len(batch["target"]["amsr_h180"]) == 1

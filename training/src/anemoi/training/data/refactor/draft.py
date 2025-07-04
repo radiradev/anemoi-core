@@ -5,7 +5,6 @@ import yaml
 from rich.console import Console
 from rich.tree import Tree
 from hydra.utils import instantiate
-
 from anemoi.datasets import open_dataset
 from anemoi.utils.dates import frequency_to_timedelta
 
@@ -49,20 +48,8 @@ class SampleProvider:
         return self.get("statistics", item)
 
     def processors(self, item):
-        processors = []
-        for k, v in self.context.data_config.items():
-            if not "processors" in v:
-               continue
-
-            for n, p in v["processors"].items():
-                processors.append([
-                    n, 
-                    instantiate(
-                        p, name_to_index_training_input=self.name_to_index(item)[k], statistics=self.statistics(item)[k]
-                    )
-                ])
-
-        return processors
+        self._check_item(item)
+        return self.get("processors", item)
 
     @property
     def frequency(self):
@@ -234,6 +221,18 @@ class Leaf(SampleProvider):
                 data["name_to_index"] = record.name_to_index[self.group]
             elif w == "statistics":
                 data["statistics"] = record.statistics[self.group]
+            elif w == "processors":
+                processor_configs = self.context.data_config[self.group].get("processors", {})
+                data["processors"] = [
+                    [
+                        n, 
+                        instantiate(
+                            p, 
+                            name_to_index_training_input=record.name_to_index[self.group], 
+                            statistics=record.statistics[self.group]
+                        )
+                    ] for n, p in processor_configs.items()
+                ]
             else:
                 raise ValueError(f"Unknown request '{w}' for Leaf sample provider")
         return data

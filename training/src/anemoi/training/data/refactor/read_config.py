@@ -3,12 +3,13 @@ from typing import Dict
 from omegaconf import DictConfig
 
 CONFIG = dict(
-    GROUPS=dict(
+    dictionary=dict(
         input=dict(
-            GROUPS=dict(
+            dictionary=dict(
                 era5=dict(  # "fields" is a user defined key
-                    STEPS={
-                        "-6h": dict(
+                    tensor=[
+                        dict(
+                            timedelta="-6h",
                             variables=[
                                 "cos_latitude",
                                 "sin_latitude",
@@ -20,7 +21,8 @@ CONFIG = dict(
                             ],
                             data="era5",
                         ),
-                        "-0h": dict(
+                        dict(
+                            timedelta="-0h",
                             variables=[
                                 "cos_latitude",
                                 "sin_latitude",
@@ -32,35 +34,38 @@ CONFIG = dict(
                             ],
                             data="era5",
                         ),
-                    },
+                    ],
                 ),
                 amsr_h180=dict(  # "metar" is a user defined key
-                    STEPS={
-                        "0h": dict(
+                    tuple=[
+                        dict(
+                            timedelta="0h",
                             variables=["rawbt_1", "rawbt_2", "rawbt_3"],
                             data="amsr_h180",
                         ),
-                    },
+                    ],
                 ),
             ),
         ),
         target=dict(
-            GROUPS=dict(
+            dictionary=dict(
                 era5=dict(  # "era5" is a user defined key
-                    STEPS={
-                        "6h": dict(
+                    tuple=[
+                        dict(
+                            timedelta="6h",
                             variables=["10u", "2t", "2d", "q_100", "q_1000"],
                             data="era5",
                         ),
-                    },
+                    ],
                 ),
                 amsr_h180=dict(  # "amsr2" is a user defined key
-                    STEPS={
-                        "6h": dict(
+                    tuple=[
+                        dict(
+                            timedelta="6h",
                             variables=["rawbt_1", "rawbt_2", "rawbt_3"],
                             data="amsr_h180",
                         ),
-                    },
+                    ],
                 ),
             ),
         ),
