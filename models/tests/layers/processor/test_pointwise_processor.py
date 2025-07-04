@@ -40,7 +40,7 @@ def pointwisemlp_processor_init():
 
 @pytest.fixture
 def pointwisemlp_processor(pointwisemlp_processor_init):
-    return PointWiseMLPProcessorConfig(**asdict(pointwisemlp_processor_init))
+    return PointWiseMLPProcessor(**asdict(pointwisemlp_processor_init))
 
 
 def test_pointwisemlp_processor_init(pointwisemlp_processor, pointwisemlp_processor_init):
