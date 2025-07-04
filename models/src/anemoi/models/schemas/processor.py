@@ -17,8 +17,8 @@ from pydantic import ValidationError
 from pydantic import model_validator
 
 from .common_components import GNNModelComponent
-from .common_components import TransformerModelComponent
 from .common_components import PointWiseModelComponent
+from .common_components import TransformerModelComponent
 
 
 class GNNProcessorSchema(GNNModelComponent):
