@@ -133,7 +133,7 @@ class GroupedSampleProvider(SampleProvider):
         return tree
 
 
-class StepSampleProvider(SampleProvider):
+class GenericListSampleProvider(SampleProvider):
     def __init__(self, context: Context, dic: dict):
         super().__init__(context)
         self._samples = {k: sample_factory(context, **v) for k, v in dic.items()}
@@ -148,16 +148,27 @@ class StepSampleProvider(SampleProvider):
             out.append(v.get(what, item + int(sample_step)))
         return out
 
-    def _build_tree(self, label="GroupedSampleProvider"):
+    def _build_tree(self, label="GenericListSampleProvider"):
         tree = Tree(label)
         for k, v in self._samples.items():
             subtree = v._build_tree(label=f"{k}: {type(v).__name__}")
             tree.add(subtree)
         return tree
 
+class ListSampleProvider(GenericListSampleProvider):
+    pass
+
+
+class TensorSampleProvider(GenericListSampleProvider):
+    def __init__(self, context: Context, tensor: dict):
+        super().__init__(context, dic=tensor)
+
+    def get(self, what, item):
+        lst = super().get(what, item)
+        return np.stack(lst)
 
 class Leaf(SampleProvider):
-    def __init__(self, context: Context, variables : list[str], group: str):
+    def __init__(self, context: Context, variables: list[str], group: str):
         super().__init__(context)
         self.group = group
         self.variables = variables
@@ -236,10 +247,12 @@ def sample_factory(context, **kwargs):
         context = Context()
     if "dictionary" in kwargs:
         return GroupedSampleProvider(context, **kwargs)
+    if "tensor" in kwargs:
+        return TensorSampleProvider(context, **kwargs)
     if "GROUPS" in kwargs:
         return GroupedSampleProvider(context, dictionary=kwargs["GROUPS"])
     if "STEPS" in kwargs:
-        return StepSampleProvider(context, kwargs["STEPS"])
+        return ListSampleProvider(context, kwargs["STEPS"])
     if "variables" in kwargs:
         return Leaf(context, variables=kwargs["variables"], group=kwargs["data"])
     assert False, f"Unknown sample type for kwargs {kwargs}"
@@ -249,12 +262,12 @@ def sample_factory(context, **kwargs):
 if __name__ == "__main__":
     CONFIG = dict(
         data=dict(
-            #        era5=dict(
-            # dataset=dict(dataset="aifs-ea-an-oper-0001-mars-o96-1979-2023-6h-v8", set_group="era5"),
-            # preprocessors=dict(
-            #    tp=[dict(normalizer="mean-std")]),
-            # ),
-            #        ),
+            era5=dict(
+                dataset=dict(dataset="aifs-ea-an-oper-0001-mars-o96-1979-2023-6h-v8", set_group="era5"),
+                # preprocessors=dict(
+                #    tp=[dict(normalizer="mean-std")]),
+                # ),
+            ),
             snow=dict(dataset="observations-testing-2018-2018-6h-v0"),
             metop_a=dict(dataset="observations-testing-2018-2018-6h-v0"),
         ),
@@ -270,24 +283,24 @@ if __name__ == "__main__":
             dictionary=dict(
                 input=dict(
                     dictionary=dict(
-                        #                    fields=dict(  # "fields" is a user defined key
-                        #                        STEPS=dict(
-                        #                            _6h=dict(
-                        #                                variables=["q_50", "2t"],
-                        #                                data="era5",
-                        #                            ),
-                        #                            _0h=dict(
-                        #                                variables=["q_50", "2t"],
-                        #                                data="era5",
-                        #                            ),
-                        #                        ),
-                        #                    ),
+                        fields=dict(  # "fields" is a user defined key
+                            tensor={
+                                "-6h":dict(
+                                    variables=["q_50", "2t"],
+                                    data="era5",
+                                ),
+                                "0h":dict(
+                                    variables=["q_50", "2t"],
+                                    data="era5",
+                                ),
+                            },
+                        ),
                         # user-friendly config would be:
-                        # fields=dict(
-                        #     steps=['-6h', '0h'],
-                        #     variables=["q_50", "2t"],
-                        #     data="era5",
-                        # ),
+                        #fields=dict(
+                        #    steps=["-6h", "0h"],
+                        #    variables=["q_50", "2t"],
+                        #    data="era5",
+                        #),
                         metop=dict(  # "metar" is a user defined key
                             STEPS={
                                 "-6h": dict(
