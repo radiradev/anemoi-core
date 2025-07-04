@@ -84,12 +84,15 @@ class ShuffledSampleProvider(SampleProvider):
         super().__init__(sample.context)
         self.sample = sample
         self.seed = seed
+        length = len(self.sample)
+        self.idx = np.arange(length)
+        if seed is not None:
+            np.random.seed(seed)
+            self.idx = np.random.permutation(self.idx)
 
     def get(self, what, item):
         self.sample._check_item(item)
-        if self.seed is not None:
-            np.random.seed(self.seed + item)
-        return self.sample.get(what, item)
+        return self.sample.get(what, self.idx[item])
 
     def _build_tree(self, label="ShuffledSampleProvider"):
         tree = Tree(label)
@@ -328,10 +331,10 @@ sample:
         fields:
           tensor:
             - timedelta: "-6h"
-              variables: ["q_50", "2t"]
+              variables: ["q_50", "2t", "t_850"]
               data: era5
             - timedelta: "0h"
-              variables: ["q_50", "2t"]
+              variables: ["q_50", "2t", "t_850"]
               data: era5
         metop:
           tuple:
@@ -342,7 +345,7 @@ sample:
               variables: ["scatss_1", "scatss_2"]
               data: metop_a
         snow:
-          timedelta: "0h"
+          timedelta: "6h"
           variables: ["sdepth_0"]
           data: snow
         mixed:
