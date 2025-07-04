@@ -4,13 +4,13 @@ defaults:
 - datamodule: single
 - diagnostics: evaluation
 - hardware: example
-- graph: ailand
+- graph: point_wise_processor
 - model: graphtransformer
 - training: default
 - _self_
 
 
-config_validation: False
+config_validation: True
 
 ### This file is for local experimentation.
 ##  When you commit your changes, assign the new features and keywords
@@ -19,34 +19,12 @@ config_validation: False
 # hardware:
 #   num_gpus_per_node: 1
 
-diagnostics:
-  #plot:
-  #  callbacks: []
-  log:
-    wandb:
-      entity: a
-    mlflow:
-      enabled: False
-hardware:
-  paths:
-    truncation: null
-    data: ???
-    output: ??
-  files:
-    truncation: null
-    truncation_inv: null
-    graph: "debug.pt"
-    dataset: ???
 model:
+  model:
+    _target_: anemoi.models.models.AnemoiModelProc
   processor:
     _target_: anemoi.models.layers.processor.PointMLP
     num_layers: 4
     num_chunks: 2
-    mlp_hidden_ratio: 4
-  num_channels: 128
-dataloader:
-  limit_batches:
-    training: 10
-    validation: 5
-training:
-  max_epochs: 2
+    mlp_hidden_ratio: 1
+  num_channels: 256

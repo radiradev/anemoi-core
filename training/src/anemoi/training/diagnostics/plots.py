@@ -382,8 +382,6 @@ def plot_histogram(
         ax[plot_idx].set_title(variable_name)
         ax[plot_idx].set_xlabel(variable_name)
         ax[plot_idx].set_ylabel("Density")
-        if any(x in variable_name for x in ["sd", "snow", "stl", "swvl", "rsn"]):
-            ax[plot_idx].set_yscale("log")
         ax[plot_idx].legend()
         ax[plot_idx].set_aspect("auto", adjustable=None)
 
