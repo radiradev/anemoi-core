@@ -87,7 +87,7 @@ class TestPointWiseMLPProcessorBlock:
             layer_kernels=layer_kernels,
         )
 
-        x = torch.randn((batch_size, hidden_dim))  # .to(torch.float16, non_blocking=True)
+        x = torch.randn((batch_size, num_channels))  # .to(torch.float16, non_blocking=True)
         output = block.forward(x, shapes, batch_size)
         assert isinstance(output, torch.Tensor)
-        assert output.shape == (batch_size, hidden_dim)
+        assert output.shape == (batch_size, num_channels)
