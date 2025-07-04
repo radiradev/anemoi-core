@@ -313,6 +313,7 @@ def plot_histogram(
     y_true: np.ndarray,
     y_pred: np.ndarray,
     precip_and_related_fields: list | None = None,
+    log_scale: bool | False = False,
 ) -> Figure:
     """Plots histogram.
 
@@ -331,6 +332,8 @@ def plot_histogram(
         Predicted data of shape (lat*lon, nvar*level)
     precip_and_related_fields : list, optional
         List of precipitation-like variables, by default []
+    log_scale : bool, optional
+        Plot histograms with a log-scale, by default False
 
     Returns
     -------
@@ -382,7 +385,7 @@ def plot_histogram(
         ax[plot_idx].set_title(variable_name)
         ax[plot_idx].set_xlabel(variable_name)
         ax[plot_idx].set_ylabel("Density")
-        if any(x in variable_name for x in ["sd", "snow", "stl", "swvl", "rsn"]):
+        if log_scale:
             ax[plot_idx].set_yscale("log")
         ax[plot_idx].legend()
         ax[plot_idx].set_aspect("auto", adjustable=None)
@@ -550,7 +553,7 @@ def plot_flat_sample(
         # converting to mm from m
         truth *= 1000.0
         pred *= 1000.0
-        if sum(input_) != 0:
+        if np.nansum(input_) != 0:
             input_ *= 1000.0
     data = [None for _ in range(6)]
     # truth, prediction and prediction error always plotted
