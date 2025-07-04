@@ -7,7 +7,7 @@ from rich.tree import Tree
 from hydra.utils import instantiate
 
 from anemoi.datasets import open_dataset
-from anemoi.training.data.refactor.utils import convert_to_timedelta
+from anemoi.utils.dates import frequency_to_timedelta
 
 
 class Context:
@@ -70,7 +70,7 @@ class SampleProvider:
 
     @property
     def frequency(self):
-        return convert_to_timedelta("6h")  # convert_to_timedelta(self.context.data_config.frequency)
+        return frequency_to_timedelta("6h")
 
     def __repr__(self):
         console = Console(record=True, width=120)
@@ -146,7 +146,7 @@ class StepSampleProvider(SampleProvider):
         self._check_item(item)
         out = []
         for k, v in self._samples.items():
-            k = convert_to_timedelta(k)
+            k = frequency_to_timedelta(k)
             sample_step = k / v.frequency
             assert sample_step == int(sample_step)
             out.append(v.get(what, item + int(sample_step)))
@@ -222,6 +222,8 @@ class DataHandler:
         self.config = dict(dataset=self.dataset, select=self.variables)
         self.ds = open_dataset(**self.config)
         # print(f"🔍 Opened dataset with config: {self.config}")
+        self.frequency = frequency_to_timedelta(self.ds.frequency)
+
 
     @property
     def record(self):
