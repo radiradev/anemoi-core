@@ -75,8 +75,14 @@ class SampleProvider:
             console.print(tree)
         return capture.get()
 
-    def _build_tree(self, label="SampleProvider"):
+    def _build_tree(self, label=None):
+        if label is None:
+            label = self.label
         return Tree(label)
+
+    @property
+    def label(self):
+        return self.__class__.__name__
 
     def _check_item(self, item):
         if not isinstance(item, (int, np.integer)):
@@ -128,32 +134,55 @@ class GroupedSampleProvider(SampleProvider):
     def _build_tree(self, label="GroupedSampleProvider"):
         tree = Tree(label)
         for k, v in self._samples.items():
-            subtree = v._build_tree(label=f"{k}: {type(v).__name__}")
+            subtree = v._build_tree(label=f"{k}: {v.label}")
             tree.add(subtree)
         return tree
 
 
-class GenericListSampleProvider(SampleProvider):
-    def __init__(self, context: Context, dic: dict):
+class TimeDeltaShiftedSampleProvider(SampleProvider):
+    def __init__(self, context: Context, timedelta: str, **kwargs):
         super().__init__(context)
-        self._samples = {k: sample_factory(context, **v) for k, v in dic.items()}
+        self.timedelta = frequency_to_timedelta(timedelta)
+        self._sample = sample_factory(context, **kwargs)
+
+    def compute_new_item(self, item, what=None):
+        return item + int(self.timedelta / self._sample.frequency)
 
     def get(self, what, item):
         self._check_item(item)
-        out = []
-        for k, v in self._samples.items():
-            k = frequency_to_timedelta(k)
-            sample_step = k / v.frequency
-            assert sample_step == int(sample_step)
-            out.append(v.get(what, item + int(sample_step)))
-        return out
+        new_item = self.compute_new_item(item, what)
+        return self._sample.get(what, new_item)
 
-    def _build_tree(self, label="GenericListSampleProvider"):
+    def _build_tree(self, label="TimeDeltaShiftedSampleProvider"):
+        return Tree(f"{label} {self.timedelta} -> {type(self._sample).__name__}")
+
+
+class GenericListSampleProvider(SampleProvider):
+    def __init__(self, context: Context, lst: dict):
+        super().__init__(context)
+        self._samples = tuple(sample_factory(context, **v) for v in lst)
+
+    def get(self, what, item):
+        self._check_item(item)
+        return tuple(v.get(what, item) for v in self._samples)
+
+    #    def get(self, what, item):
+    #        self._check_item(item)
+    #        out = []
+    #        for k, v in self._samples.items():
+    #            k = frequency_to_timedelta(k)
+    #            sample_step = k / v.frequency
+    #            assert sample_step == int(sample_step)
+    #            out.append(v.get(what, item + int(sample_step)))
+    #        return out
+
+    def _build_tree(self, label="Tuple"):
         tree = Tree(label)
-        for k, v in self._samples.items():
-            subtree = v._build_tree(label=f"{k}: {type(v).__name__}")
+        for v in self._samples:
+            subtree = v._build_tree(label=f"{type(v).__name__}")
             tree.add(subtree)
         return tree
+
 
 class ListSampleProvider(GenericListSampleProvider):
     pass
@@ -161,11 +190,13 @@ class ListSampleProvider(GenericListSampleProvider):
 
 class TensorSampleProvider(GenericListSampleProvider):
     def __init__(self, context: Context, tensor: dict):
-        super().__init__(context, dic=tensor)
+        super().__init__(context, lst=tensor)
 
     def get(self, what, item):
         lst = super().get(what, item)
-        return np.stack(lst)
+        assert isinstance(lst, (list, tuple)), f"Expected list or tuple, got {type(lst)}"
+        return np.stack(tuple(lst))
+
 
 class Leaf(SampleProvider):
     def __init__(self, context: Context, variables: list[str], group: str):
@@ -253,6 +284,8 @@ def sample_factory(context, **kwargs):
         return GroupedSampleProvider(context, dictionary=kwargs["GROUPS"])
     if "STEPS" in kwargs:
         return ListSampleProvider(context, kwargs["STEPS"])
+    if "timedelta" in kwargs:
+        return TimeDeltaShiftedSampleProvider(context, **kwargs)
     if "variables" in kwargs:
         return Leaf(context, variables=kwargs["variables"], group=kwargs["data"])
     assert False, f"Unknown sample type for kwargs {kwargs}"
@@ -284,40 +317,43 @@ if __name__ == "__main__":
                 input=dict(
                     dictionary=dict(
                         fields=dict(  # "fields" is a user defined key
-                            tensor={
-                                "-6h":dict(
+                            tensor=[
+                                dict(
+                                    timedelta="-6h",
                                     variables=["q_50", "2t"],
                                     data="era5",
                                 ),
-                                "0h":dict(
+                                dict(
+                                    timedelta="0h",
                                     variables=["q_50", "2t"],
                                     data="era5",
                                 ),
-                            },
+                            ],
                         ),
                         # user-friendly config would be:
-                        #fields=dict(
+                        # fields=dict(
                         #    steps=["-6h", "0h"],
                         #    variables=["q_50", "2t"],
                         #    data="era5",
-                        #),
-                        metop=dict(  # "metar" is a user defined key
-                            STEPS={
-                                "-6h": dict(
-                                    # give_all_things=dict(
+                        # ),
+                        metop=dict(
+                            STEPS=[
+                                dict(
+                                    timedelta="-6h",
                                     variables=["scatss_1", "scatss_2"],
                                     data="metop_a",
-                                    # )
                                 ),
-                            },
+                                dict(
+                                    timedelta="-6h",
+                                    variables=["scatss_1", "scatss_2"],
+                                    data="metop_a",
+                                ),
+                            ]
                         ),
-                        snow=dict(  # "iasi" is a user defined key
-                            STEPS={
-                                "0h": dict(
-                                    variables=["sdepth_0"],
-                                    data="snow",
-                                ),
-                            },
+                        snow=dict(
+                            timedelta="0h",
+                            variables=["sdepth_0"],
+                            data="snow",
                         ),
                     ),
                 ),
@@ -334,7 +370,7 @@ if __name__ == "__main__":
     def shorten_numpy(structure):
         if isinstance(structure, np.ndarray):
             return f"np.array({structure.shape})"
-        if isinstance(structure, list):
+        if isinstance(structure, (list, tuple)):
             if all(isinstance(item, int) for item in structure):
                 return "*" + "/".join(map(str, structure))
             return [shorten_numpy(item) for item in structure]
