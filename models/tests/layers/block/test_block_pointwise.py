@@ -25,7 +25,6 @@ LOGGER = logging.getLogger(__name__)
 class TestPointWiseMLPProcessorBlock:
     @given(
         hidden_dim=st.integers(min_value=1, max_value=100),
-        num_channels=st.integers(min_value=16, max_value=64),
         activation=st.sampled_from(
             [
                 "torch.nn.ReLU",
@@ -35,11 +34,10 @@ class TestPointWiseMLPProcessorBlock:
         dropout_p=st.floats(min_value=0.0, max_value=1.0),
     )
     @settings(max_examples=10)
-    def test_init(self, hidden_dim, num_channels, activation, dropout_p):
+    def test_init(self, hidden_dim, activation, dropout_p):
         layer_kernels = load_layer_kernels({"Activation": {"_target_": activation}})
 
         block = PointWiseMLPProcessorBlock(
-            num_channels=num_channels,
             hidden_dim=hidden_dim,
             dropout_p=dropout_p,
             layer_kernels=layer_kernels,
@@ -50,7 +48,6 @@ class TestPointWiseMLPProcessorBlock:
 
     @given(
         hidden_dim=st.integers(min_value=1, max_value=100),
-        num_channels=st.integers(min_value=16, max_value=64),
         activation=st.sampled_from(
             [
                 "torch.nn.ReLU",
@@ -67,7 +64,6 @@ class TestPointWiseMLPProcessorBlock:
     def test_forward_output(
         self,
         hidden_dim,
-        num_channels,
         activation,
         shapes,
         batch_size,
@@ -79,13 +75,12 @@ class TestPointWiseMLPProcessorBlock:
         layer_kernels = load_layer_kernels({"Activation": {"_target_": activation, **kwargs}})
 
         block = PointWiseMLPProcessorBlock(
-            num_channels=num_channels,
             hidden_dim=hidden_dim,
             dropout_p=dropout_p,
             layer_kernels=layer_kernels,
         )
 
-        x = torch.randn((batch_size, num_channels))  # .to(torch.float16, non_blocking=True)
+        x = torch.randn((batch_size, hidden_dim))  # .to(torch.float16, non_blocking=True)
         output = block.forward(x, shapes, batch_size)
         assert isinstance(output, torch.Tensor)
-        assert output.shape == (batch_size, num_channels)
+        assert output.shape == (batch_size, hidden_dim)
