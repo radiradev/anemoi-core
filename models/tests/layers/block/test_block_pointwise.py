@@ -16,10 +16,7 @@ from hypothesis import settings
 from hypothesis import strategies as st
 from torch import nn
 
-from anemoi.models.layers.block import MLP
-from anemoi.models.layers.block import GraphConvProcessorBlock
 from anemoi.models.layers.block import PointWiseMLPProcessorBlock
-from anemoi.models.layers.conv import GraphConv
 from anemoi.models.layers.utils import load_layer_kernels
 
 LOGGER = logging.getLogger(__name__)
