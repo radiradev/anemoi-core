@@ -28,10 +28,6 @@ class SampleProvider:
         self._check_item(item)
         return self.get("__getitem__", item)
 
-    def everything_as_a_dict(self, item):
-        self._check_item(item)
-        return self.get("everything-as-a-dict", item)
-
     def latitudes(self, item):
         self._check_item(item)
         return self.get("latitudes", item)
@@ -47,7 +43,7 @@ class SampleProvider:
     def name_to_index(self, item):
         self._check_item(item)
         return self.get("name_to_index", item)
-    
+
     def statistics(self, item):
         self._check_item(item)
         return self.get("statistics", item)
@@ -170,13 +166,10 @@ class Leaf(SampleProvider):
         # this may be moved to the Mother class
         self._check_item(item)
         if isinstance(what, str):
-            if what == "everything-as-a-dict":
-                return self._get("__getitem__", "latitudes", "longitudes", "timedeltas", "name_to_index", item)
-            else:
-                out = self._get(what, item)
-                assert len(out) == 1, f"Expected single item for {what}, got {len(out)}"
-                key = list(out.keys())[0]
-                return out[key]
+            out = self._get(what, item)
+            assert len(out) == 1, f"Expected single item for {what}, got {len(out)}"
+            key = list(out.keys())[0]
+            return out[key]
         return self._get(*what, item=item)
 
     def _get(self, *what_and_item):
@@ -223,7 +216,6 @@ class DataHandler:
         self.ds = open_dataset(**self.config)
         # print(f"🔍 Opened dataset with config: {self.config}")
         self.frequency = frequency_to_timedelta(self.ds.frequency)
-
 
     @property
     def record(self):
@@ -361,8 +353,6 @@ if __name__ == "__main__":
     print("Latitudes and longitudes:")
     print(show_json(s.latitudes(3)))
     print(show_json(s.longitudes(3)))
-    print("❌ Everything as a dict:")
-    print(show_json(s.everything_as_a_dict(3)))
 
     class Resolver:
         def __init__(self):
