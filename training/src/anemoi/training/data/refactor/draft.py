@@ -1,4 +1,5 @@
 import json
+import warnings
 
 import numpy as np
 import yaml
@@ -103,6 +104,17 @@ class DictSampleProvider(SampleProvider):
     def __init__(self, context: Context, dictionary: dict, with_attributes: bool = False):
         super().__init__(context)
         self.with_attributes = with_attributes
+
+        for k in dictionary:
+            if not isinstance(k, str):
+                raise ValueError(f"Keys in dictionary must be strings, got {type(k)}, {k}")
+        def normalise_key(k):
+            new_k = "".join([x.lower() if x.isalnum() else "_" for x in k])
+            if k != new_k:
+                warnings.warn(f"Normalising key '{k}' to '{new_k}'")
+            return new_k
+        dictionary = {normalise_key(k): v for k, v in dictionary.items()}
+            
         self._samples = {k: sample_factory(self.context, **v) for k, v in dictionary.items()}
 
     def __getattr__(self, key):
@@ -188,17 +200,17 @@ class GenericListSampleProvider(SampleProvider):
     def __init__(self, context: Context, tuple_: dict | list, timedeltas=None):
         super().__init__(context)
         if isinstance(tuple_, dict):
-            if 'timedeltas' in tuple_:
+            if "timedeltas" in tuple_:
                 if timedeltas is not None:
-                        raise ValueError(f"Duplicate value for timedeltas : {timedelta} vs {tuple_['timedelta']} ")
-                timedeltas = tuple_.pop('timedeltas')
+                    raise ValueError(f"Duplicate value for timedeltas : {timedelta} vs {tuple_['timedelta']} ")
+                timedeltas = tuple_.pop("timedeltas")
 
             new_tuple_ = []
             for timedelta in timedeltas:
                 elt = tuple_.copy()
-                if 'timedelta' in elt:
+                if "timedelta" in elt:
                     raise ValueError(f"Duplicate valye for timedelta and timedeltas")
-                elt['timedelta'] = timedelta
+                elt["timedelta"] = timedelta
                 new_tuple_.append(elt)
             tuple_ = new_tuple_
         self._samples = tuple(sample_factory(context, **v) for v in tuple_)
@@ -256,10 +268,15 @@ class TensorSampleProvider(GenericListSampleProvider):
 
 
 class Request(SampleProvider):
-    def __init__(self, context: Context, variables: list[str], group: str):
+    def __init__(self, context: Context, variables: dict | list[str], data: str = None):
         super().__init__(context)
-        self.group = group
+        if isinstance(variables, dict):
+            if len(variables) > 1:
+                raise ValueError("Not implemented")
+            data = list(variables.keys())[0]
+            variables = variables[data]
         self.variables = variables
+        self.group = data
 
     def _build_tree(self, label="Request", prefix=""):
         return Tree(f"{prefix}✉️  {label}({self.group}:{'/'.join(self.variables)})")
@@ -371,7 +388,7 @@ def sample_factory(context, **kwargs):
     if "timedelta" in kwargs:
         return TimeDeltaShiftedSampleProvider(context, **kwargs)
     if "variables" in kwargs:
-        return Request(context, variables=kwargs["variables"], group=kwargs["data"])
+        return Request(context, **kwargs)
     assert False, f"Unknown sample type for kwargs {kwargs}"
 
 
@@ -409,32 +426,24 @@ sample:
       dictionary:
         fields:
           tensor:
-            - timedelta: "-6h"
-              variables: ["q_50", "2t", "t_850"]
-              data: era5
-            - timedelta: "+12h"
-              variables: ["q_50", "2t", "t_850"]
-              data: era5
-        fields2:
-          tensor:
             timedeltas: ["-6h", "+12h"]
-            variables: ["q_50", "2t", "t_850"]
-            data: era5
-        snow1:
-          variables: ["sdepth_0"]
-          data: snow
-        snow2:
+            variables:
+              era5: ["q_50", "2t", "t_850"]
+        snOW😉1:
+          variables:
+            snow: ["sdepth_0"]
+        snow_2:
           timedelta: "+6h"
-          variables: ["sdepth_0"]
-          data: snow
+          variables:
+            snow: ["sdepth_0"]
         metop:
           tuple:
             - timedelta: "-12h"
-              variables: ["scatss_1", "scatss_2"]
-              data: metop_a
+              variables:
+                metop_a: ["scatss_1", "scatss_2"]
             - timedelta: "+6h"
-              variables: ["scatss_1", "scatss_2"]
-              data: metop_a
+              variables:
+                metop_a: ["scatss_1", "scatss_2"]
         #mixed:
         #  tuple:
         #    - dictionary:
