@@ -115,17 +115,13 @@ class ShuffledSampleProvider(SampleProvider):
 
 
 class DictSampleProvider(SampleProvider):
-    def __init__(
-        self, context: Context, dictionary: dict, with_attributes: bool = False
-    ):
+    def __init__(self, context: Context, dictionary: dict, with_attributes: bool = False):
         super().__init__(context)
         self.with_attributes = with_attributes
 
         for k in dictionary:
             if not isinstance(k, str):
-                raise ValueError(
-                    f"Keys in dictionary must be strings, got {type(k)}, {k}"
-                )
+                raise ValueError(f"Keys in dictionary must be strings, got {type(k)}, {k}")
 
         def normalise_key(k):
             new_k = "".join([x.lower() if x.isalnum() else "_" for x in k])
@@ -135,9 +131,7 @@ class DictSampleProvider(SampleProvider):
 
         dictionary = {normalise_key(k): v for k, v in dictionary.items()}
 
-        self._samples = {
-            k: sample_provider_factory(self.context, **v) for k, v in dictionary.items()
-        }
+        self._samples = {k: sample_provider_factory(self.context, **v) for k, v in dictionary.items()}
 
     def __getattr__(self, key):
         if key in self._samples:
@@ -198,9 +192,7 @@ class TimeDeltaShiftedSampleProvider(SampleProvider):
     def shift_item(self):
         # assert something here ?
         shift = self.timedelta // self._sample.frequency
-        assert isinstance(
-            shift, int
-        ), f"Shift must be an integer, got {shift} ({type(shift)})"
+        assert isinstance(shift, int), f"Shift must be an integer, got {shift} ({type(shift)})"
         return shift
 
     def get(self, what, item: int):
@@ -226,16 +218,14 @@ class GenericListSampleProvider(SampleProvider):
         if isinstance(tuple_, dict):
             if "timedeltas" in tuple_:
                 if timedeltas is not None:
-                    raise ValueError(
-                        f"Duplicate value for timedeltas : {timedelta} vs {tuple_['timedelta']} "
-                    )
+                    raise ValueError(f"Duplicate value for timedeltas : {timedelta} vs {tuple_['timedelta']} ")
                 timedeltas = tuple_.pop("timedeltas")
 
             new_tuple_ = []
             for timedelta in timedeltas:
                 elt = tuple_.copy()
                 if "timedelta" in elt:
-                    raise ValueError(f"Duplicate valye for timedelta and timedeltas")
+                    raise ValueError("Duplicate value for timedelta and timedeltas")
                 elt["timedelta"] = timedelta
                 new_tuple_.append(elt)
             tuple_ = new_tuple_
@@ -273,9 +263,7 @@ class TensorSampleProvider(GenericListSampleProvider):
 
     def get(self, what, item):
         lst = super().get(what, item)
-        assert isinstance(
-            lst, (list, tuple)
-        ), f"Expected list or tuple, got {type(lst)}"
+        assert isinstance(lst, (list, tuple)), f"Expected list or tuple, got {type(lst)}"
         return np.stack(tuple(lst))
 
     def _build_tree(self, label="Tensor", prefix=""):
@@ -307,7 +295,7 @@ class Request(SampleProvider):
             assert len(out) == 1, f"Expected single item for {what}, got {len(out)}"
             key = list(out.keys())[0]
             return out[key]
-        return self._get(*what, item=item)
+        return self._get(*what, item)
 
     @property
     def range(self):
@@ -370,6 +358,7 @@ class DataHandler:
         # print(f"🔍 Opened dataset with config: {self.config}")
         self.frequency = frequency_to_timedelta(self.ds.frequency)
         self.statistics = self.ds.statistics[self.group]
+        self.name_to_index = self.ds.name_to_index[self.group]
 
     def __len__(self):
         return len(self.ds)
