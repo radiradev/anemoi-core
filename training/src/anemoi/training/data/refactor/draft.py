@@ -66,6 +66,10 @@ class SampleProvider:
         self._check_item(item)
         return self.get("processors", item)
 
+    def num_channels(self, item: int):
+        self._check_item(item)
+        return self.get("num_channels", item)
+    
     @property
     def frequency(self):
         return frequency_to_timedelta("6h")
@@ -261,7 +265,7 @@ class TensorSampleProvider(GenericListSampleProvider):
     def __init__(self, context: Context, tensor: dict, **kwargs):
         super().__init__(context, tuple_=tensor, **kwargs)
 
-    def get(self, what, item):
+    def get(self, what: str, item: int):
         lst = super().get(what, item)
         assert isinstance(lst, (list, tuple)), f"Expected list or tuple, got {type(lst)}"
         return np.stack(tuple(lst))
@@ -335,6 +339,8 @@ class Request(SampleProvider):
                     ]
                     for name, config in dh.preprocessors.items()
                 ]
+            elif w == "num_channels":
+                data["num_channels"] = len(self.variables)
             else:
                 raise ValueError(f"Unknown request '{w}' for Request sample provider")
         return data

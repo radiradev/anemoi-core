@@ -59,15 +59,15 @@ class AnemoiMultiModel(nn.Module):
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
 
         self.latent_residual_connection = True
-        self.use_residual_connection = []  # ["era5"]
+        self.use_residual_connection = model_config.model.get("residual_connections", [])
 
-        sample_spec = sample_provider.spec
-        self.input_channels: dict[str, int] = sample_spec.num_channels["input"]
-        self.target_channels: dict[str, int] = sample_spec.num_channels["target"]
-        self.input_names: list[str] = sample_spec.input_names
-        self.target_names: list[str] = sample_spec.target_names
+        def cast_tuples_to_int(d: dict) -> dict:
+            return {k: v[0] for k, v in d.items()}
 
-        self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
+        self.input_channels: dict[str, int] = cast_tuples_to_int(sample_provider.num_channels(0)["input"])
+        self.target_channels: dict[str, int] = cast_tuples_to_int(sample_provider.num_channels(0)["target"])
+        self.input_names: list[str] = list(self.input_channels.keys())
+        self.target_names: list[str] = list(self.target_channels.keys())
 
         # Encoder data -> hidden
         self.encoders = nn.ModuleDict({})

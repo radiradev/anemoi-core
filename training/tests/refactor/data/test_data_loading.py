@@ -20,7 +20,21 @@ def test_sampleprovider(new_config: DictConfig):
     assert hasattr(sample_provider, "timedeltas")
     assert hasattr(sample_provider, "processors")
 
-    assert set(sample_provider.processors(0).keys()) == {"input", "target"}
+    processors = sample_provider.processors(0)
+    assert set(processors.keys()) == {"input", "target"}
+    #assert isinstance(processors["input"]["era5"], list)
+    #assert len(processors["input"]["era5"][0]) == 2
+    #assert isinstance(processors["input"]["amsr_h180"], list)
+    #assert len(processors["input"]["amsr_h180"][0]) == 2
+
+    num_channels = sample_provider.num_channels(0)
+    assert set(num_channels.keys()) == {"input", "target"}
+    assert set(num_channels["input"].keys()) == {"era5", "amsr_h180"}
+    assert isinstance(num_channels["input"]["era5"], int)
+    assert isinstance(num_channels["input"]["amsr_h180"], int)
+    assert set(num_channels["target"].keys()) == {"era5", "amsr_h180"}
+    assert isinstance(num_channels["target"]["era5"], int)
+    assert isinstance(num_channels["target"]["amsr_h180"], int)
 
 
 def test_datamodule(new_config: DictConfig):
