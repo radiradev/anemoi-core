@@ -112,13 +112,13 @@ class DOPDataset(IterableDataset):
             "end": "2018-11-01",
         }
 
-        self._sample_provider_factory = sample_provider_factory(context=training_context, **CONFIG["sample"])
+        self._sample_provider = sample_provider_factory(context=training_context, **CONFIG["sample"])
 
-        self.len = 25  # len(self._sample_provider_factory)
+        self.len = len(self._sample_provider)
 
     def __get_sample(self, index: int):
         """Get a sample from the dataset."""
-        return self._sample_provider_factory[index]
+        return self._sample_provider[index]
 
     def per_worker_init(self, n_workers: int, worker_id: int) -> None:
         """Called by worker_init_func on each copy of dataset.
