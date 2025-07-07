@@ -18,6 +18,15 @@ class Context:
         self.data_config = data_config
         self.name = name
 
+        def processor_factory(config, name_to_index=None, statistics=None):
+            return instantiate(
+                config,
+                name_to_index_training_input=name_to_index,
+                statistics=statistics,
+            )
+
+        self.processor_factory = processor_factory
+
     def __repr__(self):
         return f"Context(selection={self.selection})"
 
@@ -101,13 +110,17 @@ class ShuffledSampleProvider(SampleProvider):
 
 
 class DictSampleProvider(SampleProvider):
-    def __init__(self, context: Context, dictionary: dict, with_attributes: bool = False):
+    def __init__(
+        self, context: Context, dictionary: dict, with_attributes: bool = False
+    ):
         super().__init__(context)
         self.with_attributes = with_attributes
 
         for k in dictionary:
             if not isinstance(k, str):
-                raise ValueError(f"Keys in dictionary must be strings, got {type(k)}, {k}")
+                raise ValueError(
+                    f"Keys in dictionary must be strings, got {type(k)}, {k}"
+                )
 
         def normalise_key(k):
             new_k = "".join([x.lower() if x.isalnum() else "_" for x in k])
@@ -117,7 +130,9 @@ class DictSampleProvider(SampleProvider):
 
         dictionary = {normalise_key(k): v for k, v in dictionary.items()}
 
-        self._samples = {k: sample_factory(self.context, **v) for k, v in dictionary.items()}
+        self._samples = {
+            k: sample_factory(self.context, **v) for k, v in dictionary.items()
+        }
 
     def __getattr__(self, key):
         if key in self._samples:
@@ -178,7 +193,9 @@ class TimeDeltaShiftedSampleProvider(SampleProvider):
     def shift_item(self):
         # assert something here ?
         shift = self.timedelta // self._sample.frequency
-        assert isinstance(shift, int), f"Shift must be an integer, got {shift} ({type(shift)})"
+        assert isinstance(
+            shift, int
+        ), f"Shift must be an integer, got {shift} ({type(shift)})"
         return shift
 
     def get(self, what, item):
@@ -204,7 +221,9 @@ class GenericListSampleProvider(SampleProvider):
         if isinstance(tuple_, dict):
             if "timedeltas" in tuple_:
                 if timedeltas is not None:
-                    raise ValueError(f"Duplicate value for timedeltas : {timedelta} vs {tuple_['timedelta']} ")
+                    raise ValueError(
+                        f"Duplicate value for timedeltas : {timedelta} vs {tuple_['timedelta']} "
+                    )
                 timedeltas = tuple_.pop("timedeltas")
 
             new_tuple_ = []
@@ -258,7 +277,9 @@ class TensorSampleProvider(GenericListSampleProvider):
 
     def get(self, what, item):
         lst = super().get(what, item)
-        assert isinstance(lst, (list, tuple)), f"Expected list or tuple, got {type(lst)}"
+        assert isinstance(
+            lst, (list, tuple)
+        ), f"Expected list or tuple, got {type(lst)}"
         return np.stack(tuple(lst))
 
     def _build_tree(self, label="Tensor", prefix=""):
@@ -319,17 +340,14 @@ class Request(SampleProvider):
             elif w == "statistics":
                 data["statistics"] = record.statistics[self.group]
             elif w == "processors":
-                processor_configs = dh.preprocessors
                 data["processors"] = [
                     [
-                        n,
-                        instantiate(
-                            p,
-                            name_to_index_training_input=record.name_to_index[self.group],
-                            statistics=record.statistics[self.group],
+                        name,
+                        self.context.processor_factory(
+                            config, name_to_index=dh.name_to_index, statistics=dh.statistics
                         ),
                     ]
-                    for n, p in processor_configs.items()
+                    for name, config in dh.preprocessors.items()
                 ]
             else:
                 raise ValueError(f"Unknown request '{w}' for Request sample provider")
@@ -353,6 +371,7 @@ class DataHandler:
         self.ds = open_dataset(**self.config)
         # print(f"🔍 Opened dataset with config: {self.config}")
         self.frequency = frequency_to_timedelta(self.ds.frequency)
+        self.statistics = self.ds.statistics[self.group]
 
     def __len__(self):
         return len(self.ds)
@@ -472,7 +491,7 @@ sample:
         if isinstance(structure, np.ndarray):
             return f"np.array({structure.shape})"
         if isinstance(structure, (list, tuple)):
-            if all(isinstance(item, int) for item in structure):
+            if structure and all(isinstance(item, int) for item in structure):
                 return "*" + "/".join(map(str, structure))
             return [shorten_numpy(item) for item in structure]
         if isinstance(structure, dict):
@@ -503,6 +522,8 @@ sample:
     print("Latitudes and longitudes:")
     print(show_json(s.latitudes(3)))
     print(show_json(s.longitudes(3)))
+    print("Processors:")
+    print(show_json(s.processors(3)))
 
     # for x in [s, s.input, s.input.fields, s.input.metop, s.input.snow]:
     #    print()
