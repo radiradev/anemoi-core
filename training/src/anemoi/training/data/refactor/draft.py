@@ -108,13 +108,15 @@ class DictSampleProvider(SampleProvider):
         for k in dictionary:
             if not isinstance(k, str):
                 raise ValueError(f"Keys in dictionary must be strings, got {type(k)}, {k}")
+
         def normalise_key(k):
             new_k = "".join([x.lower() if x.isalnum() else "_" for x in k])
             if k != new_k:
                 warnings.warn(f"Normalising key '{k}' to '{new_k}'")
             return new_k
+
         dictionary = {normalise_key(k): v for k, v in dictionary.items()}
-            
+
         self._samples = {k: sample_factory(self.context, **v) for k, v in dictionary.items()}
 
     def __getattr__(self, key):
@@ -317,7 +319,7 @@ class Request(SampleProvider):
             elif w == "statistics":
                 data["statistics"] = record.statistics[self.group]
             elif w == "processors":
-                processor_configs = self.context.data_config[self.group].get("processors", {})
+                processor_configs = dh.preprocessors
                 data["processors"] = [
                     [
                         n,
@@ -342,6 +344,7 @@ class DataHandler:
         self.group = group
         self.args = args
         self.dataset = self.context.data_config[self.group]["dataset"]
+        self.preprocessors = self.context.data_config[self.group].get("processors", {})
 
         variables = [f"{group}.{v}" for v in variables]
         self.variables = variables
@@ -394,12 +397,6 @@ def sample_factory(context, **kwargs):
 
 # TEST ---------------------------------
 if __name__ == "__main__":
-    # user-friendly config would be:
-    # fields=dict(
-    #    steps=["-6h", "0h"],
-    #    variables=["q_50", "2t"],
-    #    data="era5",
-    # ),
     yaml_str = """
 data:
   era5:
