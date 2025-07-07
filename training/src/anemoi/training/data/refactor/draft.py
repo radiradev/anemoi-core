@@ -348,7 +348,9 @@ class Request(SampleProvider):
                     [
                         name,
                         self.context.processor_factory(
-                            config, name_to_index=dh.name_to_index, statistics=dh.statistics
+                            config,
+                            name_to_index=record.name_to_index[self.group],
+                            statistics=record.statistics[self.group],
                         ),
                     ]
                     for name, config in dh.preprocessors.items()
