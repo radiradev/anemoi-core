@@ -131,7 +131,7 @@ class DictSampleProvider(SampleProvider):
         dictionary = {normalise_key(k): v for k, v in dictionary.items()}
 
         self._samples = {
-            k: sample_factory(self.context, **v) for k, v in dictionary.items()
+            k: sample_provider_factory(self.context, **v) for k, v in dictionary.items()
         }
 
     def __getattr__(self, key):
@@ -176,7 +176,7 @@ class TimeDeltaShiftedSampleProvider(SampleProvider):
     def __init__(self, context: Context, timedelta: str, **kwargs):
         super().__init__(context)
         self.timedelta = frequency_to_timedelta(timedelta)
-        self._sample = sample_factory(context, **kwargs)
+        self._sample = sample_provider_factory(context, **kwargs)
 
     def compute_new_item(self, item, what=None):
         if item is None:
@@ -234,7 +234,7 @@ class GenericListSampleProvider(SampleProvider):
                 elt["timedelta"] = timedelta
                 new_tuple_.append(elt)
             tuple_ = new_tuple_
-        self._samples = tuple(sample_factory(context, **v) for v in tuple_)
+        self._samples = tuple(sample_provider_factory(context, **v) for v in tuple_)
 
     @property
     def range(self):
@@ -390,7 +390,7 @@ class DataHandler:
         return out
 
 
-def sample_factory(context, **kwargs):
+def sample_provider_factory(context, **kwargs):
     kwargs = kwargs.copy()
     if isinstance(context, dict):
         context = Context(**context)
@@ -512,7 +512,7 @@ sample:
         data_config=CONFIG["data"],
         **CONFIG["training_selection"],
     )
-    s = sample_factory(context=training_context, **sample_config)
+    s = sample_provider_factory(context=training_context, **sample_config)
     print(s)
 
     print("🆗 DataHandler")

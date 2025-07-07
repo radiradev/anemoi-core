@@ -3,7 +3,7 @@ import torch
 from omegaconf import DictConfig
 
 from anemoi.training.data.refactor.multiple_datasets_datamodule import AnemoiMultipleDatasetsDataModule
-from anemoi.training.data.refactor.draft import sample_factory, Context
+from anemoi.training.data.refactor.draft import sample_provider_factory, Context
 from anemoi.training.data.refactor.read_config import get_data_config_dict, get_sample_config_dict
 
 
@@ -13,7 +13,7 @@ def test_sampleprovider(new_config: DictConfig):
 
     context = Context("training", data_config=dhs_config, start=2019, end=2020)
 
-    sample_provider = sample_factory(context=context, **sample_config)
+    sample_provider = sample_provider_factory(context=context, **sample_config)
     sample_provider[0]
     assert hasattr(sample_provider, "latitudes")
     assert hasattr(sample_provider, "longitudes")
