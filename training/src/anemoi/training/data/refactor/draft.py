@@ -315,7 +315,7 @@ class Request(SampleProvider):
             assert len(out) == 1, f"Expected single item for {what}, got {len(out)}"
             key = list(out.keys())[0]
             return out[key]
-        return self._get(*what, item=item)
+        return self._get(*what, item)
 
     @property
     def range(self):
