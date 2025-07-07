@@ -35,34 +35,34 @@ class SampleProvider:
     def __init__(self, context: Context):
         self.context = context
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: int):
         self._check_item(item)
         return self.get("__getitem__", item)
 
     def __len__(self):
         return len(self.range)
 
-    def latitudes(self, item):
+    def latitudes(self, item: int):
         self._check_item(item)
         return self.get("latitudes", item)
 
-    def longitudes(self, item):
+    def longitudes(self, item: int):
         self._check_item(item)
         return self.get("longitudes", item)
 
-    def timedeltas(self, item):
+    def timedeltas(self, item: int):
         self._check_item(item)
         return self.get("timedeltas", item)
 
-    def name_to_index(self, item):
+    def name_to_index(self, item: int):
         self._check_item(item)
         return self.get("name_to_index", item)
 
-    def statistics(self, item):
+    def statistics(self, item: int):
         self._check_item(item)
         return self.get("statistics", item)
 
-    def processors(self, item):
+    def processors(self, item: int):
         self._check_item(item)
         return self.get("processors", item)
 
@@ -77,10 +77,10 @@ class SampleProvider:
             console.print(tree)
         return capture.get()
 
-    def _build_tree(self, label=None):
+    def _build_tree(self, label: str = None):
         raise NotImplementedError("Subclasses must implement _build_tree method")
 
-    def _check_item(self, item):
+    def _check_item(self, item: int):
         if not isinstance(item, (int, np.integer)):
             raise TypeError(f"Not implemented for non-integer indexing {type(item)}")
 
@@ -99,7 +99,7 @@ class ShuffledSampleProvider(SampleProvider):
             np.random.seed(seed)
         self.idx = np.random.permutation(self.idx)
 
-    def get(self, what, item):
+    def get(self, what, item: int):
         print(f"Shuffling : requested {item}, provided {self.idx[item]}")
         return self.sample.get(what, self.idx[item])
 
@@ -112,6 +112,7 @@ class ShuffledSampleProvider(SampleProvider):
     @property
     def range(self):
         return Range(0, len(self.sample))
+
 
 class DictSampleProvider(SampleProvider):
     def __init__(
@@ -163,7 +164,7 @@ class DictSampleProvider(SampleProvider):
 
 
 class Range:
-    def __init__(self, start, end, step=1):
+    def __init__(self, start, end, step: int = 1):
         # start and end are included
         self.start = start
         self.end = end
@@ -182,7 +183,7 @@ class TimeDeltaShiftedSampleProvider(SampleProvider):
         self.timedelta = frequency_to_timedelta(timedelta)
         self._sample = sample_provider_factory(context, **kwargs)
 
-    def compute_new_item(self, item, what=None):
+    def compute_new_item(self, item: int, what=None):
         if item is None:
             return None
         return item + self.shift_item
@@ -202,11 +203,11 @@ class TimeDeltaShiftedSampleProvider(SampleProvider):
         ), f"Shift must be an integer, got {shift} ({type(shift)})"
         return shift
 
-    def get(self, what, item):
+    def get(self, what, item: int):
         new_item = self.compute_new_item(item, what)
         return self._sample.get(what, new_item)
 
-    def _build_tree(self, prefix=""):
+    def _build_tree(self, prefix: str = ""):
         txt = frequency_to_string(self.timedelta)
         if self.timedelta <= np.timedelta64(0, "s"):
             txt = f"[green]{txt}[/green]"
@@ -246,17 +247,8 @@ class GenericListSampleProvider(SampleProvider):
         end = min(s.range.end for s in self._samples)
         return Range(start, end)
 
-    def get(self, what, item):
+    def get(self, what, item: int):
         return tuple(v.get(what, item) for v in self._samples)
-
-    #    def get(self, what, item):
-    #        out = []
-    #        for k, v in self._samples.items():
-    #            k = frequency_to_timedelta(k)
-    #            sample_step = k / v.frequency
-    #            assert sample_step == int(sample_step)
-    #            out.append(v.get(what, item + int(sample_step)))
-    #        return out
 
     def _build_tree(self, label="GenericTuple", prefix=""):
         tree = Tree(prefix + label)
@@ -305,10 +297,10 @@ class Request(SampleProvider):
         self.variables = variables
         self.group = data
 
-    def _build_tree(self, label="Request", prefix=""):
+    def _build_tree(self, label: str = "Request", prefix: str = ""):
         return Tree(f"{prefix}✉️  {label}({self.group}:{'/'.join(self.variables)})")
 
-    def get(self, what, item):
+    def get(self, what, item: int):
         # this may be moved to the Mother class
         if isinstance(what, str):
             out = self._get(what, item)
@@ -363,7 +355,7 @@ class Request(SampleProvider):
 class DataHandler:
     _record = None
 
-    def __init__(self, context, group, args, variables=[]):
+    def __init__(self, context: Context, group: str, args, variables: list = []):
         self.context = context
         self.group = group
         self.args = args
