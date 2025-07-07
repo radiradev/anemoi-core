@@ -63,35 +63,31 @@ def new_config() -> DictConfig:
             "model": {
                 "sample": {
                     "input": {
-                        "dictionary": {
-                            "era5": {
-                                "variables": [
-                                    "cos_latitude",
-                                    "sin_latitude",
-                                    "10u",
-                                    "2t",
-                                    "2d",
-                                    "q_100",
-                                    "q_1000",
-                                ],
-                                "steps": ["-6h", "0h"],
-                            },
-                            "amsr2": {
-                                "variables": ["rawbt_1", "rawbt_2", "rawbt_3"],
-                                "steps": ["0h"],
-                            },
+                        "era5": {
+                            "variables": [
+                                "cos_latitude",
+                                "sin_latitude",
+                                "10u",
+                                "2t",
+                                "2d",
+                                "q_100",
+                                "q_1000",
+                            ],
+                            "timedeltas": ["-6h", "0h"],
+                        },
+                        "amsr2": {
+                            "variables": ["rawbt_1", "rawbt_2", "rawbt_3"],
+                            "timedeltas": ["0h"],
                         },
                     },
                     "target": {
-                        "dictionary": {
-                            "era5": {
-                                "variables": ["10u", "10v", "2t", "q_1000", "tp"],
-                                "steps": ["6h"],
-                            },
-                            "amsr2": {
-                                "variables": ["rawbt_1", "rawbt_2", "rawbt_3"],
-                                "steps": ["6h"],
-                            },
+                        "era5": {
+                            "variables": ["10u", "10v", "2t", "q_1000", "tp"],
+                            "timedeltas": ["6h"],
+                        },
+                        "amsr2": {
+                            "variables": ["rawbt_1", "rawbt_2", "rawbt_3"],
+                            "timedeltas": ["6h"],
                         },
                     },
                 },
