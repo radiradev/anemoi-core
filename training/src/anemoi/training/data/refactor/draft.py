@@ -185,8 +185,22 @@ class TimeDeltaShiftedSampleProvider(SampleProvider):
 
 
 class GenericListSampleProvider(SampleProvider):
-    def __init__(self, context: Context, tuple_: dict):
+    def __init__(self, context: Context, tuple_: dict | list, timedeltas=None):
         super().__init__(context)
+        if isinstance(tuple_, dict):
+            if 'timedeltas' in tuple_:
+                if timedeltas is not None:
+                        raise ValueError(f"Duplicate value for timedeltas : {timedelta} vs {tuple_['timedelta']} ")
+                timedeltas = tuple_.pop('timedeltas')
+
+            new_tuple_ = []
+            for timedelta in timedeltas:
+                elt = tuple_.copy()
+                if 'timedelta' in elt:
+                    raise ValueError(f"Duplicate valye for timedelta and timedeltas")
+                elt['timedelta'] = timedelta
+                new_tuple_.append(elt)
+            tuple_ = new_tuple_
         self._samples = tuple(sample_factory(context, **v) for v in tuple_)
 
     @property
@@ -225,8 +239,8 @@ class ListSampleProvider(GenericListSampleProvider):
 
 
 class TensorSampleProvider(GenericListSampleProvider):
-    def __init__(self, context: Context, tensor: dict):
-        super().__init__(context, tuple_=tensor)
+    def __init__(self, context: Context, tensor: dict, **kwargs):
+        super().__init__(context, tuple_=tensor, **kwargs)
 
     def get(self, what, item):
         lst = super().get(what, item)
@@ -401,6 +415,11 @@ sample:
             - timedelta: "+12h"
               variables: ["q_50", "2t", "t_850"]
               data: era5
+        fields2:
+          tensor:
+            timedeltas: ["-6h", "+12h"]
+            variables: ["q_50", "2t", "t_850"]
+            data: era5
         snow1:
           variables: ["sdepth_0"]
           data: snow
