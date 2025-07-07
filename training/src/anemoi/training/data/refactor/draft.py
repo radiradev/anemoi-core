@@ -97,17 +97,21 @@ class ShuffledSampleProvider(SampleProvider):
         self.idx = np.arange(length)
         if seed is not None:
             np.random.seed(seed)
-            self.idx = np.random.permutation(self.idx)
+        self.idx = np.random.permutation(self.idx)
 
     def get(self, what, item):
+        print(f"Shuffling : requested {item}, provided {self.idx[item]}")
         return self.sample.get(what, self.idx[item])
 
     def _build_tree(self, label="Shuffled", prefix=""):
-        tree = Tree(prefix + label)
+        tree = Tree(prefix + label + f" (seed={self.seed})")
         subtree = self.sample._build_tree(label="SampleProvider")
         tree.add(subtree)
         return tree
 
+    @property
+    def range(self):
+        return Range(0, len(self.sample))
 
 class DictSampleProvider(SampleProvider):
     def __init__(

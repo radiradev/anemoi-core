@@ -113,8 +113,9 @@ class DOPDataset(IterableDataset):
         }
 
         self._sample_provider = sample_provider_factory(context=training_context, **CONFIG["sample"])
+        self._sample_provider = self._sample_provider.shuffle(seed=42)
 
-        self.len = len(self._sample_provider)
+        # self.len = len(self._sample_provider)
 
     def __get_sample(self, index: int):
         """Get a sample from the dataset."""
@@ -134,14 +135,11 @@ class DOPDataset(IterableDataset):
         """
         self.worker_id = worker_id
 
-        # Total number of valid ICs is dataset length minus rollout minus additional multistep inputs
-        len_corrected = self.len - self.rollout - self.multistep + 1
-        self.data_indices = np.arange(len_corrected, dtype=np.uint32)
-
+        lenght = len(self._sample_provider)
         # Divide this equally across shards (one shard per group!)
-        shard_size = len_corrected // self.seed_comm_num_groups
+        shard_size = lenght // self.seed_comm_num_groups
         shard_start = self.seed_comm_group_id * shard_size
-        shard_end = min((self.seed_comm_group_id + 1) * shard_size, self.len - self.rollout - self.multistep + 1)
+        shard_end = min((self.seed_comm_group_id + 1) * shard_size, lenght)
 
         shard_len = shard_end - shard_start
         self.n_samples_per_worker = shard_len // n_workers
@@ -158,24 +156,8 @@ class DOPDataset(IterableDataset):
         print("Sanity check random number:", sanity_rnd)
 
     def __iter__(self):
-        if self.shuffle:
-            # do a full shuffle, then get my index range
-            shuffled_data_indices = self.rng.choice(self.data_indices, size=len(self.data_indices) - 1, replace=False)
-            shuffled_chunk_indices = shuffled_data_indices[self.chunk_index_range]
-
-            while True:  # the pl.Trainer will break out of this loop after a fixed number of samples
-                idx = self.rng.choice(shuffled_chunk_indices)
-                idx += 1
-                print(
-                    f"TRAINING: Worker {self.worker_id} (pid {os.getpid()}) fetching sample index {idx} ...",
-                )
-                yield self.__get_sample(idx)
-
-        else:
-            shuffled_chunk_indices = self.data_indices[self.chunk_index_range]
             # no shuffle, just iterate over the chunk indices
             for idx in self.chunk_index_range:
-                idx += 1
                 print(
                     f"VALIDATION: Worker {self.worker_id} (pid {os.getpid()}) fetching sample index {idx} ...",
                 )
