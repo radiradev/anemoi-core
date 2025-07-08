@@ -153,8 +153,8 @@ class BaseUpdatingScaler(BaseScaler):
     def update_scaling_values(self, callback: AvailableCallbacks, **kwargs) -> TENSOR_SPEC | None:
         """Get scaling values based on the callback.
 
-        Will update the cached scaling values if the callback returns a value.
-        Any subsequent calls to `get_scaling` will use the cached values.
+        Can return None if no scaling updates are available.
+        In that case, the scaler should not update its values.
 
         Parameters
         ----------
