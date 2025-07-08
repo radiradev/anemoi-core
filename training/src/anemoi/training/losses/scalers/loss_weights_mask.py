@@ -25,7 +25,7 @@ LOGGER = logging.getLogger(__name__)
 
 class NaNMaskScaler(BaseUpdatingScaler):
 
-    scale_dims: tuple[TensorDim] = (TensorDim.GRID, TensorDim.VARIABLE)
+    scale_dims: tuple[TensorDim, ...] = (TensorDim.GRID, TensorDim.VARIABLE)
 
     def on_training_start(self, model: AnemoiModelInterface) -> np.ndarray:
         """Get loss scaling.
