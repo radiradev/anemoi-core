@@ -39,7 +39,7 @@ LOGGER = logging.getLogger(__name__)
 class BaseScaler(ABC):
     """Base class for all loss scalers."""
 
-    scale_dims: tuple[TensorDim] = None
+    scale_dims: tuple[TensorDim, ...]
 
     def __init__(self, norm: str | None = None) -> None:
         """Initialise BaseScaler.
@@ -84,7 +84,7 @@ class BaseScaler(ABC):
 
         Returns
         -------
-        scale_dims : tuple[int]
+        scale_dims : tuple[int, ...]
             Dimensions over which the scalers are applied.
         scaler_values : np.ndarray
             Scaler values
@@ -98,13 +98,7 @@ class BaseScaler(ABC):
 class AvailableCallbacks(StrEnum):
     INITIAL_SCALING_VALUES = "initial_scaling_values"
     ON_TRAINING_START = "on_training_start"
-    ON_TRAIN_EPOCH_START = "on_train_epoch_start"
-    ON_TRAIN_EPOCH_END = "on_train_epoch_end"
-    ON_TRAIN_BATCH_START = "on_train_batch_start"
-    ON_TRAIN_BATCH_END = "on_train_batch_end"
-
-    ON_VALID_BATCH_START = "on_valid_batch_start"
-    ON_VALID_BATCH_END = "on_valid_batch_end"
+    ON_BATCH_START = "on_batch_start"
 
 
 class BaseUpdatingScaler(BaseScaler):
@@ -115,13 +109,11 @@ class BaseUpdatingScaler(BaseScaler):
     update their values based on the current state of the model and the training data.
 
     The callback methods are expected to return a np.ndarray of scaling values,
-    which will be normalised and returned by the `get_scaling_values` method.
+    which will be normalised. If they return None, the scaler will not update its values.
 
-    Override `on_training_start` to provide initial scaling values if needed.
+    Override `initial_scaling_values` to provide initial scaling values if needed.
     The default implementation returns an array of ones.
     """
-
-    _cached_scaling_values: Optional[torch.Tensor] = None
 
     def initial_scaling_values(self) -> Optional[torch.Tensor]:
         """Get initial scaling values.
@@ -137,56 +129,28 @@ class BaseUpdatingScaler(BaseScaler):
         """Callback method called at the start of training."""
         LOGGER.debug("%s.on_training_start called.", self.__class__.__name__)
 
-    def on_train_epoch_start(self, model: AnemoiModelInterface) -> Optional[torch.Tensor]:  # noqa: ARG002
-        """Callback method called at the start of each epoch."""
-        LOGGER.debug("%s.on_train_epoch_start called.", self.__class__.__name__)
-
-    def on_train_epoch_end(self, model: AnemoiModelInterface) -> Optional[torch.Tensor]:  # noqa: ARG002
-        """Callback method called at the end of each epoch."""
-        LOGGER.debug("%s.on_train_epoch_end called.", self.__class__.__name__)
-
-    def on_train_batch_start(self, model: AnemoiModelInterface) -> Optional[torch.Tensor]:  # noqa: ARG002
+    def on_batch_start(self, model: AnemoiModelInterface) -> Optional[torch.Tensor]:  # noqa: ARG002
         """Callback method called at the start of each batch."""
         LOGGER.debug("%s.on_train_batch_start called.", self.__class__.__name__)
 
-    def on_train_batch_end(self, model: AnemoiModelInterface) -> Optional[torch.Tensor]:  # noqa: ARG002
-        """Callback method called at the end of each batch."""
-        LOGGER.debug("%s.on_train_batch_end called.", self.__class__.__name__)
-
-    def on_valid_batch_start(self, model: AnemoiModelInterface) -> Optional[torch.Tensor]:  # noqa: ARG002
-        """Callback method called at the start of each validation batch."""
-        LOGGER.debug("%s.on_valid_batch_start called.", self.__class__.__name__)
-
-    def on_valid_batch_end(self, model: AnemoiModelInterface) -> Optional[torch.Tensor]:  # noqa: ARG002
-        """Callback method called at the end of each validation batch."""
-        LOGGER.debug("%s.on_valid_batch_end called.", self.__class__.__name__)
-
-    def get_scaling_values(self) -> torch.Tensor:
-        """Get scaling values based on the initial scaling values callback or cache if set.
+    def get_scaling_values(self, **_kwargs) -> torch.Tensor:
+        """Get scaling values based on the initial scaling values callback.
 
         Returns
         -------
         torch.Tensor
             Scaling values as a torch tensor.
         """
-        if self._cached_scaling_values is not None:
-            LOGGER.debug("Using cached scaling values for %s.", self.__class__.__name__)
-            return self._cached_scaling_values
-
         return self.initial_scaling_values()
 
     def get_scaling(self) -> TENSOR_SPEC:
         """Get scaling values based on the initial scaling values callback."""
-        if self._cached_scaling_values is None:
-            self._cached_scaling_values = self.initial_scaling_values()
+        scalar_values = self.get_scaling_values()
 
-        scalar_values = self._cached_scaling_values
-
-        scalar_values = self.normalise(scalar_values)
         scale_dims = tuple(x.value for x in self.scale_dims)
         return scale_dims, scalar_values
 
-    def get_callback_scaling_values(self, callback: AvailableCallbacks, **kwargs) -> TENSOR_SPEC:
+    def update_scaling_values(self, callback: AvailableCallbacks, **kwargs) -> TENSOR_SPEC | None:
         """Get scaling values based on the callback.
 
         Will update the cached scaling values if the callback returns a value.
@@ -201,7 +165,7 @@ class BaseUpdatingScaler(BaseScaler):
 
         Returns
         -------
-        TENSOR_SPEC
+        TENSOR_SPEC | None
             A tuple containing the scale dimensions and the scaler values.
         """
         if not hasattr(self, callback):
@@ -209,7 +173,9 @@ class BaseUpdatingScaler(BaseScaler):
             raise ValueError(error_msg)
 
         scalar_values = getattr(self, callback)(**kwargs)
-        if scalar_values is not None:
-            self._cached_scaling_values = scalar_values
+        if scalar_values is None:
+            return None
 
-        return self.get_scaling()
+        scalar_values = self.normalise(scalar_values)
+        scale_dims = tuple(x.value for x in self.scale_dims)
+        return scale_dims, scalar_values

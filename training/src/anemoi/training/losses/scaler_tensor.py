@@ -61,7 +61,7 @@ def grad_scaler(
     return new_grad_in, grad_in[1]
 
 
-TENSOR_SPEC = tuple[Union[int, tuple[int]], torch.Tensor]
+TENSOR_SPEC = tuple[Union[int, tuple[int, ...]], torch.Tensor]
 """Scale Tensor specification type.
 
 A tuple of (dimension, tensor) where:

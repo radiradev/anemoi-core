@@ -25,7 +25,18 @@ LOGGER = logging.getLogger(__name__)
 
 class NaNMaskScaler(BaseUpdatingScaler):
 
-    scale_dims: tuple[TensorDim] = (TensorDim.GRID, TensorDim.VARIABLE)
+    scale_dims: tuple[TensorDim, ...] = (TensorDim.GRID, TensorDim.VARIABLE)
+
+    def __init__(self, norm: str | None = None, **kwargs) -> None:
+        """Initialise NanMaskScaler.
+
+        Parameters
+        ----------
+        norm : str, optional
+            Type of normalisation to apply. Options are None, unit-sum, unit-mean and l1.
+        """
+        super().__init__(norm=norm)
+        del kwargs
 
     def on_training_start(self, model: AnemoiModelInterface) -> torch.Tensor:
         """Get loss scaling.
