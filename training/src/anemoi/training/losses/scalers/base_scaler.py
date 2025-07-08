@@ -83,7 +83,7 @@ class BaseScaler(ABC):
 
         Returns
         -------
-        scale_dims : tuple[int]
+        scale_dims : tuple[int, ...]
             Dimensions over which the scalers are applied.
         scaler_values : np.ndarray
             Scaler values
