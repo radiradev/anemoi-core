@@ -293,16 +293,16 @@ def test_updating_scalars(mock_updating_scalar: type[BaseUpdatingScaler]) -> Non
     assert isinstance(scalar.initial_scaling_values(), torch.Tensor)
 
     assert scalar.get_scaling() is not None
-    assert scalar.get_scaling() == torch.Tensor([1.0]), "Scalar values should be from the initial scaling values."
+    assert scalar.get_scaling()[1] == torch.Tensor([1.0]), "Scalar values should be from the initial scaling values."
 
     assert scalar.on_training_start(None) == torch.Tensor([2.0])
     updated_scaling = scalar.update_scaling_values(callback="on_training_start", model=None)
-    assert updated_scaling is not None and updated_scaling == torch.Tensor(
+    assert updated_scaling is not None and updated_scaling[1] == torch.Tensor(
         [2.0],
     ), "Scalar values should be updated after on_training_start."
 
     assert scalar.on_batch_start(None) == torch.Tensor([3.0])
     updated_scaling = scalar.update_scaling_values(callback="on_batch_start", model=None)
-    assert updated_scaling is not None and updated_scaling == torch.Tensor(
+    assert updated_scaling is not None and updated_scaling[1] == torch.Tensor(
         [3.0],
     ), "Scalar values should be updated after on_batch_start."
