@@ -61,11 +61,8 @@ class AnemoiMultiModel(nn.Module):
         self.latent_residual_connection = True
         self.use_residual_connection = model_config.model.get("residual_connections", [])
 
-        def cast_tuples_to_int(d: dict) -> dict:
-            return {k: v[0] for k, v in d.items()}
-
-        self.input_channels: dict[str, int] = cast_tuples_to_int(sample_provider.num_channels(0)["input"])
-        self.target_channels: dict[str, int] = cast_tuples_to_int(sample_provider.num_channels(0)["target"])
+        self.input_channels: dict[str, int] = sample_provider.num_channels(0)["input"]
+        self.target_channels: dict[str, int] = sample_provider.num_channels(0)["target"]
         self.input_names: list[str] = list(self.input_channels.keys())
         self.target_names: list[str] = list(self.target_channels.keys())
 
