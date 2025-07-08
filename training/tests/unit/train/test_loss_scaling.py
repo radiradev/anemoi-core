@@ -273,10 +273,14 @@ def mock_updating_scalar() -> type[BaseUpdatingScaler]:
 
         scale_dims = (TensorDim.VARIABLE,)
 
+        def initial_scaling_values(self) -> np.ndarray:
+            """Return initial scaling values."""
+            return np.array([1.0])
+
         def on_training_start(self, model: Any) -> np.ndarray:  # noqa: ARG002
             return np.array([2.0])
 
-        def on_train_epoch_end(self, model: Any) -> np.ndarray:  # noqa: ARG002
+        def on_batch_start(self, model: Any) -> np.ndarray:  # noqa: ARG002
             return np.array([3.0])
 
     return UpdatingScalar
@@ -293,9 +297,13 @@ def test_updating_scalars(mock_updating_scalar: type[BaseUpdatingScaler]) -> Non
     assert scalar.get_scaling()[1][0] == 1.0, "Scalar values should be from the initial scaling values."
 
     assert scalar.on_training_start(None) == np.array([2.0])
-    scalar.get_callback_scaling_values(callback="on_training_start", model=None)
-    assert scalar.get_scaling()[1][0] == 2.0, "Scalar values should be updated after on_training_start."
+    updated_scaling = scalar.update_scaling_values(callback="on_training_start", model=None)
+    assert (
+        updated_scaling is not None and updated_scaling[1][0] == 2.0
+    ), "Scalar values should be updated after on_training_start."
 
-    assert scalar.on_train_epoch_end(None) == np.array([3.0])
-    scalar.get_callback_scaling_values(callback="on_train_epoch_end", model=None)
-    assert scalar.get_scaling()[1][0] == 3.0, "Scalar values should be updated after on_train_epoch_end."
+    assert scalar.on_batch_start(None) == np.array([3.0])
+    updated_scaling = scalar.update_scaling_values(callback="on_batch_start", model=None)
+    assert (
+        updated_scaling is not None and updated_scaling[1][0] == 3.0
+    ), "Scalar values should be updated after on_batch_start."
