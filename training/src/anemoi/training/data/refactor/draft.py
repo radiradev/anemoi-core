@@ -242,7 +242,11 @@ class GenericListSampleProvider(SampleProvider):
         return Range(start, end)
 
     def get(self, what, item: int):
-        return tuple(v.get(what, item) for v in self._samples)
+        ts = tuple(v.get(what, item) for v in self._samples)
+        if what in ["num_channels", "processors"]: # don't stack over variable dim
+            return ts[0]
+
+        return ts
 
     def _build_tree(self, label="GenericTuple", prefix=""):
         tree = Tree(prefix + label)
@@ -267,6 +271,9 @@ class TensorSampleProvider(GenericListSampleProvider):
 
     def get(self, what: str, item: int):
         lst = super().get(what, item)
+        if what in ["num_channels", "processors"]:
+            return lst
+
         assert isinstance(lst, (list, tuple)), f"Expected list or tuple, got {type(lst)}"
         return np.stack(tuple(lst))
 

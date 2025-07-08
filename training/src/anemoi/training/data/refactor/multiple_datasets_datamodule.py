@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
     """Anemoi Datasets data module for PyTorch Lightning."""
 
-    def __init__(self, config: BaseSchema, graph_data: HeteroData) -> None:
+    def __init__(self, config: BaseSchema, graph_data: HeteroData, which: str = "downscaling") -> None:
         """Initialize Anemoi Datasets data module.
 
         Parameters
@@ -48,8 +48,8 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         super().__init__()
         self.graph_data = graph_data
 
-        dhs_config = get_data_config_dict(config.data.data_handlers)
-        sample_config = get_sample_config_dict(config.model.sample)
+        dhs_config = get_data_config_dict(config.data.data_handlers, which)
+        sample_config = get_sample_config_dict(config.model.sample, which)
 
         training_context = Context("training", data_config=dhs_config, **config.dataloader.sampler.training)
         validation_context = Context("validation", data_config=dhs_config, **config.dataloader.sampler.validation)
