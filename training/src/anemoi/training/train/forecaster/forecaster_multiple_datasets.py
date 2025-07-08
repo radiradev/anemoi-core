@@ -124,8 +124,8 @@ class GraphForecasterMultiDataset(pl.LightningModule):
             graph_data=graph_data,
             config=convert_to_omegaconf(config),
         )
-        self.indexer = sample_provider.get_indexer()
-        self.graph_editor = DynamicGraphEditor("hidden", DotDict({}))
+        #self.indexer = sample_provider.get_indexer()
+        #self.graph_editor = DynamicGraphEditor("hidden", DotDict({}))
 
         self.config = config
         # self.model_data_indices = {self.datasets[0]: self.model.model.data_indices}  # TODO: generalize
@@ -313,13 +313,13 @@ class GraphForecasterMultiDataset(pl.LightningModule):
 
         assert rollout in [1, None], "Rollout NOT IMPLEMENTED yet"
         for rollout_step in range(rollout or self.rollout):
-            input_latlons = self.indexer.get_latlons(batch["input"])  # (G, S=1, B, 2)
-            target_latlons = self.indexer.get_latlons(batch["target"])  # (G, S=1, B, 2)
+            #input_latlons = self.indexer.get_latlons(batch["input"])  # (G, S=1, B, 2)
+            #target_latlons = self.indexer.get_latlons(batch["target"])  # (G, S=1, B, 2)
 
-            graph = self.graph_editor.update_graph(self.graph_data, input_latlons, target_latlons)
+            #graph = self.graph_editor.update_graph(self.graph_data, input_latlons, target_latlons)
 
             # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
-            y_pred = self(batch["input"], graph)
+            y_pred = self(batch["input"])
 
             # y includes the auxiliary variables, so we must leave those out when computing the loss
             loss = checkpoint(self.loss, y_pred, batch["target"], use_reentrant=False) if training_mode else None
