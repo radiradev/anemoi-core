@@ -11,12 +11,20 @@ from anemoi.datasets import open_dataset
 from anemoi.utils.dates import frequency_to_string
 from anemoi.utils.dates import frequency_to_timedelta
 
+def resolve_reference(config):
+    from omegaconf import OmegaConf
+    config = OmegaConf.create(config)
+    config = OmegaConf.to_container(config, resolve=True)
+    return config
+
 
 class Context:
     def __init__(self, name="no-name", start=None, end=None, data_config=None):
         self.selection = dict(start=start, end=end)
+        data_config = resolve_reference(data_config)
         self.data_config = data_config
         self.name = name
+
 
         def processor_factory(config, name_to_index=None, statistics=None):
             return instantiate(
@@ -394,10 +402,15 @@ class DataHandler:
 
 def sample_provider_factory(context, **kwargs):
     kwargs = kwargs.copy()
+    kwargs = resolve_reference(kwargs)
     if isinstance(context, dict):
         context = Context(**context)
     if context is None:
         context = Context()
+    if "loops" in kwargs:
+        kwargs.pop("loops")
+    if "references" in kwargs:
+        kwargs.pop("references")
     if "dictionary" in kwargs:
         return DictSampleProvider(context, **kwargs)
     if "tensor" in kwargs:
@@ -415,16 +428,17 @@ def sample_provider_factory(context, **kwargs):
 # TEST ---------------------------------
 if __name__ == "__main__":
     yaml_str = """
-data:
-  era5:
-    dataset:
-      dataset: aifs-ea-an-oper-0001-mars-o96-1979-2023-6h-v8
-      set_group: era5
-      # processors: ...
-  snow:
-    dataset: observations-testing-2018-2018-6h-v0
-  metop_a:
-    dataset: observations-testing-2018-2018-6h-v0
+sources:
+  training:
+    era5:
+      dataset:
+        dataset: aifs-ea-an-oper-0001-mars-o96-1979-2023-6h-v8
+        set_group: era5
+        # processors: ...
+    snow:
+      dataset: observations-testing-2018-2018-6h-v0
+    metop_a:
+      dataset: observations-testing-2018-2018-6h-v0
 
 training_selection:
   # start=...
@@ -435,12 +449,15 @@ validation_selection:
   # end=...
 
 sample:
+  loops:
+    timedelta: ["-6h", "+12h"]
+    
   dictionary:
     input:
       dictionary:
         fields:
           tensor:
-            timedeltas: ["-6h", "+12h"]
+            timedeltas: ${loops.timedelta}
             variables:
               era5: ["q_50", "2t", "t_850"]
         snOW😉1:
@@ -458,23 +475,6 @@ sample:
             - timedelta: "+6h"
               variables:
                 metop_a: ["scatss_1", "scatss_2"]
-        #mixed:
-        #  tuple:
-        #    - dictionary:
-        #        thing:
-        #          variables: ["q_50"]
-        #          data: era5
-        #        another:
-        #          variables: ["sdepth_0"]
-        #          data: snow
-        #    - variables: ["sdepth_0"]
-        #      data: snow
-
-        # user friendly config would be:
-        # snow:
-        #   timedeltas: ["0h", "+6h"]
-        #   variables: ["sdepth_0"]
-        #   data: snow
 """
 
     CONFIG = yaml.safe_load(yaml_str)
@@ -507,7 +507,7 @@ sample:
     sample_config = CONFIG["sample"]
     training_context = Context(
         "training",
-        data_config=CONFIG["data"],
+        data_config=CONFIG["sources"]["training"],
         **CONFIG["training_selection"],
     )
     s = sample_provider_factory(context=training_context, **sample_config)
