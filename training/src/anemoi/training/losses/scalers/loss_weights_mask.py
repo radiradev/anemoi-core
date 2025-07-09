@@ -38,7 +38,6 @@ class NaNMaskScaler(BaseUpdatingScaler):
         super().__init__(norm=norm)
         del kwargs
 
-
     def on_train_batch_start(self, model: AnemoiModelInterface) -> None:
         """Update loss scaling.
 
