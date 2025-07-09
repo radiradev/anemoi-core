@@ -402,10 +402,6 @@ def sample_provider_factory(context, **kwargs):
         return DictSampleProvider(context, **kwargs)
     if "tensor" in kwargs:
         return TensorSampleProvider(context, **kwargs)
-    if "GROUPS" in kwargs:
-        assert False, "GROUPS is deprecated, use dictionary instead"
-    if "STEPS" in kwargs:
-        assert False, "STEPS is deprecated, use tuple + timedelta instead"
     if "tuple" in kwargs:
         kwargs["tuple_"] = kwargs.pop("tuple")
         return ListSampleProvider(context, **kwargs)
