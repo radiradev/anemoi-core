@@ -32,6 +32,7 @@ from anemoi.training.losses.utils import print_variable_scaling
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.schemas.base_schema import convert_to_omegaconf
 from anemoi.training.utils.enums import TensorDim
+from anemoi.training.utils.variables_metadata import ExtractVariableGroupAndLevel
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -104,22 +105,26 @@ class GraphForecaster(pl.LightningModule):
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
+        metadata_extractor = ExtractVariableGroupAndLevel(
+            variable_groups=config.model_dump(by_alias=True).training.variable_groups,
+            metadata_variables=metadata["dataset"].get("variables_metadata"),
+        )
+
         # Instantiate all scalers with the training configuration
         self.scalers, self.updating_scalars = create_scalers(
             config.model_dump(by_alias=True).training.scalers,
-            group_config=config.model_dump(by_alias=True).training.variable_groups,
             data_indices=data_indices,
             graph_data=graph_data,
             statistics=statistics,
             statistics_tendencies=statistics_tendencies,
-            metadata_variables=metadata["dataset"].get("variables_metadata"),
+            metadata_extractor=metadata_extractor,
             output_mask=self.output_mask,
         )
 
         self.val_metric_ranges = get_metric_ranges(
             config,
             data_indices,
-            metadata["dataset"].get("variables_metadata"),
+            metadata_extractor=metadata_extractor,
         )
 
         self.loss = get_loss_function(
@@ -233,9 +238,16 @@ class GraphForecaster(pl.LightningModule):
     def update_scalers(self, callback: AvailableCallbacks) -> None:
         """Update delayed scalers such as the loss weights mask for imputed variables."""
         for name, scaler_builder in self.updating_scalars.items():
+            scaler = scaler_builder.update_scaling_values(callback, model=self.model)
+            if scaler is None:
+                continue
+
             if name in self.loss.scaler:
-                self.scalers[name] = scaler_builder.get_callback_scaling_values(callback, model=self.model)
-                self.loss.update_scaler(scaler=self.scalers[name][1], name=name)
+                self.loss.update_scaler(scaler=scaler[1], name=name)
+
+            for metric in self.metrics.values():
+                if name in metric.scaler:
+                    metric.update_scaler(scaler=scaler[1], name=name)
 
     def set_model_comm_group(
         self,
@@ -376,13 +388,7 @@ class GraphForecaster(pl.LightningModule):
             self.update_scalers(callback=AvailableCallbacks.ON_TRAINING_START)
             self.is_first_step = False
 
-        self.update_scalers(
-            callback=(
-                AvailableCallbacks.ON_TRAIN_BATCH_START
-                if not validation_mode
-                else AvailableCallbacks.ON_VALID_BATCH_START
-            ),
-        )
+        self.update_scalers(callback=AvailableCallbacks.ON_BATCH_START)
 
         # start rollout of preprocessed batch
         x = batch[
@@ -418,9 +424,7 @@ class GraphForecaster(pl.LightningModule):
             yield loss, metrics_next, y_pred
 
         self.update_scalers(
-            callback=(
-                AvailableCallbacks.ON_TRAIN_BATCH_END if not validation_mode else AvailableCallbacks.ON_VALID_BATCH_END
-            ),
+            callback=(AvailableCallbacks.ON_BATCH_START),
         )
 
     def on_after_batch_transfer(self, batch: torch.Tensor, _: int) -> torch.Tensor:
@@ -588,15 +592,11 @@ class GraphForecaster(pl.LightningModule):
         del metric
         scheduler.step(epoch=self.trainer.global_step)
 
-    def on_train_epoch_start(self) -> None:
-        self.update_scalers(callback=AvailableCallbacks.ON_TRAIN_EPOCH_START)
-
     def on_train_epoch_end(self) -> None:
         if self.rollout_epoch_increment > 0 and self.current_epoch % self.rollout_epoch_increment == 0:
             self.rollout += 1
             LOGGER.debug("Rollout window length: %d", self.rollout)
         self.rollout = min(self.rollout, self.rollout_max)
-        self.update_scalers(callback=AvailableCallbacks.ON_TRAIN_EPOCH_END)
 
     def validation_step(self, batch: torch.Tensor, batch_idx: int) -> None:
         """Calculate the loss over a validation batch using the training loss function.
