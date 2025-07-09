@@ -11,7 +11,7 @@ def test_sampleprovider(new_config: DictConfig):
     dhs_config = get_data_config_dict(new_config.data.data_handlers, "obs")
     sample_config = get_sample_config_dict(new_config.model.sample, "obs")
 
-    context = Context("training", data_config=dhs_config, start=2019, end=2020)
+    context = Context("training", sources=dhs_config, start=2019, end=2020)
 
     sample_provider = sample_provider_factory(context=context, **sample_config)
     sample_provider[0]
