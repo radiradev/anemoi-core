@@ -10,7 +10,8 @@ from torch.utils.data import IterableDataset
 from torch.utils.data import get_worker_info
 
 CONFIG_YAML = """
-data:
+sources:
+  training:
     # era5:
     #   dataset:
     #     dataset: aifs-ea-an-oper-0001-mars-o96-1979-2023-6h-v8
@@ -24,6 +25,8 @@ data:
         dataset: observations-testing-2018-2018-6h-v1-one-month
     amsr2_h180:
         dataset: observations-testing-2018-2018-6h-v1-one-month
+  validation:
+    todo:
 sample:
     dictionary:
         input:
@@ -31,18 +34,18 @@ sample:
                 ascat_metop_a:
                     tuple:
                       - timedelta: "-6h"
-                        variables: ["scatss_1", "scatss_2"]
-                        data: metop_a
+                        variables:
+                           metop_a: ["scatss_1", "scatss_2"]
                 snow:
                     tuple:
                       - timedelta: "0h"
-                        variables: ["sdepth_0"]
-                        data: snow
+                        variables:
+                           snow: ["sdepth_0"]
                 amsr2:
                     tuple:
                       - timedelta: "-6h"
-                        variables: ["rawbt_1", "rawbt_2", "rawbt_3", "rawbt_4"]
-                        data: amsr2_h180
+                        variables:
+                            amsr2_h180: ["rawbt_1", "rawbt_2", "rawbt_3", "rawbt_4"]
 """
 
 CONFIG = yaml.safe_load(CONFIG_YAML)
@@ -107,7 +110,7 @@ class DOPDataset(IterableDataset):
 
         training_context = {
             "name": "training",
-            "data_config": CONFIG["data"],
+            "sources": CONFIG["sources"]["training"],
             "start": "2018-11-02",
             "end": "2018-11-01",
         }

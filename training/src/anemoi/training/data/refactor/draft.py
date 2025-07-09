@@ -21,10 +21,17 @@ def resolve_reference(config):
 
 
 class Context:
-    def __init__(self, name="no-name", start=None, end=None, data_config=None):
+    def __init__(self, name="no-name", start=None, end=None, sources=None, data_config=None):
+        # remove this
+        if sources is None:
+            print("WARNING: 'data_config' is deprecated, use 'sources' instead.")
+            sources = data_config
+        del data_config
+        #
+
         self.selection = dict(start=start, end=end)
-        data_config = resolve_reference(data_config)
-        self.data_config = data_config
+        sources = resolve_reference(sources)
+        self.sources = sources
         self.name = name
 
         def processor_factory(config, name_to_index=None, statistics=None):
@@ -79,6 +86,9 @@ class SampleProvider:
         self._check_item(item)
         return self.get("num_channels", item)
 
+    def shape(self, item: int):
+        self._check_item(item)
+        return self.get("shape", item)
     @property
     def frequency(self):
         return frequency_to_timedelta("6h")
@@ -357,6 +367,8 @@ class Request(SampleProvider):
                 ]
             elif w == "num_channels":
                 data["num_channels"] = len(self.variables)
+            elif w == "shape":
+                data["shape"] = record[self.group].shape
             else:
                 raise ValueError(f"Unknown request '{w}' for Request sample provider")
         return data
@@ -369,12 +381,12 @@ class DataHandler:
         self.context = context
         self.group = group
         self.args = args
-        if self.group not in self.context.data_config:
+        if self.group not in self.context.sources:
             raise ValueError(
-                f"Group '{self.group}' not found in data_config: available groups are {list(self.context.data_config.keys())}"
+                f"Group '{self.group}' not found in sources: available groups are {list(self.context.sources.keys())}"
             )
-        self.dataset = self.context.data_config[self.group]["dataset"]
-        self.preprocessors = self.context.data_config[self.group].get("processors", {})
+        self.dataset = self.context.sources[self.group]["dataset"]
+        self.preprocessors = self.context.sources[self.group].get("processors", {})
 
         variables = [f"{group}.{v}" for v in variables]
         self.variables = variables
@@ -406,10 +418,12 @@ class DataHandler:
 def sample_provider_factory(context, **kwargs):
     kwargs = kwargs.copy()
     kwargs = resolve_reference(kwargs)
+
     if isinstance(context, dict):
         context = Context(**context)
     if context is None:
         context = Context()
+
     if "loops" in kwargs:
         kwargs.pop("loops")
     if "references" in kwargs:
@@ -493,7 +507,7 @@ sample:
             return f"np.array({structure.shape})"
         if isinstance(structure, (list, tuple)):
             if structure and all(isinstance(item, int) for item in structure):
-                return "*" + "/".join(map(str, structure))
+                return "[" + ", ".join(map(str, structure)) + "]"
             return [shorten_numpy(item) for item in structure]
         if isinstance(structure, dict):
             return {k: shorten_numpy(v) for k, v in structure.items()}
@@ -510,7 +524,7 @@ sample:
     sample_config = CONFIG["sample"]
     training_context = Context(
         "training",
-        data_config=CONFIG["sources"]["training"],
+        sources=CONFIG["sources"]["training"],
         **CONFIG["training_selection"],
     )
     s = sample_provider_factory(context=training_context, **sample_config)
@@ -525,6 +539,8 @@ sample:
     print(show_json(s.longitudes(3)))
     print("Processors:")
     print(show_json(s.processors(3)))
+    print("Shapes:")
+    print(show_json(s.shape(3)))
 
     # for x in [s, s.input, s.input.fields, s.input.metop, s.input.snow]:
     #    print()
