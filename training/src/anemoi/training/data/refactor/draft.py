@@ -11,8 +11,10 @@ from anemoi.datasets import open_dataset
 from anemoi.utils.dates import frequency_to_string
 from anemoi.utils.dates import frequency_to_timedelta
 
+
 def resolve_reference(config):
     from omegaconf import OmegaConf
+
     config = OmegaConf.create(config)
     config = OmegaConf.to_container(config, resolve=True)
     return config
@@ -24,7 +26,6 @@ class Context:
         data_config = resolve_reference(data_config)
         self.data_config = data_config
         self.name = name
-
 
         def processor_factory(config, name_to_index=None, statistics=None):
             return instantiate(
@@ -77,7 +78,7 @@ class SampleProvider:
     def num_channels(self, item: int):
         self._check_item(item)
         return self.get("num_channels", item)
-    
+
     @property
     def frequency(self):
         return frequency_to_timedelta("6h")
@@ -251,7 +252,7 @@ class GenericListSampleProvider(SampleProvider):
 
     def get(self, what, item: int):
         ts = tuple(v.get(what, item) for v in self._samples)
-        if what in ["num_channels", "processors"]: # don't stack over variable dim
+        if what in ["num_channels", "processors"]:  # don't stack over variable dim
             return ts[0]
 
         return ts
@@ -369,7 +370,9 @@ class DataHandler:
         self.group = group
         self.args = args
         if self.group not in self.context.data_config:
-            raise ValueError(f"Group '{self.group}' not found in data_config: available groups are {list(self.context.data_config.keys())}")
+            raise ValueError(
+                f"Group '{self.group}' not found in data_config: available groups are {list(self.context.data_config.keys())}"
+            )
         self.dataset = self.context.data_config[self.group]["dataset"]
         self.preprocessors = self.context.data_config[self.group].get("processors", {})
 
