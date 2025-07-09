@@ -360,6 +360,8 @@ class DataHandler:
         self.context = context
         self.group = group
         self.args = args
+        if self.group not in self.context.data_config:
+            raise ValueError(f"Group '{self.group}' not found in data_config: available groups are {list(self.context.data_config.keys())}")
         self.dataset = self.context.data_config[self.group]["dataset"]
         self.preprocessors = self.context.data_config[self.group].get("processors", {})
 
