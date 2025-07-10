@@ -10,7 +10,6 @@
 
 from typing import Any
 
-import numpy as np
 import pytest
 import torch
 from _pytest.fixtures import SubRequest
@@ -24,6 +23,7 @@ from anemoi.training.losses.scalers import create_scalers
 from anemoi.training.losses.scalers.base_scaler import BaseUpdatingScaler
 from anemoi.training.utils.enums import TensorDim
 from anemoi.training.utils.masks import NoOutputMask
+from anemoi.training.utils.variables_metadata import ExtractVariableGroupAndLevel
 
 
 @pytest.fixture
@@ -218,13 +218,17 @@ def test_variable_loss_scaling_vals(
 ) -> None:
     config, data_indices, statistics, statistics_tendencies = fake_data
 
+    metadata_extractor = ExtractVariableGroupAndLevel(
+        config.training.variable_groups,
+    )
+
     scalers, _ = create_scalers(
         config.training.scalers.builders,
-        group_config=config.training.variable_groups,
         data_indices=data_indices,
         graph_data=graph_with_nodes,
         statistics=statistics,
         statistics_tendencies=statistics_tendencies,
+        metadata_extractor=metadata_extractor,
         output_mask=NoOutputMask(),
     )
 
@@ -239,7 +243,8 @@ def test_variable_loss_scaling_vals(
 def test_metric_range(fake_data: tuple[DictConfig, IndexCollection]) -> None:
     config, data_indices, _, _ = fake_data
 
-    metric_range = get_metric_ranges(config, data_indices)
+    metadata_extractor = ExtractVariableGroupAndLevel(config.training.variable_groups)
+    metric_range = get_metric_ranges(config, data_indices, metadata_extractor=metadata_extractor)
 
     del metric_range["all"]
 
@@ -267,11 +272,15 @@ def mock_updating_scalar() -> type[BaseUpdatingScaler]:
 
         scale_dims = (TensorDim.VARIABLE,)
 
-        def on_training_start(self, model: Any) -> np.ndarray:  # noqa: ARG002
-            return np.array([2.0])
+        def initial_scaling_values(self) -> torch.Tensor:
+            """Return initial scaling values."""
+            return torch.Tensor([1.0])
 
-        def on_train_epoch_end(self, model: Any) -> np.ndarray:  # noqa: ARG002
-            return np.array([3.0])
+        def on_training_start(self, model: Any) -> torch.Tensor:  # noqa: ARG002
+            return torch.Tensor([2.0])
+
+        def on_batch_start(self, model: Any) -> torch.Tensor:  # noqa: ARG002
+            return torch.Tensor([3.0])
 
     return UpdatingScalar
 
@@ -284,12 +293,16 @@ def test_updating_scalars(mock_updating_scalar: type[BaseUpdatingScaler]) -> Non
     assert isinstance(scalar.initial_scaling_values(), torch.Tensor)
 
     assert scalar.get_scaling() is not None
-    assert scalar.get_scaling()[1][0] == 1.0, "Scalar values should be from the initial scaling values."
+    assert scalar.get_scaling()[1] == torch.Tensor([1.0]), "Scalar values should be from the initial scaling values."
 
-    assert scalar.on_training_start(None) == torch.tensor([2.0])
-    scalar.get_callback_scaling_values(callback="on_training_start", model=None)
-    assert scalar.get_scaling()[1][0] == 2.0, "Scalar values should be updated after on_training_start."
+    assert scalar.on_training_start(None) == torch.Tensor([2.0])
+    updated_scaling = scalar.update_scaling_values(callback="on_training_start", model=None)
+    assert updated_scaling is not None and updated_scaling[1] == torch.Tensor(
+        [2.0],
+    ), "Scalar values should be updated after on_training_start."
 
-    assert scalar.on_train_epoch_end(None) == torch.tensor([3.0])
-    scalar.get_callback_scaling_values(callback="on_train_epoch_end", model=None)
-    assert scalar.get_scaling()[1][0] == 3.0, "Scalar values should be updated after on_train_epoch_end."
+    assert scalar.on_batch_start(None) == torch.Tensor([3.0])
+    updated_scaling = scalar.update_scaling_values(callback="on_batch_start", model=None)
+    assert updated_scaling is not None and updated_scaling[1] == torch.Tensor(
+        [3.0],
+    ), "Scalar values should be updated after on_batch_start."

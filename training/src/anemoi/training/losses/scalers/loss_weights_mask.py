@@ -16,7 +16,6 @@ from anemoi.training.losses.scalers.base_scaler import BaseUpdatingScaler
 from anemoi.training.utils.enums import TensorDim
 
 if TYPE_CHECKING:
-    import torch
 
     from anemoi.models.interface import AnemoiModelInterface
 
@@ -27,7 +26,18 @@ class NaNMaskScaler(BaseUpdatingScaler):
 
     scale_dims: tuple[TensorDim] = (TensorDim.BATCH_SIZE, TensorDim.GRID, TensorDim.VARIABLE)
 
-    def on_train_batch_start(self, model: AnemoiModelInterface) -> torch.tensor | None:
+    def __init__(self, norm: str | None = None, **kwargs) -> None:
+        """Initialise NanMaskScaler.
+
+        Parameters
+        ----------
+        norm : str, optional
+            Type of normalisation to apply. Options are None, unit-sum, unit-mean and l1.
+        """
+        super().__init__(norm=norm)
+        del kwargs
+
+    def on_train_batch_start(self, model: AnemoiModelInterface) -> None:
         """Update loss scaling.
 
         Get  mask multiplying NaN locations with zero.
