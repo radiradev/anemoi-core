@@ -1028,12 +1028,6 @@ class BasePlotAdditionalMetrics(BasePerBatchPlotCallback):
         outputs: list,
         batch: torch.Tensor,
     ) -> tuple[np.ndarray, np.ndarray]:
-        # When running in Async mode, it might happen that in the last epoch these tensors
-        # have been moved to the cpu (and then the denormalising would fail as the 'input_tensor' would be on CUDA
-        # but internal ones would be on the cpu), The lines below allow to address this problem
-        if self.post_processors is None:
-            # Copy to be used across all the training cycle
-            self.post_processors = copy.deepcopy(pl_module.model.post_processors).cpu()
         if self.latlons is None:
             self.latlons = np.rad2deg(pl_module.latlons_data.clone().cpu().numpy())
 
