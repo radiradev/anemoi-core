@@ -1,6 +1,12 @@
+from functools import cached_property
 import json
+import math
 import warnings
+import logging
+import datetime
 
+from rich import print
+import itertools
 import numpy as np
 import yaml
 from hydra.utils import instantiate
@@ -20,19 +26,70 @@ def resolve_reference(config):
     return config
 
 
+def seconds(td):
+    return round(td.total_seconds())
+
+
 class Context:
-    def __init__(self, name="no-name", start=None, end=None, sources=None, data_config=None):
+    def __init__(
+        self,
+        start=None,
+        end=None,
+        frequency=None,
+        sources=None,
+        data_config=None,
+        offset=None,
+        request=None,
+        _list_of_leaves=None,
+        _parent=None,
+    ):
         # remove this
-        if sources is None:
+        if sources is None and data_config is not None:
             print("WARNING: 'data_config' is deprecated, use 'sources' instead.")
             sources = data_config
         del data_config
         #
+        self._parent = _parent
 
-        self.selection = dict(start=start, end=end)
+        if offset is None:
+            offset = "0h"
+        if isinstance(offset, str):
+            offset = frequency_to_timedelta(offset)
+        if _parent is not None:
+            offset = _parent.offset + offset
+        self.offset = offset
+
+        if _parent is not None:
+            # todo : refactor this nonsensical list of forwarding to _parent
+            if not isinstance(_parent, Context):
+                raise TypeError(f"Expected Context as parent, got {type(_parent)}: {_parent}")
+            if start is None:
+                start = _parent.start
+            if end is None:
+                end = _parent.end
+            if frequency is None:
+                frequency = _parent.frequency
+            if sources is None:
+                sources = _parent.sources
+            if _list_of_leaves is None:
+                _list_of_leaves = _parent._list_of_leaves
+            if request is None:
+                request = _parent.request
+
+        self.start = start
+        self.end = end
+        self.frequency = frequency_to_timedelta(frequency)
+
+        if not isinstance(request, (type(None), list, str)):
+            raise ValueError(f"Expected list or string for request, got {type(self.request)}: {self.request}.")
+        self.request = request
+
+        if _list_of_leaves is None:
+            _list_of_leaves = []
+        self._list_of_leaves = _list_of_leaves
+
         sources = resolve_reference(sources)
         self.sources = sources
-        self.name = name
 
         def processor_factory(config, name_to_index=None, statistics=None):
             return instantiate(
@@ -43,20 +100,103 @@ class Context:
 
         self.processor_factory = processor_factory
 
+        assert isinstance(
+            self.offset, datetime.timedelta
+        ), f"Expected timedelta for offset, got {type(self.offset)}: {self.offset}"
+        assert isinstance(
+            self.request, (type(None), list, str)
+        ), f"Expected list or string or None for request, got {type(self.request)}: {self.request}"
+
+    def register_as_leaf(self, obj):
+        # we should maybe use a set instead of a list, here?
+        assert obj not in self._list_of_leaves, f"Object {obj} is already registered in {self._list_of_leaves}"
+        self._list_of_leaves.append(obj)
+
     def __repr__(self):
-        return f"Context(selection={self.selection})"
+        return f"Context(start={self.start}, end={self.end}, offset={self.offset})"
+
+
+class VariablesList:
+    def __init__(self, variables: list[str] | dict, data=None):
+        if data is not None:
+            warnings.warn(
+                "Using 'data' argument is deprecated, use variables with '.' instead",
+                DeprecationWarning,
+            )
+            if not isinstance(variables, (list, tuple)):
+                raise ValueError(
+                    f"Expected list or tuple for variables, got {type(variables)}: {variables}, data={data}"
+                )
+            self.lst = [f"{data}.{v}" for v in variables]
+            return
+
+        assert data is None, data
+
+        if isinstance(variables, dict):
+            self.lst = []
+            for group, vars_ in variables.items():
+                if isinstance(vars_, str):
+                    vars_ = [vars_]
+                if not isinstance(vars_, (list, tuple)):
+                    raise ValueError(f"Expected list or tuple for variables, got {type(vars_)}: {vars_}")
+                for v in vars_:
+                    if not isinstance(v, str):
+                        raise ValueError(f"Expected string for variable, got {type(v)}: {v}")
+                    if "." in v:
+                        raise ValueError(
+                            f"Variable '{v}' should not contain a group name ('.' expected) in {variables})"
+                        )
+                self.lst += [f"{group}.{v}" for v in vars_]
+            return
+
+        if not isinstance(variables, (list, tuple)):
+            raise ValueError(f"Expected list or tuple for variables, got {type(variables)}: {variables}")
+
+        for v in variables:
+            if not isinstance(v, str):
+                raise ValueError(f"Expected string for variable, got {type(v)}: {v} in {variables}")
+            if "." not in v:
+                raise ValueError(f"Variable '{v}' does not contain a group name ('.' expected) in {variables})")
+        self.lst = variables
+
+    @property
+    def as_list(self):
+        return self.lst
+
+    @cached_property
+    def as_dict(self):
+        dic = {}
+        for v in self.lst:
+            group, var = v.split(".", 1)
+            if group not in dic:
+                dic[group] = []
+            dic[group].append(var)
+        return dic
+
+    def __repr__(self):
+        return f"({', '.join(self.lst)})"
 
 
 class SampleProvider:
-    def __init__(self, context: Context):
-        self.context = context
 
-    def __getitem__(self, item: int):
-        self._check_item(item)
-        return self.get("__getitem__", item)
+    @property
+    def is_root(self):
+        return self._parent is None
+
+    def __init__(self, _context: Context, _parent):
+        self._context = _context
+        self._parent = _parent
+
+    def invite(self, visitor):
+        visitor.visit(self)
+
+    def mutate(self):
+        return self
 
     def __len__(self):
-        return len(self.range)
+        raise NotImplementedError(
+            f"Length is not implemented for {self.__class__.__name__}. Please implement __len__ method."
+        )
 
     def latitudes(self, item: int):
         self._check_item(item)
@@ -89,6 +229,7 @@ class SampleProvider:
     def shape(self, item: int):
         self._check_item(item)
         return self.get("shape", item)
+
     @property
     def frequency(self):
         return frequency_to_timedelta("6h")
@@ -100,48 +241,74 @@ class SampleProvider:
             console.print(tree)
         return capture.get()
 
-    def _build_tree(self, label: str = None):
-        raise NotImplementedError("Subclasses must implement _build_tree method")
+    def _build_tree(self, label: str = None, **kwargs):
+        raise NotImplementedError("Subclasses must implement _build_tree method in " + self.__class__.__name__)
 
     def _check_item(self, item: int):
         if not isinstance(item, (int, np.integer)):
             raise TypeError(f"Not implemented for non-integer indexing {type(item)}")
 
     def shuffle(self, *args, **kwargs):
-        return ShuffledSampleProvider(self, *args, **kwargs)
+        # todo: remove doulg self, self
+        return ShuffledSampleProvider(self._context, self, self, *args, **kwargs)
 
 
-class ShuffledSampleProvider(SampleProvider):
-    def __init__(self, sample: SampleProvider, seed: int = None):
-        super().__init__(sample.context)
-        self.sample = sample
+class OffsetsGetter:
+    def __init__(self):
+        self.offsets = []
+
+    def visit(self, sample_provider: SampleProvider):
+        print("💬💬", "visiting", sample_provider.__class__.__name__)
+        if isinstance(sample_provider, DataHandler):
+            print("-> found ", sample_provider.offset)
+            self.offsets.append(sample_provider.offset)
+
+
+class ForwardSampleProvider(SampleProvider):
+    def __init__(self, _context, _parent, sample: SampleProvider):
+        super().__init__(_context, _parent)
+        self._forward = sample
+
+    def __len__(self):
+        return len(self._forward)
+
+
+class ShuffledSampleProvider(ForwardSampleProvider):
+    label = "Shuffled"
+    emoji = "🎲"
+
+    def __init__(self, _context, _parent, sample: SampleProvider, seed: int = None):
+        super().__init__(_context, _parent, sample=sample)
         self.seed = seed
-        length = len(self.sample)
+        length = len(self._forward)
         self.idx = np.arange(length)
         if seed is not None:
             np.random.seed(seed)
         self.idx = np.random.permutation(self.idx)
 
-    def get(self, what, item: int):
+    def __getitem__(self, item: int):
         print(f"Shuffling : requested {item}, provided {self.idx[item]}")
-        return self.sample.get(what, self.idx[item])
+        return self._forward.__getitem__(self.idx[item])
 
-    def _build_tree(self, label="Shuffled", prefix=""):
-        tree = Tree(prefix + label + f" (seed={self.seed})")
-        subtree = self.sample._build_tree(label="SampleProvider")
+    def _build_tree(self, prefix=""):
+        tree = Tree(prefix + self.emoji + self.label + f" (seed={self.seed})")
+        subtree = self._forward._build_tree()
         tree.add(subtree)
         return tree
 
-    @property
-    def range(self):
-        return Range(0, len(self.sample))
-
 
 class DictSampleProvider(SampleProvider):
-    def __init__(self, context: Context, dictionary: dict, with_attributes: bool = False):
-        super().__init__(context)
+    label = "dict"
+    emoji = "📖"
+
+    def __init__(self, _context: Context, _parent, dictionary: dict, with_attributes: bool = False):
+        super().__init__(_context, _parent)
         self.with_attributes = with_attributes
 
+        if not isinstance(dictionary, dict):
+            raise TypeError(f"Expected dictionary, got {type(dictionary)}: {dictionary}")
+        if len(dictionary) == 0:
+            raise ValueError("Dictionary is empty, cannot create sample provider.")
         for k in dictionary:
             if not isinstance(k, str):
                 raise ValueError(f"Keys in dictionary must be strings, got {type(k)}, {k}")
@@ -154,292 +321,702 @@ class DictSampleProvider(SampleProvider):
 
         dictionary = {normalise_key(k): v for k, v in dictionary.items()}
 
-        self._samples = {k: sample_provider_factory(self.context, **v) for k, v in dictionary.items()}
+        for k, v in dictionary.items():
+            if not isinstance(v, dict):
+                raise ValueError(f"Expected dictionary for sample provider, got {type(v)}: {v}. ")
+        self._samples = {k: sample_provider_factory(self._context, **v) for k, v in dictionary.items()}
 
     def __getattr__(self, key):
         if key in self._samples:
             return self._samples[key]
         raise AttributeError(f"{type(self).__name__} has no attribute '{key}'")
 
-    def get(self, what, item):
+    def __getitem__(self, item):
         if item == 0:
             item = item + 1  # ✅✅ TODO provide the correct lenght
-        return {k: v.get(what, item) for k, v in self._samples.items()}
+        return {k: v.__getitem__(item) for k, v in self._samples.items()}
 
-    @property
-    def range(self):
-        start = max(s.range.start for s in self._samples.values())
-        end = min(s.range.end for s in self._samples.values())
-        return Range(start, end)
-
-    def _build_tree(self, label="dict", prefix=""):
-        tree = Tree(prefix + label)
+    def _build_tree(self, prefix=""):
+        tree = Tree(prefix + self.label)
         for k, v in self._samples.items():
             subtree = v._build_tree(prefix=f'"{k}" : ')
             tree.add(subtree)
         return tree
 
-
-class Range:
-    def __init__(self, start, end, step: int = 1):
-        # start and end are included
-        self.start = start
-        self.end = end
-        self.step = step
-
     def __len__(self):
-        return self.end - self.start
+        lengths = [len(s) for s in self._samples.values()]
+        assert lengths, "No samples in dictionary, cannot determine length."
+        assert (
+            len(set(lengths)) == 1
+        ), f"Samples in dictionary have different lengths: {lengths}. Cannot determine length."
+        return lengths[0]
 
-    def __repr__(self):
-        return f"Range({self.start}, {self.end})"
 
+class _FilterSampleProvider(SampleProvider):
+    emoji = "filter-emoji"
+    label = "_Filter"
 
-class TimeDeltaShiftedSampleProvider(SampleProvider):
-    def __init__(self, context: Context, timedelta: str, **kwargs):
-        super().__init__(context)
-        self.timedelta = frequency_to_timedelta(timedelta)
-        self._sample = sample_provider_factory(context, **kwargs)
+    keyword = None
 
-    def compute_new_item(self, item: int, what=None):
-        if item is None:
-            return None
-        return item + self.shift_item
+    def __init__(self, _context: Context, _parent, **kwargs):
+        super().__init__(_context, _parent)
+        kwargs = kwargs.copy()
 
-    @property
-    def range(self):
-        start = max(self._sample.range.start + self.shift_item, 0)
-        end = min(self._sample.range.end + self.shift_item, len(self._sample))
-        return Range(start, end)
+        assert self.keyword in kwargs, f"Keyword '{self.keyword}' not found in {kwargs}"
+        self.values = kwargs.pop(self.keyword)
 
-    @property
-    def shift_item(self):
-        # assert something here ?
-        shift = self.timedelta // self._sample.frequency
-        assert isinstance(shift, int), f"Shift must be an integer, got {shift} ({type(shift)})"
-        return shift
+        new_context = Context(**{"_parent": _context, self.keyword: self.values})
+        self._forward = sample_provider_factory(new_context, **kwargs)
 
-    def get(self, what, item: int):
-        new_item = self.compute_new_item(item, what)
-        return self._sample.get(what, new_item)
+        # shift = self._offset_as_timedelta // self._forward.frequency
+
+    def invite(self, visitor):
+        super().invite(visitor)
+        self._forward.invite(visitor)
+
+    def __getitem__(self, item: int):
+        return self._forward.__getitem__(item)
 
     def _build_tree(self, prefix: str = ""):
-        txt = frequency_to_string(self.timedelta)
-        if self.timedelta <= np.timedelta64(0, "s"):
-            txt = f"[green]{txt}[/green]"
-        else:
-            txt = f"[red]{txt}[/red]"
+        tree = self._forward._build_tree()
+        tree.label = tree.label + f" ({self.emoji} {self.values})"
+        return tree
 
-        tree = Tree(f"{prefix} ⏱️  {txt}")
-        subtree = self._sample._build_tree()
-        tree.add(subtree)
+    def __len__(self):
+        return len(self._forward)
+
+
+class OffsetSampleProvider(_FilterSampleProvider):
+    emoji = "⏱️"
+    label = "Offset"
+    keyword = "offset"
+
+
+class RequestSampleProvider(_FilterSampleProvider):
+    emoji = "🙏"
+    label = "Request"
+    keyword = "request"
+
+
+class Dimension:
+    def __init__(self, **raw):
+        self.raw = raw
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({', '.join(f'{k}={v}' for k, v in self.raw.items())})"
+
+
+class IterableDimension(Dimension):
+    name = None
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        key = list(kwargs.keys())[0]
+        assert key == self.name
+        self.values = kwargs[key]
+        if not isinstance(self.values, (list, tuple)):
+            raise ValueError(f"Not implemented for non-list values in {self.name}: {self.values}")
+
+    def __repr__(self):
+        return f"{self.name}({', '.join(map(str, self.values))})"
+
+
+class OffsetDimension(IterableDimension):
+    name = "offset"
+
+
+class VariablesDimension(IterableDimension):
+    name = "variables"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if isinstance(self.values, dict):
+            self.values = [f"{k}.{v}" for k, vals in self.values.items() for v in vals]
+
+
+class RepeatDimension(IterableDimension):
+    name = "repeat"
+
+
+class DataDimension(Dimension):
+    name = "data"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if "name" in kwargs:
+            self.name = kwargs["name"]
+
+
+class SelectionDimension(Dimension):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        key = list(kwargs.keys())[0]
+        assert key == self.name
+        self.values = kwargs[key]
+
+
+class EnsembleDimension(SelectionDimension):
+    name = "ensembles"
+
+
+class ValuesDimension(SelectionDimension):
+    name = "values"
+
+
+def dimension_factory(raw_dim):
+    if isinstance(raw_dim, Dimension):
+        return raw_dim
+    assert isinstance(raw_dim, dict), f"Expected dict, got {type(raw_dim)}: {raw_dim}"
+    if "variables" in raw_dim:
+        return VariablesDimension(**raw_dim)
+    elif "offset" in raw_dim:
+        return OffsetDimension(**raw_dim)
+    elif "ensembles" in raw_dim:
+        warnings.warn("Ensemble dimensions are not implemented yet, ignoring the config")
+        return EnsembleDimension(**raw_dim)
+    elif "values" in raw_dim:
+        warnings.warn("Values dimensions are not implemented yet, ignoring the config")
+        return ValuesDimension(**raw_dim)
+    elif "repeat" in raw_dim:
+        warnings.warn("repeat should only be used for testing.")
+        return RepeatDimension(**raw_dim)
+    else:
+        return DataDimension(**raw_dim)
+
+
+class TupleSampleProvider(SampleProvider):
+    emoji = "🔗"
+    label = "tuple"
+
+    def __init__(self, _context: Context, _parent, tuple_: dict):
+        super().__init__(_context, _parent)
+
+        tuple_ = tuple_.copy()
+        loops = tuple_.pop("loop")
+        template = tuple_.pop("template")
+        if tuple_:
+            raise ValueError(f"Unexpected keys in tuple: {tuple_}")
+
+        self.iterables = [dimension_factory(i) for i in loops]
+
+        for i in self.iterables:
+            if not isinstance(i, IterableDimension):
+                raise ValueError(f"Expected iterable dimension in all loop dimensions, got {type(i)} for {i}")
+
+        self.template = template
+
+    def __len__(self):
+        assert False, f"This object must have mutated before using it. {self.iterables}, {self.template}"
+
+    def invite(self, visitor):
+        super().invite(visitor)
+        for s in self._samples:
+            s.invite(visitor)
+
+    def mutate(self):
+        if not self.iterables:
+            return sample_provider_factory(self._context, **self.template)
+
+        if len(self.iterables) == 1:
+            iterable = self.iterables[0]
+            self._samples = []
+            for v in iterable.values:
+                config = {iterable.name: v, "sample": self.template}
+                print(f"Creating sample provider for {iterable.name} = {v} with config {config}")
+                sample = sample_provider_factory(self._context, _parent=self._parent, **config)
+                self._samples.append(sample)
+            self._samples = tuple(self._samples)
+
+            return self
+
+        assert len(self.iterables) > 1
+        *others, iterable = self.iterables
+        new_config = {
+            "tuple": {
+                "loop": others,
+                "template": {
+                    "tuple": {
+                        "loop": [iterable],
+                        "template": self.template,
+                    }
+                },
+            }
+        }
+        return sample_provider_factory(self._context, _parent=self._parent, **new_config)
+
+    def __getitem__(self, item: int):
+        def recurse(x):
+            if isinstance(x, SampleProvider):
+                return x.__getitem__(item)
+            if isinstance(x, tuple):
+                return tuple(recurse(elt) for elt in x)
+            assert False, f"Unknown type {type(x)} : {x}"
+
+        return recurse(self._samples)
+
+    def _build_tree(self, prefix=""):
+        tree = Tree(prefix + self.emoji + self.label + f" ({len(self._samples)} samples)")
+        for s in self._samples:
+            tree.add(s._build_tree())
         return tree
 
 
-class GenericListSampleProvider(SampleProvider):
-    def __init__(self, context: Context, tuple_: dict | list, timedeltas=None):
-        super().__init__(context)
-        if isinstance(tuple_, dict):
-            if "timedeltas" in tuple_:
-                if timedeltas is not None:
-                    raise ValueError(f"Duplicate value for timedeltas : {timedelta} vs {tuple_['timedelta']} ")
-                timedeltas = tuple_.pop("timedeltas")
+class TensorSampleProvider(SampleProvider):
+    emoji = "🔢"
+    label = "tensor"
 
-            new_tuple_ = []
-            for timedelta in timedeltas:
-                elt = tuple_.copy()
-                if "timedelta" in elt:
-                    raise ValueError("Duplicate value for timedelta and timedeltas")
-                elt["timedelta"] = timedelta
-                new_tuple_.append(elt)
-            tuple_ = new_tuple_
-        self._samples = tuple(sample_provider_factory(context, **v) for v in tuple_)
+    _tuple_sample_provider = None
 
-    @property
-    def range(self):
-        start = max(s.range.start for s in self._samples)
-        end = min(s.range.end for s in self._samples)
-        return Range(start, end)
+    def __init__(self, _context: Context, _parent, tensor: dict):
+        dims = tensor
+        super().__init__(_context, _parent)
 
-    def get(self, what, item: int):
-        ts = tuple(v.get(what, item) for v in self._samples)
-        if what in ["num_channels", "processors"]:  # don't stack over variable dim
-            return ts[0]
+        self.dimensions = [dimension_factory(dim) for dim in dims]
+        if len(dims) != len(list(set([dim.name for dim in self.dimensions]))):
+            raise ValueError(f"Duplicate dimension names in tuple {dims}")
 
-        return ts
+        self.order = [dim.name for dim in self.dimensions]  # keep the dim order to reshape
 
-    def _build_tree(self, label="GenericTuple", prefix=""):
-        tree = Tree(prefix + label)
-        for v in self._samples:
-            subtree = v._build_tree()
-            tree.add(subtree)
-        return tree
+        template = [d for d in self.dimensions if isinstance(d, DataDimension)]
+        if len(template) > 1:
+            raise ValueError(f"Expected a single data dimension, got {template}")
+        if len(template) == 0:
+            template = [d for d in self.dimensions if isinstance(d, VariablesDimension)]
+        if len(template) == 0:
+            raise ValueError(f"Expected a data or variables dimension, got {self.dimensions}, nothing to point to data")
+        self.template = template[0]
 
+        self.loops = [d for d in self.dimensions if isinstance(d, IterableDimension) and d != self.template]
 
-class ListSampleProvider(GenericListSampleProvider):
-    def _build_tree(self, label="tuple", prefix=""):
-        tree = Tree(prefix + "🔗 " + label)
-        for v in self._samples:
-            subtree = v._build_tree()
-            tree.add(subtree)
-        return tree
+        config = {
+            "tuple": {
+                "loop": self.loops,
+                "template": self.template.raw,
+            }
+        }
+        self._tuple_sample_provider = sample_provider_factory(_context, _parent=self, **config)
 
+    def __len__(self):
+        return len(self._tuple_sample_provider)
 
-class TensorSampleProvider(GenericListSampleProvider):
-    def __init__(self, context: Context, tensor: dict, **kwargs):
-        super().__init__(context, tuple_=tensor, **kwargs)
+    def invite(self, visitor):
+        super().invite(visitor)
+        self._tuple_sample_provider.invite(visitor)
 
-    def get(self, what: str, item: int):
-        lst = super().get(what, item)
-        if what in ["num_channels", "processors"]:
-            return lst
+    def __getitem__(self, item: int):
+        data = self._tuple_sample_provider.__getitem__(item)
+        if isinstance(data, dict):
+            return {k: self.transpose(np.array(v)) for k, v in data.items()}
+        return self.transpose(np.array(data))
 
-        assert isinstance(lst, (list, tuple)), f"Expected list or tuple, got {type(lst)}"
-        return np.stack(tuple(lst))
+    def transpose(self, array):
+        # Transpose the array to match the order of requested dimensions
+        # TODO : clean up this logic, maybe use ... from einops
 
-    def _build_tree(self, label="Tensor", prefix=""):
-        tree = Tree(prefix + "🔢 " + label)
-        for v in self._samples:
-            subtree = v._build_tree()
-            tree.add(subtree)
-        return tree
+        dimensions = self.dimensions
+        order = self.order.copy()
 
+        if len(dimensions) < array.ndim:
+            # if there are less dimensions than the array has, we need to add empty dimensions
+            missing_dims = array.ndim - len(dimensions)
+            dimensions = dimensions + [DataDimension(name=f"dim_{i}") for i in range(missing_dims)]
+            order += [f"dim_{i}" for i in range(missing_dims)]
 
-class Request(SampleProvider):
-    def __init__(self, context: Context, variables: dict | list[str], data: str = None):
-        super().__init__(context)
-        if isinstance(variables, dict):
-            if len(variables) > 1:
-                raise ValueError("Not implemented")
-            data = list(variables.keys())[0]
-            variables = variables[data]
-        self.variables = variables
-        self.group = data
+        assert len(dimensions) == array.ndim, f"Expected {len(self.dimensions)} dimensions, got {array.ndim} for {data}"
+        assert len(order) == len(dimensions), f"Expected {len(self.dimensions)} order, got {len(order)} for {data}"
 
-    def _build_tree(self, label: str = "Request", prefix: str = ""):
-        return Tree(f"{prefix}✉️  {label}({self.group}:{'/'.join(self.variables)})")
+        current_order = [
+            dim.name for dim in dimensions if isinstance(dim, IterableDimension) and not dim == self.template
+        ] + [self.template.name]
+        if len(current_order) != len(order):
+            missing_dims = len(order) - len(current_order)
+            current_order += [f"dim_{i}" for i in range(missing_dims)]
 
-    def get(self, what, item: int):
-        # this may be moved to the Mother class
-        if isinstance(what, str):
-            out = self._get(what, item)
-            assert len(out) == 1, f"Expected single item for {what}, got {len(out)}"
-            key = list(out.keys())[0]
-            return out[key]
-        return self._get(*what, item)
+        assert len(current_order) == len(order), f"Current order {current_order} does not match requested order {order}"
 
-    @property
-    def range(self):
-        dh = DataHandler(self.context, self.group, None, variables=self.variables)
-        return Range(0, len(dh))
+        import einops
 
-    def _get(self, *what_and_item):
-        *what, item = what_and_item
-        dh = DataHandler(self.context, self.group, item, variables=self.variables)
-        if item is not None:
-            record = dh.record
+        return einops.rearrange(array, " ".join(current_order) + " -> " + " ".join(order))
 
-        data = {}
-        for w in what:
-            if w == "__getitem__":
-                data["data"] = record[self.group]
-            elif w == "latitudes":
-                data["latitudes"] = record.latitudes[self.group]
-            elif w == "longitudes":
-                data["longitudes"] = record.longitudes[self.group]
-            elif w == "timedeltas":
-                second = np.timedelta64(1, "s")
-                data["timedeltas"] = record.timedeltas[self.group] // second
-            elif w == "name_to_index":
-                data["name_to_index"] = record.name_to_index[self.group]
-            elif w == "statistics":
-                data["statistics"] = record.statistics[self.group]
-            elif w == "processors":
-                data["processors"] = [
-                    [
-                        name,
-                        self.context.processor_factory(
-                            config,
-                            name_to_index=record.name_to_index[self.group],
-                            statistics=record.statistics[self.group],
-                        ),
-                    ]
-                    for name, config in dh.preprocessors.items()
-                ]
-            elif w == "num_channels":
-                data["num_channels"] = len(self.variables)
-            elif w == "shape":
-                data["shape"] = record[self.group].shape
+    def _build_tree(self, prefix=""):
+        tree = Tree(f"{prefix}{self.emoji} {self.label}")
+        for i, d in enumerate(self.dimensions):
+            if isinstance(d, IterableDimension):
+                tree.add(f" dim {i} : {d}")
+            elif isinstance(d, DataDimension):
+                tree.add(self._tuple_sample_provider._build_tree(prefix=f"dim {i} : {d}"))
             else:
-                raise ValueError(f"Unknown request '{w}' for Request sample provider")
-        return data
+                tree.add(f'? dim {i} "{d.name}" = {d.raw}')
+
+        if self._tuple_sample_provider is not None:
+            subtree = self._tuple_sample_provider._build_tree(prefix="(debug) ")
+            tree.add(subtree)
+        return tree
+
+
+class VariablesSampleProvider(SampleProvider):
+    emoji = "⛁"  #  🆎
+    # emoji = "🧩"
+    label = "Variables"
+
+    min_offset = None
+    max_offset = None
+    i_offset = None
+    dropped_samples = None
+
+    def __init__(self, _context: Context, _parent, variables: dict | list[str], data: str = None):
+        super().__init__(_context, _parent)
+        self.variables = VariablesList(variables, data=data)
+        if len(self.variables.as_dict) > 1:
+            raise ValueError(
+                f"Expected a single group of variables, got {list(self.variables.as_dict.keys())} in {variables}"
+            )
+
+        dic = self.variables.as_dict
+        self.group = list(dic.keys())[0]
+
+        self.request = _context.request
+
+        self.offset = frequency_to_timedelta(self._context.offset)
+        self._context.register_as_leaf(self)
+
+    def set_min_max_offsets(self, min_offset=None, max_offset=None, dropped_samples=None):
+        self.min_offset = min_offset
+        self.max_offset = max_offset
+        self.dropped_samples = dropped_samples
+        self.actual_offset = self.offset - self.min_offset
+
+        def _(x):
+            return frequency_to_string(x) if x else "0h"
+
+        if self.frequency != self._context.frequency:
+            print(f"Warning: Frequency mismatch: {_(self.frequency)} != {_(self._context.frequency)}. ")
+            print(self)
+            raise NotImplementedError(
+                f"Frequency mismatch: {_(self.frequency)} != {_(self._context.frequency)}. "
+                "For now, the frequency must match the context frequency."
+                "This will be implemented in the future if needed."
+            )
+
+        i_offset = seconds(self.actual_offset) / seconds(self.frequency)
+        if i_offset != int(i_offset):
+            print("❌", self)
+            msg = (
+                f"Offset {_(self.offset)} or {_(self.min_offset)} is not a multiple of frequency {_(self.frequency)}, for {self}. "
+                f"i_offset = {i_offset} is not an integer."
+            )
+            raise ValueError(msg)
+        self.i_offset = int(i_offset)
+
+    def __len__(self):
+        if self.dropped_samples is None:
+            return None
+        return len(self.data_handler) - self.dropped_samples
+
+    @cached_property
+    def data_handler(self):
+        simple_names = self.variables.as_dict[self.group]
+        return DataHandler(self.group, variables=simple_names, sources=self._context.sources)
+
+    def __getitem__(self, item):
+        actual_item = item + self.i_offset
+
+        if actual_item < 0 or actual_item >= len(self.data_handler):
+            print("❌", self)
+            msg = f"Item {item} ({actual_item}) is out of bounds with i_offset {self.i_offset}, lenght of the dataset is {len(self.data_handler)} and dropped_samples is {self.dropped_samples}."
+            raise IndexError(msg)
+
+        return self.data_handler.get(actual_item, request=self.request)
+
+    def _build_tree(self, prefix: str = ""):
+        def _(x):
+            return frequency_to_string(x) if x else "0h"
+
+        string_offset = _(self.offset)
+        if not self.offset:
+            string_offset = "0h"
+
+        txt = f"{prefix}{self.emoji} {self.label} ("
+        txt += f"{self.group}:{'/'.join(self.variables.as_list)}, offset={string_offset}"
+        txt += ")"
+        tree = Tree(txt)
+        if self.min_offset is not None:
+            tree.add(f"global_min_offset={_(self.min_offset)}")
+        if self.max_offset is not None:
+            tree.add(f"global_max_offset={_(self.max_offset)}")
+        tree.add(f"lenght={len(self)}")
+        if self.i_offset is not None:
+            explain = f"({_(self.offset)} - {_(self.min_offset)})/{_(self.frequency)} = {_(self.actual_offset)}/{_(self.frequency)} = {self.i_offset}"
+            tree.add(f"i -> i + {self.i_offset} because {explain}")
+        return tree
 
 
 class DataHandler:
-    _record = None
+    emoji = "D"
+    label = "DataHandler"
 
-    def __init__(self, context: Context, group: str, args, variables: list = []):
-        self.context = context
+    def __init__(self, group: str, variables: list = [], sources=None):
         self.group = group
-        self.args = args
-        if self.group not in self.context.sources:
+
+        if sources is None:
+            raise ValueError("For now, sources must be provided to DataHandler. For now.")
+
+        if self.group not in sources:
             raise ValueError(
-                f"Group '{self.group}' not found in sources: available groups are {list(self.context.sources.keys())}"
+                f"Group '{self.group}' not found in sources: available groups are {list(self.sources.keys())}"
             )
-        self.dataset = self.context.sources[self.group]["dataset"]
-        self.preprocessors = self.context.sources[self.group].get("processors", {})
+        self.config = sources[self.group].copy()
+        self.preprocessors = self.config.get("processors", {})
 
         variables = [f"{group}.{v}" for v in variables]
         self.variables = variables
 
-        self.config = dict(dataset=self.dataset, select=self.variables)
-        self.ds = open_dataset(**self.config)
-        # print(f"🔍 Opened dataset with config: {self.config}")
+        self.ds = open_dataset(dataset=self.config["dataset"], select=self.variables)
+
         self.frequency = frequency_to_timedelta(self.ds.frequency)
-        self.statistics = self.ds.statistics[self.group]
-        self.name_to_index = self.ds.name_to_index[self.group]
+        self._statistics = self.ds.statistics[group]
+        self._name_to_index = self.ds.name_to_index[group]
+
+        if hasattr(self.ds, "shapes"):
+            self._shape = self.ds.shapes[group]
+        elif hasattr(self.ds, "shape"):
+            if isinstance(self.ds.shape, dict):
+                self._shape = self.ds.shape[group]
+            elif isinstance(self.ds.shape, (list, tuple)):
+                self._shape = self.ds.shape
+            else:
+                raise ValueError(f"Unexpected shape type {type(self.ds.shape)}: {self.ds.shape}")
+        else:
+            raise ValueError(f"Dataset {self.ds} does not have 'shape' or 'shapes' attribute.")
+
+        # TODO:
+        # this class is not efficient and should be refactored to make sure a chunk of data is loaded only once
+        # this implies changing the VariablesSampleProvider class, compress the requests for data
+        # and use pointers (views) to the data that will be loaded only once
+        # but the interface using "request" may stay the same
+
+    def invite(self, visitor):
+        visitor.visit(self)
 
     def __len__(self):
         return len(self.ds)
 
-    @property
-    def record(self):
-        if self._record is not None:
-            return self._record
-        self._record = self.ds[self.args]
-        return self._record
+    def __getitem__(self, item: int):
+        return self.ds[item][self.group]
+
+    def latitudes(self, item=None):
+        if item is None:
+            return self.ds.latitudes[self.group]
+        return self.ds[item].latitudes[self.group]
+
+    def longitudes(self, item=None):
+        if item is None:
+            return self.ds.longitudes[self.group]
+        return self.ds[item].longitudes[self.group]
+
+    def timedeltas(self, item=None):
+        if item is None:
+            # not implemented ?
+            return self.ds.timedeltas[self.group]
+        return self.ds[item].timedeltas[self.group]
+
+    def name_to_index(self, item=None):
+        return self._name_to_index
+
+    def statistics(self, item=None):
+        return self._statistics
+
+    def shape(self, item=None):
+        return self._shape
+
+    def latitudes_longitudes(self, item=None):
+        lats = self.latitudes(item)
+        longs = self.longitudes(item)
+        return np.array([lats, longs]).T
+
+    def get(self, item: int, request):
+        assert isinstance(item, (type(None), int, np.integer)), f"Expected integer for item, got {type(item)}: {item}"
+        assert isinstance(
+            request, (type(None), str, list, tuple)
+        ), f"Expected string or list for request, got {type(request)}: {request}"
+
+        ACTIONS = {
+            None: self.__getitem__,
+            "data": self.__getitem__,
+            "latitudes": self.latitudes,
+            "longitudes": self.longitudes,
+            "latitudes_longitudes": self.latitudes_longitudes,
+            "timedeltas": self.timedeltas,
+            "name_to_index": self.name_to_index,
+            "statistics": self.statistics,
+            "shape": self.shape,
+        }
+        if isinstance(request, (list, tuple)):
+            dic = {}
+            for r in request:
+                if r not in ACTIONS:
+                    raise ValueError(
+                        f"Unknown request '{r}' in {request}. Available requests are {list(ACTIONS.keys())}."
+                    )
+                action = ACTIONS[r]
+                dic[r] = action(item)
+            return dic
+
+        action = ACTIONS.get(request)
+        if action is None:
+            raise ValueError(
+                f"Unknown request '{request}' in {request}. Available requests are {list(ACTIONS.keys())}."
+            )
+        return action(item)
+
+    def get_one(self, item: int, request):
+        if request not in ACTIONS:
+            raise ValueError(
+                f"Unknown request '{request}' in {request}. Available requests are {list(ACTIONS.keys())}."
+            )
+        return ACTIONS[request](item)
 
     def __repr__(self):
-        out = f"Request {self.dataset} @ {self.group} [{', '.join(self.variables)}]"
-        if self.args is not None:
-            out += f", args={self.args}"
-        return out
+        return f"DataHandler {self.config['dataset']} @ {self.group} [{', '.join(self.variables)}]"
 
 
-def sample_provider_factory(context, **kwargs):
+def sample_provider_factory(_context=None, **kwargs):
     kwargs = kwargs.copy()
-    kwargs = resolve_reference(kwargs)
+    # kwargs = resolve_reference(kwargs)
 
-    if isinstance(context, dict):
-        context = Context(**context)
-    if context is None:
-        context = Context()
+    if "context" in kwargs:
+        raise NotImplementedError(
+            "The 'context' argument is deprecated, use directly start, end, frequency, sources instead"
+        )
+
+    if _context is None:
+        _context = Context(
+            sources=kwargs.pop("sources", None),
+            start=kwargs.pop("start", None),
+            end=kwargs.pop("end", None),
+            frequency=kwargs.pop("frequency"),
+        )
 
     if "loops" in kwargs:
         kwargs.pop("loops")
     if "references" in kwargs:
         kwargs.pop("references")
-    if "dictionary" in kwargs:
-        return DictSampleProvider(context, **kwargs)
-    if "tensor" in kwargs:
-        return TensorSampleProvider(context, **kwargs)
-    if "tuple" in kwargs:
+
+    if "_parent" not in kwargs:
+        kwargs["_parent"] = None
+
+    if "sample" in kwargs:
+        # backward compatibility
+        kwargs["structure"] = kwargs.pop("sample")
+    if "samples" in kwargs:
+        # backward compatibility
+        kwargs["structures"] = kwargs.pop("samples")
+
+    # if "structure" in kwargs:
+    #    kwargs["structure"] = sample_provider_factory(_context, **kwargs["structure"])
+    # if "structures" in kwargs:
+    #    kwargs["structures"] = sample_provider_factory(_context, **kwargs["structures"])
+
+    if "offset" in kwargs:
+        obj = OffsetSampleProvider(_context, **kwargs)
+    elif "request" in kwargs:
+        obj = RequestSampleProvider(_context, **kwargs)
+    elif "dictionary" in kwargs:
+        obj = DictSampleProvider(_context, **kwargs)
+    elif "tensor" in kwargs:
+        obj = TensorSampleProvider(_context, **kwargs)
+    elif "tuple" in kwargs:
         kwargs["tuple_"] = kwargs.pop("tuple")
-        return ListSampleProvider(context, **kwargs)
-    if "timedelta" in kwargs:
-        return TimeDeltaShiftedSampleProvider(context, **kwargs)
-    if "variables" in kwargs:
-        return Request(context, **kwargs)
-    assert False, f"Unknown sample type for kwargs {kwargs}"
+        obj = TupleSampleProvider(_context, **kwargs)
+    elif "variables" in kwargs:
+        obj = VariablesSampleProvider(_context, **kwargs)
+    elif "repeat" in kwargs:
+        repeat = kwargs.pop("repeat")
+        obj = sample_provider_factory(_context, **kwargs)
+    elif "structure" in kwargs:
+        if isinstance(kwargs["structure"], SampleProvider):
+            return kwargs["structure"]  # not mutate here?: todo: think about it
+        if isinstance(kwargs["structure"], dict):
+            obj = sample_provider_factory(_context, **kwargs["structure"])
+        else:
+            raise ValueError(
+                f"Expected dictionary for 'structure', got {type(kwargs['structure'])}: {kwargs['structure']}"
+            )
+    else:
+        assert False, f"Unknown sample type for kwargs {kwargs}"
+    obj = obj.mutate()
+
+    if obj.is_root:
+        # set the min/max offsets for the root sample provider
+        leaves = obj._context._list_of_leaves
+        all_offsets = [leaf.offset for leaf in leaves]
+        all_offsets = [frequency_to_timedelta(o) for o in all_offsets]
+        all_offsets = all_offsets + [frequency_to_timedelta("0h")]
+        minimum = min(all_offsets)
+        maximum = max(all_offsets)
+
+        freq = obj._context.frequency
+
+        freq_seconds = round(freq.total_seconds())
+
+        def round_down(dt):
+            seconds = round(dt.total_seconds())
+            return datetime.timedelta(seconds=seconds - (seconds % freq_seconds))
+
+        minimum = round_down(minimum)
+
+        def round_up(dt):
+            seconds = round(dt.total_seconds())
+            remainder = seconds % freq_seconds
+            if remainder == 0:
+                return datetime.timedelta(seconds=seconds)
+            return datetime.timedelta(seconds=seconds + (freq_seconds - remainder))
+
+        maximum = round_up(maximum)
+
+        assert round(minimum.total_seconds()) % round(freq.total_seconds()) == 0
+        assert round(maximum.total_seconds()) % round(freq.total_seconds()) == 0
+        assert minimum <= maximum, f"Minimum offset {minimum} is greater than maximum offset {maximum}"
+
+        dropped_samples = -seconds(minimum) / seconds(freq)
+        dropped_samples += seconds(maximum) / seconds(freq)
+        assert int(dropped_samples) == dropped_samples
+        dropped_samples = int(dropped_samples)
+
+        for leaf in leaves:
+            leaf.set_min_max_offsets(min_offset=minimum, max_offset=maximum, dropped_samples=dropped_samples)
+
+    check_sample_provider(obj)
+
+    return obj
+
+
+def check_sample_provider(obj):
+
+    # check there is one root, and only one
+    class FindRoot:
+        def __init__(self):
+            self.roots = []
+
+        def visit(self, sp):
+            if sp.is_root:
+                self.roots.append(sp)
+            return self
+
+    roots = FindRoot().visit(obj).roots
+    if len(roots) > 1:
+        print(f"Found roots: {roots}")
+        for r in roots:
+            print(r._build_tree())
+        raise ValueError(f"Multiple root sample providers found: {roots}. Please ensure only one root is defined.")
+    if len(roots) == 0 and obj.is_root:
+        raise ValueError("No root sample provider found. Please ensure a root sample provider is defined.")
+    if len(roots) == 1 and not obj.is_root:
+        raise ValueError(
+            f"Sample provider {obj} is not a root, but it should be. Please ensure the root sample provider is defined."
+        )
+
+    # other checks todo
 
 
 # TEST ---------------------------------
@@ -451,7 +1028,9 @@ sources:
       dataset:
         dataset: aifs-ea-an-oper-0001-mars-o96-1979-2023-6h-v8
         set_group: era5
-        # processors: ...
+      # processors: ...
+      optimisations: use_tensors
+      user_key: mine
     snow:
       dataset: observations-testing-2018-2018-6h-v0
     metop_a:
@@ -466,35 +1045,193 @@ validation_selection:
   # end=...
 
 sample:
-  loops:
-    timedelta: ["-6h", "+12h"]
-    
-  dictionary:
-    input:
       dictionary:
-        fields:
+
+
+        ex_simple_tensor:
           tensor:
-            timedeltas: ${loops.timedelta}
-            variables:
-              era5: ["q_50", "2t", "t_850"]
-        snOW😉1:
-          variables:
-            snow: ["sdepth_0"]
-        snow_2:
-          timedelta: "+6h"
-          variables:
-            snow: ["sdepth_0"]
-        metop:
+            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+
+        # not supported
+        ex_simple_tensor_shortcut:
+          variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+
+        ex_simple_dict:
+          dictionary:
+            key1:
+                tensor:
+                  - variables: ["snow.stalt", "snow.sdepth_0"]
+            key2:
+                tensor:
+                  - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+
+        ex_simple_offset:
+          tensor:
+            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+              offset: "-12h"
+
+        ex_simple_offset_also:
+          offset: "-12h"
+          tensor:
+            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+
+        ex_adding_offsets:
+          offset: "-12h"
+          tensor:
+            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+              offset: "-6h"
+
+        ex_dict:
+          dictionary:
+            key1:
+                offset: "-6h"
+                tensor:
+                    - variables: ["snow.stalt", "snow.sdepth_0"]
+            key2:
+                offset: "0h"
+                tensor:
+                   - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+
+        ex_tensor_2:
+          tensor:
+            - offset: ["-6h", "0h", "+6h"]
+            - variables: ["era5.2t", "era5.10u"]
+
+
+        # choose the order of dimensions in the tensor
+        ex_tensor_3:
+          tensor:
+            - variables: ["era5.2t", "era5.10u"]
+            - offset: ["-6h", "0h", "+6h"]
+
+        # this would fail, as obs are not regular:
+        # ex_tensor_failing:
+        #   tensor:
+        #     - variables: ["metop_a.scatss_1", "metop_a.scatss_2", "snow.sdepth_0"]
+
+        # do this instead when the tensors are not regular and get a tuple of tensors:
+        ex_tuple:
           tuple:
-            - timedelta: "-12h"
-              variables:
-                metop_a: ["scatss_1", "scatss_2"]
-            - timedelta: "+6h"
-              variables:
-                metop_a: ["scatss_1", "scatss_2"]
+            loop:
+              - offset: ["-6h", "0h", "+6h"]
+            template:
+              tensor:
+                - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+
+        ex_request_1:
+          tensor:
+            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+              request: data 
+              # this is the default
+
+        ex_request_2:
+          tensor:
+            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+              request: latitudes
+
+        ex_request_3:
+          tensor:
+            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+              request: [data, latitudes]
+
+        ex_request_4:
+          request: [data, latitudes_longitudes, timedeltas]
+          tuple:
+            loop:
+              - offset: [-6h, 0h]
+            template:
+              variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+
+
+        ex_request_4:
+          request: [name_to_index, statistics, shape]
+          tuple:
+            loop:
+              - offset: [-6h, 0h]
+            template:
+              variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+
+
+        test_offset4:
+          offset: "-6h"
+          structure:
+            offset: "-6h"
+            structure:
+              variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+
+
+        # not implemented.
+        # test_offset4:
+        #   offset: "-6h"
+        #   dictionary:
+        #     a:
+        #       offset: "-1h"
+        #       variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+        #     b:
+        #       offset: "13h"
+        #       variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+        
+
+#        c:
+#          tuple:
+#            - offset: ["-12h", "-6h"]
+#            - variables: ["metop_a.scatss_1", "metop_a.scatss_2" "snow.sdepth_0"]
+#        cc:
+#          tuple:
+#            - variables: ["metop_a.scatss_1", "metop_a.scatss_2", "snow.sdepth_0"]
+#            - offset: ["-12h", "-6h"]
+#
+#        c_tensor:
+#          tuple:
+#            - offset: ["-12h", "-6h"]
+#            - variables: ["metop_a.scatss_1", "metop_a.scatss_2", "snow.sdepth_0"]
+#
+#        d:
+#          tuple:
+#            - offset: ["-12h", "-6h"]
+#            - ensembles: 1 
+#            - variables: ["metop_a.scatss_1", "metop_a.scatss_2", "snow.sdepth_0"]
+#            - dictionary:
+#                key:
+#                  variables: ["metop_a.scatss_1", "metop_a.scatss_2", "snow.sdepth_0"]
+
+
+          
+        #example_2:
+        #  tuple:
+        #    - offset: ["-12h", "-6h"]
+        #    #- lat_lon: ...
+        #    - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+       # era5:
+       #   tensor:
+       #        - offset: ["-12h"]
+       #        - ensembles: 1 
+       #        - variables: ["metop_a.scatss_1", "metop_b.scatss_2"]
+       #        - lat_lon: True
+
+       #   tensor:
+       #        - offset: ["-12h", "-6h"]
+       #        - lat_lon: True
+       #        - variables: ["metop_a.scatss_1", "metop_b.scatss_2"]
+
+       #   tuple:
+       #     - offset: ["-12h", "-6h"]
+       #     - variables: ["metop_a.scatss_1", "metop_b.scatss_2"]
+
+# what Mihai needs:
+#        metop:
+#          tuple:
+#            - offset: ["-12h", "-6h"]
+#            - tensor:
+#               - lat_lon: 'all' 'shard'  # 'slice(None, None)'
+#               - variables: ["metop_a.scatss_1", "metop_b.scatss_2"]
+
+
 """
 
     CONFIG = yaml.safe_load(yaml_str)
+    # with open("/etc/ecmwf/nfs/dh1_home_a/mafp/work/obs/ai-obs-gnn/obsgnn/data/full_config.yaml", "r") as f:
+    #    CONFIG = yaml.safe_load(f)
 
     def show_yaml(structure):
         return yaml.dump(structure, indent=2, sort_keys=False)
@@ -504,7 +1241,10 @@ sample:
 
     def shorten_numpy(structure):
         if isinstance(structure, np.ndarray):
-            return f"np.array({structure.shape})"
+            if np.issubdtype(structure.dtype, np.floating):
+                return f"np.array{structure.shape} with mean {np.nanmean(structure):.2f}"
+            else:
+                return f"np.array{structure.shape} with mean {np.nanmean(structure)}"
         if isinstance(structure, (list, tuple)):
             if structure and all(isinstance(item, int) for item in structure):
                 return "[" + ", ".join(map(str, structure)) + "]"
@@ -515,37 +1255,50 @@ sample:
             return str(structure)
         return structure
 
-    for k, v in CONFIG.items():
-        print(f"💬 CONFIG {k}")
-        print(show_yaml(v))
-    print("-----------------")
+    # for k, v in CONFIG.items():
+    #    print(f"💬 CONFIG {k}")
+    #    print(show_yaml(v))
+    # print("✅ -----------------")
 
-    print("✅ SampleProvider")
     sample_config = CONFIG["sample"]
-    training_context = Context(
-        "training",
+    training_context = dict(
+        # sources=CONFIG["data"],
         sources=CONFIG["sources"]["training"],
-        **CONFIG["training_selection"],
+        start=None,
+        end=None,
+        frequency="6h",
     )
-    s = sample_provider_factory(context=training_context, **sample_config)
-    print(s)
+    for key, config in sample_config["dictionary"].items():
+        print(f"[yellow]- {key} : building sample_provider[/yellow]")
+        print(yaml.dump(config, indent=2, sort_keys=False))
+        s = sample_provider_factory(**training_context, **config)
+        # print(len(s))
+        print(s)
+        print("----------------------------")
 
+    print("✅✅  --------")
+    for key, config in sample_config["dictionary"].items():
+        print(f"[yellow]- {key} : getting data [/yellow]")
+        print(yaml.dump(config, indent=2, sort_keys=False))
+        s = sample_provider_factory(**training_context, **config)
+        print(s)
+        print("sp[1] = ", show_json(s[1]))
+        print()
+
+    exit()
     print("🆗 DataHandler")
-    results_structure = s[3]
+    s[2]
+    i = 3
+    results_structure = s[i]
     print(show_json(results_structure))
 
     print("Latitudes and longitudes:")
-    print(show_json(s.latitudes(3)))
-    print(show_json(s.longitudes(3)))
+    print(show_json(s.latitudes(i)))
+    print(show_json(s.longitudes(i)))
     print("Processors:")
-    print(show_json(s.processors(3)))
+    print(show_json(s.processors(i)))
     print("Shapes:")
-    print(show_json(s.shape(3)))
-
-    # for x in [s, s.input, s.input.fields, s.input.metop, s.input.snow]:
-    #    print()
-    #    print("__len__:", len(x))
-    #    print(x)
+    print(show_json(s.shape(i)))
 
     class Resolver:
         def __init__(self):
@@ -574,3 +1327,95 @@ sample:
     # print("🔍 Resolver mapping:")
     # for k, v in resolver._mapping.items():
     #    print(f"{k}: {v}")
+
+# class OneGroupVariablesSampleProvider(SampleProvider):
+#    # This will request data related to one group, for a list of variables.
+#    # to the DataHandler
+#    label = "Group"
+#    emoji = "G️"
+#
+#    # emoji = "✉️"
+#    def __init__(self, _context: Context, _parent, group: str, variables: list[str]):
+#        lkj
+#        super().__init__(_context, _parent)
+#        self.group = group
+#        self.variables = variables
+#        self.dh = DataHandler(self._context, self.group, variables=self.variables)
+#
+#    def _build_tree(self, prefix: str = ""):
+#        return Tree(f"{prefix}{self.emoji}  {self.label}({self.group}:{'/'.join(self.variables)})")
+#
+#    def get(self, what, item: int):
+#        if what == "__getitem__":
+#            return self.dh[item][self.group]
+#        assert False, "lkjlk"
+#        # this may be moved to the Mother class
+#        if isinstance(what, str):
+#            out = self._get(what, item)
+#            assert len(out) == 1, f"Expected single item for {what}, got {len(out)}"
+#            key = list(out.keys())[0]
+#            return out[key]
+#        return self._get(*what, item)
+#
+#    @property
+#
+#    def _get(self, *what_and_item):
+#        *what, item = what_and_item
+#        dh = DataHandler(self._context, self.group, item, variables=self.variables)
+#        if item is not None:
+#            record = dh.record
+#
+#        data = {}
+#        for w in what:
+#            if w == "__getitem__":
+#                data["data"] = record[self.group]
+#            elif w == "latitudes":
+#                data["latitudes"] = record.latitudes[self.group]
+#            elif w == "longitudes":
+#                data["longitudes"] = record.longitudes[self.group]
+#            elif w == "timedeltas":
+#                second = np.timedelta64(1, "s")
+#                data["timedeltas"] = record.timedeltas[self.group] // second
+#            elif w == "name_to_index":
+#                data["name_to_index"] = record.name_to_index[self.group]
+#            elif w == "statistics":
+#                data["statistics"] = record.statistics[self.group]
+#            elif w == "processors":
+#                data["processors"] = [
+#                    [
+#                        name,
+#                        self._context.processor_factory(
+#                            config,
+#                            name_to_index=record.name_to_index[self.group],
+#                            statistics=record.statistics[self.group],
+#                        ),
+#                    ]
+#                    for name, config in dh.preprocessors.items()
+#                ]
+#            elif w == "num_channels":
+#                data["num_channels"] = len(self.variables)
+#            elif w == "shape":
+#                data["shape"] = record[self.group].shape
+#            else:
+#                raise ValueError(f"Unknown request '{w}' for Request sample provider")
+#        return data
+
+# ex_tensor:
+#   tensor:
+#     - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+#     - lat_lon: True
+#     - ensemble: True
+
+
+#     - lat_lon: True
+#     - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+#     - ensemble: True
+
+
+#     - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+#     - '...'
+#     - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+
+
+#     - '...'
+#     - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
