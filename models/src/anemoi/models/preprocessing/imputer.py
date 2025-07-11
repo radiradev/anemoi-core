@@ -88,6 +88,13 @@ class BaseImputer(BasePreprocessor, ABC):
                 LOGGER.debug(f"Imputer: skipping {name} as no imputation method is specified")
                 continue
 
+            if name_to_index_inference_input.get(name, None) is None:
+                # if the variable is not in inference input (diagnostic variable), we cannot place NaNs in its inference output
+                if method != self.default:
+                    LOGGER.warning(
+                        "Placement of NaNs for diagnostic variables in inference output is not supported: {name}"
+                    )
+
             self.index_training_input.append(name_to_index_training_input[name])
             self.index_training_output.append(name_to_index_training_output.get(name, None))
             self.index_inference_input.append(name_to_index_inference_input.get(name, None))
@@ -101,7 +108,7 @@ class BaseImputer(BasePreprocessor, ABC):
             else:
                 raise TypeError(f"Statistics {type(statistics)} is optional and not a dictionary")
 
-            LOGGER.debug(f"Imputer: replacing NaNs in {name} with value {self.replacement[-1]}")
+            LOGGER.info(f"Imputer: replacing NaNs in {name} with value {self.replacement[-1]}")
 
     def get_nans(self, x: torch.Tensor) -> torch.Tensor:
         """Get NaN mask from data
@@ -147,7 +154,9 @@ class BaseImputer(BasePreprocessor, ABC):
 
         return nan_locations[..., idx_src].expand(-1, *x.shape[1:-2], -1)
 
-    def fill_with_value(self, x: torch.Tensor, index: list[int], nan_locations: torch.Tensor):
+    def fill_with_value(
+        self, x: torch.Tensor, index_x: list[int], nan_locations: torch.Tensor, index_nl: list[int]
+    ) -> torch.Tensor:
         """Fill NaN locations in the input tensor with the specified values.
 
         Parameters
@@ -167,8 +176,8 @@ class BaseImputer(BasePreprocessor, ABC):
         # Expand the nan locations to match the shape of the input tensor
         for i in x.shape[2:-2]:
             nan_locations = nan_locations.unsqueeze(2)
-        for idx_src, (idx_dst, value) in zip(index, zip(index, self.replacement)):
-            if idx_dst is not None:
+        for idx_src, (idx_dst, value) in zip(index_nl, zip(index_x, self.replacement)):
+            if idx_src is not None and idx_dst is not None:
                 x[..., idx_dst][nan_locations[..., idx_src]] = value
         return x
 
@@ -184,8 +193,8 @@ class BaseImputer(BasePreprocessor, ABC):
         if x.shape[-1] == self.num_training_input_vars:
             # training input
 
-            # save nan locations from training input, select first timestep whose nan locations are used for the loss mask and postprocessing
-            self.nan_locations = nan_locations[:, 0]
+            # save nan locations for input variables from training input, select first timestep whose nan locations are used for the loss mask and postprocessing
+            self.nan_locations = nan_locations[:, 0, ..., self.data_indices.data.input.full]
 
             # data indices for training input
             index = self.index_training_input
@@ -196,17 +205,15 @@ class BaseImputer(BasePreprocessor, ABC):
             )  # shape (batchsize, grid, n_outputs)
 
             # for all variables that are imputed and part of the model output, set the loss weight to zero at NaN location
-            for idx_src, idx_dst in zip(index, self.index_inference_output):
-                if idx_dst is not None:
-                    self.loss_mask_training[..., idx_dst] = (~self.nan_locations[..., idx_src]).int()
+            for idx_src, idx_dst in zip(self.index_training_input, self.index_inference_output):
+                if idx_src is not None and idx_dst is not None:
+                    self.loss_mask_training[..., idx_dst] = (~nan_locations[:, 0, ..., idx_src]).int()
 
         elif x.shape[-1] == self.num_inference_input_vars:
             # inference input
 
-            # update nan locations of progonostic variables of inference input
-            self.nan_locations[..., self.data_indices.data.input.prognostic] = nan_locations[
-                ..., self.data_indices.model.input.prognostic
-            ][:, 0]
+            # save nan masks of inference input for inverse transform
+            self.nan_locations = nan_locations[:, 0]
 
             # data indices for training input
             index = self.index_inference_input
@@ -217,7 +224,7 @@ class BaseImputer(BasePreprocessor, ABC):
             )
 
         # Replace values
-        return self.fill_with_value(x, index, nan_locations)
+        return self.fill_with_value(x, index, nan_locations, index)
 
     def inverse_transform(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
         """Impute missing values in the input tensor."""
@@ -240,8 +247,8 @@ class BaseImputer(BasePreprocessor, ABC):
         ), f"Batch dimension of input tensor ({x.shape[0]}) does not match the batch dimension of nan locations ({self.nan_locations.shape[0]}). Are you using the postprocessors without running the preprocessor first?"
 
         # Replace values
-        for idx_src, idx_dst in zip(self.index_training_input, index):
-            if idx_dst is not None:
+        for idx_src, idx_dst in zip(self.index_inference_input, index):
+            if idx_src is not None and idx_dst is not None:
                 x[..., idx_dst][self._expand_subset_mask(x, idx_src, self.nan_locations)] = torch.nan
         return x
 
@@ -365,11 +372,13 @@ class CopyImputer(BaseImputer):
 
             LOGGER.debug(f"Imputer: replacing NaNs in {name} with value coming from variable :{self.replacement[-1]}")
 
-    def fill_with_value(self, x, index, nan_locations: torch.Tensor):
+    def fill_with_value(
+        self, x: torch.Tensor, index_x: list[int], nan_locations: torch.Tensor, index_nl: list[int]
+    ) -> torch.Tensor:
         for i in x.shape[2:-2]:
             nan_locations = nan_locations.unsqueeze(2)
         # Replace values
-        for idx_src, (idx_dst, value) in zip(index, zip(index, self.replacement)):
+        for idx_src, (idx_dst, value) in zip(index_nl, zip(index_x, self.replacement)):
             if idx_dst is not None:
                 assert not torch.isnan(
                     x[..., self.data_indices.data.input.name_to_index[value]][nan_locations[..., idx_src]]

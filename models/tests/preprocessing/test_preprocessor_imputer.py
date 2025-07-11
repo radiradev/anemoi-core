@@ -93,8 +93,8 @@ def non_default_input_data():
     restored = torch.Tensor(
         [
             [
-                [[1.0, 2.0, 3.0, np.nan, 5.0, 1.0], [6.0, np.nan, 8.0, 9.0, np.nan, 1.0]],
-                [[1.0, 2.0, 3.0, np.nan, 5.0, 1.0], [6.0, np.nan, 8.0, 9.0, np.nan, 1.0]],
+                [[1.0, 2.0, 3.0, np.nan, 5.0, 1.0], [6.0, np.nan, 8.0, 9.0, 3.0, 1.0]],
+                [[1.0, 2.0, 3.0, np.nan, 5.0, 1.0], [6.0, np.nan, 8.0, 9.0, 3.0, 1.0]],
             ]
         ]
     )
@@ -106,7 +106,8 @@ def default_input_data():
     # one sample, one time step, two grid points, 6 variables
     base = torch.Tensor([[[[1.0, 2.0, 3.0, np.nan, 5.0, 1.0], [6.0, np.nan, 8.0, 9.0, np.nan, 1.0]]]])
     expected = torch.Tensor([[[[1.0, 2.0, 3.0, 1.0, 5.0, 1.0], [6.0, 1.0, 8.0, 9.0, 1.0, 1.0]]]])
-    return base, expected, base
+    restored = torch.Tensor([[[[1.0, 2.0, 3.0, np.nan, 5.0, 1.0], [6.0, np.nan, 8.0, 9.0, 1.0, 1.0]]]])
+    return base, expected, restored
 
 
 @pytest.fixture()
@@ -148,7 +149,8 @@ def default_constant_data():
     # one sample, one time step, two grid points, 6 variables
     base = torch.Tensor([[[[1.0, 2.0, 3.0, np.nan, 5.0, 1.0], [6.0, np.nan, 8.0, 9.0, np.nan, 1.0]]]])
     expected = torch.Tensor([[[[1.0, 2.0, 3.0, 22.7, 5.0, 1.0], [6.0, 22.7, 8.0, 9.0, 22.7, 1.0]]]])
-    return base, expected, base
+    restored = torch.Tensor([[[[1.0, 2.0, 3.0, np.nan, 5.0, 1.0], [6.0, np.nan, 8.0, 9.0, 22.7, 1.0]]]])
+    return base, expected, restored
 
 
 @pytest.fixture()
@@ -156,7 +158,8 @@ def non_default_constant_data():
     # one sample, one time step, two grid points, 6 variables
     base = torch.Tensor([[[[1.0, 2.0, 3.0, np.nan, 5.0, 1.0], [6.0, np.nan, 8.0, 9.0, np.nan, 1.0]]]])
     expected = torch.Tensor([[[[1.0, 2.0, 3.0, 10.0, 5.0, 1.0], [6.0, 3.0, 8.0, 9.0, 3.0, 1.0]]]])
-    return base, expected, base
+    restored = torch.Tensor([[[[1.0, 2.0, 3.0, np.nan, 5.0, 1.0], [6.0, np.nan, 8.0, 9.0, 3.0, 1.0]]]])
+    return base, expected, restored
 
 
 @pytest.fixture()
@@ -181,7 +184,8 @@ def copy_data():
     # one sample, one time step, two grid points, 6 variables
     base = torch.Tensor([[[[1.0, 2.0, 3.0, np.nan, 5.0, 1.0], [6.0, np.nan, 8.0, 9.0, np.nan, 1.0]]]])
     expected = torch.Tensor([[[[1.0, 2.0, 3.0, 1.0, 5.0, 1.0], [6.0, 6.0, 8.0, 9.0, 6.0, 1.0]]]])
-    return base, expected, base
+    restored = torch.Tensor([[[[1.0, 2.0, 3.0, np.nan, 5.0, 1.0], [6.0, np.nan, 8.0, 9.0, 6.0, 1.0]]]])
+    return base, expected, restored
 
 
 fixture_combinations = (
@@ -301,7 +305,7 @@ def test_mask_saving(imputer_fixture, data_fixture, request):
     x, _, _ = request.getfixturevalue(data_fixture)
     imputer = request.getfixturevalue(imputer_fixture)
     # reduce time dimension
-    expected_mask = torch.isnan(x)[:, 0]
+    expected_mask = torch.isnan(x)[:, 0][..., imputer.data_indices.data.input.full]
     imputer.transform(x)
     assert torch.equal(imputer.nan_locations, expected_mask), "Mask not saved correctly after first run."
 
@@ -352,7 +356,7 @@ def test_changing_nan_locations(imputer_fixture, data_fixture, request):
     imputer = request.getfixturevalue(imputer_fixture)
 
     # reduce time dimension
-    expected_mask = torch.isnan(x)[:, 0]
+    expected_mask = torch.isnan(x)[:, 0][..., imputer.data_indices.data.input.full]
     transformed = imputer.transform(x, in_place=False)
     assert torch.allclose(transformed, expected, equal_nan=True), "Transform does not handle NaNs correctly."
     restored = imputer.inverse_transform(transformed, in_place=False)
@@ -366,7 +370,7 @@ def test_changing_nan_locations(imputer_fixture, data_fixture, request):
     expected = expected.roll(1, dims=0)
     expected_restored = expected_restored.roll(1, dims=0)
     # reduce time dimension
-    expected_mask = torch.isnan(x)[:, 0]
+    expected_mask = torch.isnan(x)[:, 0][..., imputer.data_indices.data.input.full]
     imputer.transform(x, in_place=False)
     assert torch.allclose(
         imputer.transform(x, in_place=False), expected, equal_nan=True
