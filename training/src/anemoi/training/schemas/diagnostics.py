@@ -100,6 +100,27 @@ ColormapSchema = Annotated[
 ]
 
 
+class PlotReconstructedSampleSchema(BaseModel):
+    target_: Literal["anemoi.training.diagnostics.callbacks.plot.PlotReconstructedSample"] = Field(alias="_target_")
+    "PlotSample object from anemoi training diagnostics callbacks."
+    sample_idx: int
+    "Index of sample to plot, must be inside batch size."
+    parameters: list[str]
+    "List of parameters to plot."
+    accumulation_levels_plot: list[float]
+    "Accumulation levels to plot."
+    cmap_accumulation: Union[list[str], None] = Field(default=None)
+    "Colors of the accumulation levels. Default to None. Kept for backward compatibility."
+    precip_and_related_fields: Union[list[str], None] = Field(default=None)
+    "List of precipitation related fields, by default None."
+    per_sample: int = Field(example=6)
+    "Number of plots per sample, by default 6."
+    every_n_batches: Union[int, None] = Field(default=None)
+    "Batch frequency to plot at, by default None."
+    colormaps: Union[dict[str, ColormapSchema], None] = Field(default=None)
+    "List of colormaps to use, by default None."
+
+
 class PlotSampleSchema(BaseModel):
     target_: Literal["anemoi.training.diagnostics.callbacks.plot.PlotSample"] = Field(alias="_target_")
     "PlotSample object from anemoi training diagnostics callbacks."
@@ -151,6 +172,7 @@ PlotCallbacks = Annotated[
         GraphTrainableFeaturesPlotSchema,
         PlotLossSchema,
         PlotSampleSchema,
+        PlotReconstructedSampleSchema,
         PlotSpectrumSchema,
         PlotHistogramSchema,
     ],

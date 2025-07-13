@@ -1,7 +1,7 @@
 ---
 defaults:
-- paths: example
-- files: example
+- paths: atos
+- files: atos
 
 # number of GPUs per node and number of nodes (for DDP)
 accelerator: auto

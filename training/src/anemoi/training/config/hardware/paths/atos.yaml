@@ -1,5 +1,5 @@
-data: ???
-output: ???
+data: /home/mlx/ai-ml/datasets/
+output: ${oc.decode:${oc.env:SCRATCH}}/anemoi/output/
 truncation: null
 logs:
   base: ${hardware.paths.output}logs/

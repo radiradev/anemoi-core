@@ -1,6 +1,6 @@
 ---
 defaults:
-  - plot: detailed
+  - plot: autoencoder
   - callbacks: placeholder
   - benchmark_profiler: detailed
 

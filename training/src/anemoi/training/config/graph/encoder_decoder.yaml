@@ -15,7 +15,7 @@ nodes:
   hidden:
     node_builder:
       _target_: anemoi.graphs.nodes.ReducedGaussianGridNodes # options: AnemoiDatasetNodes, NPZFileNodes
-      grid: o48 # o32, o48, ...
+      grid: o32 # o32, o48, ...
 
 
 edges:
@@ -27,9 +27,8 @@ edges:
     cutoff_factor: 0.6 # only for cutoff method
     source_mask_attr_name: null
     target_mask_attr_name: null
-
   attributes: ${graph.attributes.edges}
-  # Decoder configuration
+# Decoder configuration
 - source_name: ${graph.hidden}
   target_name: ${graph.data}
   edge_builders:

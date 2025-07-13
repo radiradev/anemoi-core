@@ -1,0 +1,85 @@
+defaults:
+- data: autoencoder
+- dataloader: native_grid
+- datamodule: single
+- diagnostics: evaluation
+- hardware: slurm
+- graph: encoder_decoder
+- model: autoencoder
+- training: autoencoder
+- _self_
+
+config_validation: False # True
+
+data:
+  frequency: 6h
+  resolution: o96
+
+model:
+  model:
+    _target_: anemoi.models.models.AnemoiModelAutoencoder
+
+training:
+  model_task: anemoi.training.train.autoencoder.GraphAutoencoder
+  multistep_input: 1
+  # resume or fork a training from a checkpoint last.ckpt or specified in hardware.files.warm_start
+  run_id: null
+  fork_run_id: null
+  load_weights_only: False # only load model weights, do not restore optimiser states etc.
+
+diagnostics:
+  callbacks:
+  - _target_: anemoi.training.diagnostics.callbacks.plot.PlotSpectrum
+    # every_n_batches: 100 # Override for batch frequency
+    # min_delta: 0.01 # Minimum distance between two consecutive points
+    sample_idx: ${diagnostics.plot.sample_idx}
+    every_n_batches: ${diagnostics.plot.frequency.batch}
+    parameters:
+    - vo_137
+    - d_137
+    - t_137
+    - t_100
+    - d_100
+    - vo_100
+    - o3_45
+  - _target_: anemoi.training.diagnostics.callbacks.plot.PlotHistogram
+    sample_idx: ${diagnostics.plot.sample_idx}
+    every_n_batches: ${diagnostics.plot.frequency.batch}
+    precip_and_related_fields: ${diagnostics.plot.precip_and_related_fields}
+    parameters:
+    - vo_137
+    - d_137
+    - t_137
+    - t_100
+    - d_100
+    - vo_100
+    - o3_45
+  log:
+    interval: 50
+    wandb:
+      entity: 'ecmwf'
+    mlflow:
+      enabled: True
+      offline: True
+      experiment_name: 'ae-dev'
+      authentication: True
+      tracking_uri: 'https://mlflow.ecmwf.int'
+      run_name: 'aetest'
+  profiler: False
+  enable_progress_bar: True
+  check_val_every_n_epoch: 1
+  print_memory_summary: False
+
+  enable_checkpointing: True
+  checkpoint:
+    every_n_minutes:
+      save_frequency: null # Approximate, as this is checked at the end of training steps
+      num_models_saved: 0 # If set to k, saves the 'last' k model weights in the training.
+
+    every_n_epochs:
+      save_frequency: 1
+      num_models_saved: -1 # If set to -1, all checkpoints are kept ensuring runs can be continued/forked at any point in the training process
+
+    every_n_train_steps:
+      save_frequency: null # Does not scale with rollout
+      num_models_saved: 0

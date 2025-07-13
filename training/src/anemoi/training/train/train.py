@@ -184,11 +184,11 @@ class AnemoiTrainer:
     def model(self) -> pl.LightningModule:
         """Provide the model instance."""
         assert (
+            # not (
+            #     "GLU" in self.config.model.processor.layer_kernels["Activation"]["_target_"]
+            #     and ".Transformer" in self.config.model.processor.target_
+            # )
             not (
-                "GLU" in self.config.model.processor.layer_kernels["Activation"]["_target_"]
-                and ".Transformer" in self.config.model.processor.target_
-            )
-            and not (
                 "GLU" in self.config.model.encoder.layer_kernels["Activation"]["_target_"]
                 and ".Transformer" in self.config.model.encoder.target_
             )

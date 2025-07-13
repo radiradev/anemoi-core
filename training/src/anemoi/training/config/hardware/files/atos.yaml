@@ -1,5 +1,6 @@
-dataset: ???
-graph: ???
+dataset: aifs-ea-an-oper-0001-mars-o96-1979-2024-1h-v7-ml137.zarr
+dataset_ozone: aifs-ea-an-oper-0001-mars-o96-1979-2024-6h-v1-ml137-o3.zarr
+graph: debug.pt
 truncation: null
 truncation_inv: null
 checkpoint:
