@@ -25,3 +25,31 @@ def get_data_config_dict(data, which: str) -> Dict:
 
 def get_sample_config_dict(sample: DictConfig, which: str) -> Dict:
     return get_example(which)["sample"]
+
+
+def convert_source(config, name: str) -> Dict:
+    config["data"] = name
+    return {"tensor": config}
+
+
+def convert_sample_config(config) -> Dict:
+    c = {}
+    for n, cfgs in config.items():
+        c[n] = {"dictionary": {source: convert_source(cfg, name=source) for source, cfg in cfgs.items()}}
+    return c
+
+def convert_dataset(dataset, group_name: str):
+    if not isinstance(dataset["dataset"], dict | DictConfig):
+        dataset["dataset"] = {"dataset": dataset}
+    dataset["dataset"]["set_group"] = group_name
+    return dataset
+
+def convert_data_config(config) -> Dict:
+    return {k: convert_dataset(v, group_name=k) for k,v in config.items()}
+
+def get_config_dict(config: DictConfig) -> Dict:
+    return dict(
+        data=convert_data_config(config["data"]["data_handlers"]),
+        sample={"dictionary": convert_sample_config(config["model"]["sample"])}
+    )
+

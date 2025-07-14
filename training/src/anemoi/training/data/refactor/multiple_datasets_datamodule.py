@@ -20,7 +20,7 @@ from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.training.data.refactor.dataset import NativeGridMultDataset
 from anemoi.training.data.refactor.draft import Context
 from anemoi.training.data.refactor.draft import sample_provider_factory
-from anemoi.training.data.refactor.read_config import get_sample_config_dict, get_data_config_dict
+from anemoi.training.data.refactor.read_config import get_config_dict
 from anemoi.training.data.utils import get_dataloader_config
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.utils.worker_init import worker_init_func
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
     """Anemoi Datasets data module for PyTorch Lightning."""
 
-    def __init__(self, config: BaseSchema, graph_data: HeteroData, which: str = "downscaling") -> None:
+    def __init__(self, config: BaseSchema, graph_data: HeteroData) -> None:
         """Initialize Anemoi Datasets data module.
 
         Parameters
@@ -48,15 +48,14 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         super().__init__()
         self.graph_data = graph_data
 
-        dhs_config = get_data_config_dict(config.data.data_handlers, which)
-        sample_config = get_sample_config_dict(config.model.sample, which)
+        config_dict = get_config_dict(config)
 
-        training_context = Context("training", sources=dhs_config, **config.dataloader.sampler.training)
-        validation_context = Context("validation", sources=dhs_config, **config.dataloader.sampler.validation)
+        training_context = Context("training", sources=config_dict["data"], **config.dataloader.sampler.training)
+        validation_context = Context("validation", sources=config_dict["data"], **config.dataloader.sampler.validation)
 
         # Create Sampler provider
-        self.training_samples = sample_provider_factory(context=training_context, **sample_config)
-        self.validation_samples = sample_provider_factory(context=validation_context, **sample_config)
+        self.training_samples = sample_provider_factory(context=training_context, **config_dict["sample"])
+        self.validation_samples = sample_provider_factory(context=validation_context, **config_dict["sample"])
 
         dl_keys_to_ignore = ["sampler", "read_group_size", "grid_indices", "limit_batches"]
         self.train_dataloader_config = get_dataloader_config(

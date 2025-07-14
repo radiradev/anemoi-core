@@ -5,7 +5,7 @@ defaults:
 - diagnostics: evaluation
 - hardware: example
 - graph: downscaling
-- model: refactored_graphtransformer
+- model: downscaling_graphtransformer
 - training: refactored_default
 - _self_
 
@@ -29,6 +29,7 @@ diagnostics:
     callbacks: []
 hardware:
   files:
+    dataset: null
     lowres_dataset: aifs-od-an-oper-0001-mars-o96-2016-2023-6h-v6
     hires_dataset: cerra-rr-an-oper-0001-mars-5p5km-1984-2020-6h-v2-hmsi
     graph: "debug.pt"

@@ -6,7 +6,7 @@ cpu_offload: False
 
 sample:
   input:
-    era5:
+    lowres:
       variables:
       - "cos_latitude"
       - "cos_longitude"
@@ -51,14 +51,22 @@ sample:
       - "z_700"
       - "z_1000"
       timedeltas: ["0h"]
-    cerra:
+    hires:
       variables:
+      - "cos_latitude"
+      - "cos_longitude"
+      - "sin_latitude"
+      - "sin_longitude"
+      - "cos_julian_day"
+      - "cos_local_time"
+      - "sin_julian_day"
+      - "sin_local_time"
       - "orog"
       - "lsm"
       - "skt"
       timedeltas: ["0h"]
   target:
-    cerra:
+    hires:
       variables:
       #- "10u"
       #- "10v"

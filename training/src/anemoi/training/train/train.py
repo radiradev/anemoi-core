@@ -510,7 +510,7 @@ class AnemoiTrainer:
         LOGGER.debug("---- DONE. ----")
 
 
-@hydra.main(version_base=None, config_path="../config", config_name="debug_multiple_datasets")
+@hydra.main(version_base=None, config_path="../config", config_name="debug_downscaling")
 def main(config: DictConfig) -> None:
     AnemoiTrainer(config).train()
 
