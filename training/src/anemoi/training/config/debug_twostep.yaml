@@ -20,20 +20,13 @@ config_validation: False
 
 
 diagnostics:
-  #plot:
-  #  callbacks: []
+  plot:
+    callbacks: []
   log:
     wandb:
       entity: a
     mlflow:
-      enabled: True
-      offline: False
-      authentication: True
-      log_model: False
-      experiment_name: 'aifs-debug'
-      run_name: "PR228: Test global model"
-      project_name: "AIFS"
-      tracking_uri: https://mlflow.ecmwf.int
+      enabled: False
 hardware:
   paths:
     truncation: null
