@@ -23,12 +23,12 @@ data_handlers:
       #   config: ${data.remapper}
   amsr2:
     dataset:
-      dataset: ${hardware.paths.obs_dataset}/obs-2018-11.vz
+      dataset: obs-2018-11
       select: ['amsr2_h180.*']
       #"window": "(-6h, 0]"
   airs:
     dataset:
-      dataset: ${hardware.paths.obs_dataset}/obs-2018-11.vz
+      dataset: obs-2018-11
       select: ['aqua_airs_radiances.*']
 
 

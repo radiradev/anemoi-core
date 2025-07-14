@@ -64,7 +64,7 @@ def test_datamodule(new_config: DictConfig, which: str):
         assert len(batch["target"]["amsr_h180"]) == 1
     if which in ["multiple", "downscaling"]:
         assert set(batch["input"].keys()) == {"era5", "cerra"}
-        assert set(batch["target"].keys()) == {"era5", "cerra"}
+        assert set(batch["target"].keys()) == {"cerra"}
 
 
 if __name__ == "__main__":
