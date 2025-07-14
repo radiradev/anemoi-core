@@ -156,6 +156,7 @@ class InputNormalizer(BasePreprocessor):
         if not in_place:
             x = x.clone()
 
+        assert x.ndim == 5, "x should be (batch, time, n_vars, ens, latlons)"
         if data_index is not None:
             x.mul_(self._norm_mul[data_index]).add_(self._norm_add[data_index])
         else:

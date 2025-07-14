@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
+from einops import rearrange
 
 import pytorch_lightning as pl
 import torch
@@ -130,7 +131,7 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         self.config = config
         # self.model_data_indices = {self.datasets[0]: self.model.model.data_indices}  # TODO: generalize
 
-        self.save_hyperparameters()
+        #self.save_hyperparameters()
 
         self.latlons_data = graph_data[config.graph.data].x  # TODO: Generalize, link graph key to DataHandler key
 
@@ -302,6 +303,8 @@ class GraphForecasterMultiDataset(pl.LightningModule):
             Loss value, metrics, and predictions (per step)
 
         """
+        batch = {k: {n: rearrange(t, "bs t v ens xy -> bs t ens xy v") for n, t in v.items()} for k, v in batch.items()}
+
         # for validation not normalized in-place because remappers cannot be applied in-place
         batch["input"] = self.model.input_pre_processors(batch["input"], in_place=not validation_mode)
         batch["target"] = self.model.target_pre_processors(batch["target"], in_place=not validation_mode)

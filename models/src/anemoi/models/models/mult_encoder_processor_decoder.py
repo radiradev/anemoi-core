@@ -100,9 +100,9 @@ class AnemoiMultiModel(nn.Module):
                 in_channels_dst=self.node_attributes.attr_ndims[input_name] + self.input_channels[input_name],
                 hidden_dim=self.num_channels,
                 out_channels_dst=self.target_channels[target_name],
-                sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_data)],
+                sub_graph=self._graph_data[(self._graph_name_hidden, "to", target_name)],
                 src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-                dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
+                dst_grid_size=self.node_attributes.num_nodes[target_name],
             )
 
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
@@ -288,7 +288,7 @@ class AnemoiMultiModel(nn.Module):
     def forward(
         self, x: dict[str, Tensor], *, model_comm_group: Optional[ProcessGroup] = None, **kwargs
     ) -> dict[str, Tensor]:
-        batch_size = x["era5"].shape[0]
+        batch_size = x[list(x.keys())[0]].shape[0]
         ensemble_size = 1
 
         x_hidden = self.node_attributes(self._graph_name_hidden, batch_size=batch_size)

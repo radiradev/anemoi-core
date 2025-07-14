@@ -193,7 +193,6 @@ class _Processors(nn.Module):
 
 class Processors(nn.Module):
     def __init__(self, processors: dict[str, list[BasePreprocessor]], inverse: bool = False) -> None:
-
         super().__init__()
         self.dic = nn.ModuleDict({k: _Processors(v, inverse) for k, v in processors.items()})
 

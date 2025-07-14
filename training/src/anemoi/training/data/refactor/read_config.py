@@ -39,8 +39,8 @@ def convert_sample_config(config) -> Dict:
     return c
 
 def convert_dataset(dataset, group_name: str):
-    if not isinstance(dataset["dataset"], dict | DictConfig):
-        dataset["dataset"] = {"dataset": dataset}
+    if isinstance(dataset["dataset"], str):
+        dataset["dataset"] = {"dataset": dataset["dataset"]}
     dataset["dataset"]["set_group"] = group_name
     return dataset
 
