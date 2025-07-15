@@ -11,7 +11,7 @@ import einops
 import torch
 from hydra.utils import instantiate
 from torch import nn
-from torch_geometric.utils import HeteroData
+from torch_geometric.data import HeteroData
 
 
 class GraphNodeEmbedder(nn.Module):
