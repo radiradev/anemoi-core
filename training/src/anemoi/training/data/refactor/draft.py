@@ -254,17 +254,6 @@ class SampleProvider:
         return ShuffledSampleProvider(self._context, self, self, *args, **kwargs)
 
 
-class OffsetsGetter:
-    def __init__(self):
-        self.offsets = []
-
-    def visit(self, sample_provider: SampleProvider):
-        print("💬💬", "visiting", sample_provider.__class__.__name__)
-        if isinstance(sample_provider, DataHandler):
-            print("-> found ", sample_provider.offset)
-            self.offsets.append(sample_provider.offset)
-
-
 class ForwardSampleProvider(SampleProvider):
     def __init__(self, _context, _parent, sample: SampleProvider):
         super().__init__(_context, _parent)
@@ -279,7 +268,7 @@ class ShuffledSampleProvider(ForwardSampleProvider):
     emoji = "🎲"
 
     def __init__(self, _context, _parent, sample: SampleProvider, seed: int = None):
-        super().__init__(_context, _parent, sample=sample)
+        super().__init__(_context, _parent, sample)
         self.seed = seed
         length = len(self._forward)
         self.idx = np.arange(length)
@@ -526,7 +515,7 @@ class TupleSampleProvider(SampleProvider):
             iterable = self.iterables[0]
             self._samples = []
             for v in iterable.values:
-                config = {iterable.name: v, "sample": self.template}
+                config = {iterable.name: v, "structure": self.template}
                 print(f"Creating sample provider for {iterable.name} = {v} with config {config}")
                 sample = sample_provider_factory(self._context, _parent=self._parent, **config)
                 self._samples.append(sample)
@@ -772,6 +761,7 @@ class DataHandler:
             )
         self.config = sources[self.group].copy()
         self.preprocessors = self.config.get("processors", {})
+        self.configs = self.config.get("configs", {})
 
         variables = [f"{group}.{v}" for v in variables]
         self.variables = variables
@@ -874,20 +864,12 @@ class DataHandler:
             )
         return action(item)
 
-    def get_one(self, item: int, request):
-        if request not in ACTIONS:
-            raise ValueError(
-                f"Unknown request '{request}' in {request}. Available requests are {list(ACTIONS.keys())}."
-            )
-        return ACTIONS[request](item)
-
     def __repr__(self):
         return f"DataHandler {self.config['dataset']} @ {self.group} [{', '.join(self.variables)}]"
 
 
 def sample_provider_factory(_context=None, **kwargs):
     kwargs = kwargs.copy()
-    # kwargs = resolve_reference(kwargs)
 
     if "context" in kwargs:
         raise NotImplementedError(
@@ -909,18 +891,6 @@ def sample_provider_factory(_context=None, **kwargs):
 
     if "_parent" not in kwargs:
         kwargs["_parent"] = None
-
-    if "sample" in kwargs:
-        # backward compatibility
-        kwargs["structure"] = kwargs.pop("sample")
-    if "samples" in kwargs:
-        # backward compatibility
-        kwargs["structures"] = kwargs.pop("samples")
-
-    # if "structure" in kwargs:
-    #    kwargs["structure"] = sample_provider_factory(_context, **kwargs["structure"])
-    # if "structures" in kwargs:
-    #    kwargs["structures"] = sample_provider_factory(_context, **kwargs["structures"])
 
     if "offset" in kwargs:
         obj = OffsetSampleProvider(_context, **kwargs)
@@ -1001,7 +971,6 @@ def sample_provider_factory(_context=None, **kwargs):
 
 
 def check_sample_provider(obj):
-
     # check there is one root, and only one
     class FindRoot:
         def __init__(self):
@@ -1011,7 +980,6 @@ def check_sample_provider(obj):
             if sp.is_root:
                 self.roots.append(sp)
             return self
-
     roots = FindRoot().visit(obj).roots
     if len(roots) > 1:
         print(f"Found roots: {roots}")
@@ -1024,8 +992,6 @@ def check_sample_provider(obj):
         raise ValueError(
             f"Sample provider {obj} is not a root, but it should be. Please ensure the root sample provider is defined."
         )
-
-    # other checks todo
 
 
 # TEST ---------------------------------
@@ -1044,6 +1010,14 @@ sources:
       dataset: observations-testing-2018-2018-6h-v0
     metop_a:
       dataset: observations-testing-2018-2018-6h-v0
+      configs:
+        user_key_1:
+            "metop_a.scatss_1": "foo"
+            "metop_a.scatss_2": ["bar"]
+        user_key_2:
+            "metop_a.scatss_1": "foo"
+            "metop_a.scatss_2": ["bar"]
+
 
 training_selection:
   # start=...
@@ -1053,10 +1027,13 @@ validation_selection:
   start: "2018-11-02"
   # end=...
 
+
+sample:
+   use_case: "downscaling"
+   high_res: ......
+   
 sample:
       dictionary:
-
-
         ex_simple_tensor:
           tensor:
             - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
@@ -1106,7 +1083,6 @@ sample:
             - offset: ["-6h", "0h", "+6h"]
             - variables: ["era5.2t", "era5.10u"]
 
-
         # choose the order of dimensions in the tensor
         ex_tensor_3:
           tensor:
@@ -1151,7 +1127,6 @@ sample:
             template:
               variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
 
-
         ex_request_4:
           request: [name_to_index, statistics, shape]
           tuple:
@@ -1160,7 +1135,6 @@ sample:
             template:
               variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
 
-
         test_offset4:
           offset: "-6h"
           structure:
@@ -1168,34 +1142,7 @@ sample:
             structure:
               variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
 
-
-        # not implemented.
-        # test_offset4:
-        #   offset: "-6h"
-        #   dictionary:
-        #     a:
-        #       offset: "-1h"
-        #       variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-        #     b:
-        #       offset: "13h"
-        #       variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-        
-
-#        c:
-#          tuple:
-#            - offset: ["-12h", "-6h"]
-#            - variables: ["metop_a.scatss_1", "metop_a.scatss_2" "snow.sdepth_0"]
-#        cc:
-#          tuple:
-#            - variables: ["metop_a.scatss_1", "metop_a.scatss_2", "snow.sdepth_0"]
-#            - offset: ["-12h", "-6h"]
-#
-#        c_tensor:
-#          tuple:
-#            - offset: ["-12h", "-6h"]
-#            - variables: ["metop_a.scatss_1", "metop_a.scatss_2", "snow.sdepth_0"]
-#
-#        d:
+#        ex_not_implemented:
 #          tuple:
 #            - offset: ["-12h", "-6h"]
 #            - ensembles: 1 
@@ -1204,43 +1151,9 @@ sample:
 #                key:
 #                  variables: ["metop_a.scatss_1", "metop_a.scatss_2", "snow.sdepth_0"]
 
-
-          
-        #example_2:
-        #  tuple:
-        #    - offset: ["-12h", "-6h"]
-        #    #- lat_lon: ...
-        #    - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-       # era5:
-       #   tensor:
-       #        - offset: ["-12h"]
-       #        - ensembles: 1 
-       #        - variables: ["metop_a.scatss_1", "metop_b.scatss_2"]
-       #        - lat_lon: True
-
-       #   tensor:
-       #        - offset: ["-12h", "-6h"]
-       #        - lat_lon: True
-       #        - variables: ["metop_a.scatss_1", "metop_b.scatss_2"]
-
-       #   tuple:
-       #     - offset: ["-12h", "-6h"]
-       #     - variables: ["metop_a.scatss_1", "metop_b.scatss_2"]
-
-# what Mihai needs:
-#        metop:
-#          tuple:
-#            - offset: ["-12h", "-6h"]
-#            - tensor:
-#               - lat_lon: 'all' 'shard'  # 'slice(None, None)'
-#               - variables: ["metop_a.scatss_1", "metop_b.scatss_2"]
-
-
 """
 
     CONFIG = yaml.safe_load(yaml_str)
-    # with open("/etc/ecmwf/nfs/dh1_home_a/mafp/work/obs/ai-obs-gnn/obsgnn/data/full_config.yaml", "r") as f:
-    #    CONFIG = yaml.safe_load(f)
 
     def show_yaml(structure):
         return yaml.dump(structure, indent=2, sort_keys=False)
@@ -1263,11 +1176,6 @@ sample:
         if isinstance(structure, DataHandler):
             return str(structure)
         return structure
-
-    # for k, v in CONFIG.items():
-    #    print(f"💬 CONFIG {k}")
-    #    print(show_yaml(v))
-    # print("✅ -----------------")
 
     sample_config = CONFIG["sample"]
     training_context = dict(
@@ -1293,138 +1201,3 @@ sample:
         print(s)
         print("sp[1] = ", show_json(s[1]))
         print()
-
-    exit()
-    print("🆗 DataHandler")
-    s[2]
-    i = 3
-    results_structure = s[i]
-    print(show_json(results_structure))
-
-    print("Latitudes and longitudes:")
-    print(show_json(s.latitudes(i)))
-    print(show_json(s.longitudes(i)))
-    print("Processors:")
-    print(show_json(s.processors(i)))
-    print("Shapes:")
-    print(show_json(s.shape(i)))
-
-    class Resolver:
-        def __init__(self):
-            self._mapping = {}
-            self._count = 0
-
-        def register(self, result):
-            key = self._count
-            self._mapping[key] = result
-            self._count += 1
-            return key
-
-    def gather_results(resolver, structure):
-        if isinstance(structure, DataHandler):
-            return resolver.register(structure)
-        if isinstance(structure, list):
-            return [gather_results(resolver, item) for item in structure]
-        if isinstance(structure, dict):
-            return {k: gather_results(resolver, v) for k, v in structure.items()}
-        raise TypeError(f"Unsupported type in results structure: {type(structure)}")
-
-    # resolver = Resolver()
-    # struct = gather_results(resolver, results_structure)
-    # print("🔍 Gathered results structure:")
-    # print(show_json(struct))
-    # print("🔍 Resolver mapping:")
-    # for k, v in resolver._mapping.items():
-    #    print(f"{k}: {v}")
-
-# class OneGroupVariablesSampleProvider(SampleProvider):
-#    # This will request data related to one group, for a list of variables.
-#    # to the DataHandler
-#    label = "Group"
-#    emoji = "G️"
-#
-#    # emoji = "✉️"
-#    def __init__(self, _context: Context, _parent, group: str, variables: list[str]):
-#        lkj
-#        super().__init__(_context, _parent)
-#        self.group = group
-#        self.variables = variables
-#        self.dh = DataHandler(self._context, self.group, variables=self.variables)
-#
-#    def _build_tree(self, prefix: str = ""):
-#        return Tree(f"{prefix}{self.emoji}  {self.label}({self.group}:{'/'.join(self.variables)})")
-#
-#    def get(self, what, item: int):
-#        if what == "__getitem__":
-#            return self.dh[item][self.group]
-#        assert False, "lkjlk"
-#        # this may be moved to the Mother class
-#        if isinstance(what, str):
-#            out = self._get(what, item)
-#            assert len(out) == 1, f"Expected single item for {what}, got {len(out)}"
-#            key = list(out.keys())[0]
-#            return out[key]
-#        return self._get(*what, item)
-#
-#    @property
-#
-#    def _get(self, *what_and_item):
-#        *what, item = what_and_item
-#        dh = DataHandler(self._context, self.group, item, variables=self.variables)
-#        if item is not None:
-#            record = dh.record
-#
-#        data = {}
-#        for w in what:
-#            if w == "__getitem__":
-#                data["data"] = record[self.group]
-#            elif w == "latitudes":
-#                data["latitudes"] = record.latitudes[self.group]
-#            elif w == "longitudes":
-#                data["longitudes"] = record.longitudes[self.group]
-#            elif w == "timedeltas":
-#                second = np.timedelta64(1, "s")
-#                data["timedeltas"] = record.timedeltas[self.group] // second
-#            elif w == "name_to_index":
-#                data["name_to_index"] = record.name_to_index[self.group]
-#            elif w == "statistics":
-#                data["statistics"] = record.statistics[self.group]
-#            elif w == "processors":
-#                data["processors"] = [
-#                    [
-#                        name,
-#                        self._context.processor_factory(
-#                            config,
-#                            name_to_index=record.name_to_index[self.group],
-#                            statistics=record.statistics[self.group],
-#                        ),
-#                    ]
-#                    for name, config in dh.preprocessors.items()
-#                ]
-#            elif w == "num_channels":
-#                data["num_channels"] = len(self.variables)
-#            elif w == "shape":
-#                data["shape"] = record[self.group].shape
-#            else:
-#                raise ValueError(f"Unknown request '{w}' for Request sample provider")
-#        return data
-
-# ex_tensor:
-#   tensor:
-#     - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-#     - lat_lon: True
-#     - ensemble: True
-
-
-#     - lat_lon: True
-#     - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-#     - ensemble: True
-
-
-#     - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-#     - '...'
-#     - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-
-
-#     - '...'
-#     - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
