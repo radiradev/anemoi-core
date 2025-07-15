@@ -272,11 +272,10 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         ]
         return x
 
-    def rollout_step(
+    def _step(
         self,
         batch: dict[RecordProviderName, dict[str, torch.Tensor]],
-        rollout: int | None = None,
-        training_mode: bool = True,
+        batch_idx: int,
         validation_mode: bool = False,
     ) -> Generator[tuple[torch.Tensor | None, dict, list], None, None]:
         """Rollout step for the forecaster.
@@ -301,8 +300,10 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         ------
         Generator[tuple[Union[torch.Tensor, None], dict, list], None, None]
             Loss value, metrics, and predictions (per step)
-
         """
+        del batch_idx
+        # batch = self.allgather_batch(batch)
+
         batch = {k: {n: rearrange(t, "bs t v ens xy -> bs t ens xy v") for n, t in v.items()} for k, v in batch.items()}
 
         # for validation not normalized in-place because remappers cannot be applied in-place
@@ -314,51 +315,21 @@ class GraphForecasterMultiDataset(pl.LightningModule):
             self.define_delayed_scalers()
             self.is_first_step = False
 
-        assert rollout in [1, None], "Rollout NOT IMPLEMENTED yet"
-        for rollout_step in range(rollout or self.rollout):
-            #input_latlons = self.indexer.get_latlons(batch["input"])  # (G, S=1, B, 2)
-            #target_latlons = self.indexer.get_latlons(batch["target"])  # (G, S=1, B, 2)
+        #input_latlons = self.indexer.get_latlons(batch["input"])  # (G, S=1, B, 2)
+        #target_latlons = self.indexer.get_latlons(batch["target"])  # (G, S=1, B, 2)
 
-            #graph = self.graph_editor.update_graph(self.graph_data, input_latlons, target_latlons)
+        #graph = self.graph_editor.update_graph(self.graph_data, input_latlons, target_latlons)
 
-            # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
-            y_pred = self(batch["input"])
+        # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
+        y_pred = self(batch["input"], self.graph_data)
 
-            # y includes the auxiliary variables, so we must leave those out when computing the loss
-            loss = checkpoint(self.loss, y_pred, batch["target"], use_reentrant=False) if training_mode else None
+        # y includes the auxiliary variables, so we must leave those out when computing the loss
+        loss = checkpoint(self.loss, y_pred, batch["target"], use_reentrant=False)
 
-            # x = self.advance_input(x, y_pred, batch, rollout_step)
-
-            metrics_next = {}
-            if validation_mode:
-                metrics_next = self.calculate_val_metrics(y_pred, batch["target"], rollout_step)
-            yield loss, metrics_next, y_pred
-
-    def _step(
-        self,
-        batch: dict[RecordProviderName, dict[str, torch.Tensor]],
-        batch_idx: int,
-        validation_mode: bool = False,
-    ) -> tuple[dict[str, torch.Tensor], dict[str, Mapping[str, torch.Tensor]], dict[str, torch.Tensor]]:
-        del batch_idx
-        # batch = self.allgather_batch(batch)
-
-        loss = torch.zeros(1, dtype=torch.float32, device=self.device, requires_grad=False)
-        metrics = {}
-        y_preds = []
-
-        for loss_next, metrics_next, y_preds_next in self.rollout_step(
-            batch,
-            rollout=self.rollout,
-            training_mode=True,
-            validation_mode=validation_mode,
-        ):
-            loss += loss_next.sum()  # TODO figure out what happened here, should be a scalar
-            metrics.update(metrics_next)
-            y_preds.extend(y_preds_next)
-
-        loss *= 1.0 / self.rollout
-        return loss, metrics, y_preds
+        metrics_next = {}
+        if validation_mode:
+            metrics_next = self.calculate_val_metrics(y_pred, batch["target"])
+        yield loss, metrics_next, y_pred
 
     def allgather_batch(self, batch: torch.Tensor) -> torch.Tensor:
         """Allgather the batch-shards across the reader group.

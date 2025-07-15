@@ -286,7 +286,7 @@ class AnemoiMultiModel(nn.Module):
         return y
 
     def forward(
-        self, x: dict[str, Tensor], *, model_comm_group: Optional[ProcessGroup] = None, **kwargs
+        self, x: dict[str, Tensor], graph: HeteroData, *, model_comm_group: Optional[ProcessGroup] = None, **kwargs
     ) -> dict[str, Tensor]:
         batch_size = x[list(x.keys())[0]].shape[0]
         ensemble_size = 1
