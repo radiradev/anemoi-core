@@ -103,10 +103,12 @@ class Context:
         self.processor_factory = processor_factory
 
         assert isinstance(
-            self.offset, datetime.timedelta,
+            self.offset,
+            datetime.timedelta,
         ), f"Expected timedelta for offset, got {type(self.offset)}: {self.offset}"
         assert isinstance(
-            self.request, (type(None), list, str),
+            self.request,
+            (type(None), list, str),
         ), f"Expected list or string or None for request, got {type(self.request)}: {self.request}"
 
     def register_as_leaf(self, obj):
@@ -213,7 +215,8 @@ class SampleProvider:
     @property
     def name_to_index(self, item: int):
         raise NotImplementedError(
-            f"name_to_index is not implemented for {self.__class__.__name__}. Please implement name_to_index method.")
+            f"name_to_index is not implemented for {self.__class__.__name__}. Please implement name_to_index method."
+        )
 
     def statistics(self, item: int):
         raise NotImplementedError()
@@ -257,9 +260,11 @@ class ForwardSampleProvider(SampleProvider):
 
     def __len__(self):
         return len(self._forward)
+
     @property
     def name_to_index(self):
         return self._forward.name_to_index
+
 
 class ShuffledSampleProvider(ForwardSampleProvider):
     label = "Shuffled"
@@ -614,21 +619,33 @@ class TensorSampleProvider(SampleProvider):
 
     def __getitem__(self, item: int):
         data = self._tuple_sample_provider.__getitem__(item)
+
+        def process_element(k, elt):
+            if k == "data":
+                elt = np.array(elt)
+                self.transpose(elt)
+                return elt
+            else:
+                return elt
+
         if isinstance(data, dict):
-            return {k: self.transpose(np.array(v)) for k, v in data.items()}
-        return self.transpose(np.array(data))
+            return {k: process_element(k, v) for k, v in data.items()}
+
+        return process_element("data", data)
 
     @property
     def name_to_index(self):
         sample = self._tuple_sample_provider
         name_to_index = []
         name_to_index.append(sample.name_to_index)
-        print('❌❌❌', name_to_index)
+        # print('❌❌❌', name_to_index)
         return name_to_index
 
     def transpose(self, array):
         # Transpose the array to match the order of requested dimensions
         # TODO : clean up this logic, maybe use ... from einops
+        array = np.array(array)
+
         if not isinstance(array, np.ndarray):
             return array
 
@@ -846,12 +863,10 @@ class DataHandler:
             return self.ds.timedeltas[self.group]
         return self.ds[item].timedeltas[self.group]
 
-
-
-    def statistics(self, item=None):
+    def get_statistics(self, item=None):
         return self._statistics
 
-    def shape(self, item=None):
+    def get_shape(self, item=None):
         return self._shape
 
     def latitudes_longitudes(self, item=None):
@@ -859,13 +874,17 @@ class DataHandler:
         longs = self.longitudes(item)
         return np.array([lats, longs]).T
 
-    def configs(self, item=None):
+    def get_configs(self, item=None):
         return self._configs
+
+    def get_name_to_index(self, item=None):
+        return self._name_to_index
 
     def _get(self, item: int, request):
         assert isinstance(item, (type(None), int, np.integer)), f"Expected integer for item, got {type(item)}: {item}"
         assert isinstance(
-            request, (type(None), str, list, tuple),
+            request,
+            (type(None), str, list, tuple),
         ), f"Expected string or list for request, got {type(request)}: {request}"
 
         ACTIONS = {
@@ -875,9 +894,10 @@ class DataHandler:
             "longitudes": self.longitudes,
             "latitudes_longitudes": self.latitudes_longitudes,
             "timedeltas": self.timedeltas,
-            "statistics": self.statistics,
-            "shape": self.shape,
-            "configs": self.configs,
+            "statistics": self.get_statistics,
+            "shape": self.get_shape,
+            "configs": self.get_configs,
+            "name_to_index": self.get_name_to_index,
         }
 
         def do_action(r, item):
@@ -1175,7 +1195,7 @@ sample:
               variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
 
         ex_request_4:
-          request: [statistics, shape]
+          request: [statistics, shape, name_to_index]
           tuple:
             loop:
               - offset: [-6h, 0h]
@@ -1275,6 +1295,6 @@ sample:
         s = sample_provider_factory(**training_context, **config)
         print(s)
         name_to_index = s.name_to_index
-        print('✅✅✅name_to_index = ', name_to_index)
+        print("✅✅✅name_to_index = ", name_to_index)
         print("sp[1] = ", show_json(s[1]))
         print()
