@@ -307,6 +307,10 @@ class ForwardSampleProvider(SampleProvider):
         return self._forward.statistics
 
     @property
+    def shape(self):
+        return self._forward.shape
+
+    @property
     def configs(self):
         return self._forward.configs
 
@@ -387,6 +391,10 @@ class DictSampleProvider(SampleProvider):
         return {k: v.statistics for k, v in self._samples.items()}
 
     @property
+    def shape(self):
+        return {k: v.shape for k, v in self._samples.items()}
+
+    @property
     def configs(self):
         return {k: v.configs for k, v in self._samples.items()}
 
@@ -431,6 +439,10 @@ class _FilterSampleProvider(SampleProvider):
     @property
     def statistics(self):
         return self._forward.statistics
+
+    @property
+    def shape(self):
+        return self._forward.shape
 
     @property
     def configs(self):
@@ -639,6 +651,10 @@ class TupleSampleProvider(SampleProvider):
         return [s.statistics for s in self._samples]
 
     @property
+    def shape(self):
+        return [s.shape for s in self._samples]
+
+    @property
     def configs(self):
         return [s.configs for s in self._samples]
 
@@ -692,21 +708,29 @@ class TensorSampleProvider(SampleProvider):
 
     def __getitem__(self, item: int):
         data = self._tuple_sample_provider.__getitem__(item)
+        # if self._context.request == "data":
+        #    data_ = np.array(data)
+        #    if not isinstance(data_, np.ndarray):
+        #        print(type(data), data)
+        #        print(type(data_), data_)
+        #        raise TypeError(f"Expected numpy array, got {type(data_)}: {data_}")
+        #    return self.transpose(data_)
 
         def process_element(k, elt):
             if k == "data":
-                elt = np.array(elt)
-                self.transpose(elt)
+                elt_ = np.array(elt)
+                elt = self.transpose(elt_)
                 return elt
             else:
                 return elt
 
         if isinstance(data, dict):
             return {k: process_element(k, v) for k, v in data.items()}
-        if isinstance(data, (list, tuple)) and all(isinstance(elt, dict) for elt in data):
-            return [{k: process_element(k, v) for k, v in elt.items()} for elt in data]
 
-        return process_element("data", data)
+        if self._context.request == "data":
+            return process_element("data", data)
+
+        return data
 
     @property
     def name_to_index(self):
@@ -715,6 +739,11 @@ class TensorSampleProvider(SampleProvider):
     @property
     def statistics(self):
         return dict(variables=self._template_sample_provider.statistics)
+
+    @property
+    def shape(self):
+        # todo read from data handler and have 'dynamic' shape
+        return self[0].shape
 
     @property
     def configs(self):
@@ -809,6 +838,10 @@ class VariablesSampleProvider(SampleProvider):
     @property
     def statistics(self):
         return self.data_handler.statistics
+
+    @property
+    def shape(self):
+        return self.data_handler.shape
 
     @property
     def configs(self):
@@ -1388,3 +1421,118 @@ sample:
 #        print(t)
 #        print(t[1])
 #        print(s.configs)
+
+
+class Structure:
+    def __init__(self, content: dict):
+        self.content = content
+
+    def __repr__(self):
+        console = Console(record=True, width=120)
+        tree = self.tree()
+        with console.capture() as capture:
+            console.print(tree)
+        return capture.get()
+
+
+class TupleStructure(Structure):
+    def tree(self, prefix=""):
+        tree = Tree(prefix + "🔗")
+        for v in self.content:
+            tree.add(v.tree())
+        return tree
+
+
+class DictStructure(Structure):
+    def __init__(self, content: dict):
+        super().__init__(content)
+        for k in content:
+            setattr(self, k, content[k])
+
+    def tree(self, prefix=""):
+        tree = Tree(prefix + "📖")
+        for k, v in self.content.items():
+            tree.add(v.tree(prefix=f"{k} : "))
+        return tree
+
+
+class TensorStructure(Structure):
+    def __init__(self, content: dict, info):
+        for k, v in info.items():
+            setattr(self, k, v)
+        self.data = content
+
+    def tree(self, prefix=""):
+        return Tree(prefix + f"🔢 {self.data.shape} with mean {np.nanmean(self.data):.2f}")
+
+
+def structure(data, info):
+    check_structure(data, info)
+    if isinstance(data, dict):
+        return DictStructure({k: structure(v, {k_: v_[k] for k_, v_ in info.items()}) for k, v in data.items()})
+    if isinstance(data, (list, tuple)):
+        return TupleStructure([structure(elt, {k_: v_[i] for k_, v_ in info.items()}) for i, elt in enumerate(data)])
+    if isinstance(data, np.ndarray):
+        return TensorStructure(data, info)
+    raise ValueError(f"Unknown data type {type(data)}: {data}")
+
+
+def check_structure(data, info):
+    assert isinstance(info, dict), f"Expected info to be a dictionary, got {type(info)}: {info}"
+    if isinstance(data, dict):
+        for k, v in info.items():
+            assert isinstance(v, dict), f"Expected info[{k}] to be a dictionary, got {type(v)}: {v}"
+            for k_, v_ in v.items():
+                assert k_ in data, f"Key {k_} is in info[{k}] but not in data: {data.keys()}"
+    if isinstance(data, (list, tuple)):
+        for k, v in info.items():
+            assert isinstance(v, (list, tuple)), f"Expected info[{k}] to be a list or tuple, got {type(v)}: {v}"
+            assert len(v) == len(
+                data
+            ), f"Expected info[{k}] to have the same length as data, got {len(v)} != {len(data)}"
+
+
+print("............................")
+
+i = 1
+
+config = """dictionary:
+    key1:
+      tensor:
+        - variables: ["era5.2t", "era5.10u", "era5.10v"]
+        - offset: ["-6h"]
+    key2:
+      tensor:
+        - offset: ["-6h", "+6h"]
+        - variables: ["era5.2t", "era5.10u"]
+    key3:
+      tuple:
+        loop:
+          - offset: ["-6h", "0h", "+6h"]
+        template:
+          tensor:
+            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+"""
+config = yaml.safe_load(config)
+sp = sample_provider_factory(**training_context, **config)
+
+info = {
+    "name_to_index": sp.name_to_index,
+    "statistics": sp.statistics,
+    "configs": sp.configs,
+    "shape": sp.shape,
+}
+print("info_from_sample_provider", info)
+
+data = sp[i]
+print("Native types data : ", show_json(data))
+
+obj = structure(data, info)
+print("Data as object :")
+print(obj)
+print(f"{obj.key1.name_to_index=}")
+print(f"{obj.key1.configs=}")
+print(f"{obj.key1.statistics=}")
+print(f"{obj.key1.data=}")
+print(f"{obj.key1.data.shape=}")
+print(f"{obj.key1.shape=}")
