@@ -842,25 +842,26 @@ class DataHandler:
         ), f"Expected string or list for request, got {type(request)}: {request}"
 
         ACTIONS = {
-                None: self.__getitem__,
-                "data": self.__getitem__,
-                "latitudes": self.latitudes,
-                "longitudes": self.longitudes,
-                "latitudes_longitudes": self.latitudes_longitudes,
-                "timedeltas": self.timedeltas,
-                "name_to_index": self.name_to_index,
-                "statistics": self.statistics,
-                "shape": self.shape,
-                "configs": self.configs,
-            }
+            None: self.__getitem__,
+            "data": self.__getitem__,
+            "latitudes": self.latitudes,
+            "longitudes": self.longitudes,
+            "latitudes_longitudes": self.latitudes_longitudes,
+            "timedeltas": self.timedeltas,
+            "name_to_index": self.name_to_index,
+            "statistics": self.statistics,
+            "shape": self.shape,
+            "configs": self.configs,
+        }
+
         def do_action(r, item):
             action = ACTIONS.get(r)
 
             if action is not None:
                 return action(item)
 
-            if '.' in r:
-                rr, key = r.split('.')
+            if "." in r:
+                rr, key = r.split(".")
                 action = ACTIONS.get(rr)
                 if action is None:
                     raise ValueError(
@@ -868,9 +869,7 @@ class DataHandler:
                     )
                 return action(item)[key]
 
-            raise ValueError(
-                f"Unknown request '{r}' in {request}. Available requests are {list(ACTIONS.keys())}."
-            )
+            raise ValueError(f"Unknown request '{r}' in {request}. Available requests are {list(ACTIONS.keys())}.")
 
         if isinstance(request, (list, tuple)):
             dic = {}
