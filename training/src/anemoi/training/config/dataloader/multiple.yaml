@@ -61,6 +61,7 @@ grid_indices:
 training:
   start: null
   end: 2020
+  frequency: 6h
 
 validation_rollout: 1 # number of rollouts to use for validation, must be equal or greater than rollout expected by callbacks
 
@@ -71,3 +72,4 @@ validation:
 test:
   start: 2022
   end: null
+  frequency: 6h

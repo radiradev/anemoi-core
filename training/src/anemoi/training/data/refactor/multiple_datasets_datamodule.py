@@ -18,7 +18,6 @@ from torch.utils.data import DataLoader
 
 from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.training.data.refactor.dataset import NativeGridMultDataset
-from anemoi.training.data.refactor.draft import Context
 from anemoi.training.data.refactor.draft import sample_provider_factory
 from anemoi.training.data.refactor.read_config import get_config_dict
 from anemoi.training.data.utils import get_dataloader_config
@@ -50,12 +49,12 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
 
         config_dict = get_config_dict(config)
 
-        training_context = Context("training", sources=config_dict["data"], **config.dataloader.sampler.training)
-        validation_context = Context("validation", sources=config_dict["data"], **config.dataloader.sampler.validation)
+        training_context = dict(sources=config_dict["data"], **config.dataloader.sampler.training, frequency="6h")
+        validation_context = dict(sources=config_dict["data"], **config.dataloader.sampler.validation, frequency="6h")
 
         # Create Sampler provider
-        self.training_samples = sample_provider_factory(context=training_context, **config_dict["sample"])
-        self.validation_samples = sample_provider_factory(context=validation_context, **config_dict["sample"])
+        self.training_samples = sample_provider_factory(**training_context, **config_dict["sample"])
+        self.validation_samples = sample_provider_factory(**validation_context, **config_dict["sample"])
 
         dl_keys_to_ignore = ["sampler", "read_group_size", "grid_indices", "limit_batches"]
         self.train_dataloader_config = get_dataloader_config(

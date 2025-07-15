@@ -50,7 +50,7 @@ sample:
       - "z_300"
       - "z_700"
       - "z_1000"
-      timedeltas: ["0h"]
+      offset: ["0h"]
     hires:
       variables:
       - "cos_latitude"
@@ -64,7 +64,7 @@ sample:
       - "orog"
       - "lsm"
       - "skt"
-      timedeltas: ["0h"]
+      offset: ["0h"]
   target:
     hires:
       variables:
@@ -93,7 +93,7 @@ sample:
       - "z_700"
       - "z_1000"
       - "tp"
-      timedeltas: ["0h"]
+      offset: ["0h"]
 
 model:
   _target_: anemoi.models.models.mult_encoder_processor_decoder.AnemoiMultiModel

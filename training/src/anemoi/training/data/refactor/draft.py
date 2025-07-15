@@ -12,6 +12,7 @@ import yaml
 from hydra.utils import instantiate
 from rich.console import Console
 from rich.tree import Tree
+from omegaconf import DictConfig, ListConfig
 
 from anemoi.datasets import open_dataset
 from anemoi.utils.dates import frequency_to_string
@@ -413,6 +414,8 @@ class IterableDimension(Dimension):
         super().__init__(**kwargs)
         key = list(kwargs.keys())[0]
         assert key == self.name
+        if isinstance(kwargs[key], ListConfig):
+            kwargs[self.name] = list(kwargs[key])
         self.values = kwargs[key]
         if not isinstance(self.values, (list, tuple)):
             raise ValueError(f"Not implemented for non-list values in {self.name}: {self.values}")
@@ -466,6 +469,8 @@ class ValuesDimension(SelectionDimension):
 def dimension_factory(raw_dim):
     if isinstance(raw_dim, Dimension):
         return raw_dim
+    if isinstance(raw_dim, DictConfig):
+        raw_dim = dict(raw_dim)
     assert isinstance(raw_dim, dict), f"Expected dict, got {type(raw_dim)}: {raw_dim}"
     if "variables" in raw_dim:
         return VariablesDimension(**raw_dim)
@@ -929,6 +934,8 @@ def sample_provider_factory(_context=None, **kwargs):
         kwargs["tuple_"] = kwargs.pop("tuple")
         obj = TupleSampleProvider(_context, **kwargs)
     elif "variables" in kwargs:
+        if isinstance(kwargs["variables"], ListConfig):
+            kwargs["variables"] = list(kwargs["variables"])
         obj = VariablesSampleProvider(_context, **kwargs)
     elif "repeat" in kwargs:
         repeat = kwargs.pop("repeat")
@@ -936,6 +943,8 @@ def sample_provider_factory(_context=None, **kwargs):
     elif "structure" in kwargs:
         if isinstance(kwargs["structure"], SampleProvider):
             return kwargs["structure"]  # not mutate here?: todo: think about it
+        if isinstance(kwargs["structure"], DictConfig):
+            kwargs["structure"] = dict(kwargs["structure"])
         if isinstance(kwargs["structure"], dict):
             obj = sample_provider_factory(_context, **kwargs["structure"])
         else:
