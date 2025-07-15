@@ -52,6 +52,8 @@ class Context:
         #
         self._parent = _parent
 
+        # if not specified, take the offset from the parent context
+        # default offset is 0h
         if offset is None:
             offset = "0h"
         if isinstance(offset, str):
@@ -59,6 +61,13 @@ class Context:
         if _parent is not None:
             offset = _parent.offset + offset
         self.offset = offset
+
+        # request from the parent always overrides the request in the current context
+        if _parent is not None and _parent.request is not None:
+            request = _parent.request
+        if not isinstance(request, (type(None), list, str)):
+            raise ValueError(f"Expected list or string for request, got {type(self.request)}: {self.request}.")
+        self.request = request
 
         if _parent is not None:
             # todo : refactor this nonsensical list of forwarding to _parent
@@ -74,16 +83,10 @@ class Context:
                 sources = _parent.sources
             if _list_of_leaves is None:
                 _list_of_leaves = _parent._list_of_leaves
-            if request is None:
-                request = _parent.request
 
         self.start = start
         self.end = end
         self.frequency = frequency_to_timedelta(frequency)
-
-        if not isinstance(request, (type(None), list, str)):
-            raise ValueError(f"Expected list or string for request, got {type(self.request)}: {self.request}.")
-        self.request = request
 
         if _list_of_leaves is None:
             _list_of_leaves = []
@@ -980,6 +983,7 @@ def check_sample_provider(obj):
             if sp.is_root:
                 self.roots.append(sp)
             return self
+
     roots = FindRoot().visit(obj).roots
     if len(roots) > 1:
         print(f"Found roots: {roots}")
@@ -1135,12 +1139,19 @@ sample:
             template:
               variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
 
+
         test_offset4:
           offset: "-6h"
           structure:
             offset: "-6h"
             structure:
               variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+              
+        test_request1:
+          request: shape
+          structure:
+              variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+              request: [data, latitudes_longitudes, timedeltas]
 
 #        ex_not_implemented:
 #          tuple:
