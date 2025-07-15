@@ -23,6 +23,8 @@ from torch_geometric.data import HeteroData
 from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.layers.graph import NamedNodesAttributes
 from anemoi.training.data.refactor.draft import SampleProvider
+from anemoi.models.layers.projection import GraphNodeEmbedder
+from anemoi.models.layers.projection import NodeProjector
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -61,10 +63,19 @@ class AnemoiMultiModel(nn.Module):
         self.latent_residual_connection = True
         self.use_residual_connection = model_config.model.get("residual_connections", [])
 
-        self.input_channels: dict[str, int] = sample_provider.num_channels(0)["input"]
-        self.target_channels: dict[str, int] = sample_provider.num_channels(0)["target"]
-        self.input_names: list[str] = list(self.input_channels.keys())
-        self.target_names: list[str] = list(self.target_channels.keys())
+        self.num_input_channels: dict[str, int] = sample_provider.num_channels(0)["input"]
+        self.num_target_channels: dict[str, int] = sample_provider.num_channels(0)["target"]
+        self.input_names: list[str] = list(self.num_input_channels.keys())
+        self.target_names: list[str] = list(self.num_target_channels.keys())
+
+        # Embedding layers
+        self.graph_node_embedder = GraphNodeEmbedder(
+            num_input_channels=self.num_target_channels | self.num_input_channels, 
+            out_channels=self.num_channels
+        )
+        self.unembed_data = NodeProjector(
+            model_config.model.emb_data, in_features=self.num_channels, num_output_channels=self.num_target_channels
+        )
 
         # Encoder data -> hidden
         self.encoders = nn.ModuleDict({})
@@ -72,8 +83,8 @@ class AnemoiMultiModel(nn.Module):
             self.encoders[input_name] = instantiate(
                 model_config.model.encoder,
                 _recursive_=False,
-                in_channels_src=self.node_attributes.attr_ndims[input_name] + self.input_channels[input_name],
-                in_channels_dst=self.node_attributes.attr_ndims[self._graph_name_hidden],
+                in_channels_src=self.num_channels,
+                in_channels_dst=self.num_channels,
                 hidden_dim=self.num_channels,
                 sub_graph=self._graph_data[(self._graph_name_data, "to", self._graph_name_hidden)],
                 src_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
@@ -97,9 +108,9 @@ class AnemoiMultiModel(nn.Module):
                 model_config.model.decoder,
                 _recursive_=False,
                 in_channels_src=self.num_channels,
-                in_channels_dst=self.node_attributes.attr_ndims[input_name] + self.input_channels[input_name],
+                in_channels_dst=self.num_channels,
                 hidden_dim=self.num_channels,
-                out_channels_dst=self.target_channels[target_name],
+                out_channels_dst=self.num_target_channels[target_name],
                 sub_graph=self._graph_data[(self._graph_name_hidden, "to", target_name)],
                 src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
                 dst_grid_size=self.node_attributes.num_nodes[target_name],
@@ -123,8 +134,15 @@ class AnemoiMultiModel(nn.Module):
     def _assemble_input(self, name: str, x: torch.Tensor, batch_size: int) -> tuple[torch.Tensor, torch.Tensor]:
         # x.shape: (batch_size, multi_step, ens_dim, grid_size, num_vars)
 
+        # x_src_data_latent = self.graph_node_embedder(
+        #   graph[name], 
+        #   einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"), 
+        #   name, 
+        #   batch_size=batch_size
+        # )
+
         # normalize and add data positional info (lat/lon)
-        x_data_latent = torch.cat(
+        x_src_data_latent = torch.cat(
             (
                 einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
                 self.node_attributes(name, batch_size=batch_size),
@@ -134,10 +152,16 @@ class AnemoiMultiModel(nn.Module):
 
         x_skip = x[:, -1, :, :, :]
 
-        return x_data_latent, x_skip
+        return x_src_data_latent, x_skip
 
-    def _assemble_target(self, name: str, x: torch.Tensor, batch_size: int) -> tuple[torch.Tensor, torch.Tensor]:
-        return self.node_attributes(name, batch_size=batch_size)
+    def _assemble_target(self, name: str, batch_size: int) -> tuple[torch.Tensor, torch.Tensor]:
+        # x_dst_data_latent = self.graph_node_embedder(
+        #   graph[name], 
+        #   name, 
+        #   batch_size=batch_size
+        # )
+        x_dst_data_latent = self.node_attributes(name, batch_size=batch_size)
+        return x_dst_data_latent
 
     def _disassemble_target(
         self,
@@ -200,6 +224,7 @@ class AnemoiMultiModel(nn.Module):
     def encode(
         self,
         x: dict[str, torch.Tensor],
+        graph: HeteroData,
         shard_shapes_hidden: tuple[list],
         batch_size: int,
         model_comm_group: Optional[ProcessGroup] = None,
@@ -215,6 +240,7 @@ class AnemoiMultiModel(nn.Module):
             x_data_latent[name], x_hidden_latent[name] = self._run_mapper(
                 self.encoders[name],
                 (x_input_data, x_hidden),
+                sub_graph=graph[(name, "to", self._graph_name_hidden)],
                 batch_size=batch_size,
                 shard_shapes=(shard_shapes_input_data, shard_shapes_hidden),
                 model_comm_group=model_comm_group,
@@ -224,11 +250,12 @@ class AnemoiMultiModel(nn.Module):
 
     def merge_latents(self, latents: dict[str, torch.Tensor]) -> torch.Tensor:
         # TODO: implement different strategies: sum, average, learnable, ...
-        return latents["era5"]
+        return latents[list(latents.keys())[0]]
 
     def decode(
         self,
         x: dict[str, torch.Tensor],
+        graph: HeteroData,
         shard_shapes_hidden: tuple[list],
         batch_size: int,
         ensemble_size: int,
@@ -241,7 +268,7 @@ class AnemoiMultiModel(nn.Module):
             if name in x_target_data:
                 x_target_latent = x_target_data[name]
             else:
-                x_target_latent = self._assemble_target(name, x_target_data, batch_size)
+                x_target_latent = self._assemble_target(name, batch_size)
 
             shard_shapes_target_data = get_shape_shards(
                 x_target_latent, 0, model_comm_group
@@ -250,6 +277,7 @@ class AnemoiMultiModel(nn.Module):
             x_out[name] = self._run_mapper(
                 self.decoders[name],
                 (x_hidden_latent, x_target_latent),
+                sub_graph=graph[(self._graph_name_hidden, "to", name)],
                 batch_size=batch_size,
                 shard_shapes=(shard_shapes_hidden, shard_shapes_target_data),
                 model_comm_group=model_comm_group,
@@ -292,10 +320,14 @@ class AnemoiMultiModel(nn.Module):
         ensemble_size = 1
 
         x_hidden = self.node_attributes(self._graph_name_hidden, batch_size=batch_size)
+        # x_hidden = self.graph_node_embedder(
+        #   graph[self._graph_name_hidden], None, self._graph_name_hidden, batch_size=batch_size
+        # )
         shard_shapes_hidden = get_shape_shards(x_hidden, 0, model_comm_group)
 
         x_data_latent, x_hidden_latent, x_data_skip = self.encode(
             (x, x_hidden),
+            graph,
             shard_shapes_hidden=shard_shapes_hidden,
             batch_size=batch_size,
             model_comm_group=model_comm_group,
@@ -305,6 +337,7 @@ class AnemoiMultiModel(nn.Module):
 
         x_latent_proc = self.processor(
             x_hidden_latent,
+            graph[(self._graph_name_hidden, "to", self._graph_name_hidden)],
             batch_size=batch_size,
             shard_shapes=shard_shapes_hidden,
             model_comm_group=model_comm_group,
@@ -315,6 +348,7 @@ class AnemoiMultiModel(nn.Module):
 
         x_out = self.decode(
             (x_hidden_latent, x_data_latent),
+            graph,
             shard_shapes_hidden=shard_shapes_hidden,
             batch_size=batch_size,
             ensemble_size=ensemble_size,
