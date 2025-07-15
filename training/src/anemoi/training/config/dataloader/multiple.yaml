@@ -68,8 +68,8 @@ validation_rollout: 1 # number of rollouts to use for validation, must be equal
 validation:
   start: 2021
   end: 2021
+  frequency: 6h
 
 test:
   start: 2022
   end: null
-  frequency: 6h
