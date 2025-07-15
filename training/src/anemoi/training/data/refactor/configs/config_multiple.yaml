@@ -4,8 +4,7 @@ sample:
       dictionary:
         era5:
           tensor:
-            timedeltas: ["-6h", "0h"]
-            variables:
+            - variables:
               - cos_latitude
               - sin_latitude
               - cos_longitude
@@ -15,25 +14,26 @@ sample:
               - 2d
               - q_100
               - q_1000
-            data: era5
+              data: era5
+            - offset: ["-6h", "0h"]
         cerra:
           tensor:
-            timedeltas: ["0h"]
-            variables:
+            - variables:
               - cos_latitude
               - sin_latitude
               - cos_longitude
               - sin_longitude
-            data: cerra
+              data: cerra
+            - offset: ["-6h", "0h"]
     target:
       dictionary:
         cerra:
           tensor:
-            timedeltas: ["6h"]
-            variables:
+            - variables:
               - tp
               - t_100
-            data: cerra 
+              data: cerra 
+            - offset: ["6h"]
 
 data:
   era5:
