@@ -409,6 +409,9 @@ class IterableDimension(Dimension):
         if isinstance(kwargs[key], ListConfig):
             kwargs[self.name] = list(kwargs[key])
         self.values = kwargs[key]
+        self.check()
+
+    def check(self):
         if not isinstance(self.values, (list, tuple)):
             raise ValueError(f"Not implemented for non-list values in {self.name}: {self.values}")
 
@@ -427,6 +430,9 @@ class VariablesDimension(IterableDimension):
         super().__init__(**kwargs)
         if isinstance(self.values, dict):
             self.values = [f"{k}.{v}" for k, vals in self.values.items() for v in vals]
+
+    def check(self):
+        pass
 
 
 class RepeatDimension(IterableDimension):
