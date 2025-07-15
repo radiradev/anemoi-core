@@ -764,7 +764,7 @@ class DataHandler:
             )
         self.config = sources[self.group].copy()
         self.preprocessors = self.config.get("processors", {})
-        self.configs = self.config.get("configs", {})
+        self._configs = self.config.get("configs", {})
 
         variables = [f"{group}.{v}" for v in variables]
         self.variables = variables
@@ -832,6 +832,9 @@ class DataHandler:
         longs = self.longitudes(item)
         return np.array([lats, longs]).T
 
+    def configs(self, item=None):
+        return self._configs
+
     def get(self, item: int, request):
         assert isinstance(item, (type(None), int, np.integer)), f"Expected integer for item, got {type(item)}: {item}"
         assert isinstance(
@@ -839,33 +842,43 @@ class DataHandler:
         ), f"Expected string or list for request, got {type(request)}: {request}"
 
         ACTIONS = {
-            None: self.__getitem__,
-            "data": self.__getitem__,
-            "latitudes": self.latitudes,
-            "longitudes": self.longitudes,
-            "latitudes_longitudes": self.latitudes_longitudes,
-            "timedeltas": self.timedeltas,
-            "name_to_index": self.name_to_index,
-            "statistics": self.statistics,
-            "shape": self.shape,
-        }
-        if isinstance(request, (list, tuple)):
-            dic = {}
-            for r in request:
-                if r not in ACTIONS:
+                None: self.__getitem__,
+                "data": self.__getitem__,
+                "latitudes": self.latitudes,
+                "longitudes": self.longitudes,
+                "latitudes_longitudes": self.latitudes_longitudes,
+                "timedeltas": self.timedeltas,
+                "name_to_index": self.name_to_index,
+                "statistics": self.statistics,
+                "shape": self.shape,
+                "configs": self.configs,
+            }
+        def do_action(r, item):
+            action = ACTIONS.get(r)
+
+            if action is not None:
+                return action(item)
+
+            if '.' in r:
+                rr, key = r.split('.')
+                action = ACTIONS.get(rr)
+                if action is None:
                     raise ValueError(
                         f"Unknown request '{r}' in {request}. Available requests are {list(ACTIONS.keys())}."
                     )
-                action = ACTIONS[r]
-                dic[r] = action(item)
+                return action(item)[key]
+
+            raise ValueError(
+                f"Unknown request '{r}' in {request}. Available requests are {list(ACTIONS.keys())}."
+            )
+
+        if isinstance(request, (list, tuple)):
+            dic = {}
+            for r in request:
+                dic[r] = do_action(r, item)
             return dic
 
-        action = ACTIONS.get(request)
-        if action is None:
-            raise ValueError(
-                f"Unknown request '{request}' in {request}. Available requests are {list(ACTIONS.keys())}."
-            )
-        return action(item)
+        return do_action(request, item)
 
     def __repr__(self):
         return f"DataHandler {self.config['dataset']} @ {self.group} [{', '.join(self.variables)}]"
@@ -1021,6 +1034,11 @@ sources:
         user_key_2:
             "metop_a.scatss_1": "foo"
             "metop_a.scatss_2": ["bar"]
+        normaliser:
+            "metop_a.scatss_1": "mean-std"
+            "scatss_2": "min-max"
+            "scatss_3": {"name": "custom-normaliser", "theta": 0.5, "rho": 0.1}
+
 
 
 training_selection:
@@ -1146,14 +1164,22 @@ sample:
             offset: "-6h"
             structure:
               variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-              
+
         test_request1:
           request: shape
           structure:
               variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
               request: [data, latitudes_longitudes, timedeltas]
 
-#        ex_not_implemented:
+        test_request1:
+          variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+          request: configs
+
+        test_request2:
+          variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+          request: configs.normaliser
+
+#        et_implemented:
 #          tuple:
 #            - offset: ["-12h", "-6h"]
 #            - ensembles: 1 
