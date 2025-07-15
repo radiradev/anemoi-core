@@ -619,8 +619,8 @@ class TensorSampleProvider(SampleProvider):
             dimensions = dimensions + [DataDimension(name=f"dim_{i}") for i in range(missing_dims)]
             order += [f"dim_{i}" for i in range(missing_dims)]
 
-        assert len(dimensions) == array.ndim, f"Expected {len(self.dimensions)} dimensions, got {array.ndim} for {data}"
-        assert len(order) == len(dimensions), f"Expected {len(self.dimensions)} order, got {len(order)} for {data}"
+        assert len(dimensions) == array.ndim, f"Expected {len(self.dimensions)} dimensions, got {array.ndim} for {array}"
+        assert len(order) == len(dimensions), f"Expected {len(self.dimensions)} order, got {len(order)} for {array}"
 
         current_order = [
             dim.name for dim in dimensions if isinstance(dim, IterableDimension) and not dim == self.template

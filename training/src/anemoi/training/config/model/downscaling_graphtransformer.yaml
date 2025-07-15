@@ -121,11 +121,15 @@ layer_kernels_processor:
     _target_: anemoi.models.layers.normalization.AutocastLayerNorm
     bias: False
 
+emb_data:
+  _target_: anemoi.models.layers.mlp.MLP
+  hidden_dim: 128
+  n_extra_layers: 0
+  activation: GELU
 
 processor:
-  _target_: anemoi.models.layers.processor.GraphTransformerProcessor
+  _target_: anemoi.models.layers.processor.DynamicGraphTransformerProcessor
   # activation: ${model.activation}
-  trainable_size: ${model.trainable_parameters.hidden2hidden}
   sub_graph_edge_attributes: ${model.attributes.edges}
   num_layers: 16
   num_chunks: 2
@@ -137,8 +141,7 @@ processor:
 
 
 encoder:
-  _target_: anemoi.models.layers.mapper.GraphTransformerForwardMapper
-  trainable_size: ${model.trainable_parameters.data2hidden}
+  _target_: anemoi.models.layers.mapper.DynamicGraphTransformerForwardMapper
   sub_graph_edge_attributes: ${model.attributes.edges}
   # activation: ${model.activation}
   num_chunks: 1
@@ -149,8 +152,7 @@ encoder:
   layer_kernels: ${model.layer_kernels}
 
 decoder:
-  _target_: anemoi.models.layers.mapper.GraphTransformerBackwardMapper
-  trainable_size: ${model.trainable_parameters.hidden2data}
+  _target_: anemoi.models.layers.mapper.DynamicGraphTransformerBackwardMapper
   sub_graph_edge_attributes: ${model.attributes.edges}
   # activation: ${model.activation}
   num_chunks: 1

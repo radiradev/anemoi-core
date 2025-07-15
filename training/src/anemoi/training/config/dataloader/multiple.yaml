@@ -5,9 +5,11 @@ sampler:
   training:
     start: 2015
     end: 2018
+    frequency: 6h
   validation:
     start: 2019
     end: 2020
+    frequency: 6h
 
 # ============
 # read_group_size:
@@ -61,14 +63,12 @@ grid_indices:
 training:
   start: null
   end: 2020
-  frequency: 6h
 
 validation_rollout: 1 # number of rollouts to use for validation, must be equal or greater than rollout expected by callbacks
 
 validation:
   start: 2021
   end: 2021
-  frequency: 6h
 
 test:
   start: 2022

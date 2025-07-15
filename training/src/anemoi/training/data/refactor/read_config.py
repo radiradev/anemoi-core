@@ -28,14 +28,13 @@ def get_sample_config_dict(sample: DictConfig, which: str) -> Dict:
 
 
 def convert_source(config, name: str) -> Dict:
-    config["data"] = name
     return {
         "tensor": [
-            dict(variables=config["variables"]), 
+            dict(variables=[f"{name}.{v}" for v in config["variables"]]), 
             dict(offset=config["offset"])
         ],
         "request": [
-            "data", "latitudes_longitudes", "name_to_index", "processors", "shape"
+            "data", "latitudes_longitudes", "name_to_index", "statistics", "configs", "shape"
         ]
     }
 
