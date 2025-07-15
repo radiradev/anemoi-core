@@ -491,6 +491,8 @@ def dimension_factory(raw_dim):
     if "repeat" in raw_dim:
         warnings.warn("repeat should only be used for testing.")
         return RepeatDimension(**raw_dim)
+    if "lat_lon" in raw_dim:
+        raise ValueError("'lat_lon' dimension is not supported'")
     return DataDimension(**raw_dim)
 
 
@@ -516,7 +518,9 @@ class TupleSampleProvider(SampleProvider):
         self.template = template
 
     def __len__(self):
-        assert False, f"This object must have mutated before using it. {self.iterables}, {self.template}"
+        lenghts = [len(s) for s in self._samples]
+        assert len(set(lenghts)) == 1, f"Samples in tuple have different lengths: {lenghts}. Cannot determine length."
+        return lenghts[0]
 
     def invite(self, visitor):
         super().invite(visitor)
@@ -805,7 +809,7 @@ class DataHandler:
 
         if self.group not in sources:
             raise ValueError(
-                f"Group '{self.group}' not found in sources: available groups are {list(self.sources.keys())}",
+                f"Group '{self.group}' not found in sources: available groups are {list(sources.keys())}",
             )
         self.config = sources[self.group].copy()
         self.preprocessors = self.config.get("processors", {})
@@ -1251,6 +1255,7 @@ sample:
         CONFIG = yaml.safe_load(yaml_str)
         sample_config = CONFIG["sample"]
         sources_config = CONFIG["sources"]["training"]
+    print(sources_config)
 
     def show_yaml(structure):
         return yaml.dump(structure, indent=2, sort_keys=False)
@@ -1284,8 +1289,8 @@ sample:
         print(f"[yellow]- {key} : building sample_provider[/yellow]")
         print(yaml.dump(config, indent=2, sort_keys=False))
         s = sample_provider_factory(**training_context, **config)
-        # print(len(s))
         print(s)
+        print(len(s))
         print("----------------------------")
 
     print("✅✅  --------")
