@@ -219,7 +219,9 @@ class SampleProvider:
         )
 
     def statistics(self, item: int):
-        raise NotImplementedError()
+        raise NotImplementedError(
+            f"statistics is not implemented for {self.__class__.__name__}. Please implement statistics method."
+        )
 
     def processors(self, item: int):
         raise NotImplementedError()
@@ -264,6 +266,14 @@ class ForwardSampleProvider(SampleProvider):
     @property
     def name_to_index(self):
         return self._forward.name_to_index
+
+    @property
+    def statistics(self, item):
+        return super().statistics(item)
+
+    @property
+    def frequency(self):
+        return self._forward.frequency
 
 
 class ShuffledSampleProvider(ForwardSampleProvider):
@@ -333,6 +343,10 @@ class DictSampleProvider(SampleProvider):
     def name_to_index(self):
         return {k: v.name_to_index for k, v in self._samples.items()}
 
+    @property
+    def statistics(self):
+        return {k: v.statistics for k, v in self._samples.items()}
+
     def _build_tree(self, prefix=""):
         tree = Tree(prefix + self.label)
         for k, v in self._samples.items():
@@ -374,6 +388,10 @@ class _FilterSampleProvider(SampleProvider):
     @property
     def name_to_index(self):
         return self._forward.name_to_index
+
+    @property
+    def statistics(self):
+        return self._forward.statistics
 
     def __getitem__(self, item: int):
         return self._forward.__getitem__(item)
@@ -572,6 +590,10 @@ class TupleSampleProvider(SampleProvider):
     def name_to_index(self):
         return [s.name_to_index for s in self._samples]
 
+    @property
+    def statistics(self):
+        return [s.statistics for s in self._samples]
+
     def _build_tree(self, prefix=""):
         tree = Tree(prefix + self.emoji + self.label + f" ({len(self._samples)} samples)")
         for s in self._samples:
@@ -640,10 +662,25 @@ class TensorSampleProvider(SampleProvider):
     @property
     def name_to_index(self):
         sample = self._tuple_sample_provider
-        name_to_index = []
-        name_to_index.append(sample.name_to_index)
-        # print('❌❌❌', name_to_index)
-        return name_to_index
+        x = sample.name_to_index
+        return self._flatten(x)
+
+    @property
+    def statistics(self):
+        sample = self._tuple_sample_provider
+        x = sample.statistics
+        return self._flatten(x)
+
+    def _flatten(self, x):
+        if isinstance(x, dict):
+            return x
+        assert len(set([str(_) for _ in x])) == 1, f"Expected a single name_to_index, got {x} for {self}"
+        x = x[0]
+        if isinstance(x, dict):
+            return x
+        raise NotImplementedError(
+            f"name_to_index not implemented for tensor with more than two dimensions: {self.dimensions}"
+        )
 
     def transpose(self, array):
         # Transpose the array to match the order of requested dimensions
@@ -725,6 +762,10 @@ class VariablesSampleProvider(SampleProvider):
     @property
     def name_to_index(self):
         return self.data_handler.name_to_index
+
+    @property
+    def statistics(self):
+        return self.data_handler.statistics
 
     def set_min_max_offsets(self, min_offset=None, max_offset=None, dropped_samples=None):
         self.min_offset = min_offset
@@ -932,6 +973,10 @@ class DataHandler:
     @property
     def name_to_index(self):
         return self._name_to_index
+
+    @property
+    def statistics(self):
+        return self._statistics
 
     def __repr__(self):
         return f"DataHandler {self.config['dataset']} @ {self.group} [{', '.join(self.variables)}]"
@@ -1300,6 +1345,8 @@ sample:
         s = sample_provider_factory(**training_context, **config)
         print(s)
         name_to_index = s.name_to_index
-        print("✅✅✅name_to_index = ", name_to_index)
+        print(f"name_to_index = {name_to_index}")
+        statistitics = s.statistics
+        print(f"statistics = {statistitics}")
         print("sp[1] = ", show_json(s[1]))
         print()
