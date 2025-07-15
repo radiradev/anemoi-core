@@ -188,6 +188,7 @@ class SampleProvider:
     def __init__(self, _context: Context, _parent):
         self._context = _context
         self._parent = _parent
+        self._frequency = self._context.frequency
 
     def invite(self, visitor):
         visitor.visit(self)
@@ -201,40 +202,34 @@ class SampleProvider:
         )
 
     def latitudes(self, item: int):
-        self._check_item(item)
-        return self.get("latitudes", item)
+        raise NotImplementedError()
 
     def longitudes(self, item: int):
-        self._check_item(item)
-        return self.get("longitudes", item)
+        raise NotImplementedError()
 
     def timedeltas(self, item: int):
-        self._check_item(item)
-        return self.get("timedeltas", item)
+        raise NotImplementedError()
 
+    @property
     def name_to_index(self, item: int):
-        self._check_item(item)
-        return self.get("name_to_index", item)
+        raise NotImplementedError(
+            f"name_to_index is not implemented for {self.__class__.__name__}. Please implement name_to_index method.")
 
     def statistics(self, item: int):
-        self._check_item(item)
-        return self.get("statistics", item)
+        raise NotImplementedError()
 
     def processors(self, item: int):
-        self._check_item(item)
-        return self.get("processors", item)
+        raise NotImplementedError()
 
     def num_channels(self, item: int):
-        self._check_item(item)
-        return self.get("num_channels", item)
+        raise NotImplementedError()
 
     def shape(self, item: int):
-        self._check_item(item)
-        return self.get("shape", item)
+        raise NotImplementedError()
 
     @property
     def frequency(self):
-        return frequency_to_timedelta("6h")
+        return self._frequency
 
     def __repr__(self):
         console = Console(record=True, width=120)
@@ -262,7 +257,9 @@ class ForwardSampleProvider(SampleProvider):
 
     def __len__(self):
         return len(self._forward)
-
+    @property
+    def name_to_index(self):
+        return self._forward.name_to_index
 
 class ShuffledSampleProvider(ForwardSampleProvider):
     label = "Shuffled"
@@ -327,6 +324,10 @@ class DictSampleProvider(SampleProvider):
             item = item + 1  # ✅✅ TODO provide the correct lenght
         return {k: v.__getitem__(item) for k, v in self._samples.items()}
 
+    @property
+    def name_to_index(self):
+        return {k: v.name_to_index for k, v in self._samples.items()}
+
     def _build_tree(self, prefix=""):
         tree = Tree(prefix + self.label)
         for k, v in self._samples.items():
@@ -364,6 +365,10 @@ class _FilterSampleProvider(SampleProvider):
     def invite(self, visitor):
         super().invite(visitor)
         self._forward.invite(visitor)
+
+    @property
+    def name_to_index(self):
+        return self._forward.name_to_index
 
     def __getitem__(self, item: int):
         return self._forward.__getitem__(item)
@@ -554,6 +559,10 @@ class TupleSampleProvider(SampleProvider):
 
         return recurse(self._samples)
 
+    @property
+    def name_to_index(self):
+        return [s.name_to_index for s in self._samples]
+
     def _build_tree(self, prefix=""):
         tree = Tree(prefix + self.emoji + self.label + f" ({len(self._samples)} samples)")
         for s in self._samples:
@@ -609,9 +618,19 @@ class TensorSampleProvider(SampleProvider):
             return {k: self.transpose(np.array(v)) for k, v in data.items()}
         return self.transpose(np.array(data))
 
+    @property
+    def name_to_index(self):
+        sample = self._tuple_sample_provider
+        name_to_index = []
+        name_to_index.append(sample.name_to_index)
+        print('❌❌❌', name_to_index)
+        return name_to_index
+
     def transpose(self, array):
         # Transpose the array to match the order of requested dimensions
         # TODO : clean up this logic, maybe use ... from einops
+        if not isinstance(array, np.ndarray):
+            return array
 
         dimensions = self.dimensions
         order = self.order.copy()
@@ -682,6 +701,10 @@ class VariablesSampleProvider(SampleProvider):
         self.offset = frequency_to_timedelta(self._context.offset)
         self._context.register_as_leaf(self)
 
+    @property
+    def name_to_index(self):
+        return self.data_handler.name_to_index
+
     def set_min_max_offsets(self, min_offset=None, max_offset=None, dropped_samples=None):
         self.min_offset = min_offset
         self.max_offset = max_offset
@@ -728,7 +751,7 @@ class VariablesSampleProvider(SampleProvider):
             msg = f"Item {item} ({actual_item}) is out of bounds with i_offset {self.i_offset}, lenght of the dataset is {len(self.data_handler)} and dropped_samples is {self.dropped_samples}."
             raise IndexError(msg)
 
-        return self.data_handler.get(actual_item, request=self.request)
+        return self.data_handler._get(actual_item, request=self.request)
 
     def _build_tree(self, prefix: str = ""):
         def _(x):
@@ -823,8 +846,7 @@ class DataHandler:
             return self.ds.timedeltas[self.group]
         return self.ds[item].timedeltas[self.group]
 
-    def name_to_index(self, item=None):
-        return self._name_to_index
+
 
     def statistics(self, item=None):
         return self._statistics
@@ -840,7 +862,7 @@ class DataHandler:
     def configs(self, item=None):
         return self._configs
 
-    def get(self, item: int, request):
+    def _get(self, item: int, request):
         assert isinstance(item, (type(None), int, np.integer)), f"Expected integer for item, got {type(item)}: {item}"
         assert isinstance(
             request, (type(None), str, list, tuple),
@@ -853,7 +875,6 @@ class DataHandler:
             "longitudes": self.longitudes,
             "latitudes_longitudes": self.latitudes_longitudes,
             "timedeltas": self.timedeltas,
-            "name_to_index": self.name_to_index,
             "statistics": self.statistics,
             "shape": self.shape,
             "configs": self.configs,
@@ -883,6 +904,10 @@ class DataHandler:
             return dic
 
         return do_action(request, item)
+
+    @property
+    def name_to_index(self):
+        return self._name_to_index
 
     def __repr__(self):
         return f"DataHandler {self.config['dataset']} @ {self.group} [{', '.join(self.variables)}]"
@@ -1150,7 +1175,7 @@ sample:
               variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
 
         ex_request_4:
-          request: [name_to_index, statistics, shape]
+          request: [statistics, shape]
           tuple:
             loop:
               - offset: [-6h, 0h]
@@ -1158,26 +1183,26 @@ sample:
               variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
 
 
-        test_offset4:
-          offset: "-6h"
-          structure:
-            offset: "-6h"
-            structure:
-              variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-
-        test_request1:
-          request: [data, shape]
-          structure:
-              variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-              request: [data, latitudes_longitudes, timedeltas]
-
-        test_request2:
-          variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-          request: configs
-
-        test_request3:
-          variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-          request: configs.normaliser
+        #test_offset4:
+        #  offset: "-6h"
+        #  structure:
+        #    offset: "-6h"
+        #    structure:
+        #      variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+        #
+        #test_request1:
+        #  request: [data, shape]
+        #  structure:
+        #      variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+        #      request: [data, latitudes_longitudes, timedeltas]
+        #
+        #test_request2:
+        #  variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+        #  request: configs
+        #
+        #test_request3:
+        #  variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+        #  request: configs.normaliser
 
 #        et_implemented:
 #          tuple:
@@ -1190,7 +1215,22 @@ sample:
 
 """
 
-    CONFIG = yaml.safe_load(yaml_str)
+    import sys
+
+    if len(sys.argv) > 1:
+        import yaml
+
+        path = yaml.safe_load(sys.argv[1])
+        with open(path, "r") as f:
+            yaml_str = f.read()
+        CONFIG = yaml.safe_load(yaml_str)
+        sample_config = CONFIG["sample"]
+        sources_config = CONFIG["data"]
+
+    else:
+        CONFIG = yaml.safe_load(yaml_str)
+        sample_config = CONFIG["sample"]
+        sources_config = CONFIG["sources"]["training"]
 
     def show_yaml(structure):
         return yaml.dump(structure, indent=2, sort_keys=False)
@@ -1213,10 +1253,9 @@ sample:
             return str(structure)
         return structure
 
-    sample_config = CONFIG["sample"]
     training_context = dict(
         # sources=CONFIG["data"],
-        sources=CONFIG["sources"]["training"],
+        sources=sources_config,
         start=None,
         end=None,
         frequency="6h",
@@ -1235,5 +1274,7 @@ sample:
         print(yaml.dump(config, indent=2, sort_keys=False))
         s = sample_provider_factory(**training_context, **config)
         print(s)
+        name_to_index = s.name_to_index
+        print('✅✅✅name_to_index = ', name_to_index)
         print("sp[1] = ", show_json(s[1]))
         print()
