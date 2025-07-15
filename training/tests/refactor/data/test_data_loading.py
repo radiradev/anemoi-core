@@ -2,9 +2,11 @@ import pytest
 import torch
 from omegaconf import DictConfig
 
+from anemoi.training.data.refactor.draft import Context
+from anemoi.training.data.refactor.draft import sample_provider_factory
 from anemoi.training.data.refactor.multiple_datasets_datamodule import AnemoiMultipleDatasetsDataModule
-from anemoi.training.data.refactor.draft import sample_provider_factory, Context
-from anemoi.training.data.refactor.read_config import get_data_config_dict, get_sample_config_dict
+from anemoi.training.data.refactor.read_config import get_data_config_dict
+from anemoi.training.data.refactor.read_config import get_sample_config_dict
 
 
 def test_sampleprovider(new_config: DictConfig):
@@ -25,9 +27,9 @@ def test_sampleprovider(new_config: DictConfig):
     assert isinstance(processors["input"]["era5"], list)
     assert len(processors["input"]["era5"][0]) == 2
     assert isinstance(processors["input"]["amsr_h180"], list)
-    assert len(processors["input"]["amsr_h180"]) == 0 # no processors
+    assert len(processors["input"]["amsr_h180"]) == 0  # no processors
 
-    num_channels = sample_provider.num_channels(0) # {"input": {"era": (4, 4), "amsr": (1,) }}
+    num_channels = sample_provider.num_channels(0)  # {"input": {"era": (4, 4), "amsr": (1,) }}
     assert set(num_channels.keys()) == {"input", "target"}
     assert set(num_channels["input"].keys()) == {"era5", "amsr_h180"}
     assert isinstance(num_channels["input"]["era5"], int)
@@ -57,7 +59,7 @@ def test_datamodule(new_config: DictConfig, which: str):
         assert set(batch["input"].keys()) == {"era5", "amsr_h180"}
         assert set(batch["target"].keys()) == {"era5", "amsr_h180"}
 
-        assert batch["input"]["era5"].shape == (1, 2, 7, 1, 40320) # (, time, vars, ens, latlon)
+        assert batch["input"]["era5"].shape == (1, 2, 7, 1, 40320)  # (, time, vars, ens, latlon)
         assert len(batch["input"]["amsr_h180"]) == 1
         assert batch["input"]["amsr_h180"][0].shape == (1, 3, 187186)
         assert len(batch["target"]["era5"]) == 1

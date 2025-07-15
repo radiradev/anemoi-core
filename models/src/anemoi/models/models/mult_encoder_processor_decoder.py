@@ -22,9 +22,9 @@ from torch_geometric.data import HeteroData
 
 from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.layers.graph import NamedNodesAttributes
-from anemoi.training.data.refactor.draft import SampleProvider
 from anemoi.models.layers.projection import GraphNodeEmbedder
 from anemoi.models.layers.projection import NodeProjector
+from anemoi.training.data.refactor.draft import SampleProvider
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -70,8 +70,7 @@ class AnemoiMultiModel(nn.Module):
 
         # Embedding layers
         self.graph_node_embedder = GraphNodeEmbedder(
-            num_input_channels=self.num_target_channels | self.num_input_channels, 
-            out_channels=self.num_channels
+            num_input_channels=self.num_target_channels | self.num_input_channels, out_channels=self.num_channels
         )
         self.unembed_data = NodeProjector(
             model_config.model.emb_data, in_features=self.num_channels, num_output_channels=self.num_target_channels
@@ -135,9 +134,9 @@ class AnemoiMultiModel(nn.Module):
         # x.shape: (batch_size, multi_step, ens_dim, grid_size, num_vars)
 
         # x_src_data_latent = self.graph_node_embedder(
-        #   graph[name], 
-        #   einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"), 
-        #   name, 
+        #   graph[name],
+        #   einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
+        #   name,
         #   batch_size=batch_size
         # )
 
@@ -156,8 +155,8 @@ class AnemoiMultiModel(nn.Module):
 
     def _assemble_target(self, name: str, batch_size: int) -> tuple[torch.Tensor, torch.Tensor]:
         # x_dst_data_latent = self.graph_node_embedder(
-        #   graph[name], 
-        #   name, 
+        #   graph[name],
+        #   name,
         #   batch_size=batch_size
         # )
         x_dst_data_latent = self.node_attributes(name, batch_size=batch_size)
@@ -322,7 +321,7 @@ class AnemoiMultiModel(nn.Module):
         x_hidden = self.node_attributes(self._graph_name_hidden, batch_size=batch_size)
         # x_hidden = self.graph_node_embedder(
         #   graph[self._graph_name_hidden], None, self._graph_name_hidden, batch_size=batch_size
-        # )
+        # )
         shard_shapes_hidden = get_shape_shards(x_hidden, 0, model_comm_group)
 
         x_data_latent, x_hidden_latent, x_data_skip = self.encode(

@@ -14,9 +14,9 @@ data:
     dataset:
       dataset: obs-2018-11
       select:
-      - amsr_h180.* 
+      - amsr_h180.*
 
-sample:  
+sample:
   dictionary:
     input:
       dictionary:
@@ -59,4 +59,4 @@ sample:
               - rawbt_1
               - rawbt_2
               - rawbt_3
-            data: amsr_h180 
+            data: amsr_h180

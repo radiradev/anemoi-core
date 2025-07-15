@@ -20,7 +20,8 @@ from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.training.data.refactor.dataset import NativeGridMultDataset
 from anemoi.training.data.refactor.draft import Context
 from anemoi.training.data.refactor.draft import sample_provider_factory
-from anemoi.training.data.refactor.read_config import get_sample_config_dict, get_data_config_dict
+from anemoi.training.data.refactor.read_config import get_data_config_dict
+from anemoi.training.data.refactor.read_config import get_sample_config_dict
 from anemoi.training.data.utils import get_dataloader_config
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.utils.worker_init import worker_init_func

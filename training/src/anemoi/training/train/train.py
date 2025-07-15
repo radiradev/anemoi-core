@@ -101,20 +101,11 @@ class AnemoiTrainer:
         datamodule = instantiate(
             convert_to_omegaconf(self.config).datamodule,
             convert_to_omegaconf(self.config),
-            self.graph_data,
         )
         # self.config.data.num_features = len(datamodule.ds_train.data.variables)
         # LOGGER.info("Number of data variables: %s", str(len(datamodule.ds_train.data.variables)))
         # LOGGER.debug("Variables: %s", str(datamodule.ds_train.data.variables))
         return datamodule
-
-    @cached_property
-    def data_indices(self) -> dict:
-        """Returns a dictionary of data indices.
-
-        This is used to slice the data.
-        """
-        return self.datamodule.data_indices
 
     @cached_property
     def initial_seed(self) -> int:
@@ -202,7 +193,7 @@ class AnemoiTrainer:
         kwargs = {
             "config": self.config,
             # "data_indices": self.data_indices,
-            "sample_provider": self.datamodule.training_samples,
+            "sample_provider": self.datamodule.metadata_provider,
             "graph_data": self.graph_data,
             "metadata": self.metadata,
         }

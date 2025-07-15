@@ -1083,6 +1083,7 @@ class TransformerBackwardMapper(BackwardMapperPostProcessMixin, TransformerBaseM
         shapes_dst = change_channels_in_shape(shapes_dst, self.hidden_dim)
         return x_src, x_dst, shapes_src, shapes_dst
 
+
 class DynamicGraphTransformerBaseMapper(BaseMapper):
     """Dynamic Graph Transformer Base Mapper from hidden -> data or data -> hidden."""
 

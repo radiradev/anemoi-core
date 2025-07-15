@@ -119,7 +119,7 @@ class InputNormalizer(BasePreprocessor):
         # Check for typos in method config
         assert isinstance(self.methods, dict)
         for name, method in self.methods.items():
-            #assert name in name_to_index_training_input, f"{name} is not a valid variable name"
+            # assert name in name_to_index_training_input, f"{name} is not a valid variable name"
             assert method in [
                 "mean-std",
                 "std",

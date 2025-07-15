@@ -402,6 +402,7 @@ class GraphTransformerProcessor(GraphEdgeMixin, BaseProcessor):
 
         return x
 
+
 class DynamicGraphTransformerProcessor(BaseProcessor):
     """Processor."""
 

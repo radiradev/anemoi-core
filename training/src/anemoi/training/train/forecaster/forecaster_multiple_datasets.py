@@ -12,10 +12,10 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
-from einops import rearrange
 
 import pytorch_lightning as pl
 import torch
+from einops import rearrange
 from timm.scheduler import CosineLRScheduler
 from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.utils.checkpoint import checkpoint
@@ -37,7 +37,6 @@ from anemoi.utils.config import DotDict
 
 if TYPE_CHECKING:
     from collections.abc import Generator
-    from collections.abc import Mapping
 
     from torch.distributed.distributed_c10d import ProcessGroup
     from torch_geometric.data import HeteroData
@@ -125,13 +124,13 @@ class GraphForecasterMultiDataset(pl.LightningModule):
             graph_data=graph_data,
             config=convert_to_omegaconf(config),
         )
-        #self.indexer = sample_provider.get_indexer()
-        #self.graph_editor = DynamicGraphEditor("hidden", DotDict({}))
+        # self.indexer = sample_provider.get_indexer()
+        # self.graph_editor = DynamicGraphEditor("hidden", DotDict({}))
 
         self.config = config
         # self.model_data_indices = {self.datasets[0]: self.model.model.data_indices}  # TODO: generalize
 
-        #self.save_hyperparameters()
+        # self.save_hyperparameters()
 
         self.latlons_data = graph_data[config.graph.data].x  # TODO: Generalize, link graph key to DataHandler key
 
@@ -315,10 +314,10 @@ class GraphForecasterMultiDataset(pl.LightningModule):
             self.define_delayed_scalers()
             self.is_first_step = False
 
-        #input_latlons = self.indexer.get_latlons(batch["input"])  # (G, S=1, B, 2)
-        #target_latlons = self.indexer.get_latlons(batch["target"])  # (G, S=1, B, 2)
+        # input_latlons = self.indexer.get_latlons(batch["input"])  # (G, S=1, B, 2)
+        # target_latlons = self.indexer.get_latlons(batch["target"])  # (G, S=1, B, 2)
 
-        #graph = self.graph_editor.update_graph(self.graph_data, input_latlons, target_latlons)
+        # graph = self.graph_editor.update_graph(self.graph_data, input_latlons, target_latlons)
 
         # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
         y_pred = self(batch["input"], self.graph_data)

@@ -1,18 +1,16 @@
-from functools import cached_property
-import json
-import math
-import warnings
-import logging
 import datetime
+import json
+import warnings
+from functools import cached_property
 
-from rich import print
-import itertools
 import numpy as np
 import yaml
 from hydra.utils import instantiate
+from omegaconf import DictConfig
+from omegaconf import ListConfig
+from rich import print
 from rich.console import Console
 from rich.tree import Tree
-from omegaconf import DictConfig, ListConfig
 
 from anemoi.datasets import open_dataset
 from anemoi.utils.dates import frequency_to_string
@@ -70,7 +68,7 @@ class Context:
         self.request = request
 
         if _parent is not None:
-            # todo : refactor this nonsensical list of forwarding to _parent
+            # TODO : refactor this nonsensical list of forwarding to _parent
             if not isinstance(_parent, Context):
                 raise TypeError(f"Expected Context as parent, got {type(_parent)}: {_parent}")
             if start is None:
@@ -105,10 +103,10 @@ class Context:
         self.processor_factory = processor_factory
 
         assert isinstance(
-            self.offset, datetime.timedelta
+            self.offset, datetime.timedelta,
         ), f"Expected timedelta for offset, got {type(self.offset)}: {self.offset}"
         assert isinstance(
-            self.request, (type(None), list, str)
+            self.request, (type(None), list, str),
         ), f"Expected list or string or None for request, got {type(self.request)}: {self.request}"
 
     def register_as_leaf(self, obj):
@@ -129,7 +127,7 @@ class VariablesList:
             )
             if not isinstance(variables, (list, tuple)):
                 raise ValueError(
-                    f"Expected list or tuple for variables, got {type(variables)}: {variables}, data={data}"
+                    f"Expected list or tuple for variables, got {type(variables)}: {variables}, data={data}",
                 )
             self.lst = [f"{data}.{v}" for v in variables]
             return
@@ -148,7 +146,7 @@ class VariablesList:
                         raise ValueError(f"Expected string for variable, got {type(v)}: {v}")
                     if "." in v:
                         raise ValueError(
-                            f"Variable '{v}' should not contain a group name ('.' expected) in {variables})"
+                            f"Variable '{v}' should not contain a group name ('.' expected) in {variables})",
                         )
                 self.lst += [f"{group}.{v}" for v in vars_]
             return
@@ -199,7 +197,7 @@ class SampleProvider:
 
     def __len__(self):
         raise NotImplementedError(
-            f"Length is not implemented for {self.__class__.__name__}. Please implement __len__ method."
+            f"Length is not implemented for {self.__class__.__name__}. Please implement __len__ method.",
         )
 
     def latitudes(self, item: int):
@@ -253,7 +251,7 @@ class SampleProvider:
             raise TypeError(f"Not implemented for non-integer indexing {type(item)}")
 
     def shuffle(self, *args, **kwargs):
-        # todo: remove doulg self, self
+        # TODO: remove doulg self, self
         return ShuffledSampleProvider(self._context, self, self, *args, **kwargs)
 
 
@@ -472,19 +470,18 @@ def dimension_factory(raw_dim):
     assert isinstance(raw_dim, dict), f"Expected dict, got {type(raw_dim)}: {raw_dim}"
     if "variables" in raw_dim:
         return VariablesDimension(**raw_dim)
-    elif "offset" in raw_dim:
+    if "offset" in raw_dim:
         return OffsetDimension(**raw_dim)
-    elif "ensembles" in raw_dim:
+    if "ensembles" in raw_dim:
         warnings.warn("Ensemble dimensions are not implemented yet, ignoring the config")
         return EnsembleDimension(**raw_dim)
-    elif "values" in raw_dim:
+    if "values" in raw_dim:
         warnings.warn("Values dimensions are not implemented yet, ignoring the config")
         return ValuesDimension(**raw_dim)
-    elif "repeat" in raw_dim:
+    if "repeat" in raw_dim:
         warnings.warn("repeat should only be used for testing.")
         return RepeatDimension(**raw_dim)
-    else:
-        return DataDimension(**raw_dim)
+    return DataDimension(**raw_dim)
 
 
 class TupleSampleProvider(SampleProvider):
@@ -541,9 +538,9 @@ class TupleSampleProvider(SampleProvider):
                     "tuple": {
                         "loop": [iterable],
                         "template": self.template,
-                    }
+                    },
                 },
-            }
+            },
         }
         return sample_provider_factory(self._context, _parent=self._parent, **new_config)
 
@@ -595,7 +592,7 @@ class TensorSampleProvider(SampleProvider):
             "tuple": {
                 "loop": self.loops,
                 "template": self.template.raw,
-            }
+            },
         }
         self._tuple_sample_provider = sample_provider_factory(_context, _parent=self, **config)
 
@@ -625,7 +622,9 @@ class TensorSampleProvider(SampleProvider):
             dimensions = dimensions + [DataDimension(name=f"dim_{i}") for i in range(missing_dims)]
             order += [f"dim_{i}" for i in range(missing_dims)]
 
-        assert len(dimensions) == array.ndim, f"Expected {len(self.dimensions)} dimensions, got {array.ndim} for {array}"
+        assert (
+            len(dimensions) == array.ndim
+        ), f"Expected {len(self.dimensions)} dimensions, got {array.ndim} for {array}"
         assert len(order) == len(dimensions), f"Expected {len(self.dimensions)} order, got {len(order)} for {array}"
 
         current_order = [
@@ -672,7 +671,7 @@ class VariablesSampleProvider(SampleProvider):
         self.variables = VariablesList(variables, data=data)
         if len(self.variables.as_dict) > 1:
             raise ValueError(
-                f"Expected a single group of variables, got {list(self.variables.as_dict.keys())} in {variables}"
+                f"Expected a single group of variables, got {list(self.variables.as_dict.keys())} in {variables}",
             )
 
         dic = self.variables.as_dict
@@ -698,7 +697,7 @@ class VariablesSampleProvider(SampleProvider):
             raise NotImplementedError(
                 f"Frequency mismatch: {_(self.frequency)} != {_(self._context.frequency)}. "
                 "For now, the frequency must match the context frequency."
-                "This will be implemented in the future if needed."
+                "This will be implemented in the future if needed.",
             )
 
         i_offset = seconds(self.actual_offset) / seconds(self.frequency)
@@ -766,7 +765,7 @@ class DataHandler:
 
         if self.group not in sources:
             raise ValueError(
-                f"Group '{self.group}' not found in sources: available groups are {list(self.sources.keys())}"
+                f"Group '{self.group}' not found in sources: available groups are {list(self.sources.keys())}",
             )
         self.config = sources[self.group].copy()
         self.preprocessors = self.config.get("processors", {})
@@ -844,7 +843,7 @@ class DataHandler:
     def get(self, item: int, request):
         assert isinstance(item, (type(None), int, np.integer)), f"Expected integer for item, got {type(item)}: {item}"
         assert isinstance(
-            request, (type(None), str, list, tuple)
+            request, (type(None), str, list, tuple),
         ), f"Expected string or list for request, got {type(request)}: {request}"
 
         ACTIONS = {
@@ -871,7 +870,7 @@ class DataHandler:
                 action = ACTIONS.get(rr)
                 if action is None:
                     raise ValueError(
-                        f"Unknown request '{r}' in {request}. Available requests are {list(ACTIONS.keys())}."
+                        f"Unknown request '{r}' in {request}. Available requests are {list(ACTIONS.keys())}.",
                     )
                 return action(item)[key]
 
@@ -894,7 +893,7 @@ def sample_provider_factory(_context=None, **kwargs):
 
     if "context" in kwargs:
         raise NotImplementedError(
-            "The 'context' argument is deprecated, use directly start, end, frequency, sources instead"
+            "The 'context' argument is deprecated, use directly start, end, frequency, sources instead",
         )
 
     if _context is None:
@@ -907,7 +906,7 @@ def sample_provider_factory(_context=None, **kwargs):
 
     if "_parent" not in kwargs:
         kwargs["_parent"] = None
-        print(f'Building sample provider : {kwargs}')
+        print(f"Building sample provider : {kwargs}")
 
     if "offset" in kwargs:
         obj = OffsetSampleProvider(_context, **kwargs)
@@ -936,7 +935,7 @@ def sample_provider_factory(_context=None, **kwargs):
             obj = sample_provider_factory(_context, **kwargs["structure"])
         else:
             raise ValueError(
-                f"Expected dictionary for 'structure', got {type(kwargs['structure'])}: {kwargs['structure']}"
+                f"Expected dictionary for 'structure', got {type(kwargs['structure'])}: {kwargs['structure']}",
             )
     else:
         assert False, f"Unknown sample type for kwargs {kwargs}"
@@ -1008,7 +1007,7 @@ def check_sample_provider(obj):
         raise ValueError("No root sample provider found. Please ensure a root sample provider is defined.")
     if len(roots) == 1 and not obj.is_root:
         raise ValueError(
-            f"Sample provider {obj} is not a root, but it should be. Please ensure the root sample provider is defined."
+            f"Sample provider {obj} is not a root, but it should be. Please ensure the root sample provider is defined.",
         )
 
 
@@ -1054,7 +1053,7 @@ validation_selection:
 sample:
    use_case: "downscaling"
    high_res: ......
-   
+
 sample:
       dictionary:
         ex_simple_tensor:
@@ -1129,7 +1128,7 @@ sample:
         ex_request_1:
           tensor:
             - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-              request: data 
+              request: data
               # this is the default
 
         ex_request_2:
@@ -1183,7 +1182,7 @@ sample:
 #        et_implemented:
 #          tuple:
 #            - offset: ["-12h", "-6h"]
-#            - ensembles: 1 
+#            - ensembles: 1
 #            - variables: ["metop_a.scatss_1", "metop_a.scatss_2", "snow.sdepth_0"]
 #            - dictionary:
 #                key:
@@ -1203,8 +1202,7 @@ sample:
         if isinstance(structure, np.ndarray):
             if np.issubdtype(structure.dtype, np.floating):
                 return f"np.array{structure.shape} with mean {np.nanmean(structure):.2f}"
-            else:
-                return f"np.array{structure.shape} with mean {np.nanmean(structure)}"
+            return f"np.array{structure.shape} with mean {np.nanmean(structure)}"
         if isinstance(structure, (list, tuple)):
             if structure and all(isinstance(item, int) for item in structure):
                 return "[" + ", ".join(map(str, structure)) + "]"

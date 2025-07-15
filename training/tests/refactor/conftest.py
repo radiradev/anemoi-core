@@ -1,7 +1,8 @@
+import os
+
 import pytest
-from omegaconf import DictConfig
-import os 
 import yaml
+from omegaconf import DictConfig
 
 
 @pytest.fixture
@@ -112,6 +113,6 @@ def new_config() -> DictConfig:
 @pytest.fixture
 def downscaling_config() -> DictConfig:
     config_path = os.path.join(os.path.dirname(__file__), "downscaling.yaml")
-    with open(config_path, "r") as f:
+    with open(config_path) as f:
         config = yaml.safe_load(f)
     return config
