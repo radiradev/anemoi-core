@@ -899,13 +899,9 @@ def sample_provider_factory(_context=None, **kwargs):
             frequency=kwargs.pop("frequency"),
         )
 
-    if "loops" in kwargs:
-        kwargs.pop("loops")
-    if "references" in kwargs:
-        kwargs.pop("references")
-
     if "_parent" not in kwargs:
         kwargs["_parent"] = None
+        print(f'Building sample provider : {kwargs}')
 
     if "offset" in kwargs:
         obj = OffsetSampleProvider(_context, **kwargs)
@@ -1165,16 +1161,16 @@ sample:
               variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
 
         test_request1:
-          request: shape
+          request: [data, shape]
           structure:
               variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
               request: [data, latitudes_longitudes, timedeltas]
 
-        test_request1:
+        test_request2:
           variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
           request: configs
 
-        test_request2:
+        test_request3:
           variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
           request: configs.normaliser
 
