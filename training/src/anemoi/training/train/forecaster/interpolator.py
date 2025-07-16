@@ -102,13 +102,7 @@ class GraphInterpolator(GraphForecaster):
         if self.is_first_step:
             self.update_scalars(callback=AvailableCallbacks.ON_TRAINING_START)
             self.is_first_step = False
-        self.update_scalars(
-            callback=(
-                AvailableCallbacks.ON_TRAIN_BATCH_START
-                if not validation_mode
-                else AvailableCallbacks.ON_VALID_BATCH_START
-            ),
-        )
+        self.update_scalers(callback=AvailableCallbacks.ON_BATCH_START)
 
         x_bound = batch[:, itemgetter(*self.boundary_times)(self.imap)][
             ...,

@@ -95,7 +95,6 @@ class BaseScaler(ABC):
 
 
 class AvailableCallbacks(StrEnum):
-    INITIAL_SCALING_VALUES = "initial_scaling_values"
     ON_TRAINING_START = "on_training_start"
     ON_BATCH_START = "on_batch_start"
 

@@ -236,18 +236,18 @@ class GraphForecaster(pl.LightningModule):
         self._ckpt_model_name_to_index = checkpoint["hyper_parameters"]["data_indices"].name_to_index
 
     def update_scalers(self, callback: AvailableCallbacks) -> None:
-        """Update delayed scalers such as the loss weights mask for imputed variables."""
+        """Update scalers, calling the defined function on them, updating if not None"""
         for name, scaler_builder in self.updating_scalars.items():
             scaler = scaler_builder.update_scaling_values(callback, model=self.model)
-            if scaler is None:
+            if scaler is None: # If scalar is None, no update to be applied
                 continue
 
-            if name in self.loss.scaler:
-                self.loss.update_scaler(scaler=scaler[1], name=name)
+            if name in self.loss.scaler: # If scalar in loss, update it
+                self.loss.update_scaler(scaler=scaler[1], name=name) # Only update the values
 
-            for metric in self.metrics.values():
+            for metric in self.metrics.values(): # If scalar in metrics, update it
                 if name in metric.scaler:
-                    metric.update_scaler(scaler=scaler[1], name=name)
+                    metric.update_scaler(scaler=scaler[1], name=name) # Only update the values
 
     def set_model_comm_group(
         self,
@@ -423,9 +423,6 @@ class GraphForecaster(pl.LightningModule):
 
             yield loss, metrics_next, y_pred
 
-        self.update_scalers(
-            callback=(AvailableCallbacks.ON_BATCH_START),
-        )
 
     def on_after_batch_transfer(self, batch: torch.Tensor, _: int) -> torch.Tensor:
         """Assemble batch after transfer to GPU by gathering the batch shards if needed.

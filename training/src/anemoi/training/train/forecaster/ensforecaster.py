@@ -241,13 +241,7 @@ class GraphEnsForecaster(GraphForecaster):
         if self.is_first_step:
             self.update_scalers(callback=AvailableCallbacks.ON_TRAINING_START)
             self.is_first_step = False
-        self.update_scalers(
-            callback=(
-                AvailableCallbacks.ON_TRAIN_BATCH_START
-                if not validation_mode
-                else AvailableCallbacks.ON_VALID_BATCH_START
-            ),
-        )
+        self.update_scalers(callback=AvailableCallbacks.ON_BATCH_START)
 
         assert len(x.shape) == 5, f"Expected a 5-dimensional tensor and got {len(x.shape)} dimensions, shape {x.shape}!"
         assert (x.shape[1] == self.multi_step) and (x.shape[2] == self.nens_per_device), (
