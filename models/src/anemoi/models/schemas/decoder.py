@@ -16,6 +16,7 @@ from pydantic import NonNegativeInt
 
 from .common_components import GNNModelComponent
 from .common_components import TransformerModelComponent
+from .common_components import PointWiseModelComponent
 
 
 class GNNDecoderSchema(GNNModelComponent):
@@ -51,3 +52,8 @@ class TransformerDecoderSchema(TransformerModelComponent):
     "Use alibi slopes for attention implementation. Default to False."
     use_rotary_embeddings: bool = Field(example=False)
     "Use rotary embeddings for attention implementation. Default to False."
+
+
+class PointWiseDecoderSchema(PointWiseModelComponent):
+    target_: Literal["anemoi.models.layers.mapper.PointWiseBackwardMapper"] = Field(..., alias="_target_")
+    "Point-wise Decoder object from anemoi.models.layers.mapper."

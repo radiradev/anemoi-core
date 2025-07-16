@@ -16,6 +16,7 @@ from pydantic import NonNegativeInt
 
 from .common_components import GNNModelComponent
 from .common_components import TransformerModelComponent
+from .common_components import PointWiseModelComponent
 
 
 class GNNEncoderSchema(GNNModelComponent):
@@ -47,3 +48,8 @@ class TransformerEncoderSchema(TransformerModelComponent):
     "Softcap value for attention. Default to 0.0."
     use_alibi_slopes: bool = Field(example=False)
     "Use alibi slopes for attention implementation. Default to False."
+
+
+class PointWiseEncoderSchema(PointWiseModelComponent):
+    target_: Literal["anemoi.models.layers.processor.PointWiseForwardMapper"] = Field(..., alias="_target_")
+    "Point-wise Encoder object from anemoi.models.layers.mapper."

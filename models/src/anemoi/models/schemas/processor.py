@@ -84,6 +84,8 @@ class TransformerProcessorSchema(TransformerModelComponent):
 class PointWiseMLPProcessorSchema(PointWiseModelComponent):
     target_: Literal["anemoi.models.layers.processor.PointWiseMLPProcessor"] = Field(..., alias="_target_")
     "Transformer processor object from anemoi.models.layers.processor."
+    num_chunks: NonNegativeInt = Field(example=1)
+    "Number of chunks to divide the layer into. Default to 1."
     num_layers: NonNegativeInt = Field(example=16)
     "Number of layers of Transformer processor."
     num_channels: NonNegativeInt = Field(example=128)
