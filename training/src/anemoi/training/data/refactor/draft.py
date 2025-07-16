@@ -1423,116 +1423,117 @@ sample:
 #        print(s.configs)
 
 
-class Structure:
-    def __init__(self, content: dict):
-        self.content = content
-
-    def __repr__(self):
-        console = Console(record=True, width=120)
-        tree = self.tree()
-        with console.capture() as capture:
-            console.print(tree)
-        return capture.get()
-
-
-class TupleStructure(Structure):
-    def tree(self, prefix=""):
-        tree = Tree(prefix + "🔗")
-        for v in self.content:
-            tree.add(v.tree())
-        return tree
-
-
-class DictStructure(Structure):
-    def __init__(self, content: dict):
-        super().__init__(content)
-        for k in content:
-            setattr(self, k, content[k])
-
-    def tree(self, prefix=""):
-        tree = Tree(prefix + "📖")
-        for k, v in self.content.items():
-            tree.add(v.tree(prefix=f"{k} : "))
-        return tree
-
-
-class TensorStructure(Structure):
-    def __init__(self, content: dict, info):
-        for k, v in info.items():
-            setattr(self, k, v)
-        self.data = content
-
-    def tree(self, prefix=""):
-        return Tree(prefix + f"🔢 {self.data.shape} with mean {np.nanmean(self.data):.2f}")
-
-
-def structure(data, info):
-    check_structure(data, info)
-    if isinstance(data, dict):
-        return DictStructure({k: structure(v, {k_: v_[k] for k_, v_ in info.items()}) for k, v in data.items()})
-    if isinstance(data, (list, tuple)):
-        return TupleStructure([structure(elt, {k_: v_[i] for k_, v_ in info.items()}) for i, elt in enumerate(data)])
-    if isinstance(data, np.ndarray):
-        return TensorStructure(data, info)
-    raise ValueError(f"Unknown data type {type(data)}: {data}")
-
-
-def check_structure(data, info):
-    assert isinstance(info, dict), f"Expected info to be a dictionary, got {type(info)}: {info}"
-    if isinstance(data, dict):
-        for k, v in info.items():
-            assert isinstance(v, dict), f"Expected info[{k}] to be a dictionary, got {type(v)}: {v}"
-            for k_, v_ in v.items():
-                assert k_ in data, f"Key {k_} is in info[{k}] but not in data: {data.keys()}"
-    if isinstance(data, (list, tuple)):
-        for k, v in info.items():
-            assert isinstance(v, (list, tuple)), f"Expected info[{k}] to be a list or tuple, got {type(v)}: {v}"
-            assert len(v) == len(
-                data
-            ), f"Expected info[{k}] to have the same length as data, got {len(v)} != {len(data)}"
-
-
-print("............................")
-
-i = 1
-
-config = """dictionary:
-    key1:
-      tensor:
-        - variables: ["era5.2t", "era5.10u", "era5.10v"]
-        - offset: ["-6h"]
-    key2:
-      tensor:
-        - offset: ["-6h", "+6h"]
-        - variables: ["era5.2t", "era5.10u"]
-    key3:
-      tuple:
-        loop:
-          - offset: ["-6h", "0h", "+6h"]
-        template:
+    class Structure:
+        def __init__(self, content: dict):
+            self.content = content
+    
+        def __repr__(self):
+            console = Console(record=True, width=120)
+            tree = self.tree()
+            with console.capture() as capture:
+                console.print(tree)
+            return capture.get()
+    
+    
+    class TupleStructure(Structure):
+        def tree(self, prefix=""):
+            tree = Tree(prefix + "🔗")
+            for v in self.content:
+                tree.add(v.tree())
+            return tree
+    
+    
+    class DictStructure(Structure):
+        def __init__(self, content: dict):
+            super().__init__(content)
+            for k in content:
+                setattr(self, k, content[k])
+    
+        def tree(self, prefix=""):
+            tree = Tree(prefix + "📖")
+            for k, v in self.content.items():
+                tree.add(v.tree(prefix=f"{k} : "))
+            return tree
+    
+    
+    class TensorStructure(Structure):
+        def __init__(self, content: dict, info):
+            for k, v in info.items():
+                setattr(self, k, v)
+            self.data = content
+    
+        def tree(self, prefix=""):
+            return Tree(prefix + f"🔢 {self.data.shape} with mean {np.nanmean(self.data):.2f}")
+    
+    
+    def structure(data, info):
+        check_structure(data, info)
+        if isinstance(data, dict):
+            return DictStructure({k: structure(v, {k_: v_[k] for k_, v_ in info.items()}) for k, v in data.items()})
+        if isinstance(data, (list, tuple)):
+            return TupleStructure([structure(elt, {k_: v_[i] for k_, v_ in info.items()}) for i, elt in enumerate(data)])
+        if isinstance(data, np.ndarray):
+            return TensorStructure(data, info)
+        raise ValueError(f"Unknown data type {type(data)}: {data}")
+    
+    
+    def check_structure(data, info):
+        assert isinstance(info, dict), f"Expected info to be a dictionary, got {type(info)}: {info}"
+        if isinstance(data, dict):
+            for k, v in info.items():
+                assert isinstance(v, dict), f"Expected info[{k}] to be a dictionary, got {type(v)}: {v}"
+                for k_, v_ in v.items():
+                    assert k_ in data, f"Key {k_} is in info[{k}] but not in data: {data.keys()}"
+        if isinstance(data, (list, tuple)):
+            for k, v in info.items():
+                assert isinstance(v, (list, tuple)), f"Expected info[{k}] to be a list or tuple, got {type(v)}: {v}"
+                assert len(v) == len(
+                    data
+                ), f"Expected info[{k}] to have the same length as data, got {len(v)} != {len(data)}"
+    
+    
+    print("............................")
+    
+    i = 1
+    
+    config = """dictionary:
+        key1:
           tensor:
-            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-"""
-config = yaml.safe_load(config)
-sp = sample_provider_factory(**training_context, **config)
-
-info = {
-    "name_to_index": sp.name_to_index,
-    "statistics": sp.statistics,
-    "configs": sp.configs,
-    "shape": sp.shape,
-}
-print("info_from_sample_provider", info)
-
-data = sp[i]
-print("Native types data : ", show_json(data))
-
-obj = structure(data, info)
-print("Data as object :")
-print(obj)
-print(f"{obj.key1.name_to_index=}")
-print(f"{obj.key1.configs=}")
-print(f"{obj.key1.statistics=}")
-print(f"{obj.key1.data=}")
-print(f"{obj.key1.data.shape=}")
-print(f"{obj.key1.shape=}")
+            - variables: ["era5.2t", "era5.10u", "era5.10v"]
+            - offset: ["-6h"]
+        key2:
+          tensor:
+            - offset: ["-6h", "+6h"]
+            - variables: ["era5.2t", "era5.10u"]
+        key3:
+          tuple:
+            loop:
+              - offset: ["-6h", "0h", "+6h"]
+            template:
+              tensor:
+                - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+    """
+    config = yaml.safe_load(config)
+    sp = sample_provider_factory(**training_context, **config)
+    
+    info = {
+        "name_to_index": sp.name_to_index,
+        "statistics": sp.statistics,
+        "configs": sp.configs,
+        "shape": sp.shape,
+    }
+    print("info_from_sample_provider", info)
+    
+    data = sp[i]
+    print("Native types data : ", show_json(data))
+    
+    obj = structure(data, info)
+    print("Data as object :")
+    print(obj)
+    print(f"{obj.key1.name_to_index=}")
+    print(f"{obj.key1.configs=}")
+    print(f"{obj.key1.statistics=}")
+    print(f"{obj.key1.data=}")
+    print(f"{obj.key1.data.shape=}")
+    print(f"{obj.key1.shape=}")
+    
