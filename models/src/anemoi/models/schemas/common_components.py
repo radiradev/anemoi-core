@@ -60,8 +60,6 @@ class GNNModelComponent(BaseModel):
 class PointWiseModelComponent(BaseModel):
     convert_: str = Field("all", alias="_convert_")
     "Target's parameters to convert to primitive containers. Other parameters will use OmegaConf. Default to all."
-    num_chunks: NonNegativeInt = Field(example=1)
-    "Number of chunks to divide the layer into. Default to 1."
     cpu_offload: bool = Field(example=False)
     "Offload to CPU. Default to False."
     layer_kernels: Union[dict[str, dict], None] = Field(default_factory=dict)
