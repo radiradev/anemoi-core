@@ -1173,7 +1173,7 @@ class PointWiseBaseMapper(BaseMapper):
 
         self.offload_layers(cpu_offload)
 
-        self.emb_nodes_dst = self.layer_factory.Linear(self.in_channels_dst, self.hidden_dim)
+        self.emb_nodes_dst = nn.Identity()
 
     def forward(
         self,
@@ -1189,7 +1189,9 @@ class PointWiseBaseMapper(BaseMapper):
             x, shard_shapes, model_comm_group, x_src_is_sharded, x_dst_is_sharded
         )
 
-        x_dst = self.post_process(x_dst, shapes_dst, model_comm_group, keep_x_dst_sharded=keep_x_dst_sharded)
+        assert x_src.shape[0] == x_dst.shape[0], f"{self.__class__.__name__} can only be applied between the same set of nodes."
+
+        x_dst = self.post_process(x_src, shapes_src, model_comm_group, keep_x_dst_sharded=keep_x_dst_sharded)
 
         return x_dst
 
@@ -1235,7 +1237,7 @@ class PointWiseForwardMapper(ForwardMapperPreProcessMixin, PointWiseBaseMapper):
             cpu_offload=cpu_offload,
         )
 
-        self.emb_nodes_src = nn.Identity()
+        self.emb_nodes_src = self.layer_factory.Linear(self.in_channels_src, self.hidden_dim)
 
     def forward(
         self,
