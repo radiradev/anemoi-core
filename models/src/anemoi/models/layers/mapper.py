@@ -1189,7 +1189,9 @@ class PointWiseBaseMapper(BaseMapper):
             x, shard_shapes, model_comm_group, x_src_is_sharded, x_dst_is_sharded
         )
 
-        assert x_src.shape[0] == x_dst.shape[0], f"{self.__class__.__name__} can only be applied between the same set of nodes."
+        assert (
+            x_src.shape[0] == x_dst.shape[0]
+        ), f"{self.__class__.__name__} can only be applied between the same set of nodes."
 
         x_dst = self.post_process(x_src, shapes_src, model_comm_group, keep_x_dst_sharded=keep_x_dst_sharded)
 
