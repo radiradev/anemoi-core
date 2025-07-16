@@ -22,7 +22,7 @@ layer_kernels:
     bias: False
 
 processor:
-  _target_: anemoi.models.layers.processor.GraphTransformerProcessor
+  _target_: anemoi.models.layers.processor.PointWiseMLPProcessor
   trainable_size: ${model.trainable_parameters.hidden2hidden}
   sub_graph_edge_attributes: ${model.attributes.edges}
   num_layers: 16
@@ -34,26 +34,17 @@ processor:
   layer_kernels: ${model.layer_kernels}
 
 encoder:
-  _target_: anemoi.models.layers.mapper.GraphTransformerForwardMapper
+  _target_: anemoi.models.layers.mapper.PointWiseForwardMapper
   trainable_size: ${model.trainable_parameters.data2hidden}
   sub_graph_edge_attributes: ${model.attributes.edges}
-  num_chunks: 1
-  mlp_hidden_ratio: 1 # GraphTransformer or Transformer only
-  num_heads: 1 # GraphTransformer or Transformer only
-  qk_norm: False
   cpu_offload: ${model.cpu_offload}
   layer_kernels: ${model.layer_kernels}
 
-
 decoder:
-  _target_: anemoi.models.layers.mapper.GraphTransformerBackwardMapper
+  _target_: anemoi.models.layers.mapper.PointWiseBackwardMapper
   trainable_size: ${model.trainable_parameters.hidden2data}
   sub_graph_edge_attributes: ${model.attributes.edges}
-  num_chunks: 1
-  mlp_hidden_ratio: 1 # GraphTransformer or Transformer only
-  num_heads: 1 # GraphTransformer or Transformer only
   initialise_data_extractor_zero: False
-  qk_norm: False
   cpu_offload: ${model.cpu_offload}
   layer_kernels: ${model.layer_kernels}
 
@@ -61,11 +52,11 @@ output_mask:
   _target_: anemoi.training.utils.masks.NoOutputMask
 
 trainable_parameters:
-  data: 8
-  hidden: 8
-  data2hidden: 8
-  hidden2data: 8
-  hidden2hidden: 8 # GNN and GraphTransformer Processor only
+  data: 0
+  hidden: 0
+  data2hidden: 0
+  hidden2data: 0
+  hidden2hidden: 0 # GNN and GraphTransformer Processor only
 
 
 attributes:
