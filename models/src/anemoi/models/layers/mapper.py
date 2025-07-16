@@ -1235,7 +1235,7 @@ class PointWiseForwardMapper(ForwardMapperPreProcessMixin, PointWiseBaseMapper):
             cpu_offload=cpu_offload,
         )
 
-        self.emb_nodes_src = self.layer_factory.Linear(self.in_channels_src, self.hidden_dim)
+        self.emb_nodes_src = nn.Identity()
 
     def forward(
         self,
