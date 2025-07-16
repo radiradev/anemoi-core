@@ -21,6 +21,26 @@ from anemoi.training.data.refactor.draft import SampleProvider
 from anemoi.utils.config import DotDict
 
 
+def processor_factory(config):
+    if isinstance(config, dict):
+        if "configs" in config and "name_to_index" in config and "statistics" in config:
+            return [
+                [
+                    name, 
+                    instantiate(
+                        cfg, name_to_index=config["name_to_index"], statistics=config["statistics"]
+                    )
+                ] for name, cfg in config["configs"].items()
+            ]
+        return {k: processor_factory(v) for k, v in config.items()}
+        
+    if isinstance(config, tuple):
+        # name_to_index and statistics should be equal for all elements ???
+        return processor_factory(config[0])
+
+    return []
+
+
 class AnemoiModelInterface(torch.nn.Module):
     """An interface for Anemoi models.
 
@@ -69,30 +89,23 @@ class AnemoiModelInterface(torch.nn.Module):
         self.graph_data = graph_data
         self.metadata = metadata
         self.supporting_arrays = {}
-        # self.data_indices = data_indices
         self._build_model()
-
-    def _build_processors(self):
-        return self.sample_provider[0]
 
     def _build_model(self) -> None:
         """Builds the model and pre- and post-processors."""
         # Instantiate processors
-        preprocessors = self._build_processors()
-        input_preprocessors = preprocessors["input"]
-        target_processors = preprocessors["target"]
+        preprocessors = processor_factory(self.sample_provider[0])
 
         # Assign the processor list pre- and post-processors
-        self.input_pre_processors = Processors(input_preprocessors)
-        self.target_pre_processors = Processors(target_processors)
-        self.target_post_processors = Processors(target_processors, inverse=True)
+        self.input_pre_processors = Processors(preprocessors["input"])
+        self.target_pre_processors = Processors(preprocessors["target"])
+        self.target_post_processors = Processors(preprocessors["target"], inverse=True)
 
         # Instantiate the model
         self.model = AnemoiMultiModel(
             # self.config.model.model,
             model_config=self.config,
             sample_provider=self.sample_provider,
-            # data_indices=self.data_indices,
             graph_data=self.graph_data,
             # truncation_data=self.truncation_data,
             # _recursive_=False,  # Disables recursive instantiation by Hydra

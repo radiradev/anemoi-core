@@ -10,7 +10,7 @@
 
 from abc import ABC
 from typing import Optional
-
+import torch
 from torch import Tensor
 from torch import nn
 from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import offload_wrapper
@@ -201,8 +201,8 @@ class GNNProcessor(GraphEdgeMixin, BaseProcessor):
         trainable_size: int,
         src_grid_size: int,
         dst_grid_size: int,
-        sub_graph: HeteroData,
-        sub_graph_edge_attributes: list[str],
+        subgraph: HeteroData,
+        subgraph_edge_attributes: list[str],
         cpu_offload: bool = False,
         layer_kernels: DotDict,
         **kwargs,
@@ -225,9 +225,9 @@ class GNNProcessor(GraphEdgeMixin, BaseProcessor):
             Source grid size
         dst_grid_size : int
             Destination grid size
-        sub_graph : HeteroData
+        subgraph : HeteroData
             Graph for sub graph in GNN
-        sub_graph_edge_attributes : list[str]
+        subgraph_edge_attributes : list[str]
             Sub graph edge attributes
         cpu_offload : bool
             Whether to offload processing to CPU, by default False
@@ -245,7 +245,7 @@ class GNNProcessor(GraphEdgeMixin, BaseProcessor):
             layer_kernels=layer_kernels,
         )
 
-        self._register_edges(sub_graph, sub_graph_edge_attributes, src_grid_size, dst_grid_size, trainable_size)
+        self._register_edges(subgraph, subgraph_edge_attributes, src_grid_size, dst_grid_size, trainable_size)
 
         self.trainable = TrainableTensor(trainable_size=trainable_size, tensor_size=self.edge_attr.shape[0])
 
@@ -305,8 +305,8 @@ class GraphTransformerProcessor(GraphEdgeMixin, BaseProcessor):
         trainable_size: int,
         src_grid_size: int,
         dst_grid_size: int,
-        sub_graph: HeteroData,
-        sub_graph_edge_attributes: list[str],
+        subgraph: HeteroData,
+        subgraph_edge_attributes: list[str],
         qk_norm: bool = False,
         cpu_offload: bool = False,
         layer_kernels: DotDict,
@@ -332,9 +332,9 @@ class GraphTransformerProcessor(GraphEdgeMixin, BaseProcessor):
             Source grid size
         dst_grid_size : int
             Destination grid size
-        sub_graph : HeteroData
+        subgraph : HeteroData
             Graph for sub graph in GNN
-        sub_graph_edge_attributes : list[str]
+        subgraph_edge_attributes : list[str]
             Sub graph edge attributes
         qk_norm: bool, optional
             Normalize query and key, by default False
@@ -354,7 +354,7 @@ class GraphTransformerProcessor(GraphEdgeMixin, BaseProcessor):
             layer_kernels=layer_kernels,
         )
 
-        self._register_edges(sub_graph, sub_graph_edge_attributes, src_grid_size, dst_grid_size, trainable_size)
+        self._register_edges(subgraph, subgraph_edge_attributes, src_grid_size, dst_grid_size, trainable_size)
 
         self.trainable = TrainableTensor(trainable_size=trainable_size, tensor_size=self.edge_attr.shape[0])
 
@@ -415,10 +415,10 @@ class DynamicGraphTransformerProcessor(BaseProcessor):
         num_chunks: int = 2,
         num_heads: int = 16,
         mlp_hidden_ratio: int = 4,
-        activation: str = "GELU",
         cpu_offload: bool = False,
-        sub_graph_edge_index_name: str = "edge_index",
-        sub_graph_edge_attributes: Optional[list] = [],
+        subgraph_edge_index_name: str = "edge_index",
+        subgraph_edge_attributes: Optional[list] = [],
+        edge_dim: int = 0,
         **kwargs,
     ) -> None:
         """Initialize DynamicGraphTransformerProcessor.
@@ -435,8 +435,6 @@ class DynamicGraphTransformerProcessor(BaseProcessor):
             Number of heads to use, default 16
         mlp_hidden_ratio: int
             ratio of mlp hidden dimension to embedding dimension, default 4
-        activation : str, optional
-            Activation function, by default "GELU"
         cpu_offload : bool, optional
             Whether to offload processing to CPU, by default False
         """
@@ -444,24 +442,24 @@ class DynamicGraphTransformerProcessor(BaseProcessor):
             num_channels=num_channels,
             num_layers=num_layers,
             num_chunks=num_chunks,
-            activation=activation,
             cpu_offload=cpu_offload,
             num_heads=num_heads,
             mlp_hidden_ratio=mlp_hidden_ratio,
+            layer_kernels=layer_kernels,
         )
-        self.edge_attribute_names = sub_graph_edge_attributes
-        self.edge_index_name = sub_graph_edge_index_name
+        self.edge_dim = edge_dim
+        self.edge_attribute_names = subgraph_edge_attributes
+        self.edge_index_name = subgraph_edge_index_name
 
-        self.trainable = TrainableTensor(trainable_size=trainable_size, tensor_size=self.edge_attr.shape[0])
+        self.trainable = TrainableTensor(trainable_size=trainable_size, tensor_size=self.edge_dim)
 
         self.build_layers(
             GraphTransformerProcessorChunk,
             num_channels=num_channels,
             num_layers=self.chunk_size,
-            layer_kernels=layer_kernels,
+            layer_kernels=self.layer_factory,
             num_heads=num_heads,
             mlp_hidden_ratio=mlp_hidden_ratio,
-            activation=activation,
             edge_dim=self.edge_dim,
         )
 
@@ -471,15 +469,15 @@ class DynamicGraphTransformerProcessor(BaseProcessor):
         self,
         x: Tensor,
         batch_size: int,
-        sub_graph: HeteroData,
+        subgraph: HeteroData,
         shard_shapes: tuple[tuple[int], tuple[int]],
         model_comm_group: Optional[ProcessGroup] = None,
         *args,
         **kwargs,
     ) -> Tensor:
         shape_nodes = change_channels_in_shape(shard_shapes, self.num_channels)
-        edge_index = sub_graph[self.edge_index_name].to(torch.int64)
-        edge_attr = torch.cat([sub_graph[attr] for attr in self.edge_attribute_names], axis=1)
+        edge_index = subgraph[self.edge_index_name].to(torch.int64)
+        edge_attr = torch.cat([subgraph[attr] for attr in self.edge_attribute_names], axis=1)
 
         shapes_edge_attr = get_shape_shards(edge_attr, 0, model_comm_group)
         edge_attr = shard_tensor(edge_attr, 0, shapes_edge_attr, model_comm_group)

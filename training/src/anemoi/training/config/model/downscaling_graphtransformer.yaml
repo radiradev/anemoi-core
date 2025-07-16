@@ -125,12 +125,13 @@ emb_data:
   _target_: anemoi.models.layers.mlp.MLP
   hidden_dim: 128
   n_extra_layers: 0
-  activation: GELU
+  final_activation: GELU
+  layer_kernels: ${model.layer_kernels_processor}
 
 processor:
   _target_: anemoi.models.layers.processor.DynamicGraphTransformerProcessor
   # activation: ${model.activation}
-  sub_graph_edge_attributes: ${model.attributes.edges}
+  subgraph_edge_attributes: ${model.attributes.edges}
   num_layers: 16
   num_chunks: 2
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
@@ -142,7 +143,7 @@ processor:
 
 encoder:
   _target_: anemoi.models.layers.mapper.DynamicGraphTransformerForwardMapper
-  sub_graph_edge_attributes: ${model.attributes.edges}
+  subgraph_edge_attributes: ${model.attributes.edges}
   # activation: ${model.activation}
   num_chunks: 1
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
@@ -153,7 +154,7 @@ encoder:
 
 decoder:
   _target_: anemoi.models.layers.mapper.DynamicGraphTransformerBackwardMapper
-  sub_graph_edge_attributes: ${model.attributes.edges}
+  subgraph_edge_attributes: ${model.attributes.edges}
   # activation: ${model.activation}
   num_chunks: 1
   mlp_hidden_ratio: 4 # GraphTransformer or Transformer only

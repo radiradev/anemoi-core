@@ -303,7 +303,7 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         del batch_idx
         # batch = self.allgather_batch(batch)
 
-        batch = {k: {n: rearrange(t, "bs t v ens xy -> bs t ens xy v") for n, t in v.items()} for k, v in batch.items()}
+        batch = {k: {n: rearrange(t["data"], "bs t v ens xy -> bs t ens xy v") for n, t in v.items()} for k, v in batch.items()}
 
         # for validation not normalized in-place because remappers cannot be applied in-place
         batch["input"] = self.model.input_pre_processors(batch["input"], in_place=not validation_mode)
