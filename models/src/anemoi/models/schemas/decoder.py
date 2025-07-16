@@ -15,8 +15,8 @@ from pydantic import NonNegativeFloat
 from pydantic import NonNegativeInt
 
 from .common_components import GNNModelComponent
-from .common_components import TransformerModelComponent
 from .common_components import PointWiseModelComponent
+from .common_components import TransformerModelComponent
 
 
 class GNNDecoderSchema(GNNModelComponent):
