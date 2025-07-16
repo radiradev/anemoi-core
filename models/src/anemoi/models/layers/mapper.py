@@ -1296,7 +1296,7 @@ class PointWiseBackwardMapper(BackwardMapperPostProcessMixin, PointWiseBaseMappe
 
         self.node_data_extractor = nn.Sequential(
             self.layer_factory.LayerNorm(self.hidden_dim),
-            self.layer_factory.Linear(self.hidden_dim, self.out_channels_dst)
+            self.layer_factory.Linear(self.hidden_dim, self.out_channels_dst),
         )
 
     def pre_process(self, x, shard_shapes, model_comm_group=None, x_src_is_sharded=False, x_dst_is_sharded=False):
