@@ -616,7 +616,6 @@ class TupleSampleProvider(SampleProvider):
             self._samples = []
             for v in iterable.values:
                 config = {iterable.name: v, "structure": self.template}
-                print(f"Creating sample provider for {iterable.name} = {v} with config {config}")
                 sample = sample_provider_factory(self._context, _parent=self._parent, **config)
                 self._samples.append(sample)
             self._samples = tuple(self._samples)
@@ -1183,6 +1182,125 @@ def sample_provider_factory(_context=None, **kwargs):
     return obj
 
 
+class Structure:
+    def __repr__(self):
+        console = Console(record=True, width=120)
+        tree = self.tree()
+        with console.capture() as capture:
+            console.print(tree)
+        return capture.get()
+
+
+class TupleStructure(Structure):
+    def __init__(self, *content):
+        self.content = content
+
+    def tree(self, prefix=""):
+        tree = Tree(prefix + "🔗")
+        for v in self.content:
+            tree.add(v.tree())
+        return tree
+
+    def apply(self, func):
+        return tuple([x.apply(func) for x in self.content])
+
+
+class DictStructure(Structure):
+    def __init__(self, **content):
+        self.content = content
+        for k in content:
+            if not hasattr(self, k):
+                setattr(self, k, content[k])
+
+    def tree(self, prefix=""):
+        tree = Tree(prefix + "📖")
+        for k, v in self.content.items():
+            tree.add(v.tree(prefix=f"{k} : "))
+        return tree
+
+    def apply(self, func):
+        return {k: v.apply(func) for k, v in self.content.items()}
+
+
+class LeafStructure(Structure):
+    def __init__(self, **info):
+        for k, v in info.items():
+            setattr(self, k, v)
+        self._names = list(info.keys())
+
+    def tree(self, prefix=""):
+        tree = Tree(f"{prefix}  📦 {', '.join(self._names)}")
+        if hasattr(self, "shape"):
+            tree.add(f"Shape: {self.shape}")
+        if hasattr(self, "statistics"):
+            tree.add(f"Statistics: {str(self.statistics)[:50]}")
+        if hasattr(self, "latitudes"):
+            tree.add(f"Latitudes: [{np.min(self.latitudes):.2f}, {np.max(self.latitudes):.2f}]")
+        if hasattr(self, "longitudes"):
+            tree.add(f"Longitudes: [{np.min(self.longitudes):.2f}, {np.max(self.longitudes):.2f}]")
+        if hasattr(self, "timedeltas"):
+            minimum = np.min(self.timedeltas)
+            maximum = np.max(self.timedeltas)
+            minimum = int(minimum)
+            maximum = int(maximum)
+            minimum = datetime.timedelta(seconds=minimum)
+            maximum = datetime.timedelta(seconds=maximum)
+            minimum = frequency_to_string(minimum)
+            maximum = frequency_to_string(maximum)
+            tree.add(f"Timedeltas: [{minimum},{maximum}]")
+        if hasattr(self, "data"):
+            tree.add(f"Data: array of shape {self.data.shape} with mean {np.nanmean(self.data):.2f}")
+        return tree
+
+    def apply(self, func):
+        return func(path="x", **{k: getattr(self, k) for k in self._names})
+
+
+def structure(**info):
+    check_structure(**info)
+    first = info[next(iter(info.keys()))]
+
+    if "variables" in first:  # todo use sp.structure
+        return LeafStructure(**info)
+
+    if isinstance(first, (list, tuple)):
+        lst = []
+        for i in range(len(first)):
+            s = {key: info[key][i] for key in info.keys()}
+            assert list(s.keys()) == list(info.keys()), f"Expected keys {list(info.keys())}, got {list(s.keys())}"
+            lst.append(structure(**s))
+        return TupleStructure(*lst)
+
+    assert isinstance(first, dict), f"Expected dicts"
+    dic = {}
+    for k in first.keys():
+        s = {key: info[key][k] for key in info.keys()}
+        assert list(s.keys()) == list(info.keys()), f"Expected keys {list(info.keys())}, got {list(s.keys())}"
+        dic[k] = structure(**s)
+    return DictStructure(**dic)
+
+
+def check_structure(**info):
+    if "variables" in info:
+        return
+    first = info[next(iter(info.keys()))]
+    if "variables" in first:
+        return
+    if isinstance(first, dict):
+        for v in info.values():
+            assert isinstance(v, dict), f"Expected all info values to be dictionaries, got {v}"
+            assert set(v.keys()) == set(
+                first.keys()
+            ), f"Expected all info values to have the same keys, got {v} vs {first}"
+
+    if isinstance(first, (list, tuple)):
+        for v in info.values():
+            assert isinstance(v, (list, tuple)), f"Expected all info values to be lists or tuples, got {v}"
+            assert len(v) == len(
+                first
+            ), f"Expected all info values to have the same length as first, got {v} vs {first}"
+
+
 # TEST ---------------------------------
 if __name__ == "__main__":
     yaml_str = """
@@ -1408,135 +1526,27 @@ sample:
         end=None,
         frequency="6h",
     )
-    for key, config in sample_config["dictionary"].items():
-        print(f"[yellow]- {key} : building sample_provider[/yellow]")
-        print(yaml.dump(config, indent=2, sort_keys=False))
-        s = sample_provider_factory(**training_context, **config)
-        print(s)
-        print(len(s))
-        print("----------------------------")
+    # if True:
+    if False:
+        for key, config in sample_config["dictionary"].items():
+            print(f"[yellow]- {key} : building sample_provider[/yellow]")
+            print(yaml.dump(config, indent=2, sort_keys=False))
+            s = sample_provider_factory(**training_context, **config)
+            print(s)
+            print(len(s))
+            print("----------------------------")
 
-    print("✅✅  --------")
-    for key, config in sample_config["dictionary"].items():
-        print(f"[yellow]- {key} : getting data [/yellow]")
-        print(yaml.dump(config, indent=2, sort_keys=False))
-        s = sample_provider_factory(**training_context, **config)
-        print(s)
-        name_to_index = s.name_to_index
-        print(f"name_to_index = {name_to_index}")
-        statistitics = s.statistics
-        print(f"statistics = {statistitics}")
-        print("sp[1] = ", show_json(s[1]))
-        print()
-    #        print('*********')
-    #        t = sample_provider_factory(**training_context, request=["statistics"], structure=config)
-    #        print(t)
-    #        print(t[1])
-    #        print(s.configs)
-
-    class Structure:
-        def __repr__(self):
-            console = Console(record=True, width=120)
-            tree = self.tree()
-            with console.capture() as capture:
-                console.print(tree)
-            return capture.get()
-
-    class TupleStructure(Structure):
-        def __init__(self, *content):
-            self.content = content
-
-        def tree(self, prefix=""):
-            tree = Tree(prefix + "🔗")
-            for v in self.content:
-                tree.add(v.tree())
-            return tree
-
-    class DictStructure(Structure):
-        def __init__(self, **content):
-            self.content = content
-            for k in content:
-                if not hasattr(self, k):
-                    setattr(self, k, content[k])
-
-        def tree(self, prefix=""):
-            tree = Tree(prefix + "📖")
-            for k, v in self.content.items():
-                tree.add(v.tree(prefix=f"{k} : "))
-            return tree
-
-    class LeafStructure(Structure):
-        def __init__(self, **info):
-            for k, v in info.items():
-                setattr(self, k, v)
-            self._names = list(info.keys())
-
-        def tree(self, prefix=""):
-            tree = Tree(f"{prefix}  📦 {', '.join(self._names)}")
-            if hasattr(self, "shape"):
-                tree.add(f"Shape: {self.shape}")
-            if hasattr(self, "statistics"):
-                tree.add(f"Statistics: {str(self.statistics)[:50]}")
-            if hasattr(self, "latitudes"):
-                tree.add(f"Latitudes: [{np.min(self.latitudes):.2f}, {np.max(self.latitudes):.2f}]")
-            if hasattr(self, "longitudes"):
-                tree.add(f"Longitudes: [{np.min(self.longitudes):.2f}, {np.max(self.longitudes):.2f}]")
-            if hasattr(self, "timedeltas"):
-                minimum = np.min(self.timedeltas)
-                maximum = np.max(self.timedeltas)
-                minimum = int(minimum)
-                maximum = int(maximum)
-                minimum = datetime.timedelta(seconds=minimum)
-                maximum = datetime.timedelta(seconds=maximum)
-                minimum = frequency_to_string(minimum)
-                maximum = frequency_to_string(maximum)
-                tree.add(f"Timedeltas: [{minimum},{maximum}]")
-            if hasattr(self, "data"):
-                tree.add(f"Data: array of shape {self.data.shape} with mean {np.nanmean(self.data):.2f}")
-            return tree
-
-    def structure(**info):
-        check_structure(**info)
-        first = info[next(iter(info.keys()))]
-
-        if "variables" in first:  # todo use sp.structure
-            return LeafStructure(**info)
-
-        if isinstance(first, (list, tuple)):
-            lst = []
-            for i in range(len(first)):
-                s = {key: info[key][i] for key in info.keys()}
-                assert list(s.keys()) == list(info.keys()), f"Expected keys {list(info.keys())}, got {list(s.keys())}"
-                lst.append(structure(**s))
-            return TupleStructure(*lst)
-
-        assert isinstance(first, dict), f"Expected dicts"
-        dic = {}
-        for k in first.keys():
-            s = {key: info[key][k] for key in info.keys()}
-            assert list(s.keys()) == list(info.keys()), f"Expected keys {list(info.keys())}, got {list(s.keys())}"
-            dic[k] = structure(**s)
-        return DictStructure(**dic)
-
-    def check_structure(**info):
-        if "variables" in info:
-            return
-        first = info[next(iter(info.keys()))]
-        if "variables" in first:
-            return
-        if isinstance(first, dict):
-            for v in info.values():
-                assert isinstance(v, dict), f"Expected all info values to be dictionaries, got {v}"
-                assert set(v.keys()) == set(
-                    first.keys()
-                ), f"Expected all info values to have the same keys, got {v} vs {first}"
-
-        if isinstance(first, (list, tuple)):
-            for v in info.values():
-                assert isinstance(v, (list, tuple)), f"Expected all info values to be lists or tuples, got {v}"
-                assert len(v) == len(
-                    first
-                ), f"Expected all info values to have the same length as first, got {v} vs {first}"
+        print("✅✅  --------")
+        for key, config in sample_config["dictionary"].items():
+            print(f"[yellow]- {key} : getting data [/yellow]")
+            print(yaml.dump(config, indent=2, sort_keys=False))
+            s = sample_provider_factory(**training_context, **config)
+            print(s)
+            name_to_index = s.name_to_index
+            print(f"name_to_index = {name_to_index}")
+            statistitics = s.statistics
+            print(f"statistics = {statistitics}")
+            print("sp[1] = ", show_json(s[1]))
 
     print("............................")
 
@@ -1584,3 +1594,9 @@ sample:
     print(f"{obj.key1.configs=}")
     print(f"{obj.key1.statistics=}")
     print(f"{obj.key1.data=}")
+
+    def f(name_to_index, statistics, configs, **kwargs):
+        return f"Normalisers build from: {name_to_index=}, {statistics=}, {configs=}"
+
+    result = obj.apply(f)
+    print(result)
