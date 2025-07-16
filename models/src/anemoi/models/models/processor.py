@@ -21,7 +21,6 @@ from torch.distributed.distributed_c10d import ProcessGroup
 from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 
-
 from anemoi.models.distributed.graph import gather_channels
 from anemoi.models.distributed.graph import shard_channels
 from anemoi.models.distributed.graph import shard_tensor
@@ -292,12 +291,12 @@ class AnemoiModelProc(nn.Module):
         )
 
     def forward(
-        self, 
-        x: Tensor, 
-        *, 
+        self,
+        x: Tensor,
+        *,
         model_comm_group: Optional[ProcessGroup] = None,
         grid_shard_shapes: Optional[list] = None,
-        **kwargs
+        **kwargs,
     ) -> Tensor:
         batch_size = x.shape[0]
         ensemble_size = x.shape[2]
