@@ -49,14 +49,10 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         validation_context = dict(sources=data_dict, **config.dataloader.sampler.validation)
 
         # Create Sampler provider
-        self.training_samples = sample_provider_factory(**training_context, **sample_dict, request=["data"])
-        self.validation_samples = sample_provider_factory(**validation_context, **sample_dict, request=["data"])
+        self.training_samples = sample_provider_factory(**training_context, **sample_dict)
+        self.validation_samples = sample_provider_factory(**validation_context, **sample_dict)
 
-        self.metadata_provider = sample_provider_factory(
-            **training_context,
-            **sample_dict,
-            request=["name_to_index", "statistics", "latitudes_longitudes", "configs", "shape"],
-        )
+        self.metadata_provider = sample_provider_factory(**training_context, **sample_dict)
 
         dl_keys_to_ignore = ["sampler", "read_group_size", "grid_indices", "limit_batches"]
         self.train_dataloader_config = get_dataloader_config(
