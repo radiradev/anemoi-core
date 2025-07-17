@@ -130,10 +130,9 @@ For detailed information and examples, see
 ******************
 
 Field truncation is a pre-processing step applied during autoregressive
-rollout. It smooths the input or skipped connection data which helps
-maintain stability during rollout and can be used for multi-scale loss
-computation. Please note that for ensemble training, only the skiped
-connection is truncated, not the input data.
+rollout. It smooths the skipped connection data which helps maintain
+stability during rollout and can be used for multi-scale loss
+computation.
 
 **********
  Overview
@@ -143,9 +142,9 @@ Truncation matrices are sparse transformation matrices that filter
 high-frequency components from the input data. This process serves two
 main purposes:
 
-#. **Stability Enhancement**: Smoothing the input data helps maintain
-   numerical stability during long autoregressive rollouts by reducing
-   noise amplification.
+#. **Stability Enhancement**: Smoothing the skipped connection data
+   helps maintain numerical stability during long autoregressive
+   rollouts by reducing noise amplification.
 
 #. **Multi-scale Loss Computation**: For ensemble training, truncation
    matrices can be used to compute losses at different scales.
@@ -158,7 +157,7 @@ The truncation system supports several types of transformation matrices:
 
 **Truncation Matrix (``truncation``)**
    The forward transformation matrix that applies the truncation filter
-   to the input data or skipped connection.
+   to the skipped connection.
 
 **Inverse Truncation Matrix (``truncation_inv``)**
    The inverse transformation matrix.
