@@ -45,7 +45,7 @@ class BaseImputer(BasePreprocessor, ABC):
 
         self.register_buffer("nan_locations", torch.empty(0, dtype=torch.bool), persistent=False)
         # weight imputed values with zero in loss calculation
-        self.loss_mask_training = None
+        self.register_buffer("loss_mask_training", torch.empty(0, dtype=torch.bool), persistent=False)
 
     def _validate_indices(self):
         assert len(self.index_training_input) == len(self.index_inference_input) <= len(self.replacement), (
