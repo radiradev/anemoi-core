@@ -38,8 +38,8 @@ encoder:
   trainable_size: ${model.trainable_parameters.data2hidden}
   sub_graph_edge_attributes: ${model.attributes.edges}
   num_chunks: 1
-  mlp_hidden_ratio: 1 # GraphTransformer or Transformer only
-  num_heads: 1 # GraphTransformer or Transformer only
+  mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
+  num_heads: 16 # GraphTransformer or Transformer only
   qk_norm: False
   cpu_offload: ${model.cpu_offload}
   layer_kernels: ${model.layer_kernels}
@@ -50,8 +50,8 @@ decoder:
   trainable_size: ${model.trainable_parameters.hidden2data}
   sub_graph_edge_attributes: ${model.attributes.edges}
   num_chunks: 1
-  mlp_hidden_ratio: 1 # GraphTransformer or Transformer only
-  num_heads: 1 # GraphTransformer or Transformer only
+  mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
+  num_heads: 16 # GraphTransformer or Transformer only
   initialise_data_extractor_zero: False
   qk_norm: False
   cpu_offload: ${model.cpu_offload}
