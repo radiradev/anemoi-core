@@ -1132,190 +1132,6 @@ class TransformerBackwardMapper(BackwardMapperPostProcessMixin, TransformerBaseM
         return x_src, x_dst, shapes_src, shapes_dst
 
 
-class PointWiseBaseMapper(BaseMapper):
-    """Point-wise Base Mapper from hidden -> data or data -> hidden."""
-
-    def __init__(
-        self,
-        *,
-        in_channels_src: int,
-        in_channels_dst: int,
-        hidden_dim: int,
-        out_channels_dst: Optional[int] = None,
-        cpu_offload: bool = False,
-        layer_kernels: DotDict,
-    ) -> None:
-        """Initialize TransformerBaseMapper.
-
-        Parameters
-        ----------
-        in_channels_src : int
-            Input channels of the source node
-        in_channels_dst : int
-            Input channels of the destination node
-        hidden_dim : int
-            Hidden dimension
-        out_channels_dst : int, optional
-            Output channels of the destination node, by default None
-        cpu_offload : bool
-            Whether to offload processing to CPU, by default False
-        layer_kernels : DotDict
-            A dict of layer implementations e.g. layer_kernels.Linear = "torch.nn.Linear"
-            Defined in config/models/<model>.yaml
-        """
-        super().__init__(
-            in_channels_src=in_channels_src,
-            in_channels_dst=in_channels_dst,
-            hidden_dim=hidden_dim,
-            out_channels_dst=out_channels_dst,
-            layer_kernels=layer_kernels,
-            cpu_offload=cpu_offload,
-        )
-
-        self.offload_layers(cpu_offload)
-
-        self.emb_nodes_dst = nn.Identity()
-
-    def forward(
-        self,
-        x: PairTensor,
-        batch_size: int,
-        shard_shapes: tuple[tuple[int], tuple[int]],
-        model_comm_group: Optional[ProcessGroup] = None,
-        x_src_is_sharded: bool = False,
-        x_dst_is_sharded: bool = False,
-        keep_x_dst_sharded: bool = False,
-    ) -> PairTensor:
-        x_src, x_dst, shapes_src, shapes_dst = self.pre_process(
-            x, shard_shapes, model_comm_group, x_src_is_sharded, x_dst_is_sharded
-        )
-
-        assert (
-            x_src.shape[0] == x_dst.shape[0]
-        ), f"{self.__class__.__name__} can only be applied between the same set of nodes."
-
-        x_dst = self.post_process(x_src, shapes_src, model_comm_group, keep_x_dst_sharded=keep_x_dst_sharded)
-
-        return x_dst
-
-
-class PointWiseForwardMapper(ForwardMapperPreProcessMixin, PointWiseBaseMapper):
-    """PointWise Mapper from data -> hidden."""
-
-    def __init__(
-        self,
-        *,
-        in_channels_src: int,
-        in_channels_dst: int,
-        hidden_dim: int,
-        out_channels_dst: Optional[int] = None,
-        cpu_offload: bool = False,
-        layer_kernels: DotDict,
-        **kwargs,  # accept not needed extra arguments like subgraph etc.
-    ) -> None:
-        """Initialize TransformerForwardMapper.
-
-        Parameters
-        ----------
-        in_channels_src : int
-            Input channels of the source node
-        in_channels_dst : int
-            Input channels of the destination node
-        hidden_dim : int
-            Hidden dimension
-        out_channels_dst : int, optional
-            Output channels of the destination node, by default None
-        cpu_offload : bool
-            Whether to offload processing to CPU, by default False
-        layer_kernels : DotDict
-            A dict of layer implementations e.g. layer_kernels.Linear = "torch.nn.Linear"
-            Defined in config/models/<model>.yaml
-        """
-        super().__init__(
-            in_channels_src=in_channels_src,
-            in_channels_dst=in_channels_dst,
-            hidden_dim=hidden_dim,
-            layer_kernels=layer_kernels,
-            out_channels_dst=out_channels_dst,
-            cpu_offload=cpu_offload,
-        )
-
-        self.emb_nodes_src = self.layer_factory.Linear(self.in_channels_src, self.hidden_dim)
-
-    def forward(
-        self,
-        x: PairTensor,
-        batch_size: int,
-        shard_shapes: tuple[tuple[int], tuple[int], tuple[int], tuple[int]],
-        model_comm_group: Optional[ProcessGroup] = None,
-        x_src_is_sharded: bool = False,
-        x_dst_is_sharded: bool = False,
-        keep_x_dst_sharded: bool = False,
-    ) -> PairTensor:
-        x_dst = super().forward(
-            x, batch_size, shard_shapes, model_comm_group, x_src_is_sharded, x_dst_is_sharded, keep_x_dst_sharded
-        )
-        return x[0], x_dst
-
-
-class PointWiseBackwardMapper(BackwardMapperPostProcessMixin, PointWiseBaseMapper):
-    """Point-wise Mapper from hidden -> data."""
-
-    def __init__(
-        self,
-        *,
-        in_channels_src: int,
-        in_channels_dst: int,
-        hidden_dim: int,
-        out_channels_dst: Optional[int] = None,
-        cpu_offload: bool = False,
-        layer_kernels: DotDict,
-        **kwargs,  # accept not needed extra arguments like subgraph etc.
-    ) -> None:
-        """Initialize TransformerBackwardMapper.
-
-        Parameters
-        ----------
-        in_channels_src : int
-            Input channels of the source node
-        in_channels_dst : int
-            Input channels of the destination node
-        hidden_dim : int
-            Hidden dimension
-        out_channels_dst : int, optional
-            Output channels of the destination node, by default None
-        cpu_offload : bool
-            Whether to offload processing to CPU, by default False
-        layer_kernels : DotDict
-            A dict of layer implementations e.g. layer_kernels.Linear = "torch.nn.Linear"
-            Defined in config/models/<model>.yaml
-        """
-        super().__init__(
-            in_channels_src=in_channels_src,
-            in_channels_dst=in_channels_dst,
-            hidden_dim=hidden_dim,
-            layer_kernels=layer_kernels,
-            out_channels_dst=out_channels_dst,
-            cpu_offload=cpu_offload,
-        )
-
-        self.node_data_extractor = nn.Sequential(
-            self.layer_factory.LayerNorm(self.hidden_dim),
-            self.layer_factory.Linear(self.hidden_dim, self.out_channels_dst),
-        )
-
-    def pre_process(self, x, shard_shapes, model_comm_group=None, x_src_is_sharded=False, x_dst_is_sharded=False):
-        x_src, x_dst, shapes_src, shapes_dst = super().pre_process(
-            x, shard_shapes, model_comm_group, x_src_is_sharded, x_dst_is_sharded
-        )
-        shapes_src = change_channels_in_shape(shapes_src, self.hidden_dim)
-        if not x_dst_is_sharded:
-            x_dst = shard_tensor(x_dst, 0, shapes_dst, model_comm_group)
-        x_dst = self.emb_nodes_dst(x_dst)
-        shapes_dst = change_channels_in_shape(shapes_dst, self.hidden_dim)
-        return x_src, x_dst, shapes_src, shapes_dst
-
-
 class GraphInterpolationBaseMapper(GraphEdgeMixin, BaseMapper):
     """Non-learnable interpolation Base Mapper from hidden -> data or data -> hidden."""
 
@@ -1333,7 +1149,7 @@ class GraphInterpolationBaseMapper(GraphEdgeMixin, BaseMapper):
         cpu_offload: bool = False,
         layer_kernels: DotDict,
     ) -> None:
-        """Initialize TransformerBaseMapper.
+        """Initialize GraphInterpolationBaseMapper.
 
         Parameters
         ----------
@@ -1414,7 +1230,7 @@ class GraphInterpolationBaseMapper(GraphEdgeMixin, BaseMapper):
 
 
 class GraphInterpolationForwardMapper(ForwardMapperPreProcessMixin, GraphInterpolationBaseMapper):
-    """Non-learnable Interpolation forward mapper from hidden -> data or data -> hidden."""
+    """Non-learnable Interpolation forward mapper from data -> hidden."""
 
     def __init__(
         self,
@@ -1461,7 +1277,7 @@ class GraphInterpolationForwardMapper(ForwardMapperPreProcessMixin, GraphInterpo
 
 
 class GraphInterpolationBackwardMapper(BackwardMapperPostProcessMixin, GraphInterpolationBaseMapper):
-    """Non-learnable Interpolation backward mapper from hidden -> data or data -> hidden."""
+    """Non-learnable Interpolation backward mapper from hidden -> data."""
 
     def __init__(
         self,

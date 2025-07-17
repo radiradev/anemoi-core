@@ -15,7 +15,7 @@ from pydantic import NonNegativeFloat
 from pydantic import NonNegativeInt
 
 from .common_components import GNNModelComponent
-from .common_components import PointWiseModelComponent
+from .common_components import GraphInterpolationModelComponent
 from .common_components import TransformerModelComponent
 
 
@@ -50,6 +50,6 @@ class TransformerEncoderSchema(TransformerModelComponent):
     "Use alibi slopes for attention implementation. Default to False."
 
 
-class PointWiseEncoderSchema(PointWiseModelComponent):
-    target_: Literal["anemoi.models.layers.processor.PointWiseForwardMapper"] = Field(..., alias="_target_")
-    "Point-wise Encoder object from anemoi.models.layers.mapper."
+class GraphInterpolationEncoderSchema(GraphInterpolationModelComponent):
+    target_: Literal["anemoi.models.layers.mapper.GraphInterpolationForwardMapper"] = Field(..., alias="_target_")
+    "Graph interpolation Encoder object from anemoi.models.layers.mapper."

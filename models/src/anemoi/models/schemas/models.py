@@ -24,11 +24,11 @@ from anemoi.utils.schemas import BaseModel
 
 from .decoder import GNNDecoderSchema  # noqa: TC001
 from .decoder import GraphTransformerDecoderSchema  # noqa: TC001
-from .decoder import PointWiseDecoderSchema  # noqa: TC001
+from .decoder import GraphInterpolationDecoderSchema  # noqa: TC001
 from .decoder import TransformerDecoderSchema  # noqa: TC001
 from .encoder import GNNEncoderSchema  # noqa: TC001
 from .encoder import GraphTransformerEncoderSchema  # noqa: TC001
-from .encoder import PointWiseEncoderSchema  # noqa: TC001
+from .encoder import GraphInterpolationEncoderSchema  # noqa: TC001
 from .encoder import TransformerEncoderSchema  # noqa: TC001
 from .processor import GNNProcessorSchema  # noqa: TC001
 from .processor import GraphTransformerProcessorSchema  # noqa: TC001

@@ -15,7 +15,7 @@ from pydantic import NonNegativeFloat
 from pydantic import NonNegativeInt
 
 from .common_components import GNNModelComponent
-from .common_components import PointWiseModelComponent
+from .common_components import GraphInterpolationModelComponent
 from .common_components import TransformerModelComponent
 
 
@@ -54,6 +54,6 @@ class TransformerDecoderSchema(TransformerModelComponent):
     "Use rotary embeddings for attention implementation. Default to False."
 
 
-class PointWiseDecoderSchema(PointWiseModelComponent):
-    target_: Literal["anemoi.models.layers.mapper.PointWiseBackwardMapper"] = Field(..., alias="_target_")
-    "Point-wise Decoder object from anemoi.models.layers.mapper."
+class GraphInterpolationDecoderSchema(GraphInterpolationModelComponent):
+    target_: Literal["anemoi.models.layers.mapper.GraphInterpolationBackwardMapper"] = Field(..., alias="_target_")
+    "Graph interpolation Decoder object from anemoi.models.layers.mapper."
