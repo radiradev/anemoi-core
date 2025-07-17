@@ -1204,6 +1204,11 @@ class GraphInterpolationBaseMapper(GraphEdgeMixin, BaseMapper):
         x_dst_is_sharded: bool = False,
         keep_x_dst_sharded: bool = False,
     ) -> PairTensor:
+        if model_comm_group:
+            assert (
+                model_comm_group.size() == 1
+            ), f"Model sharding across GPUs is not supported for {self.__class__.__name__}"
+
         size = (sum(x[0] for x in shard_shapes[0]), sum(x[0] for x in shard_shapes[1]))
         edge_attr = self.trainable(self.edge_attr, batch_size)
         edge_index = self._expand_edges(self.edge_index_base, self.edge_inc, batch_size)
