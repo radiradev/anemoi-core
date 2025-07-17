@@ -34,15 +34,13 @@ processor:
   layer_kernels: ${model.layer_kernels}
 
 encoder:
-  _target_: anemoi.models.layers.mapper.PointWiseForwardMapper
-  trainable_size: ${model.trainable_parameters.data2hidden}
+  _target_: anemoi.models.layers.mapper.GraphInterpolationForwardMapper
   sub_graph_edge_attributes: ${model.attributes.edges}
   cpu_offload: ${model.cpu_offload}
   layer_kernels: ${model.layer_kernels}
 
 decoder:
-  _target_: anemoi.models.layers.mapper.PointWiseBackwardMapper
-  trainable_size: ${model.trainable_parameters.hidden2data}
+  _target_: anemoi.models.layers.mapper.GraphInterpolationBackwardMapper
   sub_graph_edge_attributes: ${model.attributes.edges}
   initialise_data_extractor_zero: False
   cpu_offload: ${model.cpu_offload}
