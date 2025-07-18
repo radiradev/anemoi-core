@@ -52,8 +52,6 @@ class AnemoiMultiModel(nn.Module):
         super().__init__()
         model_config = DotDict(model_config)
         self._graph_data = graph_data
-        self._graph_name_data = model_config.graph.data
-        self._graph_name_hidden = model_config.graph.hidden
 
         self.multi_step = model_config.training.multistep_input
         self.num_channels = model_config.model.num_channels
@@ -63,10 +61,12 @@ class AnemoiMultiModel(nn.Module):
         self.latent_residual_connection = True
         self.use_residual_connection = model_config.model.get("residual_connections", [])
 
-        self.num_input_channels: dict[str, int] = {n: v[0]["shape"][-2] for n, v in sample_provider[0]["input"].items()}
-        self.num_target_channels: dict[str, int] = {n: v[0]["shape"][-2] for n, v in sample_provider[0]["target"].items()}
-        self.input_names: list[str] = list(self.num_input_channels.keys())
-        self.target_names: list[str] = list(self.num_target_channels.keys())
+        num_channels = sample_provider.apply(lambda name_to_index, **kwargs: len(name_to_index["variables"]))
+        self.num_input_channels: dict[str, int] = num_channels["input"]
+        self.num_target_channels: dict[str, int] = num_channels["target"]
+        self.input_names: list[str] = model_config.model.model.encoder_input_names
+        self.hidden_name: str = model_config.model.model.hidden_name
+        self.target_names: list[str] = model_config.model.model.decoder_target_names
 
         # Embedding layers
         self.graph_node_embedder = GraphNodeEmbedder(
@@ -84,10 +84,10 @@ class AnemoiMultiModel(nn.Module):
             self.encoders[input_name] = instantiate(
                 model_config.model.encoder,
                 _recursive_=False,
-                in_channels_src=self.num_channels,
-                in_channels_dst=self.num_channels,
+                in_channels_src=self.num_input_channels[input_name] + 4,
+                in_channels_dst=4,
                 hidden_dim=self.num_channels,
-                edge_dim=2,
+                edge_dim=3,
             )
 
         # Processor hidden -> hidden
@@ -95,7 +95,7 @@ class AnemoiMultiModel(nn.Module):
             model_config.model.processor,
             _recursive_=False,
             num_channels=self.num_channels,
-            edge_dim=2,
+            edge_dim=3,
         )
 
         # Decoder hidden -> data
@@ -105,10 +105,10 @@ class AnemoiMultiModel(nn.Module):
                 model_config.model.decoder,
                 _recursive_=False,
                 in_channels_src=self.num_channels,
-                in_channels_dst=self.num_channels,
+                in_channels_dst=self.num_input_channels[target_name] + 4,
                 hidden_dim=self.num_channels,
                 out_channels_dst=self.num_target_channels[target_name],
-                edge_dim=2,
+                edge_dim=3,
             )
 
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
@@ -179,6 +179,7 @@ class AnemoiMultiModel(nn.Module):
         self,
         mapper: nn.Module,
         data: tuple[Tensor],
+        sub_graph,
         batch_size: int,
         shard_shapes: tuple[tuple[int, int], tuple[int, int]],
         model_comm_group: Optional[ProcessGroup] = None,
@@ -192,6 +193,8 @@ class AnemoiMultiModel(nn.Module):
             Which processor to use
         data : tuple[Tensor]
             tuple of data to pass in
+        sub_graph
+            Sub graph to use for the mapper
         batch_size: int,
             Batch size
         shard_shapes : tuple[tuple[int, int], tuple[int, int]]
@@ -210,6 +213,7 @@ class AnemoiMultiModel(nn.Module):
         return checkpoint(
             mapper,
             data,
+            sub_graph,
             batch_size=batch_size,
             shard_shapes=shard_shapes,
             model_comm_group=model_comm_group,
@@ -227,15 +231,15 @@ class AnemoiMultiModel(nn.Module):
         x_data, x_hidden = x
 
         x_data_latent, x_hidden_latent, x_data_skip = {}, {}, {}
-        for name, x_input_data in x_data.items():
-            x_input_data, x_data_skip[name] = self._assemble_input(name, x_input_data, batch_size)
+        for name in self.input_names:
+            x_input_data, x_data_skip[name] = self._assemble_input(name, x_data[name], batch_size)
 
             shard_shapes_input_data = get_shape_shards(x_input_data, 0, model_comm_group)
 
             x_data_latent[name], x_hidden_latent[name] = self._run_mapper(
                 self.encoders[name],
                 (x_input_data, x_hidden),
-                sub_graph=graph[(name, "to", self._graph_name_hidden)],
+                sub_graph=graph[(name, "to", self.hidden_name)].to(x_input_data.device),
                 batch_size=batch_size,
                 shard_shapes=(shard_shapes_input_data, shard_shapes_hidden),
                 model_comm_group=model_comm_group,
@@ -272,7 +276,7 @@ class AnemoiMultiModel(nn.Module):
             x_out[name] = self._run_mapper(
                 self.decoders[name],
                 (x_hidden_latent, x_target_latent),
-                sub_graph=graph[(self._graph_name_hidden, "to", name)],
+                sub_graph=graph[(self._graph_name_hidden, "to", name)].to(x_hidden_latent.device),
                 batch_size=batch_size,
                 shard_shapes=(shard_shapes_hidden, shard_shapes_target_data),
                 model_comm_group=model_comm_group,
@@ -314,7 +318,7 @@ class AnemoiMultiModel(nn.Module):
         batch_size = x[list(x.keys())[0]].shape[0]
         ensemble_size = 1
 
-        x_hidden = self.node_attributes(self._graph_name_hidden, batch_size=batch_size)
+        x_hidden = self.node_attributes(self.hidden_name, batch_size=batch_size)
         # x_hidden = self.graph_node_embedder(
         #   graph[self._graph_name_hidden], None, self._graph_name_hidden, batch_size=batch_size
         # )
@@ -332,7 +336,7 @@ class AnemoiMultiModel(nn.Module):
 
         x_latent_proc = self.processor(
             x_hidden_latent,
-            graph[(self._graph_name_hidden, "to", self._graph_name_hidden)],
+            graph[(self._graph_name_hidden, "to", self._graph_name_hidden)].to(x_hidden_latent.device),
             batch_size=batch_size,
             shard_shapes=shard_shapes_hidden,
             model_comm_group=model_comm_group,

@@ -468,8 +468,8 @@ class DynamicGraphTransformerProcessor(BaseProcessor):
     def forward(
         self,
         x: Tensor,
-        batch_size: int,
         subgraph: HeteroData,
+        batch_size: int,
         shard_shapes: tuple[tuple[int], tuple[int]],
         model_comm_group: Optional[ProcessGroup] = None,
         *args,

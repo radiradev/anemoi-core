@@ -33,6 +33,7 @@ from anemoi.training.diagnostics.callbacks import get_callbacks
 from anemoi.training.diagnostics.logger import get_mlflow_logger
 from anemoi.training.diagnostics.logger import get_tensorboard_logger
 from anemoi.training.diagnostics.logger import get_wandb_logger
+from anemoi.training.data.refactor.draft import structure
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.schemas.base_schema import UnvalidatedBaseSchema
 from anemoi.training.schemas.base_schema import convert_to_omegaconf
@@ -190,10 +191,16 @@ class AnemoiTrainer:
         ), "GLU activation function is not supported in Transformer models, due to fixed dimensions. "
         "Please use a different activation function."
 
+        sample_info = {
+            "name_to_index": self.datamodule.metadata_provider.name_to_index,
+            "statistics": self.datamodule.metadata_provider.statistics,
+            "processors": self.datamodule.metadata_provider.configs,
+        }
+
         kwargs = {
             "config": self.config,
             # "data_indices": self.data_indices,
-            "sample_provider": self.datamodule.metadata_provider,
+            "sample_provider": structure(**sample_info),
             "graph_data": self.graph_data,
             "metadata": self.metadata,
         }
