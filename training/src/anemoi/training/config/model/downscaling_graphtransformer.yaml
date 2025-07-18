@@ -97,6 +97,11 @@ sample:
 
 model:
   _target_: anemoi.models.models.mult_encoder_processor_decoder.AnemoiMultiModel
+  encoder_input_names:
+  - lowres
+  hidden_name: "hidden"
+  decoder_target_names:
+  - hires
 
 layer_kernels:
   # The layer_kernels can be adjusted per model component, but are defined here for convenience.

@@ -1160,8 +1160,8 @@ class DynamicGraphTransformerBaseMapper(BaseMapper):
     def forward(
         self,
         x: PairTensor,
-        batch_size: int,
         subgraph: HeteroData,
+        batch_size: int,
         shard_shapes: tuple[tuple[int], tuple[int]],
         model_comm_group: Optional[ProcessGroup] = None,
     ) -> PairTensor:
@@ -1179,9 +1179,9 @@ class DynamicGraphTransformerBaseMapper(BaseMapper):
             edge_attr,
             edge_index,
             (shapes_src, shapes_dst, shapes_edge_attr),
-            batch_size,
-            model_comm_group,
-            size=size,
+            batch_size=batch_size,
+            model_comm_group=model_comm_group,
+            size=size
         )
 
         x_dst = self.post_process(x_dst, shapes_dst, model_comm_group)
@@ -1257,12 +1257,14 @@ class DynamicGraphTransformerForwardMapper(ForwardMapperPreProcessMixin, Dynamic
     def forward(
         self,
         x: PairTensor,
-        batch_size: int,
         subgraph: HeteroData,
+        batch_size: int,
         shard_shapes: tuple[tuple[int], tuple[int]],
         model_comm_group: Optional[ProcessGroup] = None,
     ) -> PairTensor:
-        x_dst = super().forward(x, batch_size, subgraph, shard_shapes, model_comm_group)
+        x_dst = super().forward(
+            x, subgraph, batch_size=batch_size, shard_shapes=shard_shapes, model_comm_group=model_comm_group
+        )
         return x[0], x_dst
 
 

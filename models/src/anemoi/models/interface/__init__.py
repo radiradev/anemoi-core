@@ -17,28 +17,16 @@ from torch_geometric.data import HeteroData
 
 from anemoi.models.models.mult_encoder_processor_decoder import AnemoiMultiModel
 from anemoi.models.preprocessing import Processors
-from anemoi.training.data.refactor.draft import SampleProvider
+from anemoi.training.data.refactor.draft import Structure
 from anemoi.utils.config import DotDict
 
 
-def processor_factory(config):
-    if isinstance(config, dict):
-        if "configs" in config and "name_to_index" in config and "statistics" in config:
-            return [
-                [
-                    name, 
-                    instantiate(
-                        cfg, name_to_index=config["name_to_index"], statistics=config["statistics"]
-                    )
-                ] for name, cfg in config["configs"].items()
-            ]
-        return {k: processor_factory(v) for k, v in config.items()}
-        
-    if isinstance(config, tuple):
-        # name_to_index and statistics should be equal for all elements ???
-        return processor_factory(config[0])
-
-    return []
+def processor_factory(name_to_index, statistics, processors, **kwargs) -> list[list]:
+    return [
+        [
+            name, instantiate(cfg, name_to_index=name_to_index, statistics=statistics)
+        ] for name, cfg in processors.items()
+    ]
 
 
 class AnemoiModelInterface(torch.nn.Module):
@@ -77,7 +65,7 @@ class AnemoiModelInterface(torch.nn.Module):
         self,
         *,
         config: DotDict,
-        sample_provider: SampleProvider,
+        sample_provider: Structure,
         graph_data: HeteroData,
         # data_indices: dict,
         metadata: dict,
@@ -94,7 +82,7 @@ class AnemoiModelInterface(torch.nn.Module):
     def _build_model(self) -> None:
         """Builds the model and pre- and post-processors."""
         # Instantiate processors
-        preprocessors = processor_factory(self.sample_provider[0])
+        preprocessors = self.sample_provider.apply(processor_factory)
 
         # Assign the processor list pre- and post-processors
         self.input_pre_processors = Processors(preprocessors["input"])
