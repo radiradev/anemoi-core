@@ -251,14 +251,14 @@ class SampleProvider:
     def configs(self):
         raise ValueError("Obsolete, please use self.normaliser or self.inputer or self.extra instead")
 
-    def raw(self, item: int):
+    def get_raw(self, item: int):
         dic = self[item]
         if "dataspecs" not in dic:
             dic["dataspecs"] = self.dataspecs
         return dic
 
-    def obj(self, item):
-        raw = self.raw(item)
+    def get_obj(self, item):
+        raw = self.get_raw(item)
         if "dataspecs" not in raw:
             raw["dataspecs"] = self.dataspecs
         return structure_factory(**raw)
@@ -1616,6 +1616,6 @@ sample:
     print(f"{result.fields._as_native()}")
     print(f"{result.fields._as_native('my_function')=}")
 
-    print(f"{str(sp.raw(2))[:1000]=}")
-    print(f"{sp.obj(2)=}")
-    # print(sp.obj(2).__repr__(verbose=True))
+    print(f"{str(sp.get_raw(2))[:1000]=}")
+    print(f"{sp.get_obj(2)=}")
+    # print(sp.get_obj(2).__repr__(verbose=True))
