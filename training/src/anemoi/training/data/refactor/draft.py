@@ -35,7 +35,6 @@ class Context:
     frequency = None
     sources = None
     _offset = None
-    _request = None
     _all_nodes = None
     _visible_nodes = None
     _root = None
@@ -47,7 +46,6 @@ class Context:
         frequency=None,
         sources=None,
         offset=None,
-        request=None,
         _parent=None,
         **kwargs,
     ):
@@ -65,11 +63,6 @@ class Context:
         if isinstance(offset, str):
             offset = frequency_to_timedelta(offset)
         self._offset = self._offset + offset if self._offset else offset
-
-        # request from the parent always overrides the request in the current context
-        self._request = self._request if self._request else request
-        if not isinstance(self.request, (list, str)):
-            raise ValueError(f"Expected list or string for request, got {type(self.request)}: {self.request}.")
 
         self.start = self.start if start is None else start
         self.end = self.end if end is None else end
@@ -95,10 +88,6 @@ class Context:
             self.offset,
             datetime.timedelta,
         ), f"Expected timedelta for offset, got {type(self.offset)}: {self.offset}"
-        assert isinstance(
-            self.request,
-            (type(None), list, str),
-        ), f"Expected list or string or None for request, got {type(self.request)}: {self.request}"
 
     def _copy_from_parent(self, _parent):
         if _parent is None:
@@ -110,7 +99,6 @@ class Context:
         self.frequency = _parent.frequency
         self.sources = _parent.sources
         self._offset = _parent._offset
-        self._request = _parent._request
         self._all_nodes = _parent._all_nodes
         self._visible_nodes = _parent._visible_nodes
         self._root = _parent._root
@@ -120,12 +108,6 @@ class Context:
         if self._offset is None:
             return frequency_to_timedelta("0h")
         return self._offset
-
-    @property
-    def request(self):
-        if self._request is None:
-            return "data"
-        return self._request
 
     def register(self, obj):
         if not isinstance(obj, SampleProvider):
@@ -227,9 +209,7 @@ class SampleProvider:
         return self
 
     def __len__(self):
-        raise NotImplementedError(
-            f"Length is not implemented for {self.__class__.__name__}. Please implement __len__ method.",
-        )
+        raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
 
     def latitudes(self, item: int):
         raise NotImplementedError()
@@ -242,27 +222,46 @@ class SampleProvider:
 
     @property
     def name_to_index(self, item: int):
-        raise NotImplementedError(
-            f"name_to_index is not implemented for {self.__class__.__name__}. Please implement name_to_index method."
-        )
+        raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
 
     @property
     def statistics(self):
-        raise NotImplementedError(
-            f"statistics is not implemented for {self.__class__.__name__}. Please implement statistics method."
-        )
+        raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
+
+    @property
+    def dataspecs(self):
+        return self._path(prefix="")
+
+    def _path(self, prefix):
+        raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
+
+    @property
+    def extra(self):
+        raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
+
+    @property
+    def normaliser(self):
+        raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
+
+    @property
+    def inputer(self):
+        raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
 
     @property
     def configs(self):
-        raise NotImplementedError(
-            f"configs is not implemented for {self.__class__.__name__}. Please implement configs method."
-        )
+        raise ValueError("Obsolete, please use self.normaliser or self.inputer or self.extra instead")
 
-    def processors(self, item: int):
-        raise NotImplementedError()
+    def get_native(self, item: int):
+        dic = self[item]
+        if "dataspecs" not in dic:
+            dic["dataspecs"] = self.dataspecs
+        return dic
 
-    def num_channels(self, item: int):
-        raise NotImplementedError()
+    def get_obj(self, item):
+        raw = self.get_native(item)
+        if "dataspecs" not in raw:
+            raw["dataspecs"] = self.dataspecs
+        return structure_factory(**raw)
 
     @property
     def shape(self):
@@ -307,13 +306,24 @@ class ForwardSampleProvider(SampleProvider):
     def statistics(self):
         return self._forward.statistics
 
+    def _path(self, prefix):
+        return self._forward._path(prefix)
+
+    @property
+    def extra(self):
+        return self._forward.extra
+
+    @property
+    def normaliser(self):
+        return self._forward.normaliser
+
+    @property
+    def inputer(self):
+        return self._forward.inputer
+
     @property
     def shape(self):
         return self._forward.shape
-
-    @property
-    def configs(self):
-        return self._forward.configs
 
     @property
     def frequency(self):
@@ -348,9 +358,8 @@ class DictSampleProvider(SampleProvider):
     label = "dict"
     emoji = "📖"
 
-    def __init__(self, _context: Context, _parent, dictionary: dict, with_attributes: bool = False):
+    def __init__(self, _context: Context, _parent, dictionary: dict):
         super().__init__(_context, _parent)
-        self.with_attributes = with_attributes
 
         if not isinstance(dictionary, dict):
             raise TypeError(f"Expected dictionary, got {type(dictionary)}: {dictionary}")
@@ -371,6 +380,7 @@ class DictSampleProvider(SampleProvider):
         for k, v in dictionary.items():
             if not isinstance(v, dict):
                 raise ValueError(f"Expected dictionary for sample provider, got {type(v)}: {v}. ")
+
         self._samples = {k: sample_provider_factory(_context, **v) for k, v in dictionary.items()}
 
     def __getattr__(self, key):
@@ -395,13 +405,25 @@ class DictSampleProvider(SampleProvider):
     def statistics(self):
         return {k: v.statistics for k, v in self._samples.items()}
 
+    def _path(self, prefix):
+        first_dot = "" if prefix == "" else "."
+        return {k: v._path(f"{prefix}{first_dot}{k}") for k, v in self._samples.items()}
+
+    @property
+    def extra(self):
+        return {k: v.extra for k, v in self._samples.items()}
+
+    @property
+    def normaliser(self):
+        return {k: v.normaliser for k, v in self._samples.items()}
+
+    @property
+    def inputer(self):
+        return {k: v.inputer for k, v in self._samples.items()}
+
     @property
     def shape(self):
         return {k: v.shape for k, v in self._samples.items()}
-
-    @property
-    def configs(self):
-        return {k: v.configs for k, v in self._samples.items()}
 
     def tree(self, prefix=""):
         tree = Tree(prefix + self.label)
@@ -445,13 +467,24 @@ class _FilterSampleProvider(SampleProvider):
     def statistics(self):
         return self._forward.statistics
 
+    def _path(self, prefix):
+        return self._forward._path(prefix)
+
+    @property
+    def extra(self):
+        return self._forward.extra
+
+    @property
+    def normaliser(self):
+        return self._forward.normaliser
+
+    @property
+    def inputer(self):
+        return self._forward.inputer
+
     @property
     def shape(self):
         return self._forward.shape
-
-    @property
-    def configs(self):
-        return self._forward.configs
 
     def __getitem__(self, item: int):
         return self._forward.__getitem__(item)
@@ -469,12 +502,6 @@ class OffsetSampleProvider(_FilterSampleProvider):
     emoji = "⏱️"
     label = "Offset"
     keyword = "offset"
-
-
-class RequestSampleProvider(_FilterSampleProvider):
-    emoji = "🧬"
-    label = "Request"
-    keyword = "request"
 
 
 class Dimension:
@@ -662,13 +689,24 @@ class TupleSampleProvider(SampleProvider):
     def statistics(self):
         return [s.statistics for s in self._samples]
 
+    def _path(self, prefix):
+        return [s._path(f"{prefix}.{i}") for i, s in enumerate(self._samples)]
+
+    @property
+    def extra(self):
+        return [s.extra for s in self._samples]
+
+    @property
+    def normaliser(self):
+        return [s.normaliser for s in self._samples]
+
+    @property
+    def inputer(self):
+        return [s.inputer for s in self._samples]
+
     @property
     def shape(self):
         return [s.shape for s in self._samples]
-
-    @property
-    def configs(self):
-        return [s.configs for s in self._samples]
 
     def tree(self, prefix=""):
         txt = prefix + self.emoji + self.label + f" ({len(self._samples)} samples)"
@@ -720,13 +758,6 @@ class TensorSampleProvider(SampleProvider):
 
     def __getitem__(self, item: int):
         data = self._tuple_sample_provider.__getitem__(item)
-        # if self._context.request == "data":
-        #    data_ = np.array(data)
-        #    if not isinstance(data_, np.ndarray):
-        #        print(type(data), data)
-        #        print(type(data_), data_)
-        #        raise TypeError(f"Expected numpy array, got {type(data_)}: {data_}")
-        #    return self.transpose(data_)
 
         def process_element(k, elt):
             if k == "data":
@@ -739,8 +770,6 @@ class TensorSampleProvider(SampleProvider):
         assert "data" in data, f"Expected 'data' key in {data}, got {data}"
         return {k: process_element(k, v) for k, v in data.items()}
 
-        assert False, (self.request, data, type(data), self._context.request)
-
     @property
     def name_to_index(self):
         return dict(variables=self._template_sample_provider.name_to_index)
@@ -749,14 +778,25 @@ class TensorSampleProvider(SampleProvider):
     def statistics(self):
         return dict(variables=self._template_sample_provider.statistics)
 
+    def _path(self, prefix):
+        return f"{prefix}.tensor"
+
+    @property
+    def extra(self):
+        return self._template_sample_provider.extra
+
+    @property
+    def normaliser(self):
+        return self._template_sample_provider.normaliser
+
+    @property
+    def inputer(self):
+        return self._template_sample_provider.inputer
+
     @property
     def shape(self):
         # todo read from data handler and have 'dynamic' shape
         return self[0].shape
-
-    @property
-    def configs(self):
-        return self._template_sample_provider.configs
 
     def _flatten(self, x):
         if isinstance(x, dict):
@@ -838,7 +878,6 @@ class VariablesSampleProvider(SampleProvider):
 
         dic = self.variables.as_dict
         self.group = list(dic.keys())[0]
-        self.request = _context.request
 
     @property
     def name_to_index(self):
@@ -848,13 +887,24 @@ class VariablesSampleProvider(SampleProvider):
     def statistics(self):
         return self.data_handler.statistics
 
+    def _path(self, prefix):
+        assert False, "Should not be called, Tensor should be a parent and handle the request"
+
+    @property
+    def extra(self):
+        return self.data_handler.extra
+
+    @property
+    def normaliser(self):
+        return self.data_handler.normaliser
+
+    @property
+    def inputer(self):
+        return self.data_handler.inputer
+
     @property
     def shape(self):
         return self.data_handler.shape
-
-    @property
-    def configs(self):
-        return self.data_handler.configs
 
     def set_min_max_offsets(self, minimum=None, maximum=None, dropped_samples=None):
         self.min_offset = minimum
@@ -942,8 +992,9 @@ class DataHandler:
                 f"Group '{self.group}' not found in sources: available groups are {list(sources.keys())}",
             )
         self.config = sources[self.group].copy()
-        self.preprocessors = self.config.get("processors", {})
-        self._configs = self.config.get("configs", {})
+        self._inputer_config = self.config.get("inputer", {})
+        self._normaliser_config = self.config.get("normaliser", {})
+        self._extra_config = self.config.get("extra", {})
 
         variables = [f"{group}.{v}" for v in variables]
         self.variables = variables
@@ -1011,13 +1062,6 @@ class DataHandler:
         longs = self.longitudes(item)
         return np.array([lats, longs]).T
 
-    def get_configs(self, item=None):
-        warnings.warn(
-            "using configs is here deprecated, use sample_provider.configs instead",
-            DeprecationWarning,
-        )
-        return self._configs
-
     def get_name_to_index(self, item=None):
         warnings.warn(
             "using name_to_index here is deprecated, use sample_provider.name_to_index instead",
@@ -1040,7 +1084,6 @@ class DataHandler:
             "latitudes_longitudes": self.latitudes_longitudes,
             "timedeltas": self.timedeltas,
             "shape": self.get_shape,
-            "configs": self.get_configs,  # moved to sample_provider.configs
             "name_to_index": self.get_name_to_index,  # moved to sample_provider.name_to_index
             "statistics": self.get_statistics,  # moved to sample_provider.statistics
         }
@@ -1079,8 +1122,16 @@ class DataHandler:
         return self._statistics
 
     @property
-    def configs(self):
-        return self._configs
+    def inputer(self):
+        return self._inputer_config
+
+    @property
+    def normaliser(self):
+        return self._normaliser_config
+
+    @property
+    def extra(self):
+        return self._extra_config
 
     def __repr__(self):
         return f"DataHandler {self.config['dataset']} @ {self.group} [{', '.join(self.variables)}]"
@@ -1108,8 +1159,6 @@ def sample_provider_factory(_context=None, **kwargs):
 
     if "offset" in kwargs:
         obj = OffsetSampleProvider(_context, **kwargs)
-    elif "request" in kwargs:
-        obj = RequestSampleProvider(_context, **kwargs)
     elif "dictionary" in kwargs:
         obj = DictSampleProvider(_context, **kwargs)
     elif "tensor" in kwargs:
@@ -1182,53 +1231,58 @@ def sample_provider_factory(_context=None, **kwargs):
     return obj
 
 
-class Structure:
-    def __repr__(self):
+class StructureMixin:
+    def __repr__(self, **kwargs):
         console = Console(record=True, width=120)
-        tree = self.tree()
+        tree = self.tree(**kwargs)
         with console.capture() as capture:
             console.print(tree)
         return capture.get()
 
 
-class TupleStructure(Structure):
-    def __init__(self, *content):
-        self.content = content
+class TupleStructure(StructureMixin, tuple):
+    # beware, inheriting from tuple, do not use __init__ method
 
-    def tree(self, prefix=""):
+    def tree(self, prefix="", **kwargs):
         tree = Tree(prefix + "🔗")
-        for v in self.content:
-            tree.add(v.tree())
+        for v in self:
+            tree.add(v.tree(**kwargs))
         return tree
 
     def apply(self, func):
-        return tuple([x.apply(func) for x in self.content])
+        return TupleStructure([x.apply(func) for x in self])
+
+    def _as_native(self):
+        return tuple(x._as_native() for x in self)
 
 
-class DictStructure(Structure):
-    def __init__(self, **content):
-        self.content = content
-        for k in content:
+class DictStructure(StructureMixin, dict):
+    def __init__(self, content):
+        super().__init__(content)
+        for k in self.keys():
             if not hasattr(self, k):
-                setattr(self, k, content[k])
+                setattr(self, k, self[k])
 
-    def tree(self, prefix=""):
+    def tree(self, prefix="", **kwargs):
         tree = Tree(prefix + "📖")
-        for k, v in self.content.items():
-            tree.add(v.tree(prefix=f"{k} : "))
+        for k, v in self.items():
+            tree.add(v.tree(prefix=f"{k} : ", **kwargs))
         return tree
 
     def apply(self, func):
-        return {k: v.apply(func) for k, v in self.content.items()}
+        return DictStructure({k: v.apply(func) for k, v in self.items()})
+
+    def _as_native(self):
+        return {k: v._as_native() for k, v in self.items()}
 
 
-class LeafStructure(Structure):
+class LeafStructure(StructureMixin):
     def __init__(self, **info):
         for k, v in info.items():
             setattr(self, k, v)
         self._names = list(info.keys())
 
-    def tree(self, prefix=""):
+    def tree(self, prefix="", verbose=False, **kwargs):
         tree = Tree(f"{prefix}  📦 {', '.join(self._names)}")
         if hasattr(self, "shape"):
             tree.add(f"Shape: {self.shape}")
@@ -1250,55 +1304,60 @@ class LeafStructure(Structure):
             tree.add(f"Timedeltas: [{minimum},{maximum}]")
         if hasattr(self, "data"):
             tree.add(f"Data: array of shape {self.data.shape} with mean {np.nanmean(self.data):.2f}")
+        if hasattr(self, "dataspecs") and verbose:
+            tree.add(f"dataspecs: {self.dataspecs}")
         return tree
 
     def apply(self, func):
-        return func(path="x", **{k: getattr(self, k) for k in self._names})
+        new = func(**{k: getattr(self, k) for k in self._names})
+        name = func.__name__
+        return LeafStructure(**{"dataspecs": self.dataspecs, name: new})
+
+    def _as_native(self, key=None):
+        if key is not None:
+            return getattr(self, key, None)
+        return {k: getattr(self, k) for k in self._names}
 
 
-def structure(**info):
+def structure_factory(**info):
     check_structure(**info)
-    first = info[next(iter(info.keys()))]
+    dataspecs = info["dataspecs"]
 
-    if "variables" in first:  # todo use sp.structure
+    if isinstance(dataspecs, str) and dataspecs.endswith(".tensor"):
         return LeafStructure(**info)
 
-    if isinstance(first, (list, tuple)):
+    if isinstance(dataspecs, (list, tuple)):
         lst = []
-        for i in range(len(first)):
-            s = {key: info[key][i] for key in info.keys()}
-            assert list(s.keys()) == list(info.keys()), f"Expected keys {list(info.keys())}, got {list(s.keys())}"
-            lst.append(structure(**s))
-        return TupleStructure(*lst)
+        for i in range(len(dataspecs)):
+            lst.append(structure_factory(**{key: info[key][i] for key in info.keys()}))
+        return TupleStructure(lst)
 
-    assert isinstance(first, dict), f"Expected dicts"
+    assert isinstance(dataspecs, dict), f"Expected dicts"
     dic = {}
-    for k in first.keys():
-        s = {key: info[key][k] for key in info.keys()}
-        assert list(s.keys()) == list(info.keys()), f"Expected keys {list(info.keys())}, got {list(s.keys())}"
-        dic[k] = structure(**s)
-    return DictStructure(**dic)
+    for k in dataspecs.keys():
+        dic[k] = structure_factory(**{key: info[key][k] for key in info.keys()})
+    return DictStructure(dic)
 
 
 def check_structure(**info):
-    if "variables" in info:
-        return
-    first = info[next(iter(info.keys()))]
-    if "variables" in first:
-        return
-    if isinstance(first, dict):
-        for v in info.values():
-            assert isinstance(v, dict), f"Expected all info values to be dictionaries, got {v}"
-            assert set(v.keys()) == set(
-                first.keys()
-            ), f"Expected all info values to have the same keys, got {v} vs {first}"
+    assert "dataspecs" in info, f"Missing 'dataspecs' in info"
 
-    if isinstance(first, (list, tuple)):
-        for v in info.values():
-            assert isinstance(v, (list, tuple)), f"Expected all info values to be lists or tuples, got {v}"
-            assert len(v) == len(
-                first
-            ), f"Expected all info values to have the same length as first, got {v} vs {first}"
+    dataspecs = info["dataspecs"]
+    for v in info.values():
+        if isinstance(dataspecs, str) and dataspecs.endswith(".tensor"):
+            continue
+
+        if isinstance(dataspecs, dict):
+            assert isinstance(
+                v, dict
+            ), f"Expected all values to be dict, got {type(v)} != {type(dataspecs)} whith {v} and {dataspecs}"
+            assert set(v.keys()) == set(dataspecs.keys()), f"Expected the same keys, got {v} vs {dataspecs}"
+
+        if isinstance(dataspecs, (list, tuple)):
+            assert isinstance(
+                v, (list, tuple)
+            ), f"Expected all values to be lists or tuples, got {type(v)} != {type(dataspecs)} whith {v} and {dataspecs}"
+            assert len(v) == len(dataspecs), f"Expected the same length as first, got ✅{v}✅ vs ❌{dataspecs}❌"
 
 
 # TEST ---------------------------------
@@ -1310,24 +1369,23 @@ sources:
       dataset:
         dataset: aifs-ea-an-oper-0001-mars-o96-1979-2023-6h-v8
         set_group: era5
-      # processors: ...
-      optimisations: use_tensors
-      user_key: mine
     snow:
       dataset: observations-testing-2018-2018-6h-v0
     metop_a:
       dataset: observations-testing-2018-2018-6h-v0
-      configs:
-        user_key_1:
-            "metop_a.scatss_1": "foo"
-            "metop_a.scatss_2": ["bar"]
-        user_key_2:
-            "metop_a.scatss_1": "foo"
-            "metop_a.scatss_2": ["bar"]
-        normaliser:
-            "metop_a.scatss_1": "mean-std"
+      normaliser:
+            "scatss_1": "mean-std"
             "scatss_2": "min-max"
             "scatss_3": {"name": "custom-normaliser", "theta": 0.5, "rho": 0.1}
+      inputer:
+            "scatss_1": special
+            "scatss_2": other
+            "scatss_3": {"name": "custom-inputer", "theta": 0.5, "rho": 0.1}
+      extra:
+        user_key_1: a
+        user_key_2:
+            1: foo
+            2: bar
 
 
 
@@ -1415,39 +1473,6 @@ sample:
               tensor:
                 - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
 
-        ex_request_1:
-          tensor:
-            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-              request: data
-              # this is the default
-
-        ex_request_2:
-          tensor:
-            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-              request: latitudes
-
-        ex_request_3:
-          tensor:
-            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-              request: [data, latitudes]
-
-        ex_request_4:
-          request: [data, latitudes_longitudes, timedeltas]
-          tuple:
-            loop:
-              - offset: [-6h, 0h]
-            template:
-              variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-
-        ex_request_4:
-          request: [statistics, shape, name_to_index]
-          tuple:
-            loop:
-              - offset: [-6h, 0h]
-            template:
-              variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-
-
         #test_offset4:
         #  offset: "-6h"
         #  structure:
@@ -1455,29 +1480,6 @@ sample:
         #    structure:
         #      variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
         #
-        #test_request1:
-        #  request: [data, shape]
-        #  structure:
-        #      variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-        #      request: [data, latitudes_longitudes, timedeltas]
-        #
-        #test_request2:
-        #  variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-        #  request: configs
-        #
-        #test_request3:
-        #  variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-        #  request: configs.normaliser
-
-#        et_implemented:
-#          tuple:
-#            - offset: ["-12h", "-6h"]
-#            - ensembles: 1
-#            - variables: ["metop_a.scatss_1", "metop_a.scatss_2", "snow.sdepth_0"]
-#            - dictionary:
-#                key:
-#                  variables: ["metop_a.scatss_1", "metop_a.scatss_2", "snow.sdepth_0"]
-
 """
 
     import sys
@@ -1526,15 +1528,14 @@ sample:
         end=None,
         frequency="6h",
     )
-    # if True:
-    if False:
-        for key, config in sample_config["dictionary"].items():
-            print(f"[yellow]- {key} : building sample_provider[/yellow]")
-            print(yaml.dump(config, indent=2, sort_keys=False))
-            s = sample_provider_factory(**training_context, **config)
-            print(s)
-            print(len(s))
-            print("----------------------------")
+    if True:
+        # if False:
+        # for key, config in sample_config["dictionary"].items():
+        #     print(f"[yellow]- {key} : building sample_provider[/yellow]")
+        #     print(yaml.dump(config, indent=2, sort_keys=False))
+        #     s = sample_provider_factory(**training_context, **config)
+        #     print(s)
+        #     print("----------------------------")
 
         print("✅✅  --------")
         for key, config in sample_config["dictionary"].items():
@@ -1542,6 +1543,7 @@ sample:
             print(yaml.dump(config, indent=2, sort_keys=False))
             s = sample_provider_factory(**training_context, **config)
             print(s)
+            print("length : ", len(s))
             name_to_index = s.name_to_index
             print(f"name_to_index = {name_to_index}")
             statistitics = s.statistics
@@ -1553,15 +1555,15 @@ sample:
     i = 1
 
     config = """dictionary:
-        key1:
+        fields:
           tensor:
             - variables: ["era5.2t", "era5.10u", "era5.10v"]
             - offset: ["-6h"]
-        key2:
+        other_fields:
           tensor:
             - offset: ["-6h", "+6h"]
             - variables: ["era5.2t", "era5.10u"]
-        key3:
+        observations:
           tuple:
             loop:
               - offset: ["-6h", "0h", "+6h"]
@@ -1575,7 +1577,9 @@ sample:
     info = {
         "name_to_index": sp.name_to_index,
         "statistics": sp.statistics,
-        "configs": sp.configs,
+        "extra": sp.extra,
+        "dataspecs": sp.dataspecs,
+        "normaliser": sp.normaliser,
         # "shape": sp.shape,
         # "data_spec": sp.data_spec,
         **sp[1],
@@ -1587,16 +1591,31 @@ sample:
     for k, v in data.items():
         print(f"data['{k}'] = {show_json(v)}")
 
-    obj = structure(**info)
+    obj = structure_factory(**info)
     print("Data as object :")
     print(obj)
-    print(f"{obj.key1.name_to_index=}")
-    print(f"{obj.key1.configs=}")
-    print(f"{obj.key1.statistics=}")
-    print(f"{obj.key1.data=}")
+    print(f"{obj.fields.name_to_index=}")
+    print(f"{obj.fields.normaliser=}")
+    print(f"{obj.fields.extra=}")
+    print(f"{obj.fields.statistics=}")
+    print(f"{obj.fields.dataspecs=}")
+    print(f"{obj.observations[0].statistics=}")
+    print(f"{obj.observations[0].data=}")
+    print(f"{obj.observations[0].dataspecs=}")
 
-    def f(name_to_index, statistics, configs, **kwargs):
-        return f"Normalisers build from: {name_to_index=}, {statistics=}, {configs=}"
+    def my_function(name_to_index, statistics, normaliser, **kwargs):
+        return f"Normalisers build from: {name_to_index=}, {statistics=}, {normaliser=}"
 
-    result = obj.apply(f)
+    result = obj.apply(my_function)
     print(result)
+    print()
+    print(f"{result.observations[0].my_function=}")
+    print(f"{result.fields.my_function=}")
+    print()
+    print(f"{result.fields=}")
+    print(f"{result.fields._as_native()}")
+    print(f"{result.fields._as_native('my_function')=}")
+
+    print(f"{str(sp.get_native(2))[:1000]=}")
+    print(f"{sp.get_obj(2)=}")
+    # print(sp.get_obj(2).__repr__(verbose=True))
