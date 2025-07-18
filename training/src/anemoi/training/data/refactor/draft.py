@@ -1306,10 +1306,10 @@ class DictStructure(StructureMixin, dict):
 
 
 class LeafStructure(StructureMixin):
-    def __init__(self, **info):
-        for k, v in info.items():
+    def __init__(self, **content):
+        for k, v in content.items():
             setattr(self, k, v)
-        self._names = list(info.keys())
+        self._names = list(content.keys())
 
     def tree(self, prefix="", verbose=False, **kwargs):
         tree = Tree(f"{prefix}  📦 {', '.join(self._names)}")
@@ -1318,20 +1318,30 @@ class LeafStructure(StructureMixin):
         if hasattr(self, "statistics"):
             tree.add(f"Statistics: {str(self.statistics)[:50]}")
         if hasattr(self, "latitudes"):
-            # print latitudes
-            print(f"Latitudes: {self.latitudes}")
-            tree.add(f"Latitudes: [{np.min(self.latitudes):.2f}, {np.max(self.latitudes):.2f}]")
+            try:
+                txt = f"[{np.min(self.latitudes):.2f}, {np.max(self.latitudes):.2f}]"
+            except ValueError:
+                txt = f"[no np.min/np.max]"
+            tree.add(f"Latitudes: [{txt}")
         if hasattr(self, "longitudes"):
-            tree.add(f"Longitudes: [{np.min(self.longitudes):.2f}, {np.max(self.longitudes):.2f}]")
+            try:
+                txt = f"[{np.min(self.longitudes):.2f}, {np.max(self.longitudes):.2f}]"
+            except ValueError:
+                txt = f"[no np.min/np.max]"
+            tree.add(f"Longitudes: [{txt}]")
         if hasattr(self, "timedeltas"):
-            minimum = np.min(self.timedeltas)
-            maximum = np.max(self.timedeltas)
-            minimum = int(minimum)
-            maximum = int(maximum)
-            minimum = datetime.timedelta(seconds=minimum)
-            maximum = datetime.timedelta(seconds=maximum)
-            minimum = frequency_to_string(minimum)
-            maximum = frequency_to_string(maximum)
+            try:
+                minimum = np.min(self.timedeltas)
+                maximum = np.max(self.timedeltas)
+                minimum = int(minimum)
+                maximum = int(maximum)
+                minimum = datetime.timedelta(seconds=minimum)
+                maximum = datetime.timedelta(seconds=maximum)
+                minimum = frequency_to_string(minimum)
+                maximum = frequency_to_string(maximum)
+            except ValueError:
+                minimum = "no np.min"
+                maximum = "no np.max"
             tree.add(f"Timedeltas: [{minimum},{maximum}]")
         if hasattr(self, "data"):
             tree.add(f"Data: array of shape {self.data.shape} with mean {np.nanmean(self.data):.2f}")
@@ -1359,6 +1369,10 @@ class LeafStructure(StructureMixin):
         result_name = result or input_name
 
         func = getattr(self, function)
+
+        if not callable(func):
+            raise ValueError(f"Expected a callable function in {self.dataspecs}, got {type(func)}: {func}")
+
         x = getattr(structure, input_name)
         y = func(x)
 
@@ -1370,31 +1384,31 @@ class LeafStructure(StructureMixin):
         return {k: getattr(self, k) for k in self._names}
 
 
-def structure_factory(**info):
-    check_structure(**info)
-    dataspecs = info["dataspecs"]
+def structure_factory(**content):
+    check_structure(**content)
+    dataspecs = content["dataspecs"]
 
     if isinstance(dataspecs, str) and dataspecs.endswith(".tensor"):
-        return LeafStructure(**info)
+        return LeafStructure(**content)
 
     if isinstance(dataspecs, (list, tuple)):
         lst = []
         for i in range(len(dataspecs)):
-            lst.append(structure_factory(**{key: info[key][i] for key in info.keys()}))
+            lst.append(structure_factory(**{key: content[key][i] for key in content.keys()}))
         return TupleStructure(lst)
 
     assert isinstance(dataspecs, dict), f"Expected dicts"
     dic = {}
     for k in dataspecs.keys():
-        dic[k] = structure_factory(**{key: info[key][k] for key in info.keys()})
+        dic[k] = structure_factory(**{key: content[key][k] for key in content.keys()})
     return DictStructure(dic)
 
 
-def check_structure(**info):
-    assert "dataspecs" in info, f"Missing 'dataspecs' in info"
+def check_structure(**content):
+    assert "dataspecs" in content, f"Missing 'dataspecs' in content"
 
-    dataspecs = info["dataspecs"]
-    for v in info.values():
+    dataspecs = content["dataspecs"]
+    for v in content.values():
         if isinstance(dataspecs, str) and dataspecs.endswith(".tensor"):
             continue
 
@@ -1625,7 +1639,7 @@ sample:
     config = yaml.safe_load(config)
     sp = sample_provider_factory(**training_context, **config)
 
-    info = {
+    content = {
         "name_to_index": sp.name_to_index,
         "statistics": sp.statistics,
         "extra": sp.extra,
@@ -1635,14 +1649,14 @@ sample:
         # "data_spec": sp.data_spec,
         **sp[1],
     }
-    print("info_from_sample_provider", info)
+    print("info_from_sample_provider", content)
 
     data = sp[i]
     print("Native types data : ")
     for k, v in data.items():
         print(f"data['{k}'] = {show_json(v)}")
 
-    obj = structure_factory(**info)
+    obj = structure_factory(**content)
     print("Data as object :")
     print(obj)
     print(f"{obj.fields.name_to_index=}")
@@ -1671,7 +1685,9 @@ sample:
     print(f"{sp.get_obj(2)=}")
     # print(sp.get_obj(2).__repr__(verbose=True))
 
-    def double_function(**kwargs):
+    def double_function(normaliser, **kwargs):
+        # print(normaliser)
+        # return Normaliser(config = normaliser)
         return lambda x: x * 2
 
     function_structure = obj.apply(double_function)
