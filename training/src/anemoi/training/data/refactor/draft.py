@@ -1272,6 +1272,10 @@ class TupleStructure(StructureMixin, tuple):
     def apply(self, func):
         return TupleStructure([x.apply(func) for x in self])
 
+    def __call__(self, structure, **kwargs):
+        assert isinstance(structure, TupleStructure), f"Expected TupleStructure, got {type(structure)}: {structure}"
+        return TupleStructure(func(elt, **kwargs) for func, elt in zip(self, structure))
+
     def _as_native(self):
         return tuple(x._as_native() for x in self)
 
@@ -1291,6 +1295,11 @@ class DictStructure(StructureMixin, dict):
 
     def apply(self, func):
         return DictStructure({k: v.apply(func) for k, v in self.items()})
+
+    def __call__(self, structure, **kwargs):
+        assert isinstance(structure, DictStructure), f"Expected DictStructure, got {type(structure)}: {structure}"
+        assert set(self.keys()) == set(structure.keys()), f"Keys do not match: {self.keys()} vs {structure.keys()}"
+        return DictStructure({k: self[k](structure[k], **kwargs) for k in self.keys()})
 
     def _as_native(self):
         return {k: v._as_native() for k, v in self.items()}
@@ -1334,6 +1343,26 @@ class LeafStructure(StructureMixin):
         new = func(**{k: getattr(self, k) for k in self._names})
         name = func.__name__
         return LeafStructure(**{"dataspecs": self.dataspecs, name: new})
+
+    def __call__(self, structure, function=None, input=None, result=None, **kwargs):
+        assert isinstance(structure, LeafStructure), f"Expected LeafStructure, got {type(structure)}: {structure}"
+
+        if not function:
+            if len(self._names) != 2:
+                raise NotImplementedError(f"Expected two names in LeafStructure, got {self._names}. ")
+            for function in self._names:
+                if function == "dataspecs":
+                    continue
+                break
+
+        input_name = input or "data"
+        result_name = result or input_name
+
+        func = getattr(self, function)
+        x = getattr(structure, input_name)
+        y = func(x)
+
+        return LeafStructure(**{"dataspecs": structure.dataspecs, result_name: y})
 
     def _as_native(self, key=None):
         if key is not None:
@@ -1641,3 +1670,14 @@ sample:
     print(f"{str(sp.get_native(2))[:1000]=}")
     print(f"{sp.get_obj(2)=}")
     # print(sp.get_obj(2).__repr__(verbose=True))
+
+    def double_function(**kwargs):
+        return lambda x: x * 2
+
+    function_structure = obj.apply(double_function)
+    print("Function structure:")
+    print(function_structure)
+
+    result = function_structure(obj)
+    print("Result of applying the function to the structure:")
+    print(result)
