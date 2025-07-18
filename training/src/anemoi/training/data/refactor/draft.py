@@ -263,6 +263,26 @@ class SampleProvider:
             raw["dataspecs"] = self.dataspecs
         return structure_factory(**raw)
 
+    def get_things_that_do_not_depend_on_the_index(self):
+        """Returns a structure that does not depend on the index."""
+        return structure_factory(
+            name_to_index=self.name_to_index,
+            statistics=self.statistics,
+            dataspecs=self.dataspecs,
+            extra=self.extra,
+            normaliser=self.normaliser,
+            inputer=self.inputer,
+        )
+
+    def create_structure_from_batch(self, batch):
+        """Creates a structure from a batch of data."""
+        if not isinstance(batch, dict):
+            raise TypeError(f"Expected dict for batch, got {type(batch)}: {batch}")
+        return structure_factory(
+            dataspecs=self.dataspecs,
+            **batch,
+        )
+
     @property
     def shape(self):
         raise NotImplementedError()
@@ -1289,6 +1309,8 @@ class LeafStructure(StructureMixin):
         if hasattr(self, "statistics"):
             tree.add(f"Statistics: {str(self.statistics)[:50]}")
         if hasattr(self, "latitudes"):
+            # print latitudes
+            print(f"Latitudes: {self.latitudes}")
             tree.add(f"Latitudes: [{np.min(self.latitudes):.2f}, {np.max(self.latitudes):.2f}]")
         if hasattr(self, "longitudes"):
             tree.add(f"Longitudes: [{np.min(self.longitudes):.2f}, {np.max(self.longitudes):.2f}]")
@@ -1351,7 +1373,7 @@ def check_structure(**info):
             assert isinstance(
                 v, dict
             ), f"Expected all values to be dict, got {type(v)} != {type(dataspecs)} whith {v} and {dataspecs}"
-            assert set(v.keys()) == set(dataspecs.keys()), f"Expected the same keys, got {v} vs {dataspecs}"
+            assert set(v.keys()) == set(dataspecs.keys()), f"Expected the same keys, got {list(v.keys())} vs. {list(dataspecs.keys())}"
 
         if isinstance(dataspecs, (list, tuple)):
             assert isinstance(
