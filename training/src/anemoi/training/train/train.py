@@ -196,6 +196,7 @@ class AnemoiTrainer:
             "statistics": self.datamodule.training_samples.statistics,
             "processors": self.datamodule.training_samples.processors,
             "extra": self.datamodule.training_samples.extra,
+            "dataspecs": self.datamodule.training_samples.dataspecs,
         }
 
         kwargs = {
