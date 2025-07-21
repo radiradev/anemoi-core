@@ -16,7 +16,6 @@ from anemoi.training.losses.scalers.base_scaler import BaseUpdatingScaler
 from anemoi.training.utils.enums import TensorDim
 
 if TYPE_CHECKING:
-
     import torch
 
     from anemoi.models.interface import AnemoiModelInterface
