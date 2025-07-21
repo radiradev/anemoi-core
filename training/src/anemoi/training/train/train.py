@@ -33,7 +33,7 @@ from anemoi.training.diagnostics.callbacks import get_callbacks
 from anemoi.training.diagnostics.logger import get_mlflow_logger
 from anemoi.training.diagnostics.logger import get_tensorboard_logger
 from anemoi.training.diagnostics.logger import get_wandb_logger
-from anemoi.training.data.refactor.draft import structure
+from anemoi.training.data.refactor.draft import structure_factory
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.schemas.base_schema import UnvalidatedBaseSchema
 from anemoi.training.schemas.base_schema import convert_to_omegaconf
@@ -192,15 +192,16 @@ class AnemoiTrainer:
         "Please use a different activation function."
 
         sample_info = {
-            "name_to_index": self.datamodule.metadata_provider.name_to_index,
-            "statistics": self.datamodule.metadata_provider.statistics,
-            "processors": self.datamodule.metadata_provider.configs,
+            "name_to_index": self.datamodule.training_samples.name_to_index,
+            "statistics": self.datamodule.training_samples.statistics,
+            "processors": self.datamodule.training_samples.processors,
+            "extra": self.datamodule.training_samples.extra,
         }
 
         kwargs = {
             "config": self.config,
             # "data_indices": self.data_indices,
-            "sample_provider": structure(**sample_info),
+            "sample_provider": structure_factory(**sample_info),
             "graph_data": self.graph_data,
             "metadata": self.metadata,
         }

@@ -244,12 +244,16 @@ class SampleProvider:
         raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
 
     @property
-    def inputer(self):
+    def imputer(self):
+        raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
+
+    @property
+    def processors(self):
         raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
 
     @property
     def configs(self):
-        raise ValueError("Obsolete, please use self.normaliser or self.inputer or self.extra instead")
+        raise ValueError("Obsolete, please use self.normaliser or self.imputer or self.extra instead")
 
     def get_native(self, item: int):
         dic = self[item]
@@ -271,7 +275,7 @@ class SampleProvider:
             dataspecs=self.dataspecs,
             extra=self.extra,
             normaliser=self.normaliser,
-            inputer=self.inputer,
+            imputer=self.imputer,
         )
 
     def create_structure_from_batch(self, batch):
@@ -338,8 +342,12 @@ class ForwardSampleProvider(SampleProvider):
         return self._forward.normaliser
 
     @property
-    def inputer(self):
-        return self._forward.inputer
+    def imputer(self):
+        return self._forward.imputer
+
+    @property
+    def processors(self):
+        return self._forward.processors
 
     @property
     def shape(self):
@@ -438,8 +446,12 @@ class DictSampleProvider(SampleProvider):
         return {k: v.normaliser for k, v in self._samples.items()}
 
     @property
-    def inputer(self):
-        return {k: v.inputer for k, v in self._samples.items()}
+    def imputer(self):
+        return {k: v.imputer for k, v in self._samples.items()}
+
+    @property
+    def processors(self):
+        return {k: v.processors for k, v in self._samples.items()}
 
     @property
     def shape(self):
@@ -499,8 +511,12 @@ class _FilterSampleProvider(SampleProvider):
         return self._forward.normaliser
 
     @property
-    def inputer(self):
-        return self._forward.inputer
+    def imputer(self):
+        return self._forward.imputer
+
+    @property
+    def processors(self):
+        return self._forward.processors
 
     @property
     def shape(self):
@@ -721,9 +737,13 @@ class TupleSampleProvider(SampleProvider):
         return [s.normaliser for s in self._samples]
 
     @property
-    def inputer(self):
-        return [s.inputer for s in self._samples]
+    def imputer(self):
+        return [s.imputer for s in self._samples]
 
+    @property
+    def processors(self):
+        return [s.processors for s in self._samples]
+    
     @property
     def shape(self):
         return [s.shape for s in self._samples]
@@ -810,8 +830,12 @@ class TensorSampleProvider(SampleProvider):
         return self._template_sample_provider.normaliser
 
     @property
-    def inputer(self):
-        return self._template_sample_provider.inputer
+    def imputer(self):
+        return self._template_sample_provider.imputer
+
+    @property
+    def processors(self):
+        return self._template_sample_provider.processors
 
     @property
     def shape(self):
@@ -919,8 +943,12 @@ class VariablesSampleProvider(SampleProvider):
         return self.data_handler.normaliser
 
     @property
-    def inputer(self):
-        return self.data_handler.inputer
+    def imputer(self):
+        return self.data_handler.imputer
+
+    @property
+    def processors(self):
+        return self.data_handler.processors
 
     @property
     def shape(self):
@@ -1012,7 +1040,7 @@ class DataHandler:
                 f"Group '{self.group}' not found in sources: available groups are {list(sources.keys())}",
             )
         self.config = sources[self.group].copy()
-        self._inputer_config = self.config.get("inputer", {})
+        self._imputer_config = self.config.get("imputer", {})
         self._normaliser_config = self.config.get("normaliser", {})
         self._extra_config = self.config.get("extra", {})
 
@@ -1142,13 +1170,17 @@ class DataHandler:
         return self._statistics
 
     @property
-    def inputer(self):
-        return self._inputer_config
+    def imputer(self):
+        return self._imputer_config
 
     @property
     def normaliser(self):
         return self._normaliser_config
-
+    
+    @property
+    def processors(self):
+        return dict(normaliser=self._normaliser_config, imputer=self._imputer_config)
+    
     @property
     def extra(self):
         return self._extra_config
@@ -1442,10 +1474,10 @@ sources:
             "scatss_1": "mean-std"
             "scatss_2": "min-max"
             "scatss_3": {"name": "custom-normaliser", "theta": 0.5, "rho": 0.1}
-      inputer:
+      imputer:
             "scatss_1": special
             "scatss_2": other
-            "scatss_3": {"name": "custom-inputer", "theta": 0.5, "rho": 0.1}
+            "scatss_3": {"name": "custom-imputer", "theta": 0.5, "rho": 0.1}
       extra:
         user_key_1: a
         user_key_2:

@@ -17,7 +17,6 @@ from torch_geometric.data import HeteroData
 
 from anemoi.models.models.mult_encoder_processor_decoder import AnemoiMultiModel
 from anemoi.models.preprocessing import Processors
-from anemoi.training.data.refactor.draft import Structure
 from anemoi.utils.config import DotDict
 
 
@@ -65,7 +64,7 @@ class AnemoiModelInterface(torch.nn.Module):
         self,
         *,
         config: DotDict,
-        sample_provider: Structure,
+        sample_provider,
         graph_data: HeteroData,
         # data_indices: dict,
         metadata: dict,
