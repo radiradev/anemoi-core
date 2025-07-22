@@ -1179,7 +1179,13 @@ class DataHandler:
     
     @property
     def processors(self):
-        return dict(normaliser=self._normaliser_config, imputer=self._imputer_config)
+        processors = {}
+        if len(self._normaliser_config):
+            processors["normaliser"] = self._normaliser_config
+
+        if len(self._imputer_config):
+            processors["imputer"] = self._imputer_config
+        return processors
     
     @property
     def extra(self):

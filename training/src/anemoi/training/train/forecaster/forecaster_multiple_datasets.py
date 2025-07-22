@@ -303,9 +303,10 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         del batch_idx
         # batch = self.allgather_batch(batch)
 
-        batch = {k: {n: rearrange(t, "bs t v ens xy -> bs t ens xy v") for n, t in v.items()} for k, v in batch["data"].items()}
+        batch = {k: {n: rearrange(t, "bs v t ens xy -> bs t ens xy v") for n, t in v.items()} for k, v in batch["data"].items()}
 
         # for validation not normalized in-place because remappers cannot be applied in-place
+        # We need shape: (bath_size, time, ens, latlons, n_vars)
         batch["input"] = self.model.input_pre_processors(batch["input"], in_place=not validation_mode)
         batch["target"] = self.model.target_pre_processors(batch["target"], in_place=not validation_mode)
 
@@ -327,7 +328,7 @@ class GraphForecasterMultiDataset(pl.LightningModule):
 
         metrics_next = {}
         if validation_mode:
-            metrics_next = self.calculate_val_metrics(y_pred, batch["target"])
+            metrics_next = self.calculate_val_metrics(y_pred, batch["target"], rollout_step=0)
         yield loss, metrics_next, y_pred
 
     def allgather_batch(self, batch: torch.Tensor) -> torch.Tensor:
@@ -390,6 +391,9 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         val_metrics, preds:
             validation metrics and predictions
         """
+        if len(self.metrics) == 0:
+            return None
+
         metrics = {}
         y_postprocessed = self.model.target_post_processors(y, in_place=False)
         y_pred_postprocessed = self.model.target_post_processors(y_pred, in_place=False)

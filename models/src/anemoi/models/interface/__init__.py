@@ -21,9 +21,10 @@ from anemoi.utils.config import DotDict
 
 
 def processor_factory(name_to_index, statistics, processors, **kwargs) -> list[list]:
+    from anemoi.models.preprocessing.normalizer import InputNormalizer
     return [
         [
-            name, instantiate(cfg, name_to_index=name_to_index, statistics=statistics)
+            name, instantiate(cfg, name_to_index=name_to_index["variables"], statistics=statistics["variables"])
         ] for name, cfg in processors.items()
     ]
 
@@ -87,6 +88,7 @@ class AnemoiModelInterface(torch.nn.Module):
         self.input_pre_processors = Processors(preprocessors["input"])
         self.target_pre_processors = Processors(preprocessors["target"])
         self.target_post_processors = Processors(preprocessors["target"], inverse=True)
+        # TODO: Implemente structure.processor_factory (not only at LeafStructure)
 
         # Instantiate the model
         self.model = AnemoiMultiModel(

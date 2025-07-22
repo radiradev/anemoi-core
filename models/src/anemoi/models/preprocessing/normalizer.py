@@ -26,7 +26,7 @@ class InputNormalizer(BasePreprocessor):
     def __init__(
         self,
         config=None,
-        name_to_index_training_input=None,
+        name_to_index=None,
         statistics=None,
         dataset: Optional = None,
     ) -> None:
@@ -51,19 +51,19 @@ class InputNormalizer(BasePreprocessor):
         # Optionally reuse statistic of one variable for another variable
         statistics_remap = {}
         for remap, source in self.remap.items():
-            idx_src, idx_remap = name_to_index_training_input[source], name_to_index_training_input[remap]
+            idx_src, idx_remap = name_to_index[source], name_to_index[remap]
             statistics_remap[idx_remap] = (minimum[idx_src], maximum[idx_src], mean[idx_src], stdev[idx_src])
 
         # Two-step to avoid overwriting the original statistics in the loop (this reduces dependence on order)
         for idx, new_stats in statistics_remap.items():
             minimum[idx], maximum[idx], mean[idx], stdev[idx] = new_stats
 
-        self._validate_normalization_inputs(name_to_index_training_input, minimum, maximum, mean, stdev)
+        self._validate_normalization_inputs(name_to_index, minimum, maximum, mean, stdev)
 
         _norm_add = np.zeros((minimum.size,), dtype=np.float32)
         _norm_mul = np.ones((minimum.size,), dtype=np.float32)
 
-        for name, i in name_to_index_training_input.items():
+        for name, i in name_to_index.items():
             method = self.methods.get(name, self.default)
 
             if method == "mean-std":
