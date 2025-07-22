@@ -329,7 +329,8 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         metrics_next = {}
         if validation_mode:
             metrics_next = self.calculate_val_metrics(y_pred, batch["target"], rollout_step=0)
-        yield loss, metrics_next, y_pred
+
+        return loss, metrics_next, y_pred
 
     def allgather_batch(self, batch: torch.Tensor) -> torch.Tensor:
         """Allgather the batch-shards across the reader group.
@@ -392,7 +393,7 @@ class GraphForecasterMultiDataset(pl.LightningModule):
             validation metrics and predictions
         """
         if len(self.metrics) == 0:
-            return None
+            return {}
 
         metrics = {}
         y_postprocessed = self.model.target_post_processors(y, in_place=False)
