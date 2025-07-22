@@ -75,6 +75,7 @@ def transfer_learning_loading(model: torch.nn.Module, ckpt_path: Path | str) -> 
     # Load the state dictionary from checkpoint
     checkpoint = torch.load(ckpt_path, weights_only=False, map_location=model.device)
     state_dict = checkpoint["state_dict"]
+    state_dict = {k.replace("model.model.", ""): v for k, v in state_dict.items()}
 
     # Update relevant layers of model with this external state dict
     model.model.update_state_dict(
@@ -82,7 +83,8 @@ def transfer_learning_loading(model: torch.nn.Module, ckpt_path: Path | str) -> 
         keywords=[
             "bias",
             "weight",
-            "processors.normalizer",
+            # normalizer not working yet, needs to be fixed
+            # "processors.normalizer",
         ],
     )
 
