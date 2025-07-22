@@ -23,8 +23,9 @@ from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.preprocessing import Processors
 from anemoi.utils.config import DotDict
 
+
 # see if function below is really needed
-# if so consider moving to some utils 
+# if so consider moving to some utils
 def contains_any(key, specifications):
     contained = False
     for specification in specifications:
@@ -32,6 +33,7 @@ def contains_any(key, specifications):
             contained = True
             break
     return contained
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -161,9 +163,11 @@ class AnemoiModelInterface(torch.nn.Module):
                 y_hat = gather_tensor(y_hat, -2, apply_shard_shapes(y_hat, -2, grid_shard_shapes), model_comm_group)
 
         return y_hat
-    
-    def update_state_dict(self, external_state_dict, keywords="", ignore_mismatched_layers=False, ignore_additional_layers=False):
-        """Update the model's stated_dict with entries from an external state_dict. 
+
+    def update_state_dict(
+        self, external_state_dict, keywords="", ignore_mismatched_layers=False, ignore_additional_layers=False
+    ):
+        """Update the model's stated_dict with entries from an external state_dict.
         Only entries whose keys contain the specified keywords are considered.
         """
 
