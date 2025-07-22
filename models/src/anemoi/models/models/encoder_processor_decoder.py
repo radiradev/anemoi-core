@@ -27,6 +27,7 @@ from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.shapes import apply_shard_shapes
 from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.layers.graph import NamedNodesAttributes
+from anemoi.models.layers.mapper import GraphTransformerBaseMapper
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -81,8 +82,6 @@ class AnemoiModelEncProcDec(nn.Module):
         if "up" in self._truncation_data:
             self.A_up = self._make_truncation_matrix(self._truncation_data["up"])
             LOGGER.info("Truncation: A_up %s", self.A_up.shape)
-
-        self.supports_sharded_input = True
 
         # Encoder data -> hidden
         self.encoder = instantiate(
@@ -300,6 +299,17 @@ class AnemoiModelEncProcDec(nn.Module):
         Tensor
             Mapped data
         """
+        if isinstance(mapper, GraphTransformerBaseMapper) and mapper.shard_strategy == "edges":
+            return mapper(  # finer grained checkpointing inside GTM with edge sharding
+                data,
+                batch_size=batch_size,
+                shard_shapes=shard_shapes,
+                model_comm_group=model_comm_group,
+                x_src_is_sharded=x_src_is_sharded,
+                x_dst_is_sharded=x_dst_is_sharded,
+                keep_x_dst_sharded=keep_x_dst_sharded,
+            )
+
         return checkpoint(
             mapper,
             data,
@@ -348,6 +358,7 @@ class AnemoiModelEncProcDec(nn.Module):
         x_hidden_latent = self.node_attributes(self._graph_name_hidden, batch_size=batch_size)
         shard_shapes_hidden = get_shard_shapes(x_hidden_latent, 0, model_comm_group)
 
+        # Encoder
         x_data_latent, x_latent = self._run_mapper(
             self.encoder,
             (x_data_latent, x_hidden_latent),
@@ -359,6 +370,7 @@ class AnemoiModelEncProcDec(nn.Module):
             keep_x_dst_sharded=True,  # always keep x_latent sharded for the processor
         )
 
+        # Processor
         x_latent_proc = self.processor(
             x_latent,
             batch_size=batch_size,
@@ -366,8 +378,10 @@ class AnemoiModelEncProcDec(nn.Module):
             model_comm_group=model_comm_group,
         )
 
+        # Skip
         x_latent_proc = x_latent_proc + x_latent
 
+        # Decoder
         x_out = self._run_mapper(
             self.decoder,
             (x_latent_proc, x_data_latent),
