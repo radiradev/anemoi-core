@@ -702,8 +702,8 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
         query, key, value, edges = self.get_qkve(x, edge_attr)
         if not hasattr(self, "shard_strategy"):
             query, key, value, edges = self.shard_qkve_heads(
-                    query, key, value, edges, shapes, batch_size, model_comm_group
-                )
+                query, key, value, edges, shapes, batch_size, model_comm_group
+            )
         else:
             if self.shard_strategy == "heads":
                 query, key, value, edges = self.shard_qkve_heads(
