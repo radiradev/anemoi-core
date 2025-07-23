@@ -424,6 +424,10 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
         x_dst_is_sharded: bool = False,
         keep_x_dst_sharded: bool = False,
     ) -> PairTensor:
+        if not hasattr(self, "shard_strategy"):
+            return self.forward_with_heads_sharding(
+                x, batch_size, shard_shapes, model_comm_group, x_src_is_sharded, x_dst_is_sharded, keep_x_dst_sharded
+            )
         if self.shard_strategy == "edges":
             return self.forward_with_edge_sharding(
                 x, batch_size, shard_shapes, model_comm_group, x_src_is_sharded, x_dst_is_sharded, keep_x_dst_sharded

@@ -158,6 +158,8 @@ class AnemoiModelEncProcDec(nn.Module):
             return apply_shard_shapes(x, dim, shard_shapes_dim)
 
     def _apply_truncation(self, x, grid_shard_shapes=None, model_comm_group=None):
+        if not hasattr(self, "A_down") or not hasattr(self, "A_up"):
+            return x    
         if self.A_down is not None or self.A_up is not None:
             if grid_shard_shapes is not None:
                 shard_shapes = self._get_shard_shapes(x, 0, grid_shard_shapes, model_comm_group)
@@ -299,16 +301,17 @@ class AnemoiModelEncProcDec(nn.Module):
         Tensor
             Mapped data
         """
-        if isinstance(mapper, GraphTransformerBaseMapper) and mapper.shard_strategy == "edges":
-            return mapper(  # finer grained checkpointing inside GTM with edge sharding
-                data,
-                batch_size=batch_size,
-                shard_shapes=shard_shapes,
-                model_comm_group=model_comm_group,
-                x_src_is_sharded=x_src_is_sharded,
-                x_dst_is_sharded=x_dst_is_sharded,
-                keep_x_dst_sharded=keep_x_dst_sharded,
-            )
+        if hasattr(mapper, "shard_strategy"):
+            if isinstance(mapper, GraphTransformerBaseMapper) and mapper.shard_strategy == "edges":
+                return mapper(  # finer grained checkpointing inside GTM with edge sharding
+                    data,
+                    batch_size=batch_size,
+                    shard_shapes=shard_shapes,
+                    model_comm_group=model_comm_group,
+                    x_src_is_sharded=x_src_is_sharded,
+                    x_dst_is_sharded=x_dst_is_sharded,
+                    keep_x_dst_sharded=keep_x_dst_sharded,
+                )
 
         return checkpoint(
             mapper,
