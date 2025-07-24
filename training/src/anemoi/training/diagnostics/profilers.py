@@ -351,8 +351,8 @@ class BenchmarkProfiler(Profiler):
 
                 return handler_fn
 
-            global_rank = int(os.environ.get("SLURM_PROCID", "0"))  # WON'T WORK WHEN RUNNING WITHOUT SLURM
-            if not (self.config.diagnostics.benchmark_profiler.memory.trace_rank0_only and global_rank != 0):
+            global_rank = rank_zero_only.rank #int(os.environ.get("SLURM_PROCID", "0"))  # WON'T WORK WHEN RUNNING WITHOUT SLURM
+            if (self.config.diagnostics.benchmark_profiler.memory.trace_rank0_only and global_rank == 0) or (not self.config.diagnostics.benchmark_profiler.memory.trace_rank0_only):
                 from pytorch_lightning.profilers.pytorch import _KINETO_AVAILABLE
 
                 assert (
@@ -363,16 +363,16 @@ class BenchmarkProfiler(Profiler):
                     PatchedProfile  # patch the profile(KinetoProfile) object to serialise the distributed info
                 )
                 self.memory_profiler = PyTorchProfiler(
-                    with_stack=True,
+                    activities=[torch.profiler.ProfilerActivity.CUDA, torch.profiler.ProfilerActivity.CPU],
+                    with_stack=False, #breaks profiling on aarch64 systems
                     emit_nvtx=False,
-                    profile_memory=True,
                     export_to_chrome=True,
-                    record_shapes=True,
-                    group_by_input_shapes=True,
+                    record_shapes=False,
+                    group_by_input_shapes=False,
                     dirpath=self.dirpath,
                     on_trace_ready=trace_handler(self.dirpath),
                     schedule=torch.profiler.schedule(
-                        wait=0,
+                        wait=self.config.diagnostics.benchmark_profiler.memory.wait,
                         warmup=self.warmup,
                         active=self.num_steps,
                         repeat=1,
@@ -578,6 +578,23 @@ class BenchmarkProfiler(Profiler):
             self.memory_timeline_fname = str(Path(self.dirpath, "memory_timelines.html"))
             self.memory_profiler.profiler.export_memory_timeline(self.memory_timeline_fname)
 
+    def convert_to_microseconds(self,time_str):
+        """
+        Convert time strings with units (us, ms, s) into microseconds (µs).
+        """
+        if pd.isna(time_str):
+            return 0
+        time_str = str(time_str).strip()
+        if time_str.endswith("us"):
+            return float(time_str[:-2])
+        elif time_str.endswith("ms"):
+            return float(time_str[:-2]) * 1000
+        elif time_str.endswith("s"):
+            return float(time_str[:-1]) * 1_000_000
+        else:
+            return 0  # Default/fallback
+
+
     @rank_zero_only
     def get_memory_profiler_df(self) -> pd.DataFrame:
         """Retrieves the memory profiler data as a DataFrame.
@@ -629,18 +646,23 @@ class BenchmarkProfiler(Profiler):
         ]
         table_main_body = "\n".join(table_main_body)
         memory_df = pd.read_fwf(StringIO(table_main_body), names=columns, skiprows=2)
+        #memory_df = memory_df[memory_df["Name"].str.startswith("anemoi-")] #filter to just anemoi markers from nvtx_wrapper
+        # currently sorted by 'CUDA total', instead sort by 'Self CUDA'
+        memory_df["Self CUDA µs"] = memory_df["Self CUDA"].apply(self.convert_to_microseconds)
+        memory_df = memory_df.sort_values(by="Self CUDA µs", ascending=False)
+        #memory_df = memory_df.drop(["Self CUDA µs"])
         flag = ["--" not in row for row in memory_df["Name"]]
         memory_df = memory_df[flag]
         time_rows = [row for row in table.split("\n")[-3:] if row != ""]
-        if time_rows:
-            time_rows_dict = {}
-            for row in time_rows:
-                key, val = row.split(":")
-                val = convert_to_seconds(val.strip())
-                time_rows_dict[key] = val
-            self.time_rows_dict = time_rows_dict
+        #if time_rows:
+            #time_rows_dict = {}
+            #for row in time_rows:
+            #    key, val = row.split(":")
+            #    val = convert_to_seconds(val.strip())
+            #    time_rows_dict[key] = val
+            #self.time_rows_dict = time_rows_dict
 
-            memory_df = memory_df[~memory_df["Name"].isin(time_rows)]
+            #memory_df = memory_df[~memory_df["Name"].isin(time_rows)]
 
         self.memory_report_fname = self.dirpath / "memory_profiler.csv"
         self._save_report(memory_df, self.memory_report_fname)

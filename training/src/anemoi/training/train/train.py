@@ -211,7 +211,7 @@ class AnemoiTrainer:
         }
 
         model_task = get_class(self.config.training.model_task)
-        model = model_task(**kwargs)
+        model = model_task(**kwargs)  # GraphForecaster -> pl.LightningModule
 
         # Load the model weights
         if self.load_weights_only:
@@ -509,8 +509,8 @@ class AnemoiTrainer:
             ckpt_path=None if (self.load_weights_only) else self.last_checkpoint,
         )
 
-        if self.config.diagnostics.print_memory_summary:
-            LOGGER.info("memory summary: %s", torch.cuda.memory_summary())
+        if self.config.diagnostics.print_memory_summary and rank_zero_only.rank == 0:
+            LOGGER.info("memory summary: %s", torch.cuda.memory_summary(device=0))
 
         LOGGER.debug("---- DONE. ----")
 

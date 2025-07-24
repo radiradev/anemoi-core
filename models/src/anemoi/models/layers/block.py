@@ -703,10 +703,8 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
             query, key, value, edges = self.shard_qkve_heads(
                 query, key, value, edges, shapes, batch_size, model_comm_group
             )
-            num_chunks = self.num_chunks if self.training else NUM_CHUNKS_INFERENCE
         else:
             query, key, value, edges = self.prepare_qkve_edge_sharding(query, key, value, edges, batch_size)
-            num_chunks = 1  # no "inner chunking" for edge sharding
 
         if self.qk_norm:
             query = self.q_norm(query)
