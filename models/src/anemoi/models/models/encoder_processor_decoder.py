@@ -23,7 +23,7 @@ from torch_geometric.data import HeteroData
 
 from anemoi.models.distributed.shapes import get_shape_shards
 from anemoi.models.layers.graph import NamedNodesAttributes
-from anemoi.models.layers.utils import load_layer_kernels
+from anemoi.models.layers.utils import load_layer_kernels, ProfilerWrapper
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -103,6 +103,7 @@ class AnemoiModelEncProcDec(nn.Module):
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             layer_kernels=self.layer_kernels_encoder,
         )
+        self.encoder = ProfilerWrapper(self.encoder, "encoder")
 
         # Processor hidden -> hidden
         self.processor = instantiate(
@@ -113,6 +114,7 @@ class AnemoiModelEncProcDec(nn.Module):
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             layer_kernels=self.layer_kernels_processor,
         )
+        self.processor = ProfilerWrapper(self.processor, "processor")
 
         # Decoder hidden -> data
         self.decoder = instantiate(
@@ -126,6 +128,7 @@ class AnemoiModelEncProcDec(nn.Module):
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
             layer_kernels=self.layer_kernels_decoder,
         )
+        self.decoder = ProfilerWrapper(self.decoder, "decoder")
 
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
         self.boundings = nn.ModuleList(
