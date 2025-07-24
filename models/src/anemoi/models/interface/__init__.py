@@ -85,9 +85,9 @@ class AnemoiModelInterface(torch.nn.Module):
         preprocessors = self.sample_provider.apply(processor_factory)
 
         # Assign the processor list pre- and post-processors
-        self.input_pre_processors = Processors(preprocessors["input"])
-        self.target_pre_processors = Processors(preprocessors["target"])
-        self.target_post_processors = Processors(preprocessors["target"], inverse=True)
+        self.input_pre_processors = Processors(preprocessors["input"].processor_factory)
+        self.target_pre_processors = Processors(preprocessors["target"].processor_factory)
+        self.target_post_processors = Processors(preprocessors["target"].processor_factory, inverse=True)
         # TODO: Implemente structure.processor_factory (not only at LeafStructure)
 
         # Instantiate the model

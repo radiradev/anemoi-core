@@ -1314,6 +1314,9 @@ class TupleStructure(StructureMixin, tuple):
         assert isinstance(structure, TupleStructure), f"Expected TupleStructure, got {type(structure)}: {structure}"
         return TupleStructure(func(elt, **kwargs) for func, elt in zip(self, structure))
 
+    def __getattr__(self, name):
+        return [getattr(x, name) for x in self]
+
     def _as_native(self):
         return tuple(x._as_native() for x in self)
 
@@ -1333,6 +1336,9 @@ class DictStructure(StructureMixin, dict):
 
     def apply(self, func):
         return DictStructure({k: v.apply(func) for k, v in self.items()})
+
+    def __getattr__(self, name: str):
+            return {k: getattr(v, name) for k, v in self.items()}
 
     def __call__(self, structure, **kwargs):
         assert isinstance(structure, DictStructure), f"Expected DictStructure, got {type(structure)}: {structure}"

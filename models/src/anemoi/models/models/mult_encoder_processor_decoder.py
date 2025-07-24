@@ -59,14 +59,18 @@ class AnemoiMultiModel(nn.Module):
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
 
         self.latent_residual_connection = True
-        self.use_residual_connection = model_config.model.get("residual_connections", [])
+        self._define_residual_connection_indices(
+            sample_provider.name_to_index["input"], 
+            sample_provider.name_to_index["target"], 
+            residual_connections=model_config.model.get("residual_connections", [])
+        )
 
         def num_channels(name_to_index, **kwargs):
             return len(name_to_index["variables"])
 
-        num_channels = sample_provider.apply(num_channels)
-        self.num_input_channels: dict[str, int] = num_channels["input"]
-        self.num_target_channels: dict[str, int] = num_channels["target"]
+        sample_provider = sample_provider.apply(num_channels)
+        self.num_input_channels: dict[str, int] = sample_provider["input"].num_channels
+        self.num_target_channels: dict[str, int] = sample_provider["target"].num_channels
         self.input_names: list[str] = model_config.model.model.encoder_input_names
         self.hidden_name: str = model_config.model.model.hidden_name
         self.target_names: list[str] = model_config.model.model.decoder_target_names
@@ -87,7 +91,7 @@ class AnemoiMultiModel(nn.Module):
             self.encoders[input_name] = instantiate(
                 model_config.model.encoder,
                 _recursive_=False,
-                in_channels_src=self.num_input_channels[input_name].num_channels + 4,
+                in_channels_src=self.num_input_channels[input_name] + 4,
                 in_channels_dst=4,
                 hidden_dim=self.num_channels,
                 edge_dim=3,
@@ -108,9 +112,9 @@ class AnemoiMultiModel(nn.Module):
                 model_config.model.decoder,
                 _recursive_=False,
                 in_channels_src=self.num_channels,
-                in_channels_dst=self.num_input_channels[target_name].num_channels + 4,
+                in_channels_dst=self.num_input_channels[target_name] + 4,
                 hidden_dim=self.num_channels,
-                out_channels_dst=self.num_target_channels[target_name].num_channels,
+                out_channels_dst=self.num_target_channels[target_name],
                 edge_dim=3,
             )
 
@@ -129,6 +133,21 @@ class AnemoiMultiModel(nn.Module):
         #    ]
         # )
 
+    def _define_residual_connection_indices(
+            self,
+            input_name_to_index,
+            target_name_to_index,
+            residual_connections: list[str],
+        ):
+        self.residual_connection_indices = {}
+        for source in residual_connections:
+            input_vars = input_name_to_index[source]["variables"]
+            target_vars = target_name_to_index[source]["variables"]
+            common_vars = set(target_vars).intersection(input_vars)
+            target_idx = [input_vars[v] for v in common_vars]
+            input_idx = [target_vars[v] for v in common_vars]
+            self.residual_connection_indices[source] = target_idx, input_idx
+        
     def _assemble_input(self, name: str, x: torch.Tensor, batch_size: int) -> tuple[torch.Tensor, torch.Tensor]:
         # x.shape: (batch_size, multi_step, ens_dim, grid_size, num_vars)
 
@@ -299,17 +318,11 @@ class AnemoiMultiModel(nn.Module):
         return x_out
 
     def residual_connection(
-        self, x: dict[str, torch.Tensor], x_skips: dict[str, torch.Tensor]
+        self, y: dict[str, torch.Tensor], x_skips: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
-        y = {}
-        for tensor_name, pred in x.items():
+        for source, (target_idx, input_idx) in self.residual_connection_indices.items():
             # residual connection (just for the prognostic variables)
-            if tensor_name in self.use_residual_connection:
-                # TODO: Implement residual connection
-                assert False, "Residual Connection NOT IMPLEMENTED yet."
-                pred[..., self._internal_output_idx] += x_skip[..., self._internal_input_idx]
-
-            y[tensor_name] = pred
+            y[source][..., target_idx] += x_skips[source][..., input_idx]
 
         return y
 
