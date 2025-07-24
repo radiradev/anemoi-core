@@ -272,7 +272,8 @@ class FlashAttentionWrapper(nn.Module):
         super().__init__()
         try:
             import flash_attn
-        except ImportError:
+        except ImportError as e:
+            print(e)
             raise ImportError("Error: Flash-attn not installed. Please install flash-attn to use Flash Attention")
 
         if version.parse(flash_attn.__version__) < version.parse("2.6.0"):

@@ -710,6 +710,8 @@ class GraphTransformerMapperBlock(GraphTransformerBaseBlock):
             query = self.q_norm(query)
             key = self.k_norm(key)
 
+        num_chunks = self.num_chunks if self.training else NUM_CHUNKS_INFERENCE_MAPPER
+
         out = self.attention_block(query, key, value, edges, edge_index, size, num_chunks)
 
         if self.shard_strategy == "heads":
