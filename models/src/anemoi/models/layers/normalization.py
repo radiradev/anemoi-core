@@ -78,8 +78,10 @@ class ConditionalLayerNorm(nn.Module):
         out = out * (scale + 1.0) + bias
         return out.type_as(x) if self.autocast else out
 
+
 class CompiledConditionalLayerNorm(ConditionalLayerNorm):
     """Compiled version of ConditionalLayerNorm."""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.forward = torch.compile(super().forward, dynamic=False)
