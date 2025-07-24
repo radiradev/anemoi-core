@@ -32,6 +32,7 @@ class BaseEdgeAttributeBuilder(MessagePassing, NormaliserMixin, ABC):
     """Base class for edge attribute builders."""
 
     node_attr_name: str = None
+    norm_by_group: bool = False
 
     def __init__(self, norm: str | None = None, dtype: str = "float32") -> None:
         super().__init__()
@@ -43,7 +44,19 @@ class BaseEdgeAttributeBuilder(MessagePassing, NormaliserMixin, ABC):
             raise TypeError(error_msg)
 
     def subset_node_information(self, source_nodes: NodeStorage, target_nodes: NodeStorage) -> PairTensor:
-        return source_nodes[self.node_attr_name].to(self.device), target_nodes[self.node_attr_name].to(self.device)
+        if self.node_attr_name in source_nodes:
+            source_nodes_data = source_nodes[self.node_attr_name].to(self.device)
+        else:
+            source_nodes_data = None
+            LOGGER.warning("The attribute %s is not in the source nodes.", self.node_attr_name)
+
+        if self.node_attr_name in target_nodes:
+            target_nodes_data = target_nodes[self.node_attr_name].to(self.device)
+        else:
+            target_nodes_data = None
+            LOGGER.warning("The attribute %s is not in the target nodes.", self.node_attr_name)
+
+        return source_nodes_data, target_nodes_data
 
     def forward(self, x: tuple[NodeStorage, NodeStorage], edge_index: Adj, size: Size = None) -> torch.Tensor:
         x = self.subset_node_information(*x)
@@ -60,8 +73,8 @@ class BaseEdgeAttributeBuilder(MessagePassing, NormaliserMixin, ABC):
 
         return edge_features
 
-    def aggregate(self, edge_features: torch.Tensor) -> torch.Tensor:
-        return self.normalise(edge_features)
+    def aggregate(self, edge_features: torch.Tensor, index: torch.Tensor, ptr=None, dim_size=None) -> torch.Tensor:
+        return self.normalise(edge_features, index, dim_size)
 
 
 class BasePositionalBuilder(BaseEdgeAttributeBuilder, ABC):
@@ -140,20 +153,35 @@ class BaseEdgeAttributeFromNodeBuilder(BaseBooleanEdgeAttributeBuilder, ABC):
             raise AttributeError(f"{self.__class__.__name__} class must set 'nodes_axis' attribute.")
 
     def compute(self, x_i: torch.Tensor, x_j: torch.Tensor) -> torch.Tensor:
-        return (x_j, x_i)[self.nodes_axis.value]
+        node_attr = (x_j, x_i)[self.nodes_axis.value]
+        assert (
+            node_attr is not None
+        ), f"The node attribute specified for {self.node_attr_name} cannot be found in the nodes."
+        return node_attr
 
 
 class AttributeFromSourceNode(BaseEdgeAttributeFromNodeBuilder):
-    """
-    Copy an attribute of the source node to the edge.
-    """
+    """Copy an attribute of the source node to the edge."""
 
     nodes_axis = NodesAxis.SOURCE
 
 
 class AttributeFromTargetNode(BaseEdgeAttributeFromNodeBuilder):
-    """
-    Copy an attribute of the target node to the edge.
-    """
+    """Copy an attribute of the target node to the edge."""
 
     nodes_axis = NodesAxis.TARGET
+
+
+class GaussianDistanceWeights(EdgeLength):
+    """Gaussian distance weights."""
+
+    norm_by_group: bool = True  # normalise the gaussian weights by target node
+
+    def __init__(self, sigma: float = 1.0, norm: str = "l1", **kwargs) -> None:
+        self.sigma = sigma
+        super().__init__(norm=norm)
+
+    def compute(self, x_i: torch.Tensor, x_j: torch.Tensor) -> torch.Tensor:
+        dists = super().compute(x_i, x_j)
+        gaussian_weights = torch.exp(-(dists**2) / (2 * self.sigma**2))
+        return gaussian_weights

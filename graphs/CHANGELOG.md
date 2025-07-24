@@ -8,6 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Please add your functional changes to the appropriate section in the PR.
 Keep it human-readable, your future self will thank you!
 
+## [0.6.2](https://github.com/ecmwf/anemoi-core/compare/graphs-0.6.1...graphs-0.6.2) (2025-06-17)
+
+
+### Features
+
+* **graphs:** Add GridsMask node attribute builder ([#355](https://github.com/ecmwf/anemoi-core/issues/355)) ([c4db823](https://github.com/ecmwf/anemoi-core/commit/c4db8236374b245be17319caf3dc26911800da10))
+* **graphs:** Build nodes from xarray compatible data ([#330](https://github.com/ecmwf/anemoi-core/issues/330)) ([3edaabb](https://github.com/ecmwf/anemoi-core/commit/3edaabb7e68a9ec89eccd5a16b258fbbf941b166))
+
+
+### Bug Fixes
+
+* **graphs:** Move libraries to optional dependencies ([#338](https://github.com/ecmwf/anemoi-core/issues/338)) ([db215ce](https://github.com/ecmwf/anemoi-core/commit/db215ce4ec0b1835e02cf1418c71292904153547))
+* SphericalAreaWeights ([#363](https://github.com/ecmwf/anemoi-core/issues/363)) ([acca570](https://github.com/ecmwf/anemoi-core/commit/acca570ac33b53a4350d2492ceff05725f87ea0f))
+
+## [0.6.1](https://github.com/ecmwf/anemoi-core/compare/graphs-0.6.0...graphs-0.6.1) (2025-06-05)
+
+
+### Bug Fixes
+
+* **graphs:** Fix device mismatch error ([#339](https://github.com/ecmwf/anemoi-core/issues/339)) ([8712c2a](https://github.com/ecmwf/anemoi-core/commit/8712c2abdd823541834b17bcdb92bd13bac101ee))
+
+## [0.6.0](https://github.com/ecmwf/anemoi-core/compare/graphs-0.5.2...graphs-0.6.0) (2025-05-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* Rework Loss Scalings to provide better modularity ([#52](https://github.com/ecmwf/anemoi-core/issues/52))
+
+### Bug Fixes
+
+* **graphs,directions:** fix error with direction computation ([#287](https://github.com/ecmwf/anemoi-core/issues/287)) ([55feded](https://github.com/ecmwf/anemoi-core/commit/55feded3b62b3906b1433a9e02988009c7f6d59e))
+* Rework Loss Scalings to provide better modularity ([#52](https://github.com/ecmwf/anemoi-core/issues/52)) ([162b906](https://github.com/ecmwf/anemoi-core/commit/162b9062882c321a4a265b0cf561be3f141ac97a))
+
 ## [0.5.2](https://github.com/ecmwf/anemoi-core/compare/graphs-0.5.1...graphs-0.5.2) (2025-04-25)
 
 

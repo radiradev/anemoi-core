@@ -90,6 +90,9 @@ class GraphCreator:
 
             graph = edge_builder.register_attributes(graph, edges_cfg.get("attributes", {}))
 
+        if graph.num_nodes == 0:
+            LOGGER.warning("The graph that was created has no nodes. Please check your graph configuration file.")
+
         return graph
 
     def clean(self, graph: HeteroData) -> HeteroData:
@@ -159,7 +162,9 @@ class GraphCreator:
             torch.save(graph, save_path)
             LOGGER.info(f"Graph saved at {save_path}.")
         else:
-            LOGGER.info("Graph already exists. Use overwrite=True to overwrite.")
+            # The error is only logged for compatibility with multi-gpu training in anemoi-training.
+            # Currently, distributed graph creation is not supported so we create the same graph in each gpu.
+            LOGGER.error(f"Graph already exists at {save_path}. Use overwrite=True to overwrite.")
 
     def create(self, save_path: Path | None = None, overwrite: bool = False) -> HeteroData:
         """Create the graph and save it to the output path.
