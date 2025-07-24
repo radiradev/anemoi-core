@@ -19,7 +19,6 @@ with contextlib.suppress(ImportError):
     from pyrsmi import rocml
 
 def parse_memory_stats(device=0):
-    torch.cuda.memory_stats(device=device)
     stats=torch.cuda.memory_stats(device=device)
     #need to handle empty dict before memory has been allocated
     try:
