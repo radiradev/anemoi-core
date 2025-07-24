@@ -13,8 +13,7 @@ LOG = logging.getLogger(__name__)
 
 
 def torch_compile(dynamic=True, **kwargs):
-    """
-    Compile a function using torch.compile.
+    """Compile a function using torch.compile.
 
     This requires torch>=2.6, and torch_geometric>=2.6,
     and will silently return the original function if the requirements are not met.
