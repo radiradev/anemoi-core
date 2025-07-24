@@ -255,8 +255,7 @@ def compute_av_time_per_iter_and_dl_stalls(iteration_durations_us, dataloading_s
     av_dataloading_stall_percentage=np.median(dataloading_stall_percentages)
     console.print(f"Each training iteration took an average of {av_iteration_duration_s:.2f}s ({av_throughput:.2f} iterations per second)")
     console.print(f"An average of {av_dataloading_stall_duration_s:.2f}s ({av_dataloading_stall_percentage:.2f}%) of each iteration was spent idling while loading data")
-    #if av_dataloading_stall_percentage > 5.0:
-    if av_dataloading_stall_percentage > 0.01:
+    if av_dataloading_stall_percentage > 5.0:
         console.print(f"Warning! Dataloading stall times are high. You can try increase the number of dataloader workers. If you are limited by CPU memory, you can try decrease prefetch factor to 1 to further increase the number of workers")
     return iteration_durations_s, dataloading_stall_durations_s, dataloading_stall_percentages
     
