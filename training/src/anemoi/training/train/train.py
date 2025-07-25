@@ -182,6 +182,7 @@ class AnemoiTrainer:
 
     def set_compile_flags(self, model, compile_class_paths):
         from hydra.utils import get_class
+
         # Convert class paths to actual classes
         compile_classes = [get_class(path) for path in compile_class_paths]
 
