@@ -14,6 +14,11 @@ from typing import Union
 from torch import Size
 from torch import Tensor
 from torch import nn
+from anemoi.models.compile.conditional import ConditionalCompile
+import os
+
+import logging
+LOG = logging.getLogger(__name__)
 
 
 class AutocastLayerNorm(nn.LayerNorm):
@@ -50,6 +55,10 @@ class ConditionalLayerNorm(nn.Module):
         self.scale = nn.Linear(condition_shape, normalized_shape)  # , bias=False)
         self.bias = nn.Linear(condition_shape, normalized_shape)  # , bias=False)
         self.autocast = autocast
+        self.compile=False
+        if (os.getenv("COMPILE_CONDLN", "0") == "1"):
+            LOG.info("Compiling Conditional LayerNorm (with conditional compile)")
+            self.compile=True
 
         if w_one_bias_zero_init:
             nn.init.zeros_(self.scale.weight)
@@ -57,6 +66,7 @@ class ConditionalLayerNorm(nn.Module):
             nn.init.zeros_(self.bias.weight)
             nn.init.zeros_(self.bias.bias)
 
+    @ConditionalCompile
     def forward(self, x: Tensor, cond: Tensor) -> Tensor:
         """Conditional Layer Normalization.
 
