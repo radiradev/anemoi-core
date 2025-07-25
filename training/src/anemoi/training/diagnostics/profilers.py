@@ -549,7 +549,7 @@ class BenchmarkProfiler(Profiler):
         )
 
         speed_metrics["avg_validation_dataloader_throughput"] = (
-            1 / np.array(self.time_profiler.recorded_durations["[_EvaluationLoop].val_next"]).mean()
+            1 / np.array(self.time_profiler.recorded_durations.get("[_EvaluationLoop].val_next", [])).mean()
         )
         speed_metrics["avg_validation_dataloader_throughput_per_sample"] = (
             speed_metrics["avg_validation_dataloader_throughput"] / batch_size_val
