@@ -12,6 +12,8 @@ import torch
 import torch_geometric
 import functools
 
+import torch
+
 LOG = logging.getLogger(__name__)
 
 #we need to have ConditionalCompile and _ConditionalCompile, to be able to pass arguments to the compile wrapper
