@@ -125,6 +125,8 @@ under the ``layer_kernels`` section.
 For detailed information and examples, see
 :ref:`anemoi-models:layer-kernels`.
 
+.. _usage-field_truncation:
+
 ******************
  Field Truncation
 ******************
@@ -168,6 +170,15 @@ The truncation system supports several types of transformation matrices:
    for loss evaluation. These need to be ordered so that the first
    matrix corresponds to the largest scales. The following matrices then
    include smaller and smaller scales.
+
+.. note::
+
+   The truncation matrices required for field truncation can be
+   generated using the ``anemoi-graphs`` package.
+
+   For detailed instructions on how to create these matrices, see the
+   documentation at :ref:`Create sparse matrices with anemoi-graphs
+   <anemoi-graphs:usage-create_sparse_matrices>` tutorial.
 
 ***************
  Ensemble Size
