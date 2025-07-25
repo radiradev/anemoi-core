@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from typing import Union
 
 from torch import Size
@@ -56,10 +55,7 @@ class ConditionalLayerNorm(nn.Module):
         self.scale = nn.Linear(condition_shape, normalized_shape)  # , bias=False)
         self.bias = nn.Linear(condition_shape, normalized_shape)  # , bias=False)
         self.autocast = autocast
-        self.compile = False
-        if os.getenv("COMPILE_CONDLN", "0") == "1":
-            LOG.info("Compiling Conditional LayerNorm (with conditional compile)")
-            self.compile = True
+        #self.compile = True #This variable is consumed by the ConditionalCompile wrapper
 
         if w_one_bias_zero_init:
             nn.init.zeros_(self.scale.weight)
@@ -88,11 +84,3 @@ class ConditionalLayerNorm(nn.Module):
         out = self.norm(x)
         out = out * (scale + 1.0) + bias
         return out.type_as(x) if self.autocast else out
-
-
-class CompiledConditionalLayerNorm(ConditionalLayerNorm):
-    """Compiled version of ConditionalLayerNorm."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.forward = torch.compile(super().forward, dynamic=False)
