@@ -102,7 +102,7 @@ attributes:
   - edge_dirs
   nodes: []
 
-# A list of elements to be compiled. these will be given the self.compile=True variable, which will then be 
+# A list of elements to be compiled. these will be given the self.compile=True variable, which will then be
 # acted on by ConditionalCompile
 # TODO figure out how to pass env vars
 compile:
