@@ -66,7 +66,7 @@ class ConditionalLayerNorm(nn.Module):
             nn.init.zeros_(self.bias.weight)
             nn.init.zeros_(self.bias.bias)
 
-    @ConditionalCompile
+    @ConditionalCompile(dynamic=True)
     def forward(self, x: Tensor, cond: Tensor) -> Tensor:
         """Conditional Layer Normalization.
 
