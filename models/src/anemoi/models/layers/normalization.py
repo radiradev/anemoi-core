@@ -9,15 +9,16 @@
 
 from __future__ import annotations
 
+import logging
+import os
 from typing import Union
 
 from torch import Size
 from torch import Tensor
 from torch import nn
-from anemoi.models.compile.conditional import ConditionalCompile
-import os
 
-import logging
+from anemoi.models.compile.conditional import ConditionalCompile
+
 LOG = logging.getLogger(__name__)
 
 
@@ -55,10 +56,10 @@ class ConditionalLayerNorm(nn.Module):
         self.scale = nn.Linear(condition_shape, normalized_shape)  # , bias=False)
         self.bias = nn.Linear(condition_shape, normalized_shape)  # , bias=False)
         self.autocast = autocast
-        self.compile=False
-        if (os.getenv("COMPILE_CONDLN", "0") == "1"):
+        self.compile = False
+        if os.getenv("COMPILE_CONDLN", "0") == "1":
             LOG.info("Compiling Conditional LayerNorm (with conditional compile)")
-            self.compile=True
+            self.compile = True
 
         if w_one_bias_zero_init:
             nn.init.zeros_(self.scale.weight)

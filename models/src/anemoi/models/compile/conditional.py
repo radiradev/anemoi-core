@@ -7,11 +7,13 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
-import logging
-import torch
 import functools
+import logging
+
+import torch
 
 LOG = logging.getLogger(__name__)
+
 
 class ConditionalCompile:
     def __init__(self, method):
