@@ -55,7 +55,6 @@ class ConditionalLayerNorm(nn.Module):
         self.scale = nn.Linear(condition_shape, normalized_shape)  # , bias=False)
         self.bias = nn.Linear(condition_shape, normalized_shape)  # , bias=False)
         self.autocast = autocast
-        #self.compile = True #This variable is consumed by the ConditionalCompile wrapper
 
         if w_one_bias_zero_init:
             nn.init.zeros_(self.scale.weight)
