@@ -43,7 +43,7 @@ def ConditionalCompile(_func=None, *, dynamic=False):
                             LOG.info(f"Compiling {method_name} using conditional compile (dynamic={self.dynamic})")
                             compiled = torch.compile(self.method.__get__(instance, owner), dynamic=self.dynamic)
                             self.compiled_methods[instance] = compiled
-                            return self.compiled_methods[instance](*args, **kwargs)
+                        return self.compiled_methods[instance](*args, **kwargs)
                     else:
                         return self.method.__get__(instance, owner)(*args, **kwargs)
 
