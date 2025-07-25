@@ -9,6 +9,7 @@
 
 import logging
 import torch
+import torch_geometric
 import functools
 
 LOG = logging.getLogger(__name__)
@@ -26,6 +27,12 @@ class ConditionalCompile:
         @functools.wraps(self.method)
         def wrapper(*args, **kwargs):
             if instance.compile:
+
+                req = torch.__version__ >= "2.6" and torch_geometric.__version__ >= "2.6"
+                if not req:
+                    LOG.debug(f"Requirements not met to conditionally compile {instance.__class__.__name__}, returning original function.")
+                    return self.method.__get__(instance, owner)(*args, **kwargs)
+
                 if instance not in self.compiled_methods:
                     LOG.debug(f"Compiling {instance.__class__.__name__} using ConditionalCompile")
                     self.compiled_methods[instance] = torch.compile(self.method.__get__(instance, owner))
