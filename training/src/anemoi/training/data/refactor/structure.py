@@ -176,7 +176,8 @@ def check_structure(**content):
 
         if isinstance(dataspecs, dict):
             assert isinstance(
-                v, dict,
+                v,
+                dict,
             ), f"Expected all values to be dict, got {type(v)} != {type(dataspecs)} whith {v} and {dataspecs}"
             assert set(v.keys()) == set(
                 dataspecs.keys(),
@@ -184,6 +185,7 @@ def check_structure(**content):
 
         if isinstance(dataspecs, (list, tuple)):
             assert isinstance(
-                v, (list, tuple),
+                v,
+                (list, tuple),
             ), f"Expected all values to be lists or tuples, got {type(v)} != {type(dataspecs)} whith {v} and {dataspecs}"
             assert len(v) == len(dataspecs), f"Expected the same length as first, got ✅{v}✅ vs ❌{dataspecs}❌"
