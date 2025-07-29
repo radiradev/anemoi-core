@@ -16,9 +16,9 @@ import torch
 from torch import nn
 from torch_geometric.data import HeteroData
 
-from anemoi.models.layers.mapper.static import GNNBackwardMapper
-from anemoi.models.layers.mapper.static import GNNBaseMapper
-from anemoi.models.layers.mapper.static import GNNForwardMapper
+from anemoi.models.layers.mapper import GNNBackwardMapper
+from anemoi.models.layers.mapper import GNNForwardMapper
+from anemoi.models.layers.mapper.base import GNNBaseMapper
 from anemoi.models.layers.utils import load_layer_kernels
 from anemoi.utils.config import DotDict
 

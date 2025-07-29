@@ -18,11 +18,12 @@ from torch_geometric.typing import PairTensor
 
 from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.shapes import change_channels_in_shape
-from anemoi.models.distributed.shapes import get_shape_shards
+from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.layers.block import GraphTransformerMapperBlock
 from anemoi.models.layers.mapper.base import BackwardMapperPostProcessMixin
 from anemoi.models.layers.mapper.base import BaseMapper
 from anemoi.models.layers.mapper.base import ForwardMapperPreProcessMixin
+from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
 
@@ -36,11 +37,11 @@ class DynamicGraphTransformerBaseMapper(BaseMapper):
         in_channels_dst: int = 0,
         hidden_dim: int = 128,
         out_channels_dst: Optional[int] = None,
-        sub_graph_edge_attributes: Optional[list] = [],
-        sub_graph_edge_index_name: str = "edge_index",
+        subgraph_edge_attributes: Optional[list] = [],
+        subgraph_edge_index_name: str = "edge_index",
+        layer_kernels: DotDict = None,
         num_chunks: int = 1,
         cpu_offload: bool = False,
-        activation: str = "GELU",
         num_heads: int = 16,
         mlp_hidden_ratio: int = 4,
         edge_dim: int = 0,
@@ -59,12 +60,10 @@ class DynamicGraphTransformerBaseMapper(BaseMapper):
             Number of heads to use, default 16
         mlp_hidden_ratio: int
             ratio of mlp hidden dimension to embedding dimension, default 4
-        sub_graph_edge_attributes: list[str]
+        subgraph_edge_attributes: list[str]
             Names of edge attributes to consider
-        sub_graph_edge_index_name: str
+        subgraph_edge_index_name: str
             Name of the edge index attribute in the graph. Defaults to "edge_index".
-        activation : str, optional
-            Activation function, by default "GELU"
         cpu_offload : bool, optional
             Whether to offload processing to CPU, by default False
         out_channels_dst : Optional[int], optional
@@ -73,25 +72,25 @@ class DynamicGraphTransformerBaseMapper(BaseMapper):
             The dimension of the edge attributes
         """
         super().__init__(
-            in_channels_src,
-            in_channels_dst,
-            hidden_dim,
+            in_channels_src=in_channels_src,
+            in_channels_dst=in_channels_dst,
+            hidden_dim=hidden_dim,
             out_channels_dst=out_channels_dst,
             num_chunks=num_chunks,
             cpu_offload=cpu_offload,
-            activation=activation,
+            layer_kernels=layer_kernels,
         )
-        self.edge_attribute_names = sub_graph_edge_attributes
-        self.edge_index_name = sub_graph_edge_index_name
+        self.edge_attribute_names = subgraph_edge_attributes
+        self.edge_index_name = subgraph_edge_index_name
 
         self.proc = GraphTransformerMapperBlock(
-            hidden_dim,
-            mlp_hidden_ratio * hidden_dim,
-            hidden_dim,
+            in_channels=hidden_dim,
+            hidden_dim=mlp_hidden_ratio * hidden_dim,
+            out_channels=hidden_dim,
             num_heads=num_heads,
             edge_dim=edge_dim,
-            activation=activation,
             num_chunks=num_chunks,
+            layer_kernels=self.layer_factory,
         )
 
         self.offload_layers(cpu_offload)
@@ -105,16 +104,16 @@ class DynamicGraphTransformerBaseMapper(BaseMapper):
     def forward(
         self,
         x: PairTensor,
+        subgraph: HeteroData,
         batch_size: int,
-        sub_graph: HeteroData,
         shard_shapes: tuple[tuple[int], tuple[int]],
         model_comm_group: Optional[ProcessGroup] = None,
     ) -> PairTensor:
         size = (sum(x[0] for x in shard_shapes[0]), sum(x[0] for x in shard_shapes[1]))
-        edge_index = sub_graph[self.edge_index_name].to(torch.int64)
-        edge_attr = torch.cat([sub_graph[attr] for attr in self.edge_attribute_names], axis=1)
+        edge_index = subgraph[self.edge_index_name].to(torch.int64)
+        edge_attr = torch.cat([subgraph[attr] for attr in self.edge_attribute_names], axis=1)
 
-        shapes_edge_attr = get_shape_shards(edge_attr, 0, model_comm_group)
+        shapes_edge_attr = get_shard_shapes(edge_attr, 0, model_comm_group)
         edge_attr = shard_tensor(edge_attr, 0, shapes_edge_attr, model_comm_group)
 
         x_src, x_dst, shapes_src, shapes_dst = self.pre_process(x, shard_shapes, model_comm_group)
@@ -124,8 +123,8 @@ class DynamicGraphTransformerBaseMapper(BaseMapper):
             edge_attr,
             edge_index,
             (shapes_src, shapes_dst, shapes_edge_attr),
-            batch_size,
-            model_comm_group,
+            batch_size=batch_size,
+            model_comm_group=model_comm_group,
             size=size,
         )
 
@@ -143,11 +142,11 @@ class DynamicGraphTransformerForwardMapper(ForwardMapperPreProcessMixin, Dynamic
         in_channels_dst: int = 0,
         hidden_dim: int = 128,
         out_channels_dst: Optional[int] = None,
-        sub_graph_edge_attributes: Optional[list] = [],
-        sub_graph_edge_index_name: str = "edge_index",
+        subgraph_edge_attributes: Optional[list] = [],
+        subgraph_edge_index_name: str = "edge_index",
+        layer_kernels: DotDict = None,
         num_chunks: int = 1,
         cpu_offload: bool = False,
-        activation: str = "GELU",
         num_heads: int = 16,
         mlp_hidden_ratio: int = 4,
         edge_dim: int = 0,
@@ -167,12 +166,10 @@ class DynamicGraphTransformerForwardMapper(ForwardMapperPreProcessMixin, Dynamic
             Number of heads to use, default 16
         mlp_hidden_ratio: int
             ratio of mlp hidden dimension to embedding dimension, default 4
-        sub_graph_edge_attributes: list[str]
+        subgraph_edge_attributes: list[str]
             Names of edge attributes to consider
-        sub_graph_edge_index_name: str
+        subgraph_edge_index_name: str
             Name of the edge index attribute in the graph. Defaults to "edge_index".
-        activation : str, optional
-            Activation function, by default "GELU"
         cpu_offload : bool, optional
             Whether to offload processing to CPU, by default False
         out_channels_dst : Optional[int], optional
@@ -185,11 +182,11 @@ class DynamicGraphTransformerForwardMapper(ForwardMapperPreProcessMixin, Dynamic
             in_channels_dst,
             hidden_dim,
             out_channels_dst=out_channels_dst,
-            sub_graph_edge_attributes=sub_graph_edge_attributes,
-            sub_graph_edge_index_name=sub_graph_edge_index_name,
+            subgraph_edge_attributes=subgraph_edge_attributes,
+            subgraph_edge_index_name=subgraph_edge_index_name,
+            layer_kernels=layer_kernels,
             num_chunks=num_chunks,
             cpu_offload=cpu_offload,
-            activation=activation,
             num_heads=num_heads,
             mlp_hidden_ratio=mlp_hidden_ratio,
             edge_dim=edge_dim,
@@ -204,12 +201,14 @@ class DynamicGraphTransformerForwardMapper(ForwardMapperPreProcessMixin, Dynamic
     def forward(
         self,
         x: PairTensor,
+        subgraph: HeteroData,
         batch_size: int,
-        sub_graph: HeteroData,
         shard_shapes: tuple[tuple[int], tuple[int]],
         model_comm_group: Optional[ProcessGroup] = None,
     ) -> PairTensor:
-        x_dst = super().forward(x, batch_size, sub_graph, shard_shapes, model_comm_group)
+        x_dst = super().forward(
+            x, subgraph, batch_size=batch_size, shard_shapes=shard_shapes, model_comm_group=model_comm_group
+        )
         return x[0], x_dst
 
 
@@ -222,11 +221,11 @@ class DynamicGraphTransformerBackwardMapper(BackwardMapperPostProcessMixin, Dyna
         in_channels_dst: int = 0,
         hidden_dim: int = 128,
         out_channels_dst: Optional[int] = None,
-        sub_graph_edge_attributes: Optional[list] = [],
-        sub_graph_edge_index_name: str = "edge_index",
+        subgraph_edge_attributes: Optional[list] = [],
+        subgraph_edge_index_name: str = "edge_index",
+        layer_kernels: DotDict = None,
         num_chunks: int = 1,
         cpu_offload: bool = False,
-        activation: str = "GELU",
         num_heads: int = 16,
         mlp_hidden_ratio: int = 4,
         edge_dim: int = 0,
@@ -246,12 +245,10 @@ class DynamicGraphTransformerBackwardMapper(BackwardMapperPostProcessMixin, Dyna
             Number of heads to use, default 16
         mlp_hidden_ratio: int
             ratio of mlp hidden dimension to embedding dimension, default 4
-        sub_graph_edge_attributes: list[str]
+        subgraph_edge_attributes: list[str]
             Names of edge attributes to consider
-        sub_graph_edge_index_name: str
+        subgraph_edge_index_name: str
             Name of the edge index attribute in the graph. Defaults to "edge_index".
-        activation : str, optional
-            Activation function, by default "GELU"
         cpu_offload : bool, optional
             Whether to offload processing to CPU, by default False
         out_channels_dst : Optional[int], optional
@@ -264,11 +261,11 @@ class DynamicGraphTransformerBackwardMapper(BackwardMapperPostProcessMixin, Dyna
             in_channels_dst,
             hidden_dim,
             out_channels_dst=out_channels_dst,
-            sub_graph_edge_attributes=sub_graph_edge_attributes,
-            sub_graph_edge_index_name=sub_graph_edge_index_name,
+            subgraph_edge_attributes=subgraph_edge_attributes,
+            subgraph_edge_index_name=subgraph_edge_index_name,
+            layer_kernels=layer_kernels,
             num_chunks=num_chunks,
             cpu_offload=cpu_offload,
-            activation=activation,
             num_heads=num_heads,
             mlp_hidden_ratio=mlp_hidden_ratio,
             edge_dim=edge_dim,

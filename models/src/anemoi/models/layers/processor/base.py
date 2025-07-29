@@ -1,4 +1,4 @@
-# (C) Copyright 2024- Anemoi contributors.
+# (C) Copyright 2025 Anemoi contributors.
 #
 # This software is licensed under the terms of the Apache Licence Version 2.0
 # which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
@@ -15,18 +15,21 @@ from torch import nn
 from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import offload_wrapper
 from torch.utils.checkpoint import checkpoint
 
+from anemoi.models.layers.utils import load_layer_kernels
+from anemoi.utils.config import DotDict
+
 
 class BaseProcessor(nn.Module, ABC):
     """Base Processor."""
 
     def __init__(
         self,
+        *,
         num_layers: int,
-        *args,
-        num_channels: int = 128,
-        num_chunks: int = 2,
-        activation: str = "GELU",
+        num_channels: int,
+        num_chunks: int,
         cpu_offload: bool = False,
+        layer_kernels: DotDict,
         **kwargs,
     ) -> None:
         """Initialize BaseProcessor."""
@@ -36,6 +39,8 @@ class BaseProcessor(nn.Module, ABC):
         self.num_chunks = num_chunks
         self.num_channels = num_channels
         self.chunk_size = num_layers // num_chunks
+
+        self.layer_factory = load_layer_kernels(layer_kernels)
 
         assert (
             num_layers % num_chunks == 0

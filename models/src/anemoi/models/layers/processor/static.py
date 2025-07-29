@@ -22,64 +22,9 @@ from anemoi.models.layers.chunk import GNNProcessorChunk
 from anemoi.models.layers.chunk import GraphTransformerProcessorChunk
 from anemoi.models.layers.chunk import TransformerProcessorChunk
 from anemoi.models.layers.graph import TrainableTensor
-from anemoi.models.layers.mapper import GraphEdgeMixin
-from anemoi.models.layers.utils import load_layer_kernels
+from anemoi.models.layers.mapper.static import GraphEdgeMixin
+from anemoi.models.layers.processor.base import BaseProcessor
 from anemoi.utils.config import DotDict
-
-
-class BaseProcessor(nn.Module, ABC):
-    """Base Processor."""
-
-    def __init__(
-        self,
-        *,
-        num_layers: int,
-        num_channels: int,
-        num_chunks: int,
-        cpu_offload: bool = False,
-        layer_kernels: DotDict,
-        **kwargs,
-    ) -> None:
-        """Initialize BaseProcessor."""
-        super().__init__()
-
-        # Each Processor divides the layers into chunks that get assigned to each ProcessorChunk
-        self.num_chunks = num_chunks
-        self.num_channels = num_channels
-        self.chunk_size = num_layers // num_chunks
-
-        self.layer_factory = load_layer_kernels(layer_kernels)
-
-        assert (
-            num_layers % num_chunks == 0
-        ), f"Number of processor layers ({num_layers}) has to be divisible by the number of processor chunks ({num_chunks})."
-
-    def offload_layers(self, cpu_offload):
-        if cpu_offload:
-            self.proc = nn.ModuleList([offload_wrapper(x) for x in self.proc])
-
-    def build_layers(self, processor_chunk_class, *args, **kwargs) -> None:
-        """Build Layers."""
-        self.proc = nn.ModuleList(
-            [
-                processor_chunk_class(
-                    *args,
-                    **kwargs,
-                )
-                for _ in range(self.num_chunks)
-            ],
-        )
-
-    def run_layers(self, data: tuple, *args, **kwargs) -> Tensor:
-        """Run Layers with checkpoint."""
-        for layer in self.proc:
-            data = checkpoint(layer, *data, *args, **kwargs, use_reentrant=False)
-        return data
-
-    def forward(self, x: Tensor, *args, **kwargs) -> Tensor:
-        """Example forward pass."""
-        x = self.run_layers((x,), *args, **kwargs)
-        return x
 
 
 class TransformerProcessor(BaseProcessor):
@@ -197,8 +142,8 @@ class GNNProcessor(GraphEdgeMixin, BaseProcessor):
         trainable_size: int,
         src_grid_size: int,
         dst_grid_size: int,
-        sub_graph: HeteroData,
-        sub_graph_edge_attributes: list[str],
+        subgraph: HeteroData,
+        subgraph_edge_attributes: list[str],
         cpu_offload: bool = False,
         layer_kernels: DotDict,
         **kwargs,
@@ -221,9 +166,9 @@ class GNNProcessor(GraphEdgeMixin, BaseProcessor):
             Source grid size
         dst_grid_size : int
             Destination grid size
-        sub_graph : HeteroData
+        subgraph : HeteroData
             Graph for sub graph in GNN
-        sub_graph_edge_attributes : list[str]
+        subgraph_edge_attributes : list[str]
             Sub graph edge attributes
         cpu_offload : bool
             Whether to offload processing to CPU, by default False
@@ -241,7 +186,7 @@ class GNNProcessor(GraphEdgeMixin, BaseProcessor):
             layer_kernels=layer_kernels,
         )
 
-        self._register_edges(sub_graph, sub_graph_edge_attributes, src_grid_size, dst_grid_size, trainable_size)
+        self._register_edges(subgraph, subgraph_edge_attributes, src_grid_size, dst_grid_size, trainable_size)
 
         self.trainable = TrainableTensor(trainable_size=trainable_size, tensor_size=self.edge_attr.shape[0])
 
@@ -301,8 +246,8 @@ class GraphTransformerProcessor(GraphEdgeMixin, BaseProcessor):
         trainable_size: int,
         src_grid_size: int,
         dst_grid_size: int,
-        sub_graph: HeteroData,
-        sub_graph_edge_attributes: list[str],
+        subgraph: HeteroData,
+        subgraph_edge_attributes: list[str],
         qk_norm: bool = False,
         cpu_offload: bool = False,
         layer_kernels: DotDict,
@@ -328,9 +273,9 @@ class GraphTransformerProcessor(GraphEdgeMixin, BaseProcessor):
             Source grid size
         dst_grid_size : int
             Destination grid size
-        sub_graph : HeteroData
+        subgraph : HeteroData
             Graph for sub graph in GNN
-        sub_graph_edge_attributes : list[str]
+        subgraph_edge_attributes : list[str]
             Sub graph edge attributes
         qk_norm: bool, optional
             Normalize query and key, by default False
@@ -350,7 +295,7 @@ class GraphTransformerProcessor(GraphEdgeMixin, BaseProcessor):
             layer_kernels=layer_kernels,
         )
 
-        self._register_edges(sub_graph, sub_graph_edge_attributes, src_grid_size, dst_grid_size, trainable_size)
+        self._register_edges(subgraph, subgraph_edge_attributes, src_grid_size, dst_grid_size, trainable_size)
 
         self.trainable = TrainableTensor(trainable_size=trainable_size, tensor_size=self.edge_attr.shape[0])
 
