@@ -18,7 +18,6 @@ from torch.distributed.distributed_c10d import ProcessGroup
 from torch_geometric.data import HeteroData
 
 from anemoi.models.distributed.shapes import get_shard_shapes
-from anemoi.models.layers.graph import NamedNodesAttributes
 from anemoi.models.models import AnemoiModelEncProcDec
 from anemoi.utils.config import DotDict
 
@@ -48,39 +47,17 @@ class AnemoiModelEncProcDecHierarchical(AnemoiModelEncProcDec):
         graph_data : HeteroData
             Graph definition
         """
-        nn.Module.__init__(self)
-        self._graph_data = graph_data
-        self.data_indices = data_indices
-        self.statistics = statistics
-        self._truncation_data = truncation_data
 
-        model_config = DotDict(model_config)
-        self._graph_name_data = model_config.graph.data
-        self._graph_hidden_names = model_config.graph.hidden
-        self.num_hidden = len(self._graph_hidden_names)
-        self.multi_step = model_config.training.multistep_input
-        num_channels = model_config.model.num_channels
+        super().__init__(
+            model_config=model_config,
+            data_indices=data_indices,
+            statistics=statistics,
+            graph_data=graph_data,
+            truncation_data=truncation_data,
+        )
 
-        # hidden_dims is the dimentionality of features at each depth
-        self.hidden_dims = {hidden: num_channels * (2**i) for i, hidden in enumerate(self._graph_hidden_names)}
-
-        # Unpack config for hierarchical graph
-        self.level_process = model_config.model.enable_hierarchical_level_processing
-
-        self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
-
-        self._calculate_shapes_and_indices(data_indices)
-        self._assert_matching_indices(data_indices)
-
-        # we can't register these as buffers because DDP does not support sparse tensors
-        # these will be moved to the GPU when first used via sefl.interpolate_down/interpolate_up
-        self.A_down, self.A_up = None, None
-        if "down" in self._truncation_data:
-            self.A_down = self._make_truncation_matrix(self._truncation_data["down"])
-            LOGGER.info("Truncation: A_down %s", self.A_down.shape)
-        if "up" in self._truncation_data:
-            self.A_up = self._make_truncation_matrix(self._truncation_data["up"])
-            LOGGER.info("Truncation: A_up %s", self.A_up.shape)
+    def _build_model(self, model_config):
+        """Builds the model components."""
 
         # Encoder data -> hidden
         self.encoder = instantiate(
@@ -181,19 +158,6 @@ class AnemoiModelEncProcDecHierarchical(AnemoiModelEncProcDec):
             sub_graph=self._graph_data[(self._graph_hidden_names[0], "to", self._graph_name_data)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_hidden_names[0]],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
-        )
-
-        # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
-        self.boundings = nn.ModuleList(
-            [
-                instantiate(
-                    cfg,
-                    name_to_index=self.data_indices.model.output.name_to_index,
-                    statistics=self.statistics,
-                    name_to_index_stats=self.data_indices.data.input.name_to_index,
-                )
-                for cfg in getattr(model_config.model, "bounding", [])
-            ]
         )
 
     def forward(
