@@ -10,18 +10,15 @@
 from __future__ import annotations
 
 import logging
-from functools import cached_property
 from typing import TYPE_CHECKING
 
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
-from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.training.data.refactor.dataset import NativeGridMultDataset
-from anemoi.training.data.refactor.draft import Context
-from anemoi.training.data.refactor.draft import sample_provider_factory
-from anemoi.training.data.refactor.read_config import get_data_config_dict
-from anemoi.training.data.refactor.read_config import get_sample_config_dict
+from anemoi.training.data.refactor.sample_provider import sample_provider_factory
+from anemoi.training.data.refactor.read_config import convert_data_config
+from anemoi.training.data.refactor.read_config import convert_sample_config
 from anemoi.training.data.utils import get_dataloader_config
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.utils.worker_init import worker_init_func
@@ -30,15 +27,13 @@ LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
 
-    from torch_geometric.data import HeteroData
-
     from anemoi.training.schemas.base_schema import BaseSchema
 
 
 class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
     """Anemoi Datasets data module for PyTorch Lightning."""
 
-    def __init__(self, config: BaseSchema, graph_data: HeteroData) -> None:
+    def __init__(self, config: BaseSchema) -> None:
         """Initialize Anemoi Datasets data module.
 
         Parameters
@@ -47,17 +42,15 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
             Job configuration
         """
         super().__init__()
-        self.graph_data = graph_data
+        data_dict = convert_data_config(config.data.data_handlers)
+        sample_dict = convert_sample_config(config.model.sample)
 
-        dhs_config = get_data_config_dict(config.data.data_handlers)
-        sample_config = get_sample_config_dict(config.model.sample)
-
-        training_context = Context("training", sources=dhs_config, **config.sampler.training)
-        validation_context = Context("validation", sources=dhs_config, **config.sampler.validation)
+        training_context = dict(sources=data_dict, **config.dataloader.sampler.training)
+        validation_context = dict(sources=data_dict, **config.dataloader.sampler.validation)
 
         # Create Sampler provider
-        self.training_samples = sample_provider_factory(context=training_context, **sample_config)
-        self.validation_samples = sample_provider_factory(context=validation_context, **sample_config)
+        self.training_samples = sample_provider_factory(**training_context, **sample_dict)
+        self.validation_samples = sample_provider_factory(**validation_context, **sample_dict)
 
         dl_keys_to_ignore = ["sampler", "read_group_size", "grid_indices", "limit_batches"]
         self.train_dataloader_config = get_dataloader_config(
@@ -74,10 +67,6 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         # data_handlers[stage.TRAINING].check_no_overlap(data_handlers[stage.VALIDATION])
         # data_handlers[stage.TRAINING].check_no_overlap(data_handlers[stage.TEST])
         # data_handlers[stage.VALIDATION].check_no_overlap(data_handlers[stage.TEST])
-
-    @cached_property
-    def data_indices(self) -> IndexCollection:
-        return IndexCollection(self.config, self.ds_train.name_to_index)
 
     def train_dataloader(self) -> dict[str, DataLoader]:
         dataset = NativeGridMultDataset(self.training_samples)
