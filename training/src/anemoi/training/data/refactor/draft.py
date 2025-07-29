@@ -812,7 +812,11 @@ class TensorSampleProvider(SampleProvider):
 
     @property
     def name_to_index(self):
-        return dict(variables=self._template_sample_provider.name_to_index)
+        name_to_index = dict(variables=self._template_sample_provider.name_to_index)
+        if hasattr(self._tuple_sample_provider, "iterables"):
+            for dim in self._tuple_sample_provider.iterables:
+                name_to_index[dim.name] = dict(enumerate(dim.values))
+        return name_to_index
 
     @property
     def statistics(self):

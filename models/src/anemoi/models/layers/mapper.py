@@ -244,8 +244,6 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
             layer_kernels=layer_kernels,
         )
 
-        Linear = self.layer_factory.Linear
-
         self._register_edges(subgraph, subgraph_edge_attributes, src_grid_size, dst_grid_size, trainable_size)
 
         self.trainable = TrainableTensor(trainable_size=trainable_size, tensor_size=self.edge_attr.shape[0])
@@ -263,7 +261,7 @@ class GraphTransformerBaseMapper(GraphEdgeMixin, BaseMapper):
 
         self.offload_layers(cpu_offload)
 
-        self.emb_nodes_dst = Linear(self.in_channels_dst, self.hidden_dim)
+        self.emb_nodes_dst = self.layer_factory.Linear(self.in_channels_dst, self.hidden_dim)
 
     def forward(
         self,

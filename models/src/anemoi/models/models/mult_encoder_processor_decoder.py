@@ -66,7 +66,7 @@ class AnemoiMultiModel(nn.Module):
         )
 
         def num_channels(name_to_index, **kwargs):
-            return len(name_to_index["variables"])
+            return len(name_to_index["variables"]) * len(name_to_index["offset"])
 
         sample_provider = sample_provider.apply(num_channels)
         self.num_input_channels: dict[str, int] = sample_provider["input"].num_channels
