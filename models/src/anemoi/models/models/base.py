@@ -9,10 +9,9 @@
 
 
 import logging
-from typing import Optional
 from abc import abstractmethod
+from typing import Optional
 
-import einops
 import numpy as np
 import torch
 from hydra.utils import instantiate
@@ -24,7 +23,6 @@ from torch_geometric.data import HeteroData
 
 from anemoi.models.distributed.graph import gather_channels
 from anemoi.models.distributed.graph import shard_channels
-from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.shapes import apply_shard_shapes
 from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.layers.graph import NamedNodesAttributes
@@ -252,7 +250,7 @@ class AnemoiBaseModel(nn.Module):
         truncation_data : dict
             Truncation data containing down and up matrices
         """
-       
+
         self.A_down, self.A_up = None, None
         if "down" in truncation_data:
             self.A_down = self._make_truncation_matrix(truncation_data["down"])
@@ -260,8 +258,7 @@ class AnemoiBaseModel(nn.Module):
         if "up" in truncation_data:
             self.A_up = self._make_truncation_matrix(truncation_data["up"])
             LOGGER.info("Truncation: A_up %s", self.A_up.shape)
-    
-    
+
     @abstractmethod
     def _build_networks(self, model_config: DotDict) -> None:
         """Builds the networks for the model."""
@@ -270,7 +267,7 @@ class AnemoiBaseModel(nn.Module):
     @abstractmethod
     def _assemble_input(self, x, batch_size, grid_shard_shapes=None, model_comm_group=None):
         pass
-    
+
     @abstractmethod
     def _assemble_output(self, x_out, x_skip, batch_size, ensemble_size, dtype):
         pass
