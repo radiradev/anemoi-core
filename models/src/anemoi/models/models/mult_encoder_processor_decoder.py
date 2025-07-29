@@ -296,7 +296,7 @@ class AnemoiMultiModel(nn.Module):
                 if name in x_raw_target:
                     x_target_latent = self._assemble_target(name, x_raw_target[name], batch_size)
                 else:
-                    x_target_latent = self._assemble_target(name, batch_size)
+                    x_target_latent = self.node_attributes(name, batch_size=batch_size)
 
             shard_shapes_target_data = get_shard_shapes(
                 x_target_latent, 0, model_comm_group
