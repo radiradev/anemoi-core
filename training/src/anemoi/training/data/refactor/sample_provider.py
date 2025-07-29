@@ -1,10 +1,8 @@
 import datetime
-import json
 import warnings
 from functools import cached_property
 
 import numpy as np
-import yaml
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from omegaconf import ListConfig
@@ -12,11 +10,15 @@ from rich import print
 from rich.console import Console
 from rich.tree import Tree
 
+from anemoi.training.data.refactor.data_handler import DataHandler
+from anemoi.training.data.refactor.dimension import DataDimension
+from anemoi.training.data.refactor.dimension import IterableDimension
+from anemoi.training.data.refactor.dimension import VariablesDimension
+from anemoi.training.data.refactor.dimension import VariablesList
+from anemoi.training.data.refactor.dimension import dimension_factory
+from anemoi.training.data.refactor.structure import structure_factory
 from anemoi.utils.dates import frequency_to_string
 from anemoi.utils.dates import frequency_to_timedelta
-from anemoi.training.data.refactor.structure import structure_factory
-from anemoi.training.data.refactor.dimension import IterableDimension, DataDimension, VariablesDimension, VariablesList, dimension_factory
-from anemoi.training.data.refactor.data_handler import DataHandler
 
 
 def resolve_reference(config):
@@ -126,7 +128,6 @@ class Context:
         return f"Context(start={self.start}, end={self.end}, offset={self.offset})"
 
 
-
 class SampleProvider:
     min_offset = None
     max_offset = None
@@ -154,13 +155,13 @@ class SampleProvider:
         raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
 
     def latitudes(self, item: int):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def longitudes(self, item: int):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def timedeltas(self, item: int):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @property
     def name_to_index(self, item: int):
@@ -231,7 +232,7 @@ class SampleProvider:
 
     @property
     def shape(self):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @property
     def frequency(self):
@@ -581,7 +582,7 @@ class TupleSampleProvider(SampleProvider):
     @property
     def processors(self):
         return [s.processors for s in self._samples]
-    
+
     @property
     def shape(self):
         return [s.shape for s in self._samples]
@@ -642,8 +643,7 @@ class TensorSampleProvider(SampleProvider):
                 elt_ = np.array(elt)
                 elt = self.transpose(elt_)
                 return elt
-            else:
-                return elt
+            return elt
 
         assert "data" in data, f"Expected 'data' key in {data}, got {data}"
         return {k: process_element(k, v) for k, v in data.items()}
@@ -681,7 +681,7 @@ class TensorSampleProvider(SampleProvider):
 
     @property
     def shape(self):
-        # todo read from data handler and have 'dynamic' shape
+        # TODO read from data handler and have 'dynamic' shape
         return self[0].shape
 
     def _flatten(self, x):
@@ -692,7 +692,7 @@ class TensorSampleProvider(SampleProvider):
         if isinstance(x, dict):
             return x
         raise NotImplementedError(
-            f"name_to_index not implemented for tensor with more than two dimensions: {self.dimensions}"
+            f"name_to_index not implemented for tensor with more than two dimensions: {self.dimensions}",
         )
 
     def transpose(self, array):
@@ -959,4 +959,3 @@ def sample_provider_factory(_context=None, **kwargs):
             node.set_min_max_offsets(minimum=minimum, maximum=maximum, dropped_samples=dropped_samples)
 
     return obj
-

@@ -15,21 +15,21 @@ from hydra.utils import instantiate
 from torch.distributed.distributed_c10d import ProcessGroup
 from torch_geometric.data import HeteroData
 
-from anemoi.models.models.mult_encoder_processor_decoder import AnemoiMultiModel
 from anemoi.models.distributed.graph import gather_tensor
 from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.shapes import apply_shard_shapes
 from anemoi.models.distributed.shapes import get_shard_shapes
+from anemoi.models.models.mult_encoder_processor_decoder import AnemoiMultiModel
 from anemoi.models.preprocessing import Processors
 from anemoi.utils.config import DotDict
 
 
 def processor_factory(name_to_index, statistics, processors, **kwargs) -> list[list]:
     from anemoi.models.preprocessing.normalizer import InputNormalizer
+
     return [
-        [
-            name, instantiate(cfg, name_to_index=name_to_index["variables"], statistics=statistics["variables"])
-        ] for name, cfg in processors.items()
+        [name, instantiate(cfg, name_to_index=name_to_index["variables"], statistics=statistics["variables"])]
+        for name, cfg in processors.items()
     ]
 
 
@@ -92,7 +92,7 @@ class AnemoiModelInterface(torch.nn.Module):
         self.input_pre_processors = Processors(preprocessors["input"].processor_factory)
         self.target_pre_processors = Processors(preprocessors["target"].processor_factory)
         self.target_post_processors = Processors(preprocessors["target"].processor_factory, inverse=True)
-        # TODO: Implemente structure.processor_factory (not only at LeafStructure)
+        # TODO: Implemente structure.processor_factory (not only at LeafStructure)
 
         # Instantiate the model
         self.model = AnemoiMultiModel(

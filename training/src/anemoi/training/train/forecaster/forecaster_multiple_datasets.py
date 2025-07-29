@@ -303,7 +303,10 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         del batch_idx
         # batch = self.allgather_batch(batch)
 
-        batch = {k: {n: rearrange(t, "bs v t ens xy -> bs t ens xy v") for n, t in v.items()} for k, v in batch["data"].items()}
+        batch = {
+            k: {n: rearrange(t, "bs v t ens xy -> bs t ens xy v") for n, t in v.items()}
+            for k, v in batch["data"].items()
+        }
 
         # for validation not normalized in-place because remappers cannot be applied in-place
         # We need shape: (bath_size, time, ens, latlons, n_vars)

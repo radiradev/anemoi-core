@@ -1,6 +1,7 @@
 import warnings
 
 import numpy as np
+
 from anemoi.datasets import open_dataset
 from anemoi.utils.dates import frequency_to_timedelta
 
@@ -156,7 +157,7 @@ class DataHandler:
     @property
     def normaliser(self):
         return self._normaliser_config
-    
+
     @property
     def processors(self):
         processors = {}
@@ -166,11 +167,10 @@ class DataHandler:
         if len(self._imputer_config):
             processors["imputer"] = self._imputer_config
         return processors
-    
+
     @property
     def extra(self):
         return self._extra_config
 
     def __repr__(self):
         return f"DataHandler {self.config['dataset']} @ {self.group} [{', '.join(self.variables)}]"
-

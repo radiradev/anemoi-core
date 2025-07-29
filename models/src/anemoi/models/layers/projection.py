@@ -12,8 +12,9 @@ import torch
 from hydra.utils import instantiate
 from torch import nn
 from torch_geometric.data import HeteroData
+
 from anemoi.models.layers.utils import load_layer_kernels
-from anemoi.models.layers.mlp import MLP
+
 
 class GraphNodeEmbedder(nn.Module):
     def __init__(self, num_input_channels: dict[str, int], out_channels: int, **kwargs):
@@ -78,7 +79,7 @@ class NodeProjector(nn.Module):
         self.projectors = nn.ModuleDict(
             {
                 source: instantiate(
-                    config, 
+                    config,
                     _recursive_=False,
                     in_features=in_features,
                     out_features=out_channels,

@@ -56,7 +56,7 @@ class DictStructure(StructureMixin, dict):
         return DictStructure({k: v.apply(func) for k, v in self.items()})
 
     def __getattr__(self, name: str):
-            return {k: getattr(v, name) for k, v in self.items()}
+        return {k: getattr(v, name) for k, v in self.items()}
 
     def __call__(self, structure, **kwargs):
         assert isinstance(structure, DictStructure), f"Expected DictStructure, got {type(structure)}: {structure}"
@@ -83,13 +83,13 @@ class LeafStructure(StructureMixin):
             try:
                 txt = f"[{np.min(self.latitudes):.2f}, {np.max(self.latitudes):.2f}]"
             except ValueError:
-                txt = f"[no np.min/np.max]"
+                txt = "[no np.min/np.max]"
             tree.add(f"Latitudes: [{txt}")
         if hasattr(self, "longitudes"):
             try:
                 txt = f"[{np.min(self.longitudes):.2f}, {np.max(self.longitudes):.2f}]"
             except ValueError:
-                txt = f"[no np.min/np.max]"
+                txt = "[no np.min/np.max]"
             tree.add(f"Longitudes: [{txt}]")
         if hasattr(self, "timedeltas"):
             try:
@@ -156,18 +156,18 @@ def structure_factory(**content):
     if isinstance(dataspecs, (list, tuple)):
         lst = []
         for i in range(len(dataspecs)):
-            lst.append(structure_factory(**{key: content[key][i] for key in content.keys()}))
+            lst.append(structure_factory(**{key: content[key][i] for key in content}))
         return TupleStructure(lst)
 
-    assert isinstance(dataspecs, dict), f"Expected dicts"
+    assert isinstance(dataspecs, dict), "Expected dicts"
     dic = {}
     for k in dataspecs.keys():
-        dic[k] = structure_factory(**{key: content[key][k] for key in content.keys()})
+        dic[k] = structure_factory(**{key: content[key][k] for key in content})
     return DictStructure(dic)
 
 
 def check_structure(**content):
-    assert "dataspecs" in content, f"Missing 'dataspecs' in content"
+    assert "dataspecs" in content, "Missing 'dataspecs' in content"
 
     dataspecs = content["dataspecs"]
     for v in content.values():
@@ -176,12 +176,14 @@ def check_structure(**content):
 
         if isinstance(dataspecs, dict):
             assert isinstance(
-                v, dict
+                v, dict,
             ), f"Expected all values to be dict, got {type(v)} != {type(dataspecs)} whith {v} and {dataspecs}"
-            assert set(v.keys()) == set(dataspecs.keys()), f"Expected the same keys, got {list(v.keys())} vs. {list(dataspecs.keys())}"
+            assert set(v.keys()) == set(
+                dataspecs.keys(),
+            ), f"Expected the same keys, got {list(v.keys())} vs. {list(dataspecs.keys())}"
 
         if isinstance(dataspecs, (list, tuple)):
             assert isinstance(
-                v, (list, tuple)
+                v, (list, tuple),
             ), f"Expected all values to be lists or tuples, got {type(v)} != {type(dataspecs)} whith {v} and {dataspecs}"
             assert len(v) == len(dataspecs), f"Expected the same length as first, got ✅{v}✅ vs ❌{dataspecs}❌"

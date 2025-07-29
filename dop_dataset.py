@@ -159,12 +159,12 @@ class DOPDataset(IterableDataset):
         print("Sanity check random number:", sanity_rnd)
 
     def __iter__(self):
-            # no shuffle, just iterate over the chunk indices
-            for idx in self.chunk_index_range:
-                print(
-                    f"VALIDATION: Worker {self.worker_id} (pid {os.getpid()}) fetching sample index {idx} ...",
-                )
-                yield self.__get_sample(idx)
+        # no shuffle, just iterate over the chunk indices
+        for idx in self.chunk_index_range:
+            print(
+                f"VALIDATION: Worker {self.worker_id} (pid {os.getpid()}) fetching sample index {idx} ...",
+            )
+            yield self.__get_sample(idx)
 
 
 def worker_init_func(worker_id: int) -> None:

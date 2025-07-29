@@ -10,6 +10,7 @@
 
 from abc import ABC
 from typing import Optional
+
 import torch
 from torch import Tensor
 from torch import nn

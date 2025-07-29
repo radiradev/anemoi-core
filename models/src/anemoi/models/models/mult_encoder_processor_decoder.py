@@ -23,7 +23,6 @@ from torch_geometric.data import HeteroData
 from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.layers.graph import NamedNodesAttributes
 from anemoi.models.layers.projection import GraphNodeEmbedder
-from anemoi.models.layers.projection import NodeProjector
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -59,9 +58,9 @@ class AnemoiMultiModel(nn.Module):
 
         self.latent_residual_connection = True
         self._define_residual_connection_indices(
-            sample_provider.name_to_index["input"], 
-            sample_provider.name_to_index["target"], 
-            residual_connections=model_config.model.get("residual_connections", [])
+            sample_provider.name_to_index["input"],
+            sample_provider.name_to_index["target"],
+            residual_connections=model_config.model.get("residual_connections", []),
         )
 
         def num_channels(name_to_index, **kwargs):
@@ -78,11 +77,11 @@ class AnemoiMultiModel(nn.Module):
         self.graph_node_embedder = GraphNodeEmbedder(
             num_input_channels=self.num_target_channels | self.num_input_channels, out_channels=self.num_channels
         )
-        #self.unembed_data = NodeProjector(
+        # self.unembed_data = NodeProjector(
         #    model_config.model.emb_data,
         #    in_features=self.num_channels,
         #    num_output_channels=self.num_target_channels
-        #)
+        # )
 
         # Encoder data -> hidden
         self.encoders = nn.ModuleDict({})
@@ -133,11 +132,11 @@ class AnemoiMultiModel(nn.Module):
         # )
 
     def _define_residual_connection_indices(
-            self,
-            input_name_to_index,
-            target_name_to_index,
-            residual_connections: list[str],
-        ):
+        self,
+        input_name_to_index,
+        target_name_to_index,
+        residual_connections: list[str],
+    ):
         self.residual_connection_indices = {}
         for source in residual_connections:
             input_vars = input_name_to_index[source]["variables"]
@@ -146,7 +145,7 @@ class AnemoiMultiModel(nn.Module):
             target_idx = [input_vars[v] for v in common_vars]
             input_idx = [target_vars[v] for v in common_vars]
             self.residual_connection_indices[source] = target_idx, input_idx
-        
+
     def _assemble_input(self, name: str, x: torch.Tensor, batch_size: int) -> tuple[torch.Tensor, torch.Tensor]:
         # x.shape: (batch_size, multi_step, ens_dim, grid_size, num_vars)
 

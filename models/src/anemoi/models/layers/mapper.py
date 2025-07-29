@@ -1421,7 +1421,7 @@ class DynamicGraphTransformerBaseMapper(BaseMapper):
             (shapes_src, shapes_dst, shapes_edge_attr),
             batch_size=batch_size,
             model_comm_group=model_comm_group,
-            size=size
+            size=size,
         )
 
         x_dst = self.post_process(x_dst, shapes_dst, model_comm_group)
