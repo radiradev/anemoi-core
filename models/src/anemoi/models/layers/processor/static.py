@@ -142,8 +142,8 @@ class GNNProcessor(GraphEdgeMixin, BaseProcessor):
         trainable_size: int,
         src_grid_size: int,
         dst_grid_size: int,
-        subgraph: HeteroData,
-        subgraph_edge_attributes: list[str],
+        sub_graph: HeteroData,
+        sub_graph_edge_attributes: list[str],
         cpu_offload: bool = False,
         layer_kernels: DotDict,
         **kwargs,
@@ -166,9 +166,9 @@ class GNNProcessor(GraphEdgeMixin, BaseProcessor):
             Source grid size
         dst_grid_size : int
             Destination grid size
-        subgraph : HeteroData
+        sub_graph : HeteroData
             Graph for sub graph in GNN
-        subgraph_edge_attributes : list[str]
+        sub_graph_edge_attributes : list[str]
             Sub graph edge attributes
         cpu_offload : bool
             Whether to offload processing to CPU, by default False
@@ -186,7 +186,7 @@ class GNNProcessor(GraphEdgeMixin, BaseProcessor):
             layer_kernels=layer_kernels,
         )
 
-        self._register_edges(subgraph, subgraph_edge_attributes, src_grid_size, dst_grid_size, trainable_size)
+        self._register_edges(sub_graph, sub_graph_edge_attributes, src_grid_size, dst_grid_size, trainable_size)
 
         self.trainable = TrainableTensor(trainable_size=trainable_size, tensor_size=self.edge_attr.shape[0])
 
@@ -246,8 +246,8 @@ class GraphTransformerProcessor(GraphEdgeMixin, BaseProcessor):
         trainable_size: int,
         src_grid_size: int,
         dst_grid_size: int,
-        subgraph: HeteroData,
-        subgraph_edge_attributes: list[str],
+        sub_graph: HeteroData,
+        sub_graph_edge_attributes: list[str],
         qk_norm: bool = False,
         cpu_offload: bool = False,
         layer_kernels: DotDict,
@@ -273,9 +273,9 @@ class GraphTransformerProcessor(GraphEdgeMixin, BaseProcessor):
             Source grid size
         dst_grid_size : int
             Destination grid size
-        subgraph : HeteroData
+        sub_graph : HeteroData
             Graph for sub graph in GNN
-        subgraph_edge_attributes : list[str]
+        sub_graph_edge_attributes : list[str]
             Sub graph edge attributes
         qk_norm: bool, optional
             Normalize query and key, by default False
@@ -295,7 +295,7 @@ class GraphTransformerProcessor(GraphEdgeMixin, BaseProcessor):
             layer_kernels=layer_kernels,
         )
 
-        self._register_edges(subgraph, subgraph_edge_attributes, src_grid_size, dst_grid_size, trainable_size)
+        self._register_edges(sub_graph, sub_graph_edge_attributes, src_grid_size, dst_grid_size, trainable_size)
 
         self.trainable = TrainableTensor(trainable_size=trainable_size, tensor_size=self.edge_attr.shape[0])
 
