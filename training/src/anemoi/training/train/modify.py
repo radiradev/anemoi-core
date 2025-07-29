@@ -36,9 +36,19 @@ class ModelModifier(ABC):
 class FreezingModelModifier(ModelModifier):
     """Model modifier to freeze modules in a model."""
 
-    def apply(self, model: torch.nn.Module, config: DictConfig) -> torch.nn.Module:
-        LOGGER.info("The following submodules will NOT be trained: %s", self.config.submodules_to_freeze)
-        for module_name in config.submodules_to_freeze:
+    def __init__(self, submodules_to_freeze: DictConfig) -> None:
+        """Initialize the freezing model modifier with a configuration.
+
+        Parameters
+        ----------
+        submodules_to_freeze : DictConfig
+            Configuration containing submodules to freeze.
+        """
+        self.submodules_to_freeze = submodules_to_freeze
+
+    def apply(self, model: torch.nn.Module) -> torch.nn.Module:
+        LOGGER.info("The following submodules will NOT be trained: %s", self.submodules_to_freeze)
+        for module_name in self.submodules_to_freeze:
             self._freeze_submodule_by_name(model, module_name)
             LOGGER.info("`%s` frozen successfully.", module_name)
         return model
@@ -66,33 +76,29 @@ class FreezingModelModifier(ModelModifier):
 class WeightsInitModelModifier(ModelModifier):
     """Modifier for initializing model weights."""
 
-    def __init__(self, config: DictConfig) -> None:
-        """Initialize the weights initialization model modifier with the configuration.
+    def __init__(self, checkpoint_path: str | Path) -> None:
+        """Initialize the weights initialization model modifier with a path.
 
         Parameters
         ----------
-        config : DictConfig
-            The configuration parameters for weight initialization.
+        checkpoint_path : str | Path
+            The path to the checkpoint file for weight initialization.
         """
-        self.config = config
+        self.checkpoint_path = checkpoint_path
 
-    def apply(self, model: torch.nn.Module, config: DictConfig) -> torch.nn.Module:
+    def apply(self, model: torch.nn.Module) -> torch.nn.Module:
         """Apply weight initialization to the model.
 
         Parameters
         ----------
         model : torch.nn.Module
             The model to initialize weights for
-        config : DictConfig
-            Configuration containing weight initialization parameters
 
         Returns
         -------
         torch.nn.Module
             Model with initialized weights
         """
-        del config
-
         model.load_from_checkpoint(
             model.checkpoint_path,
             config=model.config,
@@ -112,52 +118,23 @@ class WeightsInitModelModifier(ModelModifier):
 class TransferLearningModelModifier(ModelModifier):
     """Modifier for applying transfer learning from checkpoint."""
 
-    def __init__(self, config: DictConfig) -> None:
-        """Initialize the transfer learning model modifier with the configuration.
+    def __init__(self, checkpoint_path: Path | str) -> None:
+        """Initialize the transfer learning model modifier with a path.
 
         Parameters
         ----------
-        config : DictConfig
-            The configuration parameters for transfer learning.
-            Should contain 'ckpt_path' field.
+        checkpoint_path : str | Path
+            The path to the checkpoint file for transfer learning.
         """
-        self.config = config
+        self.checkpoint_path = checkpoint_path
 
-    def apply(self, model: torch.nn.Module, config: DictConfig) -> torch.nn.Module:
-        """Apply transfer learning by loading weights from checkpoint.
-
-        Parameters
-        ----------
-        model : torch.nn.Module
-            The model to load weights into
-        config : DictConfig
-            Configuration containing transfer learning parameters
-
-        Returns
-        -------
-        torch.nn.Module
-            Model with transferred weights loaded
-        """
-        # Get checkpoint path from model modifier config or main config
-        ckpt_path = getattr(self.config, "ckpt_path", None)
-        if ckpt_path is None:
-            ckpt_path = getattr(config.finetuning.transfer_learning, "ckpt_path", None)
-
-        if ckpt_path is None:
-            err = "No checkpoint path specified for transfer learning"
-            raise ValueError(err)
-
-        return self._transfer_learning_loading(model, ckpt_path)
-
-    def _transfer_learning_loading(self, model: torch.nn.Module, ckpt_path: Path | str) -> torch.nn.Module:
+    def apply(self, model: torch.nn.Module) -> torch.nn.Module:
         """Load weights from checkpoint with size mismatch handling.
 
         Parameters
         ----------
         model : torch.nn.Module
             The model to load weights into
-        ckpt_path : Path | str
-            Path to the checkpoint file
 
         Returns
         -------
@@ -165,7 +142,7 @@ class TransferLearningModelModifier(ModelModifier):
             Model with loaded weights
         """
         # Load the checkpoint
-        checkpoint = torch.load(ckpt_path, weights_only=False, map_location=model.device)
+        checkpoint = torch.load(self.checkpoint_path, weights_only=False, map_location=model.device)
 
         # Filter out layers with size mismatch
         state_dict = checkpoint["state_dict"]
@@ -181,7 +158,7 @@ class TransferLearningModelModifier(ModelModifier):
         # Load the filtered state_dict into the model
         model.load_state_dict(state_dict, strict=False)
         model.weights_initialized = True
-        LOGGER.info("Transfer learning applied successfully from %s", ckpt_path)
+        LOGGER.info("Transfer learning applied successfully from %s", self.checkpoint_path)
 
         return model
 
@@ -194,10 +171,10 @@ class ModelModifierApplier:
         model = base_model
 
         model_modifier_order = (
-            instantiate(model_modifier) for model_modifier in config.finetuning.strategies
-        )  # TODO(@JesperDramsch): find the right place in the config
+            instantiate(model_modifier) for model_modifier in config.training.model_modifier.modifiers
+        )
 
         for model_modifier in model_modifier_order:
-            model = model_modifier.apply(model, config)
+            model = model_modifier.apply(model)
 
         return model
