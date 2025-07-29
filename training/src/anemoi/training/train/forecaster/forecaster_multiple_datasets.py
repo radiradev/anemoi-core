@@ -24,7 +24,7 @@ from anemoi.graphs.edges import CutOffEdges
 from anemoi.graphs.edges import KNNEdges
 from anemoi.graphs.nodes import LatLonNodes
 from anemoi.models.interface import AnemoiModelInterface
-from anemoi.training.data.refactor.draft import SampleProvider
+from anemoi.training.data.refactor.sample_provider import SampleProvider
 from anemoi.training.data.utils import RecordProviderName
 from anemoi.training.losses import get_loss_function
 from anemoi.training.losses.base import BaseLoss
@@ -130,7 +130,7 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         self.config = config
         # self.model_data_indices = {self.datasets[0]: self.model.model.data_indices}  # TODO: generalize
 
-        # self.save_hyperparameters()
+        # self.save_hyperparameters() # needed for storing the checkpoints
 
         self.latlons_data = graph_data[config.graph.data].x  # TODO: Generalize, link graph key to DataHandler key
 

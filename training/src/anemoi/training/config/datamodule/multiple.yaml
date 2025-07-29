@@ -1,1 +1,1 @@
-_target_: anemoi.training.data.refactor.multiple_datasets_datamodule.AnemoiMultipleDatasetsDataModule
+_target_: anemoi.training.data.refactor.datamodule.AnemoiMultipleDatasetsDataModule

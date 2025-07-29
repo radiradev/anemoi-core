@@ -479,7 +479,7 @@ class DynamicGraphTransformerProcessor(BaseProcessor):
         edge_index = subgraph[self.edge_index_name].to(torch.int64)
         edge_attr = torch.cat([subgraph[attr] for attr in self.edge_attribute_names], axis=1)
 
-        shapes_edge_attr = get_shape_shards(edge_attr, 0, model_comm_group)
+        shapes_edge_attr = get_shard_shapes(edge_attr, 0, model_comm_group)
         edge_attr = shard_tensor(edge_attr, 0, shapes_edge_attr, model_comm_group)
 
         x, edge_attr = self.run_layers(

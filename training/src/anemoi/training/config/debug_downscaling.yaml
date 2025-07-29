@@ -1,12 +1,12 @@
 defaults:
 - data: downscaling
 - dataloader: native_grid
-- datamodule: single
+- datamodule: multiple
 - diagnostics: evaluation
 - hardware: example
 - graph: downscaling
 - model: downscaling_graphtransformer
-- training: refactored_default
+- training: default
 - _self_
 
 config_validation: False

@@ -1,12 +1,12 @@
 defaults:
 - data: regional
 - dataloader: native_grid
-- datamodule: single
+- datamodule: multiple
 - diagnostics: evaluation
 - hardware: example
 - graph: regional
 - model: regional_graphtransformer
-- training: refactored_default
+- training: default
 - _self_
 
 config_validation: False

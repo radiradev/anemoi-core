@@ -20,11 +20,10 @@ from torch.distributed.distributed_c10d import ProcessGroup
 from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 
-from anemoi.models.distributed.shapes import get_shape_shards
+from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.layers.graph import NamedNodesAttributes
 from anemoi.models.layers.projection import GraphNodeEmbedder
 from anemoi.models.layers.projection import NodeProjector
-from anemoi.training.data.refactor.draft import SampleProvider
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -36,7 +35,7 @@ class AnemoiMultiModel(nn.Module):
     def __init__(
         self,
         *,
-        sample_provider: SampleProvider,
+        sample_provider: "SampleProvider",
         model_config: DotDict,
         graph_data: HeteroData,
     ) -> None:
@@ -262,7 +261,7 @@ class AnemoiMultiModel(nn.Module):
         for name in self.input_names:
             x_input_data, x_data_skip[name] = self._assemble_input(name, x_data[name], batch_size)
 
-            shard_shapes_input_data = get_shape_shards(x_input_data, 0, model_comm_group)
+            shard_shapes_input_data = get_shard_shapes(x_input_data, 0, model_comm_group)
 
             x_data_latent[name], x_hidden_latent[name] = self._run_mapper(
                 self.encoders[name],
@@ -300,7 +299,7 @@ class AnemoiMultiModel(nn.Module):
                 else:
                     x_target_latent = self._assemble_target(name, batch_size)
 
-            shard_shapes_target_data = get_shape_shards(
+            shard_shapes_target_data = get_shard_shapes(
                 x_target_latent, 0, model_comm_group
             )  # This may be passed when name in x_target_data
 
@@ -347,7 +346,7 @@ class AnemoiMultiModel(nn.Module):
         # x_hidden = self.graph_node_embedder(
         #   graph[self.hidden_name], None, self.hidden_name, batch_size=batch_size
         # )
-        shard_shapes_hidden = get_shape_shards(x_hidden, 0, model_comm_group)
+        shard_shapes_hidden = get_shard_shapes(x_hidden, 0, model_comm_group)
 
         x_data_latent, x_hidden_latent, x_data_skip = self.encode(
             (x, x_hidden),

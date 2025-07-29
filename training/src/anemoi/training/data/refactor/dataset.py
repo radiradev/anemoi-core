@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import IterableDataset
 
-from anemoi.training.data.refactor.draft import SampleProvider
+from anemoi.training.data.refactor.sample_provider import SampleProvider
 from anemoi.training.data.utils import GroupName
 
 LOGGER = logging.getLogger(__name__)

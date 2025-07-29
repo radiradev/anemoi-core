@@ -7,7 +7,6 @@ from rich.tree import Tree
 from anemoi.utils.dates import frequency_to_string
 
 
-
 class StructureMixin:
     def __repr__(self, **kwargs):
         console = Console(record=True, width=120)
