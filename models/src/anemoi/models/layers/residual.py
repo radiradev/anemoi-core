@@ -1,3 +1,4 @@
+import einops
 import torch
 from torch import nn
 
@@ -15,28 +16,40 @@ from anemoi.models.distributed.shapes import get_shard_shapes
 
 
 class TruncationMapper(nn.Module):
-    def __init__(self, A_down: torch.Tensor, A_up: torch.Tensor = None) -> None:
+    def __init__(self, graph) -> None:
         super().__init__()
 
-    def forward(self, x):
-        return self._apply_truncation(x)
+        self.A_down = self._create_sparse_projection_matrix(
+            graph["fine", "to", "coarse"].edge_index,
+            graph["fine", "to", "coarse"].edge_attr,
+            graph["fine"].num_nodes,
+            graph["coarse"].num_nodes,
+        )
 
-    def _truncate_fields(self, x, A, batch_size=None, auto_cast=False):
-        if not batch_size:
-            batch_size = x.shape[0]
+        self.A_up = self._create_sparse_projection_matrix(
+            graph["coarse", "to", "fine"].edge_index,
+            graph["coarse", "to", "fine"].edge_attr,
+            graph["coarse"].num_nodes,
+            graph["fine"].num_nodes,
+        )
+
+    def forward(self, x):
+        batch_size = x.shape[0]
+
+        x = x[:, -1, ...]
+        x = einops.rearrange(x, "batch ensemble grid features -> (batch ensemble) grid features")
+        x = self._truncate_fields(x)
+        x = einops.rearrange(x, "(batch ensemble) grid features -> batch ensemble grid features", batch=batch_size)
+
+        return x
+
+    def _sparse_projection(self, A, x):
         out = []
-        with torch.amp.autocast(device_type="cuda", enabled=auto_cast):
-            for i in range(batch_size):
-                out.append(self.A_down.mm(x))
+        for i in range(x.shape[0]):
+            out.append(torch.sparse.mm(A.T, x[i, ...]))
         return torch.stack(out)
 
-    def _get_shard_shapes(self, x, dim=0, shard_shapes_dim=None, model_comm_group=None):
-        if shard_shapes_dim is None:
-            return get_shard_shapes(x, dim, model_comm_group)
-        else:
-            return apply_shard_shapes(x, dim, shard_shapes_dim)
-
-    def _apply_truncation(self, x, grid_shard_shapes=None, model_comm_group=None):
+    def _truncate_fields(self, x, grid_shard_shapes=None, model_comm_group=None):
         if self.A_down is not None or self.A_up is not None:
             if grid_shard_shapes is not None:
                 shard_shapes = self._get_shard_shapes(x, 0, grid_shard_shapes, model_comm_group)
@@ -47,13 +60,35 @@ class TruncationMapper(nn.Module):
             # hence we check that they are on the correct device ; copy should only happen in the first forward run
             if self.A_down is not None:
                 self.A_down = self.A_down.to(x.device)
-                x = self._truncate_fields(x, self.A_down)  # to coarse resolution
+                x = self._sparse_projection(self.A_down, x)  # to coarse resolution
             if self.A_up is not None:
                 self.A_up = self.A_up.to(x.device)
-                x = self._truncate_fields(x, self.A_up)  # back to high resolution
+                x = self._sparse_projection(self.A_up, x)  # back to high resolution
 
             if grid_shard_shapes is not None:
                 # back to grid-sharding as before
                 x = gather_channels(x, shard_shapes, model_comm_group)
 
         return x
+
+    def _get_shard_shapes(self, x, dim=0, shard_shapes_dim=None, model_comm_group=None):
+        if shard_shapes_dim is None:
+            return get_shard_shapes(x, dim, model_comm_group)
+        else:
+            return apply_shard_shapes(x, dim, shard_shapes_dim)
+
+    @staticmethod
+    def _create_sparse_projection_matrix(
+        edge_index,
+        edge_attribute,
+        num_source_nodes,
+        num_target_nodes,
+    ):
+        sparse_projection_matrix = torch.sparse_coo_tensor(
+            edge_index,
+            edge_attribute,
+            (num_source_nodes, num_target_nodes),
+            device=edge_index.device,
+        )
+
+        return sparse_projection_matrix.coalesce()
