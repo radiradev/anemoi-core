@@ -10,75 +10,12 @@
 
 from __future__ import annotations
 
-from enum import Enum
 from typing import Union
 
 from pydantic import BaseModel as PydanticBaseModel
 from pydantic import Field
-from pydantic import ValidationError
-from pydantic import model_validator
 
-from anemoi.utils.schemas import BaseModel
-
-
-class NormalizerSchema(BaseModel):
-    default: Union[str, None] = Field(literals=["mean-std", "std", "min-max", "max", "none"])
-    """Normalizer default method to apply"""
-    remap: Union[dict[str, str], None] = Field(default_factory=dict)
-    """Dictionary for remapping variables"""
-    std: Union[list[str], None] = Field(default_factory=list)
-    """Variables to normalise with std"""
-    mean_std: Union[list[str], None] = Field(default_factory=list, alias="mean-std")
-    """Variables to mormalize with mean-std"""
-    min_max: Union[list[str], None] = Field(default_factory=list, alias="min-max")
-    """Variables to normalize with min-max."""
-    max: Union[list[str], None] = Field(default_factory=list)
-    """Variables to normalize with max."""
-    none: Union[list[str], None] = Field(default_factory=list)
-    """Variables not to be normalized."""
-
-
-class ImputerSchema(BaseModel):
-    default: str = Field(literals=["none", "mean", "stdev"])
-    "Imputer default method to apply."
-    maximum: Union[list[str], None]
-    minimum: Union[list[str], None]
-    none: Union[list[str], None] = Field(default_factory=list)
-    "Variables not to be imputed."
-
-
-class RemapperSchema(BaseModel):
-    default: str = Field(literals=["none", "log1p", "sqrt", "boxcox"])
-    "Remapper default method to apply."
-    none: Union[list[str], None] = Field(default_factory=list)
-    "Variables not to be remapped."
-
-
-class PreprocessorTarget(str, Enum):
-    normalizer = "anemoi.models.preprocessing.normalizer.InputNormalizer"
-    imputer = "anemoi.models.preprocessing.imputer.InputImputer"
-    remapper = "anemoi.models.preprocessing.remapper.Remapper"
-
-
-target_to_schema = {
-    PreprocessorTarget.normalizer: NormalizerSchema,
-    PreprocessorTarget.imputer: ImputerSchema,
-    PreprocessorTarget.remapper: RemapperSchema,
-}
-
-
-class PreprocessorSchema(BaseModel):
-    target_: PreprocessorTarget = Field(..., alias="_target_")
-    "Processor object from anemoi.models.preprocessing.[normalizer|imputer|remapper]."
-    config: Union[NormalizerSchema, ImputerSchema, RemapperSchema]
-    "Target schema containing processor methods."
-
-    @model_validator(mode="after")
-    def schema_consistent_with_target(self) -> PreprocessorSchema:
-        if self.target_ not in target_to_schema or target_to_schema[self.target_] != self.config.__class__:
-            error_msg = f"Schema {self.config.__class__} does not match target {self.target_}"
-            raise ValidationError(error_msg)
-        return self
+from anemoi.models.schemas.data_processor import PreprocessorSchema  # noqa: TC001
 
 
 class DataSchema(PydanticBaseModel):

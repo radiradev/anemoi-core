@@ -20,6 +20,7 @@ import torchinfo
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.utilities import rank_zero_only
 
+from anemoi.training.utils.checkpoint import check_classes
 from anemoi.utils.checkpoints import save_metadata
 
 if TYPE_CHECKING:
@@ -151,6 +152,14 @@ class AnemoiCheckpoint(ModelCheckpoint):
         """Defines the filepath for the inference checkpoint."""
         return Path(filepath).parent / Path("inference-" + str(Path(filepath).name))
 
+    def on_train_start(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
+        """Check that model's metadata does not contain Pydantic schemas references."""
+        del pl_module
+
+        if trainer.is_global_zero:
+            model = self._torch_drop_down(trainer)
+            check_classes(model)
+
     def _save_checkpoint(self, trainer: pl.Trainer, lightning_checkpoint_filepath: str) -> None:
         if trainer.is_global_zero:
             model = self._torch_drop_down(trainer)
@@ -180,7 +189,7 @@ class AnemoiCheckpoint(ModelCheckpoint):
             tmp_supporting_arrays = model.supporting_arrays
             model.supporting_arrays = None
 
-            # Make sure we don't accidentally modidy these
+            # Make sure we don't accidentally modify these
             metadata = tmp_metadata.copy()
             supporting_arrays = tmp_supporting_arrays.copy()
 
@@ -197,6 +206,7 @@ class AnemoiCheckpoint(ModelCheckpoint):
             self._last_global_step_saved = trainer.global_step
 
         trainer.strategy.barrier()
+
         # saving checkpoint used for pytorch-lightning based training
         trainer.save_checkpoint(lightning_checkpoint_filepath, self.save_weights_only)
 
@@ -204,7 +214,22 @@ class AnemoiCheckpoint(ModelCheckpoint):
         self._last_checkpoint_saved = lightning_checkpoint_filepath
 
         if trainer.is_global_zero:
+            from importlib.metadata import version
             from weakref import proxy
+
+            from packaging.version import Version
+
+            if Version(version("torch")) >= Version("2.6"):
+                # Add a new uuid
+                checkpoint_uuid = str(uuid.uuid4())
+                trainer.lightning_module._hparams["metadata"]["uuid"] = checkpoint_uuid
+
+                # Extract and save metadata for lightning checkpoint
+                model = self._torch_drop_down(trainer)
+                metadata = model.metadata.copy()
+                supporting_arrays = model.supporting_arrays.copy()
+
+                save_metadata(lightning_checkpoint_filepath, metadata, supporting_arrays=supporting_arrays)
 
             # notify loggers
             for logger in trainer.loggers:

@@ -211,7 +211,7 @@ class AnemoiTrainer:
         }
 
         model_task = get_class(self.config.training.model_task)
-        model = model_task(**kwargs)
+        model = model_task(**kwargs)  # GraphForecaster -> pl.LightningModule
 
         # Load the model weights
         if self.load_weights_only:
@@ -284,7 +284,7 @@ class AnemoiTrainer:
         return get_tensorboard_logger(self.config)
 
     @cached_property
-    def last_checkpoint(self) -> str | None:
+    def last_checkpoint(self) -> Path | None:
         """Path to the last checkpoint."""
         if not self.start_from_checkpoint:
             return None
@@ -295,8 +295,9 @@ class AnemoiTrainer:
             fork_id or self.lineage_run,
             self.config.hardware.files.warm_start or "last.ckpt",
         )
+
         # Check if the last checkpoint exists
-        if Path(checkpoint).exists():
+        if checkpoint.exists():
             LOGGER.info("Resuming training from last checkpoint: %s", checkpoint)
             return checkpoint
 
@@ -405,7 +406,6 @@ class AnemoiTrainer:
             "Effective learning rate: %.3e",
             int(total_number_of_model_instances) * self.config.training.lr.rate,
         )
-        LOGGER.debug("Rollout window length: %d", self.config.training.rollout.start)
 
         if self.config.training.max_epochs is not None and self.config.training.max_steps not in (None, -1):
             LOGGER.info(
@@ -501,6 +501,7 @@ class AnemoiTrainer:
         )
 
         LOGGER.debug("Starting training..")
+
         trainer.fit(
             self.model,
             datamodule=self.datamodule,
