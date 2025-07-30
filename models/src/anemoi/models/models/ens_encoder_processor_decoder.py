@@ -51,8 +51,8 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
         self.input_dim += self.num_input_channels_prognostic
         self.input_dim += 1
 
-    def _build_model(self, model_config):
-        super()._build_model(model_config)
+    def _build_networks(self, model_config):
+        super()._build_networks(model_config)
         self.noise_injector = instantiate(
             model_config.model.noise_injector,
             _recursive_=False,

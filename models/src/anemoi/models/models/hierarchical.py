@@ -56,7 +56,7 @@ class AnemoiModelEncProcDecHierarchical(AnemoiModelEncProcDec):
             truncation_data=truncation_data,
         )
 
-    def _build_model(self, model_config):
+    def _build_networks(self, model_config):
         """Builds the model components."""
 
         # Encoder data -> hidden

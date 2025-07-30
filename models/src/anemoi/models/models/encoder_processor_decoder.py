@@ -58,7 +58,7 @@ class AnemoiModelEncProcDec(AnemoiModelBase):
             truncation_data=truncation_data,
         )
 
-    def _build_model(self, model_config: DotDict) -> None:
+    def _build_networks(self, model_config: DotDict) -> None:
         """Builds the model components."""
 
         # Encoder data -> hidden
