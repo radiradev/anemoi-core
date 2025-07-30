@@ -13,16 +13,18 @@ from __future__ import annotations
 import logging
 import sys
 from typing import Any
+from typing import Union
 
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
 from pydantic import BaseModel as PydanticBaseModel
+from pydantic import Field
 from pydantic import model_validator
 from pydantic._internal import _model_construction
 from pydantic_core import PydanticCustomError
 from pydantic_core import ValidationError
 
-from anemoi.graphs.schemas.base_graph import BaseGraphSchema  # noqa: TC001
+from anemoi.graphs.schemas.base_graph import BaseGraphSchema
 from anemoi.models.schemas.decoder import GraphTransformerDecoderSchema
 from anemoi.models.schemas.models import ModelSchema  # noqa: TC001
 from anemoi.utils.schemas import BaseModel
@@ -43,6 +45,25 @@ _object_setattr = _model_construction.object_setattr
 LOGGER = logging.getLogger(__name__)
 
 
+class GraphSchema(BaseGraphSchema):
+    """Graph schema for the training configuration."""
+
+    overwrite: bool = Field(example=True)
+    "whether to overwrite existing graph file. Default to True."
+    data: str = Field(example="data")
+    "Key name for the data nodes. Default to 'data'."
+    hidden: Union[str, list[str]] = Field(example="hidden")
+    "Key name for the hidden nodes. Default to 'hidden'."
+    # TODO(Helen): Needs to be adjusted for more complex graph setups
+
+    @model_validator(mode="after")
+    def check_if_nodes_edges_present_if_overwrite(self) -> BaseGraphSchema:
+        if self.overwrite and ("nodes" not in self.model_fields_set or "edges" not in self.model_fields_set):
+            msg = "If overwrite is True, nodes and edges must be provided."
+            raise ValueError(msg)
+        return self
+
+
 class BaseSchema(BaseModel):
     """Top-level schema for the training configuration."""
 
@@ -56,7 +77,7 @@ class BaseSchema(BaseModel):
     """Diagnostics configuration such as logging, plots and metrics."""
     hardware: HardwareSchema
     """Hardware configuration."""
-    graph: BaseGraphSchema
+    graph: GraphSchema
     """Graph configuration."""
     model: ModelSchema
     """Model configuration."""
