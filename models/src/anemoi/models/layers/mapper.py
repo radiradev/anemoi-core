@@ -1332,7 +1332,7 @@ class GraphInterpolationBaseMapper(GraphEdgeMixin, BaseMapper):
         self.offload_layers(cpu_offload)
 
         self.emb_nodes_dst = nn.Identity()
-    
+
     def _get_sparse_matrix(
         self, subgraph, src_grid_size: int, dst_grid_size: int, weight_attribute: Optional[str] = None
     ):
@@ -1351,7 +1351,7 @@ class GraphInterpolationBaseMapper(GraphEdgeMixin, BaseMapper):
             subgraph.edge_index,
             weights / (norm + 1e-8),
             (src_grid_size, dst_grid_size),
-            device=subgraph.edge_index.device
+            device=subgraph.edge_index.device,
         )
         return A.coalesce().T
 

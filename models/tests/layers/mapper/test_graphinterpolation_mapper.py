@@ -16,9 +16,9 @@ import torch
 from torch import nn
 from torch_geometric.data import HeteroData
 
-from anemoi.models.layers.mapper import GraphInterpolationForwardMapper
-from anemoi.models.layers.mapper import GraphInterpolationBaseMapper
 from anemoi.models.layers.mapper import GraphInterpolationBackwardMapper
+from anemoi.models.layers.mapper import GraphInterpolationBaseMapper
+from anemoi.models.layers.mapper import GraphInterpolationForwardMapper
 from anemoi.models.layers.utils import load_layer_kernels
 from anemoi.utils.config import DotDict
 
@@ -27,7 +27,7 @@ from anemoi.utils.config import DotDict
 class MapperConfig:
     in_channels_src: int = 3
     out_channels_dst: int = 5
-    #trainable_size: int = 6
+    # trainable_size: int = 6
     src_grid_size: int = 0
     dst_grid_size: int = 0
     cpu_offload: bool = False
@@ -61,7 +61,7 @@ class TestGraphInterpolationBaseMapper:
     def pair_tensor(self, mapper_init):
         return (
             torch.rand(self.NUM_SRC_NODES, mapper_init.in_channels_src),
-            torch.rand(self.NUM_DST_NODES, 1), # features of dst_nodes are not used
+            torch.rand(self.NUM_DST_NODES, 1),  # features of dst_nodes are not used
         )
 
     @pytest.fixture
@@ -158,7 +158,7 @@ class TestGraphInterpolationForwardMapper(TestGraphInterpolationBaseMapper):
         loss.backward()
 
         # Check gradients
-        assert mapper.trainable.trainable is  None
+        assert mapper.trainable.trainable is None
 
         for param in mapper.parameters():
             assert param.grad is not None, f"param.grad is None for {param}"

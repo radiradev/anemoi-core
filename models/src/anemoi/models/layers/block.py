@@ -887,7 +887,7 @@ class GraphInterpolationMapperBlock(BaseBlock):
         """
         super().__init__(**kwargs)
         self.A = sparse_matrix
-    
+
     def forward(
         self,
         x: OptPairTensor,
