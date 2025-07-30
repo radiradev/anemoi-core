@@ -873,6 +873,21 @@ class GraphTransformerProcessorBlock(GraphTransformerBaseBlock):
 
 
 class GraphInterpolationMapperBlock(BaseBlock):
+    """Graph interpolation block."""
+
+    def __init__(self, sparse_matrix, **kwargs):
+        """Initialize GraphTransformerBlock.
+
+        Parameters
+        ----------
+        sparse_matrix : torch.sparse.FloatTensor
+            Sparse matrix representing the interpolation.
+        kwargs : dict
+            Additional arguments for the base class.
+        """
+        super().__init__(**kwargs)
+        self.A = sparse_matrix
+    
     def forward(
         self,
         x: OptPairTensor,
@@ -884,13 +899,6 @@ class GraphInterpolationMapperBlock(BaseBlock):
         model_comm_group: Optional[ProcessGroup] = None,
         **layer_kwargs,
     ):
-        x_src, x_dst = x
-        interp = torch.zeros(x_dst.shape[0], x_src.shape[1], device=x_src.device, dtype=x_src.dtype)
-        counts = torch.zeros(x_dst.shape[0], 1, device=x_src.device, dtype=edge_index.dtype)
-
-        interp.index_add_(0, edge_index[1], x_src[edge_index[0]])
-        counts.index_add_(
-            0, edge_index[1], torch.ones(edge_index.shape[1], 1, device=counts.device, dtype=edge_index.dtype)
-        )
-        assert min(counts) > 0, "All target nodes need to be connected"
-        return (x_src, interp / counts), edge_attr
+        x_src, _ = x
+        x_dst = torch.sparse.mm(self.A, x_src)
+        return (x_src, x_dst), edge_attr

@@ -1277,13 +1277,13 @@ class GraphInterpolationBaseMapper(GraphEdgeMixin, BaseMapper):
         self,
         *,
         in_channels_src: int,
-        in_channels_dst: int,
         hidden_dim: int,
         sub_graph: HeteroData,
         sub_graph_edge_attributes: list[str],
         src_grid_size: int,
         dst_grid_size: int,
         out_channels_dst: Optional[int] = None,
+        weight_attribute: Optional[str] = None,
         cpu_offload: bool = False,
         layer_kernels: DotDict,
     ) -> None:
@@ -1315,7 +1315,7 @@ class GraphInterpolationBaseMapper(GraphEdgeMixin, BaseMapper):
         """
         super().__init__(
             in_channels_src=in_channels_src,
-            in_channels_dst=in_channels_dst,
+            in_channels_dst=0,
             hidden_dim=hidden_dim,
             out_channels_dst=out_channels_dst,
             layer_kernels=layer_kernels,
@@ -1326,17 +1326,40 @@ class GraphInterpolationBaseMapper(GraphEdgeMixin, BaseMapper):
 
         self.trainable = TrainableTensor(trainable_size=0, tensor_size=self.edge_attr.shape[0])
 
-        self.proc = GraphInterpolationMapperBlock()
+        A = self._get_sparse_matrix(sub_graph, src_grid_size, dst_grid_size, weight_attribute=weight_attribute)
+        self.proc = GraphInterpolationMapperBlock(sparse_matrix=A)
 
         self.offload_layers(cpu_offload)
 
         self.emb_nodes_dst = nn.Identity()
+    
+    def _get_sparse_matrix(
+        self, subgraph, src_grid_size: int, dst_grid_size: int, weight_attribute: Optional[str] = None
+    ):
+        if weight_attribute is None:
+            weights = torch.ones(subgraph.edge_index.shape[1], device=subgraph.edge_index.device)
+        else:
+            weights = subgraph[weight_attribute]
+
+        sigma = 1.0  # You may want to make this configurable
+        weights = torch.exp(-0.5 * (weights / sigma) ** 2)
+        total = torch.zeros(dst_grid_size, device=weights.device)
+        norm = total.scatter_add_(0, subgraph.edge_index[1], weights)
+        norm = norm[subgraph.edge_index[1]]
+
+        A = torch.sparse_coo_tensor(
+            subgraph.edge_index,
+            weights / (norm + 1e-8),
+            (src_grid_size, dst_grid_size),
+            device=subgraph.edge_index.device
+        )
+        return A.coalesce().T
 
     def forward(
         self,
         x: PairTensor,
         batch_size: int,
-        shard_shapes: tuple[tuple[int], tuple[int]],
+        shard_shapes: tuple[tuple[tuple[int]], tuple[tuple[int]]],
         model_comm_group: Optional[ProcessGroup] = None,
         x_src_is_sharded: bool = False,
         x_dst_is_sharded: bool = False,
@@ -1347,7 +1370,7 @@ class GraphInterpolationBaseMapper(GraphEdgeMixin, BaseMapper):
                 model_comm_group.size() == 1
             ), f"Model sharding across GPUs is not supported for {self.__class__.__name__}"
 
-        size = (sum(x[0] for x in shard_shapes[0]), sum(x[0] for x in shard_shapes[1]))
+        size = (sum(ss[0] for ss in shard_shapes[0]), sum(ss[0] for ss in shard_shapes[1]))
         edge_attr = self.trainable(self.edge_attr, batch_size)
         edge_index = self._expand_edges(self.edge_index_base, self.edge_inc, batch_size)
         shapes_edge_attr = get_shard_shapes(edge_attr, 0, model_comm_group)
@@ -1379,29 +1402,31 @@ class GraphInterpolationForwardMapper(ForwardMapperPreProcessMixin, GraphInterpo
         self,
         *,
         in_channels_src: int,
-        in_channels_dst: int,
-        hidden_dim: int,
         sub_graph: HeteroData,
         sub_graph_edge_attributes: list[str],
         src_grid_size: int,
         dst_grid_size: int,
         out_channels_dst: Optional[int] = None,
+        weight_attribute: Optional[str] = None,
         cpu_offload: bool = False,
         layer_kernels: DotDict,
     ) -> None:
         super().__init__(
             in_channels_src=in_channels_src,
-            in_channels_dst=in_channels_dst,
             sub_graph=sub_graph,
+            hidden_dim=out_channels_dst,
             sub_graph_edge_attributes=sub_graph_edge_attributes,
             src_grid_size=src_grid_size,
             dst_grid_size=dst_grid_size,
-            hidden_dim=hidden_dim,
             out_channels_dst=out_channels_dst,
+            weight_attribute=weight_attribute,
             layer_kernels=layer_kernels,
             cpu_offload=cpu_offload,
         )
-        self.emb_nodes_src = self.layer_factory.Linear(self.in_channels_src, self.hidden_dim)
+        if self.in_channels_src == self.hidden_dim:
+            self.emb_nodes_src = nn.Identity()
+        else:
+            self.emb_nodes_src = self.layer_factory.Linear(self.in_channels_src, self.hidden_dim)
 
     def forward(
         self,
@@ -1426,34 +1451,35 @@ class GraphInterpolationBackwardMapper(BackwardMapperPostProcessMixin, GraphInte
         self,
         *,
         in_channels_src: int,
-        in_channels_dst: int,
-        hidden_dim: int,
         sub_graph: HeteroData,
         sub_graph_edge_attributes: list[str],
         src_grid_size: int,
         dst_grid_size: int,
         out_channels_dst: Optional[int] = None,
+        weight_attribute: Optional[str] = None,
         initialise_data_extractor_zero: bool = False,
         cpu_offload: bool = False,
         layer_kernels: DotDict,
     ) -> None:
         super().__init__(
             in_channels_src=in_channels_src,
-            in_channels_dst=in_channels_dst,
+            hidden_dim=in_channels_src,
             sub_graph=sub_graph,
             sub_graph_edge_attributes=sub_graph_edge_attributes,
             src_grid_size=src_grid_size,
             dst_grid_size=dst_grid_size,
-            hidden_dim=hidden_dim,
             out_channels_dst=out_channels_dst,
+            weight_attribute=weight_attribute,
             layer_kernels=layer_kernels,
             cpu_offload=cpu_offload,
         )
-
-        self.node_data_extractor = nn.Sequential(
-            self.layer_factory.LayerNorm(self.hidden_dim),
-            self.layer_factory.Linear(self.hidden_dim, self.out_channels_dst),
-        )
+        if self.hidden_dim == self.out_channels_dst:
+            self.node_data_extractor = nn.Identity()
+        else:
+            self.node_data_extractor = nn.Sequential(
+                self.layer_factory.LayerNorm(self.hidden_dim),
+                self.layer_factory.Linear(self.hidden_dim, self.out_channels_dst),
+            )
         if initialise_data_extractor_zero:
             for module in self.node_data_extractor.modules():
                 if isinstance(module, nn.Linear):
