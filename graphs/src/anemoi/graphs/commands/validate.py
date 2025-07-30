@@ -8,14 +8,20 @@
 # nor does it submit to any jurisdiction.
 
 import logging
-import os, re
-from . import Command
+import os
+import re
+
+from omegaconf import DictConfig
+from omegaconf import OmegaConf
+
 from anemoi.graphs.create import GraphCreator
 from anemoi.graphs.schemas.base_graph import BaseGraphSchema
-from omegaconf import DictConfig, OmegaConf
 from anemoi.utils.schemas import BaseModel
 
+from . import Command
+
 LOGGER = logging.getLogger(__name__)
+
 
 class Validate(Command):
     """Validate a graph."""

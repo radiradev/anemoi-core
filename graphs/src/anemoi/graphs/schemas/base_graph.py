@@ -12,7 +12,6 @@ from __future__ import annotations
 import logging
 import sys
 from typing import Any
-from typing import Union
 
 from omegaconf import DictConfig
 from pydantic import BaseModel as PydanticBaseModel
