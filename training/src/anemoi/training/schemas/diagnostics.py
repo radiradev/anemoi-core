@@ -276,6 +276,8 @@ class MlflowSchema(BaseModel):
     "Keys to expand within params. Any key being expanded will have lists converted according to `expand_iterables`."
     http_max_retries: PositiveInt = Field(example=35)
     "Specifies the maximum number of retries for MLflow HTTP requests, default 35."
+    max_num_variable_scalings: PositiveInt = Field(default=200)
+    "Maximum number of variable scalings to log as hyperparameters."
 
 
 class TensorboardSchema(BaseModel):

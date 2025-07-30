@@ -57,6 +57,7 @@ log:
     expand_hyperparams: # Which keys in hyperparams to expand
       - config
     http_max_retries: 35
+    max_num_variable_scalings: 200
   interval: 100 # passed to trainer.log_every_n_steps
 
 enable_progress_bar: True
