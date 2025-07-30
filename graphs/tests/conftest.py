@@ -179,7 +179,7 @@ def config_file(tmp_path) -> tuple[str, str]:
                         "source_mask_attr_name": None,
                         "target_mask_attr_name": None,
                     },
-                ]
+                ],
             },
         ],
     }
