@@ -57,7 +57,8 @@ class GraphSchema(BaseGraphSchema):
     # TODO(Helen): Needs to be adjusted for more complex graph setups
 
     @model_validator(mode="after")
-    def check_if_nodes_edges_present_if_overwrite(self) -> BaseGraphSchema:
+    def check_if_nodes_edges_present_if_overwrite(self) -> GraphSchema:
+        """Check that nodes and edges are present if overwrite is True."""
         if self.overwrite and ("nodes" not in self.model_fields_set or "edges" not in self.model_fields_set):
             msg = "If overwrite is True, nodes and edges must be provided."
             raise ValueError(msg)
