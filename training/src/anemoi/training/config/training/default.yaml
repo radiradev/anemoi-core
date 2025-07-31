@@ -111,6 +111,9 @@ validation_metrics:
 
 variable_groups:
   default: sfc
+# Example pressure level group
+#  pl:
+#    param: [q, t, u, v, w, z]
 
 metrics:
 - z_500
