@@ -873,8 +873,6 @@ class GraphInterpolationMapperBlock(BaseBlock):
         edge_attr: Tensor,
         edge_index: Adj,
         shapes: tuple,
-        batch_size: int,
-        size: Union[int, tuple[int, int]],
         model_comm_group: Optional[ProcessGroup] = None,
         **layer_kwargs,
     ):
