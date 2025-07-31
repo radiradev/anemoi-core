@@ -36,7 +36,7 @@ class TruncationMapper(nn.Module):
     def forward(self, x, grid_shard_shapes=None, model_comm_group=None):
         batch_size = x.shape[0]
 
-        x = x[:, -1, ...]
+        x = x[:, -1, ...]  # pick current date
         if self.A_down is not None or self.A_up is not None:
             x = einops.rearrange(x, "batch ensemble grid features -> (batch ensemble) grid features")
             x = self._to_channel_shards(x, grid_shard_shapes, model_comm_group)
@@ -53,29 +53,26 @@ class TruncationMapper(nn.Module):
         return torch.stack(out)
 
     def _to_channel_shards(self, x, grid_shard_shapes=None, model_comm_group=None):
-        if grid_shard_shapes is not None:
-            shard_shapes = self._get_shard_shapes(x, 0, grid_shard_shapes, model_comm_group)
-            # grid-sharded input: reshard to channel-shards to apply truncation
-            x = shard_channels(x, shard_shapes, model_comm_group)  # we get the full sequence here
-
-        return x
+        return self._reshard(x, shard_channels, grid_shard_shapes, model_comm_group)
 
     def _to_grid_shards(self, x, grid_shard_shapes=None, model_comm_group=None):
+        return self._reshard(x, gather_channels, grid_shard_shapes, model_comm_group)
+
+    def _reshard(self, x, fn, grid_shard_shapes=None, model_comm_group=None):
         if grid_shard_shapes is not None:
             shard_shapes = self._get_shard_shapes(x, 0, grid_shard_shapes, model_comm_group)
-            x = gather_channels(x, shard_shapes, model_comm_group)
-
+            x = fn(x, shard_shapes, model_comm_group)
         return x
 
-    def _truncate_fields(self, x, grid_shard_shapes=None, model_comm_group=None):
-        # these can't be registered as buffers because ddp does not like to broadcast sparse tensors
-        # hence we check that they are on the correct device ; copy should only happen in the first forward run
+    def _truncate_fields(self, x):
+        # A_down and A_up are sparse tensors and cannot be registered as buffers,
+        # because DDP does not support broadcasting sparse tensors.
         if self.A_down is not None:
-            self.A_down = self.A_down.to(x.device)
-            x = self._sparse_projection(self.A_down, x)  # to coarse resolution
+            A_down = self.A_down.to(x.device)
+            x = self._sparse_projection(A_down, x)
         if self.A_up is not None:
-            self.A_up = self.A_up.to(x.device)
-            x = self._sparse_projection(self.A_up, x)  # back to high resolution
+            A_up = self.A_up.to(x.device)
+            x = self._sparse_projection(A_up, x)
 
         return x
 
@@ -100,3 +97,12 @@ class TruncationMapper(nn.Module):
         )
 
         return sparse_projection_matrix.coalesce()
+
+
+class SkipConnection(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+
+    def forward(self, x):
+        x = x[:, -1, ...]  # pick current date
+        return x
