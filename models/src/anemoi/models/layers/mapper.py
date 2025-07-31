@@ -1339,7 +1339,8 @@ class GraphInterpolationBaseMapper(GraphEdgeMixin, BaseMapper):
         src_grid_size: int,
         dst_grid_size: int,
         out_channels_dst: Optional[int] = None,
-        weight_attribute: Optional[str] = None,
+        weight_attribute_name: Optional[str] = None,
+        apply_gaussian_distance: bool = True,
         cpu_offload: bool = False,
         layer_kernels: DotDict,
     ) -> None:
@@ -1349,8 +1350,6 @@ class GraphInterpolationBaseMapper(GraphEdgeMixin, BaseMapper):
         ----------
         in_channels_src : int
             Input channels of the source node
-        in_channels_dst : int
-            Input channels of the destination node
         hidden_dim : int
             Hidden dimension
         out_channels_dst : int, optional
@@ -1363,6 +1362,10 @@ class GraphInterpolationBaseMapper(GraphEdgeMixin, BaseMapper):
             Source grid size
         dst_grid_size : int
             Destination grid size
+        weight_attribute_name : str, optional
+            Name of the edge attribute to use as weight, by default None
+        apply_gaussian_distance : bool, optional
+            Whether to apply Gaussian distance weighting, by default True
         cpu_offload : bool
             Whether to offload processing to CPU, by default False
         layer_kernels : DotDict
@@ -1382,32 +1385,45 @@ class GraphInterpolationBaseMapper(GraphEdgeMixin, BaseMapper):
 
         self.trainable = TrainableTensor(trainable_size=0, tensor_size=self.edge_attr.shape[0])
 
-        A = self._get_sparse_matrix(sub_graph, src_grid_size, dst_grid_size, weight_attribute=weight_attribute)
+        weights = self._get_weight_attribute(sub_graph, weight_attribute_name)
+        if apply_gaussian_distance:
+            weights = self._gaussian_distance_weighting(weights)
+        A = self._get_sparse_matrix(sub_graph.edge_index, weights, src_grid_size, dst_grid_size)
         self.proc = GraphInterpolationMapperBlock(sparse_matrix=A)
 
         self.offload_layers(cpu_offload)
 
         self.emb_nodes_dst = nn.Identity()
 
+    def _get_weight_attribute(self, sub_graph: HeteroData, weight_attribute: Optional[str] = None) -> torch.Tensor:
+        """Get the weight attribute from the subgraph."""
+        if weight_attribute is not None:
+            if weight_attribute not in sub_graph.edge_types:
+                raise ValueError(f"Weight attribute '{weight_attribute}' not found in subgraph edge types.")
+            return sub_graph[weight_attribute]
+
+        return torch.ones(sub_graph.edge_index.shape[1], device=sub_graph.edge_index.device)
+
+    def _gaussian_distance_weighting(self, weights: torch.Tensor, sigma: float = 1.0) -> torch.Tensor:
+        """Apply Gaussian distance weighting to the weights."""
+        return torch.exp(-0.5 * (weights / sigma) ** 2)
+
     def _get_sparse_matrix(
-        self, subgraph, src_grid_size: int, dst_grid_size: int, weight_attribute: Optional[str] = None
+        self,
+        edge_index: torch.Tensor,
+        weights: torch.Tensor,
+        src_grid_size: int,
+        dst_grid_size: int,
     ):
-        if weight_attribute is None:
-            weights = torch.ones(subgraph.edge_index.shape[1], device=subgraph.edge_index.device)
-        else:
-            weights = subgraph[weight_attribute]
-
-        sigma = 1.0  # You may want to make this configurable
-        weights = torch.exp(-0.5 * (weights / sigma) ** 2)
+        """Create a sparse matrix from edge_index and weights."""
         total = torch.zeros(dst_grid_size, device=weights.device)
-        norm = total.scatter_add_(0, subgraph.edge_index[1], weights)
-        norm = norm[subgraph.edge_index[1]]
-
+        norm = total.scatter_add_(0, edge_index[1], weights)
+        norm = norm[edge_index[1]]
         A = torch.sparse_coo_tensor(
-            subgraph.edge_index,
+            edge_index,
             weights / (norm + 1e-8),
             (src_grid_size, dst_grid_size),
-            device=subgraph.edge_index.device,
+            device=edge_index.device,
         )
         return A.coalesce().T
 
@@ -1426,23 +1442,17 @@ class GraphInterpolationBaseMapper(GraphEdgeMixin, BaseMapper):
                 model_comm_group.size() == 1
             ), f"Model sharding across GPUs is not supported for {self.__class__.__name__}"
 
-        size = (sum(ss[0] for ss in shard_shapes[0]), sum(ss[0] for ss in shard_shapes[1]))
-        edge_attr = self.trainable(self.edge_attr, batch_size)
         edge_index = self._expand_edges(self.edge_index_base, self.edge_inc, batch_size)
-        shapes_edge_attr = get_shard_shapes(edge_attr, 0, model_comm_group)
-        edge_attr = shard_tensor(edge_attr, 0, shapes_edge_attr, model_comm_group)
 
         x_src, x_dst, shapes_src, shapes_dst = self.pre_process(
             x, shard_shapes, model_comm_group, x_src_is_sharded, x_dst_is_sharded
         )
 
-        (x_src, x_dst), edge_attr = self.proc(
+        (x_src, x_dst), _ = self.proc(
             x=(x_src, x_dst),
-            edge_attr=edge_attr,
+            edge_attr=None,
             edge_index=edge_index,
-            shapes=(shapes_src, shapes_dst, shapes_edge_attr),
-            batch_size=batch_size,
-            size=size,
+            shapes=(shapes_src, shapes_dst, None),
             model_comm_group=model_comm_group,
         )
 
