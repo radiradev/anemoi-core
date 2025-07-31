@@ -33,13 +33,16 @@ class TruncationMapper(nn.Module):
             graph["fine"].num_nodes,
         )
 
-    def forward(self, x):
+    def forward(self, x, grid_shard_shapes=None, model_comm_group=None):
         batch_size = x.shape[0]
 
         x = x[:, -1, ...]
-        x = einops.rearrange(x, "batch ensemble grid features -> (batch ensemble) grid features")
-        x = self._truncate_fields(x)
-        x = einops.rearrange(x, "(batch ensemble) grid features -> batch ensemble grid features", batch=batch_size)
+        if self.A_down is not None or self.A_up is not None:
+            x = einops.rearrange(x, "batch ensemble grid features -> (batch ensemble) grid features")
+            x = self._to_channel_shards(x, grid_shard_shapes, model_comm_group)
+            x = self._truncate_fields(x)
+            x = self._to_grid_shards(x, grid_shard_shapes, model_comm_group)
+            x = einops.rearrange(x, "(batch ensemble) grid features -> batch ensemble grid features", batch=batch_size)
 
         return x
 
@@ -49,25 +52,30 @@ class TruncationMapper(nn.Module):
             out.append(torch.sparse.mm(A.T, x[i, ...]))
         return torch.stack(out)
 
+    def _to_channel_shards(self, x, grid_shard_shapes=None, model_comm_group=None):
+        if grid_shard_shapes is not None:
+            shard_shapes = self._get_shard_shapes(x, 0, grid_shard_shapes, model_comm_group)
+            # grid-sharded input: reshard to channel-shards to apply truncation
+            x = shard_channels(x, shard_shapes, model_comm_group)  # we get the full sequence here
+
+        return x
+
+    def _to_grid_shards(self, x, grid_shard_shapes=None, model_comm_group=None):
+        if grid_shard_shapes is not None:
+            shard_shapes = self._get_shard_shapes(x, 0, grid_shard_shapes, model_comm_group)
+            x = gather_channels(x, shard_shapes, model_comm_group)
+
+        return x
+
     def _truncate_fields(self, x, grid_shard_shapes=None, model_comm_group=None):
-        if self.A_down is not None or self.A_up is not None:
-            if grid_shard_shapes is not None:
-                shard_shapes = self._get_shard_shapes(x, 0, grid_shard_shapes, model_comm_group)
-                # grid-sharded input: reshard to channel-shards to apply truncation
-                x = shard_channels(x, shard_shapes, model_comm_group)  # we get the full sequence here
-
-            # these can't be registered as buffers because ddp does not like to broadcast sparse tensors
-            # hence we check that they are on the correct device ; copy should only happen in the first forward run
-            if self.A_down is not None:
-                self.A_down = self.A_down.to(x.device)
-                x = self._sparse_projection(self.A_down, x)  # to coarse resolution
-            if self.A_up is not None:
-                self.A_up = self.A_up.to(x.device)
-                x = self._sparse_projection(self.A_up, x)  # back to high resolution
-
-            if grid_shard_shapes is not None:
-                # back to grid-sharding as before
-                x = gather_channels(x, shard_shapes, model_comm_group)
+        # these can't be registered as buffers because ddp does not like to broadcast sparse tensors
+        # hence we check that they are on the correct device ; copy should only happen in the first forward run
+        if self.A_down is not None:
+            self.A_down = self.A_down.to(x.device)
+            x = self._sparse_projection(self.A_down, x)  # to coarse resolution
+        if self.A_up is not None:
+            self.A_up = self.A_up.to(x.device)
+            x = self._sparse_projection(self.A_up, x)  # back to high resolution
 
         return x
 
