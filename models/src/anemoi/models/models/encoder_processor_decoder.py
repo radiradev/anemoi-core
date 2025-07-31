@@ -106,17 +106,21 @@ class AnemoiModelEncProcDec(nn.Module):
         )
 
         # Decoder hidden -> data
-        self.decoder = instantiate(
-            model_config.model.decoder,
-            _recursive_=False,  # Avoids instantiation of layer_kernels here
-            in_channels_src=self.num_channels,
-            in_channels_dst=self.input_dim,
-            hidden_dim=self.num_channels,
-            out_channels_dst=self.num_output_channels,
-            sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_data)],
-            src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-            dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
-        )
+        decoded_vars = dict(pl=48, ml=40)
+        assert sum(decoded_vars.values()) == self.num_output_channels, f"Set decoded_vars[ml]={self.num_output_channels-decoded_vars['pl']}"
+        self.decoders = nn.ModuleDict()
+        for key, num_vars in decoded_vars.items():
+            self.decoders[key] = instantiate(
+                model_config.model.decoder,
+                _recursive_=False,  # Avoids instantiation of layer_kernels here
+                in_channels_src=self.num_channels,
+                in_channels_dst=self.input_dim,
+                hidden_dim=self.num_channels,
+                out_channels_dst=num_vars,
+                sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_data)],
+                src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
+                dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
+            )
 
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
         self.boundings = nn.ModuleList(
@@ -379,16 +383,20 @@ class AnemoiModelEncProcDec(nn.Module):
         x_latent_proc = x_latent_proc + x_latent
 
         # Decoder
-        x_out = self._run_mapper(
-            self.decoder,
-            (x_latent_proc, x_data_latent),
-            batch_size=batch_size,
-            shard_shapes=(shard_shapes_hidden, shard_shapes_data),
-            model_comm_group=model_comm_group,
-            x_src_is_sharded=True,  # x_latent always comes sharded
-            x_dst_is_sharded=in_out_sharded,  # x_data_latent comes sharded iff in_out_sharded
-            keep_x_dst_sharded=in_out_sharded,  # keep x_out sharded iff in_out_sharded
-        )
+        x_outs = {}
+        for key, decoder in self.decoders.items():
+            x_outs[key] = self._run_mapper(
+                decoder,
+                (x_latent_proc, x_data_latent),
+                batch_size=batch_size,
+                shard_shapes=(shard_shapes_hidden, shard_shapes_data),
+                model_comm_group=model_comm_group,
+                x_src_is_sharded=True,  # x_latent always comes sharded
+                x_dst_is_sharded=in_out_sharded,  # x_data_latent comes sharded iff in_out_sharded
+                keep_x_dst_sharded=in_out_sharded,  # keep x_out sharded iff in_out_sharded
+            )
+        # We want to match: self.data_indices.data.output.full
+        x_out = torch.concat([x_outs["pl"], x_outs["ml"]], axis=1)
 
         x_out = self._assemble_output(x_out, x_skip, batch_size, ensemble_size, x.dtype)
 
