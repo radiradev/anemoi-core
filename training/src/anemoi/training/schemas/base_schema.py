@@ -11,7 +11,6 @@
 import logging
 import sys
 from typing import Any
-from typing import Self
 from typing import Union
 
 from omegaconf import DictConfig
