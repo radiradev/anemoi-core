@@ -71,8 +71,26 @@ def save_inference_checkpoint(model: torch.nn.Module, metadata: dict, save_path:
     return inference_filepath
 
 
-def transfer_learning_loading(model: torch.nn.Module, ckpt_path: Path | str) -> nn.Module:
+def map_encprocdec_to_hierarchical(encprocdec, hierarchical):
+    for name, layer in encprocdec.items():
+        if name.startswith("model.model.encoder"):
+            new_name = name.replace("encoder", "downscale.data")
+            if name.startswith("model.model.encoder.emb_nodes_src"):
+                continue
+            hierarchical[new_name] = layer
+        elif name.startswith("model.model.decoder"):
+            new_name = name.replace("decoder", "upscale.hidden")
+            hierarchical[new_name] = layer
+        elif name.startswith("model.model.processor"):
+            hierarchical[new_name] = layer
+        else:
+            LOGGER.info(f"Skipping layer: {name}")
+    return hierarchical
 
+
+def transfer_learning_loading(
+    model: torch.nn.Module, ckpt_path: Path | str, map_to_hierarchical: bool = True
+) -> nn.Module:
     # Load the checkpoint
     checkpoint = torch.load(ckpt_path, weights_only=False, map_location=model.device)
 
@@ -80,6 +98,9 @@ def transfer_learning_loading(model: torch.nn.Module, ckpt_path: Path | str) -> 
     state_dict = checkpoint["state_dict"]
 
     model_state_dict = model.state_dict()
+
+    if map_to_hierarchical:
+        return map_encprocdec_to_hierarchical(state_dict, model_state_dict)
 
     for key in state_dict.copy():
         if key in model_state_dict and state_dict[key].shape != model_state_dict[key].shape:
@@ -132,3 +153,9 @@ def check_classes(model: torch.nn.Module) -> None:
     pickle.dump(model, buffer)
     buffer.seek(0)
     _ = LoggingUnpickler(buffer).load()
+
+
+if __name__ == "__main__":
+    hier = torch.load("/home/ecm1924/GitRepos/anemoi/anemoi-core/hier.ckpt")
+    mo = torch.load("/lus/h2resw01/hpcperm/ecm1924/aifs/debug/checkpoint/25c2bc9bbe3b48d1abbe062a309a6f96/last.ckpt", map_location="cpu")["state_dict"]
+    new_hier = map_encprocdec_to_hierarchical(mo, hier)
