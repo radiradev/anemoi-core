@@ -71,9 +71,8 @@ class AnemoiModelEncProcDec(nn.Module):
         self._assert_matching_indices(data_indices)
 
         # Residual data -> data
-        from anemoi.models.layers.residual import TruncationMapper
-
-        self.residual = TruncationMapper(self._graph_data)
+        self.residual = instantiate(model_config.model.residual)
+        #  self.residual = TruncationMapper(self._graph_data)
 
         # Encoder data -> hidden
         self.encoder = instantiate(
@@ -301,9 +300,8 @@ class AnemoiModelEncProcDec(nn.Module):
 
         # Residual
         x_skip = self.residual(
-            x_data_latent,
-            batch_size=batch_size,
-            shard_shapes=shard_shapes_data,
+            x,
+            grid_shard_shapes=grid_shard_shapes,
             model_comm_group=model_comm_group,
         )
 

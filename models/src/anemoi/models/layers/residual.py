@@ -18,17 +18,18 @@ from anemoi.models.distributed.shapes import get_shard_shapes
 class TruncationMapper(nn.Module):
     def __init__(self, graph) -> None:
         super().__init__()
+        graph = torch.load(graph, weights_only=False)
 
         self.A_down = self._create_sparse_projection_matrix(
             graph["data", "to", "hidden"].edge_index,
-            graph["data", "to", "hidden"].edge_attr,
+            graph["data", "to", "hidden"].edge_length,
             graph["data"].num_nodes,
             graph["hidden"].num_nodes,
         )
 
         self.A_up = self._create_sparse_projection_matrix(
             graph["hidden", "to", "data"].edge_index,
-            graph["hidden", "to", "data"].edge_attr,
+            graph["hidden", "to", "data"].edge_length,
             graph["hidden"].num_nodes,
             graph["data"].num_nodes,
         )
@@ -91,7 +92,7 @@ class TruncationMapper(nn.Module):
     ):
         sparse_projection_matrix = torch.sparse_coo_tensor(
             edge_index,
-            edge_attribute,
+            edge_attribute.squeeze(),
             (num_source_nodes, num_target_nodes),
             device=edge_index.device,
         )
