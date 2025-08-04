@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
