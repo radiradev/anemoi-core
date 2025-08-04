@@ -20,17 +20,17 @@ class TruncationMapper(nn.Module):
         super().__init__()
 
         self.A_down = self._create_sparse_projection_matrix(
-            graph["fine", "to", "coarse"].edge_index,
-            graph["fine", "to", "coarse"].edge_attr,
-            graph["fine"].num_nodes,
-            graph["coarse"].num_nodes,
+            graph["data", "to", "hidden"].edge_index,
+            graph["data", "to", "hidden"].edge_attr,
+            graph["data"].num_nodes,
+            graph["hidden"].num_nodes,
         )
 
         self.A_up = self._create_sparse_projection_matrix(
-            graph["coarse", "to", "fine"].edge_index,
-            graph["coarse", "to", "fine"].edge_attr,
-            graph["coarse"].num_nodes,
-            graph["fine"].num_nodes,
+            graph["hidden", "to", "data"].edge_index,
+            graph["hidden", "to", "data"].edge_attr,
+            graph["hidden"].num_nodes,
+            graph["data"].num_nodes,
         )
 
     def forward(self, x, grid_shard_shapes=None, model_comm_group=None):
@@ -103,6 +103,6 @@ class SkipConnection(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__()
 
-    def forward(self, x):
+    def forward(self, x, *args, **kwargs):
         x = x[:, -1, ...]  # pick current date
         return x

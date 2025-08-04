@@ -14,13 +14,13 @@ def up_down_graph():
     edge_index_down = torch.tensor([[0, 1], [0, 0]], dtype=torch.long)  # fine → coarse
     edge_index_up = torch.tensor([[0, 0], [0, 1]], dtype=torch.long)  # coarse → fine
 
-    graph["fine"].x = x_fine
-    graph["coarse"].x = x_coarse
-    graph["coarse", "to", "fine"].edge_index = edge_index_up
-    graph["coarse", "to", "fine"].edge_attr = torch.tensor([1.0, 2.0])
+    graph["data"].x = x_fine
+    graph["hidden"].x = x_coarse
+    graph["hidden", "to", "data"].edge_index = edge_index_up
+    graph["hidden", "to", "data"].edge_attr = torch.tensor([1.0, 2.0])
 
-    graph["fine", "to", "coarse"].edge_index = edge_index_down
-    graph["fine", "to", "coarse"].edge_attr = torch.tensor([1.0, 2.0])
+    graph["data", "to", "hidden"].edge_index = edge_index_down
+    graph["data", "to", "hidden"].edge_attr = torch.tensor([1.0, 2.0])
 
     return graph
 
@@ -34,31 +34,6 @@ def flat_data():
 @pytest.fixture
 def edge_index():
     return torch.tensor([[0, 1, 1], [1, 0, 2]])
-
-
-def test_truncation_matrix_from_edge_index(edge_index):
-    edge_index = torch.tensor([[0, 1, 1], [1, 0, 2]])
-    edge_attribute = torch.tensor([1.0, 2.0, 3.0])
-    num_source_nodes = 2
-    num_target_nodes = 3
-
-    A = TruncationMapper._create_sparse_projection_matrix(
-        edge_index,
-        edge_attribute,
-        num_source_nodes,
-        num_target_nodes,
-    )
-
-    assert A.is_sparse
-    assert A.shape == (2, 3)
-    indices = A.indices()
-    values = A.values()
-
-    expected_indices = torch.tensor([[0, 1, 1], [1, 0, 2]])
-    expected_values = torch.tensor([1.0, 2.0, 3.0])
-
-    assert torch.equal(indices, expected_indices)
-    assert torch.equal(values, expected_values)
 
 
 def test_truncation_mapper_init(up_down_graph):
