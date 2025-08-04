@@ -80,6 +80,10 @@ def map_encprocdec_to_hierarchical(encprocdec, hierarchical):
             hierarchical[new_name] = layer
         elif name.startswith("model.model.decoder"):
             new_name = name.replace("decoder", "upscale.hidden")
+            if name.startswith("model.model.decoder.emb_nodes_dst"):
+                continue
+            if name.startswith("model.model.decoder.node_data_extractor"):
+                continue
             hierarchical[new_name] = layer
         elif name.startswith("model.model.processor"):
             hierarchical[new_name] = layer
@@ -100,17 +104,17 @@ def transfer_learning_loading(
     model_state_dict = model.state_dict()
 
     if map_to_hierarchical:
-        return map_encprocdec_to_hierarchical(state_dict, model_state_dict)
+        state_dict = map_encprocdec_to_hierarchical(encprocdec=state_dict, hierarchical=model_state_dict)
+    else:
+        for key in state_dict.copy():
+            if key in model_state_dict and state_dict[key].shape != model_state_dict[key].shape:
+                LOGGER.info("Skipping loading parameter: %s", key)
+                LOGGER.info("Checkpoint shape: %s", str(state_dict[key].shape))
+                LOGGER.info("Model shape: %s", str(model_state_dict[key].shape))
 
-    for key in state_dict.copy():
-        if key in model_state_dict and state_dict[key].shape != model_state_dict[key].shape:
-            LOGGER.info("Skipping loading parameter: %s", key)
-            LOGGER.info("Checkpoint shape: %s", str(state_dict[key].shape))
-            LOGGER.info("Model shape: %s", str(model_state_dict[key].shape))
+                del state_dict[key]  # Remove the mismatched key
 
-            del state_dict[key]  # Remove the mismatched key
-
-    # Load the filtered st-ate_dict into the model
+    # Load the filtered state_dict into the model
     model.load_state_dict(state_dict, strict=False)
     # Needed for data indices check
     model._ckpt_model_name_to_index = checkpoint["hyper_parameters"]["data_indices"].name_to_index
