@@ -31,6 +31,8 @@ from .encoder import TransformerEncoderSchema  # noqa: TC001
 from .processor import GNNProcessorSchema  # noqa: TC001
 from .processor import GraphTransformerProcessorSchema  # noqa: TC001
 from .processor import TransformerProcessorSchema  # noqa: TC001
+from .residual import SkipConnectionSchema
+from .residual import TruncationMapperSchema
 
 LOGGER = logging.getLogger(__name__)
 
@@ -188,7 +190,10 @@ class BaseModelSchema(PydanticBaseModel):
         ...,
         discriminator="target_",
     )
-    "GNN decoder schema."
+    residual: Union[SkipConnectionSchema, TruncationMapperSchema] = Field(
+        ...,
+        discriminator="target_",
+    )
 
 
 class NoiseInjectorSchema(BaseModel):
