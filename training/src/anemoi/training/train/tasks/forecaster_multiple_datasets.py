@@ -11,14 +11,16 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from collections.abc import Generator
 
 import pytorch_lightning as pl
 import torch
 from einops import rearrange
 from timm.scheduler import CosineLRScheduler
+from torch.distributed.distributed_c10d import ProcessGroup
 from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.utils.checkpoint import checkpoint
+from torch_geometric.data import HeteroData
 
 from anemoi.graphs.edges import CutOffEdges
 from anemoi.graphs.edges import KNNEdges
@@ -34,13 +36,6 @@ from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.schemas.base_schema import convert_to_omegaconf
 from anemoi.training.utils.enums import TensorDim
 from anemoi.utils.config import DotDict
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
-
-    from torch.distributed.distributed_c10d import ProcessGroup
-    from torch_geometric.data import HeteroData
-
 
 LOGGER = logging.getLogger(__name__)
 

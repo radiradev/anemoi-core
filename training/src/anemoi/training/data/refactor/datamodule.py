@@ -24,10 +24,6 @@ from anemoi.training.utils.worker_init import worker_init_func
 
 LOGGER = logging.getLogger(__name__)
 
-if TYPE_CHECKING:
-
-    from anemoi.training.schemas.base_schema import BaseSchema
-
 
 class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
     """Anemoi Datasets data module for PyTorch Lightning."""
