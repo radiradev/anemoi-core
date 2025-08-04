@@ -8,15 +8,20 @@
 # nor does it submit to any jurisdiction.
 
 
-import argparse
+from __future__ import annotations
+
 import logging
 import os
 import sys
 from abc import ABC
 from abc import abstractmethod
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from anemoi.training.commands import Command
+
+if TYPE_CHECKING:
+    import argparse
 
 LOGGER = logging.getLogger(__name__)
 

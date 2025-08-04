@@ -8,6 +8,8 @@
 # nor does it submit to any jurisdiction.
 
 
+from __future__ import annotations
+
 import datetime
 import shutil
 from pathlib import Path

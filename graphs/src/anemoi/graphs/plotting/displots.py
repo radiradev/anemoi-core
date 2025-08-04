@@ -10,6 +10,8 @@
 import logging
 from pathlib import Path
 from typing import Literal
+from typing import Optional
+from typing import Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -25,7 +27,7 @@ from anemoi.graphs.plotting.prepare import get_node_attribute_dims
 LOGGER = logging.getLogger(__name__)
 
 
-def plot_distribution_node_attributes(graph: HeteroData, out_file: str | Path | None = None) -> None:
+def plot_distribution_node_attributes(graph: HeteroData, out_file: Optional[Union[str, Path]] = None) -> None:
     """Figure with the distribution of the node attributes.
 
     Each row represents a node type and each column an attribute dimension.
@@ -35,7 +37,7 @@ def plot_distribution_node_attributes(graph: HeteroData, out_file: str | Path | 
     plot_distribution_attributes(graph.node_items(), num_nodes, attr_dims, "Node", out_file)
 
 
-def plot_distribution_edge_attributes(graph: HeteroData, out_file: str | Path | None = None) -> None:
+def plot_distribution_edge_attributes(graph: HeteroData, out_file: Optional[Union[str, Path]] = None) -> None:
     """Figure with the distribution of the edge attributes.
 
     Each row represents a edge type and each column an attribute dimension.
@@ -45,7 +47,7 @@ def plot_distribution_edge_attributes(graph: HeteroData, out_file: str | Path | 
     plot_distribution_attributes(graph.edge_items(), num_edges, attr_dims, "Edge", out_file)
 
 
-def plot_distribution_node_derived_attributes(graph, outfile: str | Path | None = None):
+def plot_distribution_node_derived_attributes(graph, outfile: Optional[Union[str, Path]] = None):
     """Figure with the distribution of the node derived attributes.
 
     Each row represents a node type and each column an attribute dimension.
@@ -73,11 +75,11 @@ def plot_distribution_node_derived_attributes(graph, outfile: str | Path | None 
 
 
 def plot_distribution_attributes(
-    graph_items: NodeStorage | EdgeStorage,
+    graph_items: Union[NodeStorage, EdgeStorage],
     num_items: int,
     attr_dims: dict,
     item_type: Literal["Edge", "Node"],
-    out_file: str | Path | None = None,
+    out_file: Optional[Union[str, Path]] = None,
 ) -> None:
     """Figure with the distribution of the node and edge attributes.
 

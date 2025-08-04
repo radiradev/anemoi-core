@@ -11,26 +11,22 @@ import pytest
 from torch_geometric.data import HeteroData
 
 from anemoi.graphs.edges import CutOffEdges
-from anemoi.graphs.edges import ReversedCutOffEdges
 
 
-@pytest.mark.parametrize("edge_builder", [CutOffEdges, ReversedCutOffEdges])
-def test_init(edge_builder):
+def test_init():
     """Test CutOffEdges initialization."""
-    edge_builder("test_nodes1", "test_nodes2", 0.5)
+    CutOffEdges("test_nodes1", "test_nodes2", 0.5)
 
 
-@pytest.mark.parametrize("edge_builder", [CutOffEdges, ReversedCutOffEdges])
 @pytest.mark.parametrize("cutoff_factor", [-0.5, "hello", None])
-def test_fail_init(edge_builder, cutoff_factor: str):
+def test_fail_init(cutoff_factor: str):
     """Test CutOffEdges initialization with invalid cutoff."""
     with pytest.raises(AssertionError):
-        edge_builder("test_nodes1", "test_nodes2", cutoff_factor)
+        CutOffEdges("test_nodes1", "test_nodes2", cutoff_factor)
 
 
-@pytest.mark.parametrize("edge_builder", [CutOffEdges, ReversedCutOffEdges])
-def test_cutoff(edge_builder, graph_with_nodes: HeteroData):
+def test_cutoff(graph_with_nodes: HeteroData):
     """Test CutOffEdges."""
-    builder = edge_builder("test_nodes", "test_nodes", 0.5)
+    builder = CutOffEdges("test_nodes", "test_nodes", 0.5)
     graph = builder.update_graph(graph_with_nodes)
     assert ("test_nodes", "to", "test_nodes") in graph.edge_types

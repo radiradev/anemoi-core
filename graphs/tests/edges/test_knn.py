@@ -10,26 +10,22 @@
 import pytest
 
 from anemoi.graphs.edges import KNNEdges
-from anemoi.graphs.edges import ReversedKNNEdges
 
 
-@pytest.mark.parametrize("edge_builder", [KNNEdges, ReversedKNNEdges])
-def test_init(edge_builder):
+def test_init():
     """Test KNNEdges initialization."""
-    edge_builder("test_nodes1", "test_nodes2", 3)
+    KNNEdges("test_nodes1", "test_nodes2", 3)
 
 
-@pytest.mark.parametrize("edge_builder", [KNNEdges, ReversedKNNEdges])
 @pytest.mark.parametrize("num_nearest_neighbours", [-1, 2.6, "hello", None])
-def test_fail_init(edge_builder, num_nearest_neighbours: str):
+def test_fail_init(num_nearest_neighbours: str):
     """Test KNNEdges initialization with invalid number of nearest neighbours."""
     with pytest.raises(AssertionError):
-        edge_builder("test_nodes1", "test_nodes2", num_nearest_neighbours)
+        KNNEdges("test_nodes1", "test_nodes2", num_nearest_neighbours)
 
 
-@pytest.mark.parametrize("edge_builder", [KNNEdges, ReversedKNNEdges])
-def test_knn(edge_builder, graph_with_nodes):
+def test_knn(graph_with_nodes):
     """Test KNNEdges."""
-    builder = edge_builder("test_nodes", "test_nodes", 3)
+    builder = KNNEdges("test_nodes", "test_nodes", 3)
     graph = builder.update_graph(graph_with_nodes)
     assert ("test_nodes", "to", "test_nodes") in graph.edge_types

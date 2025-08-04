@@ -8,10 +8,13 @@
 #
 
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path  # noqa: TC003
 from typing import Annotated
 from typing import Literal
+from typing import Union
 
 from pydantic import Field
 from pydantic import PositiveFloat
@@ -27,7 +30,7 @@ class AnemoiDatasetNodeSchema(BaseModel):
         ..., alias="_target_"
     )
     "Nodes from Anemoi dataset class implementation from anemoi.graphs.nodes."
-    dataset: str | list | dict  # TODO(Helen): Discuss schema with Baudouin
+    dataset: Union[str, list, dict]  # TODO(Helen): Discuss schema with Baudouin
     "The dataset containing the nodes."
 
 
@@ -45,7 +48,7 @@ class NPZnodeSchema(BaseModel):
 class TextNodeSchema(BaseModel):
     target_: Literal["anemoi.graphs.nodes.TextNodes"] = Field(..., alias="_target_")
     "Nodes from text file class implementation from anemoi.graphs.nodes."
-    dataset: str | Path
+    dataset: Union[str, Path]
     "The path to text file containing the coordinates of the nodes."
     idx_lon: int
     "The index of the longitude in the dataset."
@@ -56,7 +59,7 @@ class TextNodeSchema(BaseModel):
 class XArrayNodeSchema(BaseModel):
     target_: Literal["anemoi.graphs.nodes.XArrayNodes"] = Field(..., alias="_target_")
     "Nodes from xarray dataset class implementation from anemoi.graphs.nodes."
-    dataset: str | Path
+    dataset: Union[str, Path]
     "The path to xarray dataset containing the coordinates of the nodes."
     lon_key: str
     "The key name of the longitude field."
@@ -156,15 +159,17 @@ class StretchedIcosahdralNodeSchema(BaseModel):
 
 
 NodeBuilderSchemas = Annotated[
-    AnemoiDatasetNodeSchema
-    | NPZnodeSchema
-    | TextNodeSchema
-    | ICONNodeSchema
-    | ICONMeshNodeSchema
-    | LimitedAreaNPZFileNodesSchema
-    | ReducedGaussianGridNodeSchema
-    | IcosahedralandHealPixNodeSchema
-    | LimitedAreaIcosahedralandHealPixNodeSchema
-    | StretchedIcosahdralNodeSchema,
+    Union[
+        AnemoiDatasetNodeSchema,
+        NPZnodeSchema,
+        TextNodeSchema,
+        ICONNodeSchema,
+        ICONMeshNodeSchema,
+        LimitedAreaNPZFileNodesSchema,
+        ReducedGaussianGridNodeSchema,
+        IcosahedralandHealPixNodeSchema,
+        LimitedAreaIcosahedralandHealPixNodeSchema,
+        StretchedIcosahdralNodeSchema,
+    ],
     Field(discriminator="target_"),
 ]

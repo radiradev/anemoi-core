@@ -7,9 +7,12 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
+from __future__ import annotations
 
 import importlib
 import logging
+from typing import TYPE_CHECKING
+from typing import Type
 
 import networkx as nx
 import numpy as np
@@ -17,7 +20,10 @@ import torch
 from torch_geometric.data.storage import NodeStorage
 
 from anemoi.graphs.edges.builders.base import BaseEdgeBuilder
-from anemoi.graphs.generate.multi_scale_edges import BaseIcosahedronEdgeStrategy
+
+if TYPE_CHECKING:
+    from anemoi.graphs.generate.multi_scale_edges import BaseIcosahedronEdgeStrategy
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -34,7 +40,7 @@ class MultiScaleEdges(BaseEdgeBuilder):
     x_hops : int
         Number of hops (in the refined icosahedron) between two nodes to connect
         them with an edge.
-    scale_resolutions : int, list[int], optional
+    scale_resolutions : Union[int, List[int], None]
         Defines the refinement levels at which edges are computed. If an integer is provided, edges are computed for all
         levels up to and including that level. For instance, `scale_resolutions=4` includes edges at levels 1 through 4,
         whereas `scale_resolutions=[4]` only includes edges at level 4.
@@ -71,7 +77,7 @@ class MultiScaleEdges(BaseEdgeBuilder):
         self.scale_resolutions = scale_resolutions
 
     @staticmethod
-    def get_edge_builder_class(node_type: str) -> type[BaseIcosahedronEdgeStrategy]:
+    def get_edge_builder_class(node_type: str) -> Type[BaseIcosahedronEdgeStrategy]:
         # All node builders inheriting from IcosahedronNodes have an attribute multi_scale_edge_cls
         module = importlib.import_module("anemoi.graphs.nodes.builders.from_refined_icosahedron")
         node_cls = getattr(module, node_type, None)

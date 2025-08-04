@@ -35,9 +35,9 @@ year = datetime.datetime.now().year
 if year == 2024:
     years = "2024"
 else:
-    years = f"2024-{year}"
+    years = "2024-%s" % (year,)
 
-copyright = f"{years}, Anemoi contributors"
+copyright = "%s, Anemoi contributors" % (years,)
 
 try:
     from anemoi.graphs._version import __version__

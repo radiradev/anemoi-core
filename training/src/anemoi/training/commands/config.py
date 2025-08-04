@@ -8,7 +8,8 @@
 # nor does it submit to any jurisdiction.
 
 
-import argparse
+from __future__ import annotations
+
 import contextlib
 import importlib.resources as pkg_resources
 import logging
@@ -16,18 +17,24 @@ import os
 import re
 import shutil
 import tempfile
-from collections.abc import Generator
 from pathlib import Path
+from typing import TYPE_CHECKING
 from typing import Any
 
 from hydra import compose
 from hydra import initialize
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
-from pydantic import BaseModel
 
 from anemoi.training.commands import Command
 from anemoi.training.schemas.base_schema import BaseSchema
+
+if TYPE_CHECKING:
+    import argparse
+    from collections.abc import Generator
+
+    from pydantic import BaseModel
+
 
 LOGGER = logging.getLogger(__name__)
 

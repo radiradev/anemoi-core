@@ -8,6 +8,8 @@
 # nor does it submit to any jurisdiction.
 
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 import pytest

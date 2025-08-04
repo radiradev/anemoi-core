@@ -10,6 +10,8 @@
 import logging
 import os
 from pathlib import Path
+from typing import Optional
+from typing import Union
 
 import torch
 
@@ -28,22 +30,22 @@ class GraphInspector:
 
     Attributes
     ----------
-    path: str | Path
+    path: Union[str, Path]
         Path to the graph file.
     output_path: Path
         Path to the output directory where the plots will be saved.
-    show_attribute_distributions: bool, optional
+    show_attribute_distributions: Optional[bool]
         Whether to show the distribution of the node and edge attributes.
-    show_nodes: bool, optional
+    show_nodes: Optional[bool]
         Whether to show the interactive plots of the nodes.
     """
 
     def __init__(
         self,
-        path: str | Path,
+        path: Union[str, Path],
         output_path: Path,
-        show_attribute_distributions: bool | None = True,
-        show_nodes: bool | None = False,
+        show_attribute_distributions: Optional[bool] = True,
+        show_nodes: Optional[bool] = False,
         **kwargs,
     ):
         self.path = path
@@ -80,3 +82,7 @@ class GraphInspector:
             LOGGER.info("Saving interactive plots of nodes ...")
             for nodes_name in self.graph.node_types:
                 plot_interactive_nodes(self.graph, nodes_name, out_file=self.output_path / f"{nodes_name}_nodes.html")
+
+
+if __name__ == "__main__":
+    GraphInspector("/home/ecm1924/GitRepos/anemoi/g.pt", "output_gpu2").inspect()

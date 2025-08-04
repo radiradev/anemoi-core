@@ -7,15 +7,19 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
+from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from anemoi.training.data.dataset import EnsNativeGridDataset
 
 from .singledatamodule import AnemoiDatasetsDataModule
 
 LOGGER = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class AnemoiEnsDatasetsDataModule(AnemoiDatasetsDataModule):

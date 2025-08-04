@@ -8,16 +8,21 @@
 # nor does it submit to any jurisdiction.
 
 
+from __future__ import annotations
+
 import logging
 import uuid
-from collections.abc import Callable
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
+from typing import Union
 
 import torch
 from torch import nn
-from typing_extensions import Self
 
 from anemoi.training.utils.enums import TensorDim
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from collections.abc import Sequence
 
 LOGGER = logging.getLogger(__name__)
 
@@ -58,7 +63,7 @@ def grad_scaler(
     return new_grad_in, grad_in[1]
 
 
-TENSOR_SPEC = tuple[int | tuple[int], torch.Tensor]
+TENSOR_SPEC = tuple[Union[int, tuple[int]], torch.Tensor]
 
 
 class Shape:
@@ -182,7 +187,7 @@ class ScaleTensor:
         scaler: torch.Tensor,
         *,
         name: str | None = None,
-    ) -> Self:
+    ) -> ScaleTensor:
         """Add new scaler to be applied along `dimension`.
 
         Dimension can be a single int even for a multi-dimensional scaler,
@@ -204,7 +209,7 @@ class ScaleTensor:
             ScaleTensor with the scaler removed
         """
         if not isinstance(scaler, torch.Tensor):
-            scaler = torch.tensor([scaler]) if isinstance(scaler, int | float) else torch.tensor(scaler)
+            scaler = torch.tensor([scaler]) if isinstance(scaler, (int, float)) else torch.tensor(scaler)
 
         if isinstance(dimension, int):
             if len(scaler.shape) == 1:
@@ -232,7 +237,7 @@ class ScaleTensor:
 
         return self
 
-    def remove_scaler(self, scaler_to_remove: str | int) -> Self:
+    def remove_scaler(self, scaler_to_remove: str | int) -> ScaleTensor:
         """Remove scaler from ScaleTensor.
 
         Parameters
@@ -255,7 +260,7 @@ class ScaleTensor:
             self._specified_dimensions.pop(scaler_to_pop)
         return self
 
-    def freeze_state(self) -> "FrozenStateRecord":  # noqa: F821
+    def freeze_state(self) -> FrozenStateRecord:  # noqa: F821
         """Freeze the state of the scaler with a context manager.
 
         Any changes made will be reverted on exit.
@@ -300,7 +305,7 @@ class ScaleTensor:
             Whether to override the scaler ignoring dimension compatibility, by default False
         """
         if not isinstance(scaler, torch.Tensor):
-            scaler = torch.tensor([scaler]) if isinstance(scaler, int | float) else torch.tensor(scaler)
+            scaler = torch.tensor([scaler]) if isinstance(scaler, (int, float)) else torch.tensor(scaler)
 
         if name not in self.tensors:
             msg = f"scaler {name!r} not found in scalers."
@@ -358,7 +363,7 @@ class ScaleTensor:
         for name, tensor in kwargs.items():
             self.update_scaler(name, tensor, override=override)
 
-    def subset(self, scaler_identifier: str | Sequence[str] | int | Sequence[int]) -> Self:
+    def subset(self, scaler_identifier: str | Sequence[str] | int | Sequence[int]) -> ScaleTensor:
         """Get subset of the scalers, filtering by name or dimension.
 
         Parameters
@@ -371,13 +376,13 @@ class ScaleTensor:
         ScaleTensor
             Subset of self
         """
-        if isinstance(scaler_identifier, str | int):
+        if isinstance(scaler_identifier, (str, int)):
             scaler_identifier = [scaler_identifier]
         if any(isinstance(scaler, int) for scaler in scaler_identifier):
             return self.subset_by_dim(scaler_identifier)
         return self.subset_by_str(scaler_identifier)
 
-    def subset_by_str(self, scalers: str | Sequence[str]) -> Self:
+    def subset_by_str(self, scalers: str | Sequence[str]) -> ScaleTensor:
         """Get subset of the scalers, filtering by name.
 
         See `.subset_by_dim` for subsetting by affected dimensions.
@@ -396,7 +401,7 @@ class ScaleTensor:
             scalers = [scalers]
         return ScaleTensor(**{name: self.tensors[name] for name in scalers})
 
-    def subset_by_dim(self, dimensions: int | Sequence[int]) -> Self:
+    def subset_by_dim(self, dimensions: int | Sequence[int]) -> ScaleTensor:
         """Get subset of the scalers, filtering by dimension.
 
         See `.subset` for subsetting by name.
@@ -424,7 +429,7 @@ class ScaleTensor:
 
         return ScaleTensor(**subset_scalers)
 
-    def without(self, scaler_identifier: str | Sequence[str] | int | Sequence[int]) -> Self:
+    def without(self, scaler_identifier: str | Sequence[str] | int | Sequence[int]) -> ScaleTensor:
         """Get subset of the scalers, filtering out by name or dimension.
 
         Parameters
@@ -437,13 +442,13 @@ class ScaleTensor:
         ScaleTensor
             Subset of self
         """
-        if isinstance(scaler_identifier, str | int):
+        if isinstance(scaler_identifier, (str, int)):
             scaler_identifier = [scaler_identifier]
         if any(isinstance(scaler, int) for scaler in scaler_identifier):
             return self.without_by_dim(scaler_identifier)
         return self.without_by_str(scaler_identifier)
 
-    def without_by_str(self, scalers: str | Sequence[str]) -> Self:
+    def without_by_str(self, scalers: str | Sequence[str]) -> ScaleTensor:
         """Get subset of the scalers, filtering out by name.
 
         Parameters
@@ -460,7 +465,7 @@ class ScaleTensor:
             scalers = [scalers]
         return ScaleTensor(**{name: tensor for name, tensor in self.tensors.items() if name not in scalers})
 
-    def without_by_dim(self, dimensions: int | Sequence[int]) -> Self:
+    def without_by_dim(self, dimensions: int | Sequence[int]) -> ScaleTensor:
         """Get subset of the scalers, filtering out by dimension.
 
         Parameters
@@ -486,7 +491,7 @@ class ScaleTensor:
 
         return ScaleTensor(**subset_scalers)
 
-    def resolve(self, ndim: int) -> Self:
+    def resolve(self, ndim: int) -> ScaleTensor:
         """Resolve relative indexes in scalers by associating against ndim.
 
         i.e. if a scaler was given as effecting dimension -1,

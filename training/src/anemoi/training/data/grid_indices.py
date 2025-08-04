@@ -7,19 +7,24 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
+from __future__ import annotations
 
 import logging
 from abc import ABC
 from abc import abstractmethod
 from collections.abc import Sequence
 from functools import cached_property
+from typing import TYPE_CHECKING
+from typing import Union
 
 import numpy as np
-from torch_geometric.data import HeteroData
+
+if TYPE_CHECKING:
+    from torch_geometric.data import HeteroData
 
 LOGGER = logging.getLogger(__name__)
 
-ArrayIndex = slice | int | Sequence[int]
+ArrayIndex = Union[slice, int, Sequence[int]]
 
 
 class BaseGridIndices(ABC):

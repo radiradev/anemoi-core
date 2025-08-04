@@ -9,6 +9,8 @@
 
 import logging
 from pathlib import Path
+from typing import Optional
+from typing import Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -31,7 +33,7 @@ LOGGER = logging.getLogger(__name__)
 def plot_interactive_subgraph(
     graph: HeteroData,
     edges_to_plot: tuple[str, str, str],
-    out_file: str | Path | None = None,
+    out_file: Optional[Union[str, Path]] = None,
 ) -> None:
     """Plots a bipartite graph (bi-graph).
 
@@ -117,7 +119,7 @@ def plot_interactive_subgraph(
         fig.show()
 
 
-def plot_isolated_nodes(graph: HeteroData, out_file: str | Path | None = None) -> None:
+def plot_isolated_nodes(graph: HeteroData, out_file: Optional[Union[str, Path]] = None) -> None:
     """Plot isolated nodes.
 
     This method creates an interactive visualization of the isolated nodes in the graph.
@@ -169,7 +171,7 @@ def plot_isolated_nodes(graph: HeteroData, out_file: str | Path | None = None) -
         fig.show()
 
 
-def plot_interactive_nodes(graph: HeteroData, nodes_name: str, out_file: str | None = None) -> None:
+def plot_interactive_nodes(graph: HeteroData, nodes_name: str, out_file: Optional[str] = None) -> None:
     """Plot nodes.
 
     This method creates an interactive visualization of a set of nodes.

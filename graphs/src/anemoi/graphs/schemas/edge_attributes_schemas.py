@@ -8,8 +8,11 @@
 #
 
 
+from __future__ import annotations
+
 from enum import Enum
 from typing import Literal
+from typing import Union
 
 from pydantic import Field
 
@@ -40,4 +43,4 @@ class EdgeAttributeFromNodeSchema(BaseModel):
     "Normalisation method applied to the edge attribute."
 
 
-EdgeAttributeSchema = BaseEdgeAttributeSchema | EdgeAttributeFromNodeSchema
+EdgeAttributeSchema = Union[BaseEdgeAttributeSchema, EdgeAttributeFromNodeSchema]
