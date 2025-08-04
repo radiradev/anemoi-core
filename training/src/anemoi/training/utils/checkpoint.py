@@ -87,6 +87,8 @@ def map_encprocdec_to_hierarchical(encprocdec, hierarchical):
             hierarchical[new_name] = layer
         elif name.startswith("model.model.processor"):
             hierarchical[new_name] = layer
+        elif name.startswith("model.model.node_attributes.trainable_tensors"):
+            hierarchical[new_name] = layer
         else:
             LOGGER.info(f"Skipping layer: {name}")
     return hierarchical
