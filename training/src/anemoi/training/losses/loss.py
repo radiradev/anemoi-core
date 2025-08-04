@@ -19,6 +19,7 @@ from omegaconf import OmegaConf
 from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.models.data_indices.tensor import OutputTensorIndex
 from anemoi.training.losses.base import BaseLoss
+from anemoi.training.losses.dict import DictLoss
 from anemoi.training.utils.variables_metadata import ExtractVariableGroupAndLevel
 
 METRIC_RANGE_DTYPE = dict[str, list[int]]

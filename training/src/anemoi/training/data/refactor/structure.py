@@ -30,7 +30,7 @@ class TupleStructure(StructureMixin, tuple):
 
     def __call__(self, structure, **kwargs):
         assert isinstance(structure, TupleStructure), f"Expected TupleStructure, got {type(structure)}: {structure}"
-        return TupleStructure(func(elt, **kwargs) for func, elt in zip(self, structure))
+        return TupleStructure(func(elt, **kwargs) for func, elt in zip(self, structure, strict=False))
 
     def __getattr__(self, name):
         return [getattr(x, name) for x in self]
