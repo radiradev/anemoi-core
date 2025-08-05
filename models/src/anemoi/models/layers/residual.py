@@ -15,6 +15,10 @@ from anemoi.models.distributed.shapes import get_shard_shapes
 # 5. Make mapper configurable
 
 
+# Inherit from layers/processor/baseprocessor
+# Add apply gaussian from Marios GraphInterpolationMapper
+
+
 class TruncationMapper(nn.Module):
     def __init__(self, graph) -> None:
         super().__init__()
@@ -107,3 +111,6 @@ class SkipConnection(nn.Module):
     def forward(self, x, *args, **kwargs):
         x = x[:, -1, ...]  # pick current date
         return x
+
+
+# class NoConnection(nn.Module):
