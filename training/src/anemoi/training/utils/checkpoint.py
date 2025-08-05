@@ -159,9 +159,3 @@ def check_classes(model: torch.nn.Module) -> None:
     pickle.dump(model, buffer)
     buffer.seek(0)
     _ = LoggingUnpickler(buffer).load()
-
-
-if __name__ == "__main__":
-    hier = torch.load("/home/ecm1924/GitRepos/anemoi/anemoi-core/hier.ckpt")
-    mo = torch.load("/lus/h2resw01/hpcperm/ecm1924/aifs/debug/checkpoint/25c2bc9bbe3b48d1abbe062a309a6f96/last.ckpt", map_location="cpu")["state_dict"]
-    new_hier = map_encprocdec_to_hierarchical(mo, hier)
