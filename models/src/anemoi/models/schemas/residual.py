@@ -11,3 +11,7 @@ class SkipConnectionSchema(BaseModel):
 
 class TruncationMapperSchema(BaseModel):
     target_: Literal["anemoi.models.layers.residual.TruncationMapper"] = Field(..., alias="_target_")
+
+
+class NoConnectionSchema(BaseModel):
+    target_: Literal["anemoi.models.layers.residual.NoConnection"] = Field(..., alias="_target_")
