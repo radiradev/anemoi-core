@@ -32,7 +32,7 @@ from anemoi.utils.config import DotDict
 LOGGER = logging.getLogger(__name__)
 
 
-class AnemoiModelBase(nn.Module):
+class AnemoiGraphModelBase(nn.Module):
     """Message passing graph neural network."""
 
     def __init__(

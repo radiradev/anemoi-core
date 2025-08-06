@@ -20,13 +20,13 @@ from torch_geometric.data import HeteroData
 
 from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.shapes import get_shard_shapes
-from anemoi.models.models import AnemoiModelBase
+from anemoi.models.models import AnemoiGraphModelBase
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
 
 
-class AnemoiModelEncProcDec(AnemoiModelBase):
+class AnemoiModelEncProcDec(AnemoiGraphModelBase):
     """Message passing graph neural network."""
 
     def __init__(
