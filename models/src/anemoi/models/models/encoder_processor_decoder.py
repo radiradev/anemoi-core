@@ -54,7 +54,6 @@ class AnemoiModelEncProcDec(nn.Module):
             Graph definition
         """
         super().__init__()
-        self._graph_data = graph_data
         self.data_indices = data_indices
         self.statistics = statistics
         self._truncation_data = truncation_data
@@ -62,19 +61,24 @@ class AnemoiModelEncProcDec(nn.Module):
         model_config = DotDict(model_config)
         self._graph_name_data = model_config.graph.data
         self._graph_name_hidden = model_config.graph.hidden
-        # self._graph_name_truncation = model_config.graph.truncation
+        self._graph_name_truncation = model_config.graph.truncation
 
         self.multi_step = model_config.training.multistep_input
         self.num_channels = model_config.model.num_channels
 
-        self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
+        self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, graph_data)
 
         self._calculate_shapes_and_indices(data_indices)
         self._assert_matching_indices(data_indices)
 
         # Residual data -> data
-        self.residual = instantiate(model_config.model.residual)
-        #  self.residual = TruncationMapper(self._graph_data)
+        self.residual = instantiate(
+            model_config.model.residual,
+            num_data_nodes=graph_data[self.graph_name_data].num_nodes,
+            num_truncation_nodes=graph_data[self._graph_name_hidden].num_nodes,
+            sub_graph_down=graph_data[(self._graph_name_data, "to", self._graph_name_truncation)],
+            sub_graph_up=graph_data[(self._graph_name_truncation, "to", self._graph_name_data)],
+        )
 
         # Encoder data -> hidden
         self.encoder = instantiate(
@@ -83,7 +87,7 @@ class AnemoiModelEncProcDec(nn.Module):
             in_channels_src=self.input_dim,
             in_channels_dst=self.node_attributes.attr_ndims[self._graph_name_hidden],
             hidden_dim=self.num_channels,
-            sub_graph=self._graph_data[(self._graph_name_data, "to", self._graph_name_hidden)],
+            sub_graph=graph_data[(self._graph_name_data, "to", self._graph_name_hidden)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
         )
@@ -93,7 +97,7 @@ class AnemoiModelEncProcDec(nn.Module):
             model_config.model.processor,
             _recursive_=False,  # Avoids instantiation of layer_kernels here
             num_channels=self.num_channels,
-            sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_hidden)],
+            sub_graph=graph_data[(self._graph_name_hidden, "to", self._graph_name_hidden)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
         )
@@ -106,7 +110,7 @@ class AnemoiModelEncProcDec(nn.Module):
             in_channels_dst=self.input_dim,
             hidden_dim=self.num_channels,
             out_channels_dst=self.num_output_channels,
-            sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_data)],
+            sub_graph=graph_data[(self._graph_name_hidden, "to", self._graph_name_data)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_grid_size=self.node_attributes.num_nodes[self._graph_name_data],
         )
