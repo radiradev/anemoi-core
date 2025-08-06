@@ -7,16 +7,6 @@ from anemoi.models.distributed.graph import shard_channels
 from anemoi.models.distributed.shapes import apply_shard_shapes
 from anemoi.models.distributed.shapes import get_shard_shapes
 
-# Residual Mapper
-# 1. Create sparse matrix from edge index in up/down graphs which should be defined in the config
-# 2. Cut out the truncation code from enc-proc-dec model and init residual mapper
-# 3. Use the apply truncation as the forward function in ResidualMapper
-# 4. Don't process the x_skip in the assemble input, but apply it in the forward function
-# 5. Make mapper configurable
-
-# Inherit from layers/processor/baseprocessor
-# Add apply gaussian from Marios GraphInterpolationMapper
-
 
 class SkipConnection(nn.Module):
     """Skip connection module that selects the most recent timestep from the input sequence.
