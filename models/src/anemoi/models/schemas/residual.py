@@ -11,4 +11,3 @@ class SkipConnectionSchema(BaseModel):
 
 class TruncationMapperSchema(BaseModel):
     target_: Literal["anemoi.models.layers.residual.TruncationMapper"] = Field(..., alias="_target_")
-    graph: str = Field(..., description="Path to the graph file containing the up and down projection matrices.")
