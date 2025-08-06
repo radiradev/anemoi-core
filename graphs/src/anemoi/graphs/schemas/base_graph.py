@@ -56,6 +56,8 @@ class BaseGraphSchema(PydanticBaseModel):
     "Key name for the data nodes. Default to 'data'."
     hidden: str | list[str] = Field(example="hidden")
     "Key name for the hidden nodes. Default to 'hidden'."
+    truncation: str | list[str] = Field(example="truncation")
+    "Key name for the hidden nodes. Default to 'hidden'."
     # TODO(Helen): Needs to be adjusted for more complex graph setups
 
     @model_validator(mode="after")
