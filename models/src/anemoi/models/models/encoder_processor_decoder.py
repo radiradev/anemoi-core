@@ -74,7 +74,7 @@ class AnemoiModelEncProcDec(nn.Module):
         # Residual data -> data
         self.residual = instantiate(
             model_config.model.residual,
-            num_data_nodes=graph_data[self.graph_name_data].num_nodes,
+            num_data_nodes=graph_data[self._graph_name_data].num_nodes,
             num_truncation_nodes=graph_data[self._graph_name_hidden].num_nodes,
             sub_graph_down=graph_data[(self._graph_name_data, "to", self._graph_name_truncation)],
             sub_graph_up=graph_data[(self._graph_name_truncation, "to", self._graph_name_data)],
