@@ -5,14 +5,14 @@ modifiers:
   # First, load pretrained weights from checkpoint
   - _target_: "anemoi.training.train.modify.TransferLearningModelModifier"
     checkpoint_path: null  # Set to path of checkpoint file
-    
+
   # Then, freeze specific layers to prevent over-fitting
   - _target_: "anemoi.training.train.modify.FreezingModelModifier"
     submodules_to_freeze:
       - "encoder"  # Freeze encoder layers
       - "processor.0"  # Freeze first processor layer
       # Add more layers as needed:
-      # - "processor.1" 
+      # - "processor.1"
       # - "decoder.embeddings"
 
 # Example configurations for different fine-tuning strategies:
@@ -24,7 +24,7 @@ modifiers:
 
 # 2. For few-shot learning (freeze most layers, fine-tune only final layers):
 # submodules_to_freeze:
-#   - "encoder" 
+#   - "encoder"
 #   - "processor.0"
 #   - "processor.1"
 #   - "processor.2"

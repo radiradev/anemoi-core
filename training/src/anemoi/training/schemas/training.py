@@ -16,8 +16,6 @@ from typing import Any
 from typing import Literal
 from typing import Union
 
-from omegaconf import DictConfig
-
 from pydantic import AfterValidator
 from pydantic import Field
 from pydantic import NonNegativeFloat

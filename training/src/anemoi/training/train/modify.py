@@ -13,7 +13,6 @@ from abc import ABC
 from abc import abstractmethod
 from typing import TYPE_CHECKING
 
-import torch
 from hydra.utils import instantiate
 
 from anemoi.utils.logging import get_logger
@@ -21,6 +20,7 @@ from anemoi.utils.logging import get_logger
 if TYPE_CHECKING:
     from pathlib import Path
 
+    import torch
     from omegaconf import DictConfig
 
 LOGGER = get_logger(__name__)
@@ -30,7 +30,7 @@ class ModelModifier(ABC):
     """Base model modifier to change loaded models post-init."""
 
     @abstractmethod
-    def apply(self, model: torch.nn.Module, config: DictConfig) -> torch.nn.Module: ...
+    def apply(self, model: torch.nn.Module) -> torch.nn.Module: ...
 
 
 class FreezingModelModifier(ModelModifier):
@@ -46,7 +46,7 @@ class FreezingModelModifier(ModelModifier):
         """
         self.submodules_to_freeze = submodules_to_freeze
 
-    def apply(self, model: torch.nn.Module, config: DictConfig) -> torch.nn.Module:
+    def apply(self, model: torch.nn.Module) -> torch.nn.Module:
         LOGGER.info("The following submodules will NOT be trained: %s", self.submodules_to_freeze)
         for module_name in self.submodules_to_freeze:
             self._freeze_submodule_by_name(model, module_name)
@@ -92,15 +92,13 @@ class TransferLearningModelModifier(ModelModifier):
         self.strict = strict
         self.skip_mismatched = skip_mismatched
 
-    def apply(self, model: torch.nn.Module, config: DictConfig) -> torch.nn.Module:
+    def apply(self, model: torch.nn.Module) -> torch.nn.Module:
         """Load weights from checkpoint with size mismatch handling.
 
         Parameters
         ----------
         model : torch.nn.Module
             The model to load weights into
-        config : DictConfig
-            Configuration object
 
         Returns
         -------
@@ -110,15 +108,13 @@ class TransferLearningModelModifier(ModelModifier):
         from anemoi.training.utils.model_loading import load_model_from_checkpoint
 
         # Use #458's transfer learning loader
-        model = load_model_from_checkpoint(
+        return load_model_from_checkpoint(
             model=model,
             checkpoint_source=self.checkpoint_path,
             loader_type="transfer_learning",
             strict=self.strict,
             skip_mismatched=self.skip_mismatched,
         )
-
-        return model
 
 
 class ModelModifierApplier:
@@ -139,6 +135,6 @@ class ModelModifierApplier:
 
         for model_modifier in model_modifier_order:
             LOGGER.info("Applying model modifier: %s", type(model_modifier).__name__)
-            model = model_modifier.apply(model, config)
+            model = model_modifier.apply(model)
 
         return model
