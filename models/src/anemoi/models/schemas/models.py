@@ -31,6 +31,7 @@ from .encoder import TransformerEncoderSchema  # noqa: TC001
 from .processor import GNNProcessorSchema  # noqa: TC001
 from .processor import GraphTransformerProcessorSchema  # noqa: TC001
 from .processor import TransformerProcessorSchema  # noqa: TC001
+from .residual import NoConnectionSchema
 from .residual import SkipConnectionSchema
 from .residual import TruncationMapperSchema
 
@@ -190,8 +191,8 @@ class BaseModelSchema(PydanticBaseModel):
         ...,
         discriminator="target_",
     )
-    residual: Union[SkipConnectionSchema, TruncationMapperSchema] = Field(
-        ...,
+    residual: Union[SkipConnectionSchema, TruncationMapperSchema, NoConnectionSchema] = Field(
+        default_factory=SkipConnectionSchema,
         discriminator="target_",
     )
 
