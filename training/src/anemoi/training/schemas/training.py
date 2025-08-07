@@ -16,6 +16,8 @@ from typing import Any
 from typing import Literal
 from typing import Union
 
+from omegaconf import DictConfig
+
 from pydantic import AfterValidator
 from pydantic import Field
 from pydantic import NonNegativeFloat
@@ -311,12 +313,6 @@ class BaseTrainingSchema(BaseModel):
     "Run ID: used to resume a run from a checkpoint, either last.ckpt or specified in hardware.files.warm_start."
     fork_run_id: Union[str, None] = Field(example=None)
     "Run ID to fork from, either last.ckpt or specified in hardware.files.warm_start."
-    load_weights_only: bool = Field(example=False)
-    "Load only the weights from the checkpoint, not the optimiser state."
-    transfer_learning: bool = Field(example=False)
-    "Flag to activate transfer learning mode when loading a checkpoint."
-    submodules_to_freeze: list[str] = Field(example=["processor"])
-    "List of submodules to freeze during transfer learning."
     deterministic: bool = Field(default=False)
     "This flag sets the torch.backends.cudnn.deterministic flag. Might be slower, but ensures reproducibility."
     precision: str = Field(default="16-mixed")
@@ -357,6 +353,10 @@ class BaseTrainingSchema(BaseModel):
     "Optimizer configuration."
     metrics: list[str]
     "List of metrics"
+    model_modifier: Union[dict, None] = Field(default=None)
+    "Model modifier configuration for weight loading, freezing, and fine-tuning."
+    checkpoint_loading: Union[dict, None] = Field(default=None)
+    "Checkpoint loading configuration for initializing model weights from saved checkpoints."
 
 
 class ForecasterSchema(BaseTrainingSchema):

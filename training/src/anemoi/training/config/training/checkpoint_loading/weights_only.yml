@@ -1,0 +1,6 @@
+# Configuration for loading only model weights from checkpoint
+# This replaces the old WeightsInitModelModifier approach
+
+source: null  # Path to checkpoint file (local path, S3, HTTP, etc.)
+loader_type: "weights_only"
+strict: true  # Whether to require exact parameter matching

@@ -1,0 +1,6 @@
+# Configuration for loading weights with transfer learning (size mismatch handling)
+
+source: null  # Path to checkpoint file (local path, S3, HTTP, etc.)
+loader_type: "transfer_learning"
+strict: false  # Allow parameter mismatches
+skip_mismatched: true  # Skip parameters with shape mismatches
