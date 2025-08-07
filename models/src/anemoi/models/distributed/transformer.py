@@ -19,8 +19,7 @@ from anemoi.models.distributed.utils import get_memory_format
 
 
 def _alltoallwrapper(output_list: list, input_list: list, group: ProcessGroup):
-    """
-    Wrapper function for all_to_all across NCCL, MPI and Gloo backends.
+    """Wrapper function for all_to_all across NCCL, MPI and Gloo backends.
     There is no all_to_all primitive for the Gloo backend. In that case each
     process broadcasts its tensor asynchronously.
 
