@@ -8,39 +8,38 @@
 # nor does it submit to any jurisdiction.
 
 
-from __future__ import annotations
-
 import io
 import logging
 import os
 import re
 import sys
 import time
+from argparse import Namespace
+from collections.abc import Mapping
 from pathlib import Path
 from threading import Thread
-from typing import TYPE_CHECKING
 from typing import Any
 from typing import Literal
 from weakref import WeakValueDictionary
 
-from packaging.version import Version
+import mlflow
+from mlflow.tracking import MlflowClient
 from pytorch_lightning.loggers.mlflow import MLFlowLogger
 from pytorch_lightning.loggers.mlflow import _convert_params
 from pytorch_lightning.loggers.mlflow import _flatten_dict
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
+from typing_extensions import override
 
-from anemoi.training.diagnostics.mlflow.auth import TokenAuth
+from anemoi.training.diagnostics.mlflow.utils import FixedLengthSet
 from anemoi.training.diagnostics.mlflow.utils import clean_config_params
 from anemoi.training.diagnostics.mlflow.utils import expand_iterables
-from anemoi.training.diagnostics.mlflow.utils import health_check
-
-if TYPE_CHECKING:
-    from argparse import Namespace
-
-    import mlflow
-    from mlflow.tracking import MlflowClient
+from anemoi.utils.mlflow.auth import TokenAuth
+from anemoi.utils.mlflow.utils import health_check
 
 LOGGER = logging.getLogger(__name__)
+
+MAX_PARAMS_LENGTH = 2000
+LOG_MODEL = False
 
 
 class LogsMonitor:
@@ -208,7 +207,7 @@ class LogsMonitor:
         # split lines and keep \n at the end of each line
         lines = [e + b"\n" for e in data.split(b"\n") if e]
 
-        ansi_csi_re = re.compile(b"\001?\033\\[((?:\\d|;)*)([a-dA-D])\002?")  # noqa: RUF039
+        ansi_csi_re = re.compile(b"\001?\033\\[((?:\\d|;)*)([a-dA-D])\002?")
 
         def _handle_csi(line: bytes) -> bytes:
             # removes the cursor up and down symbols from the line
@@ -263,6 +262,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
         authentication: bool | None = None,
         log_hyperparams: bool | None = True,
         on_resume_create_child: bool | None = True,
+        max_params_length: int | None = MAX_PARAMS_LENGTH,
     ) -> None:
         """Initialize the AnemoiMLflowLogger.
 
@@ -298,6 +298,8 @@ class AnemoiMLflowLogger(MLFlowLogger):
             Whether to log hyperparameters, by default True
         on_resume_create_child: bool | None, optional
             Whether to create a child run when resuming a run, by default False
+        max_params_length: int | None, optional
+            Maximum number of params to be logged to Mlflow
         """
         self._resumed = resumed
         self._forked = forked
@@ -305,6 +307,8 @@ class AnemoiMLflowLogger(MLFlowLogger):
 
         self._fork_run_server2server = None
         self._parent_run_server2server = None
+        self._parent_dry_run = False
+        self._max_params_length = max_params_length
 
         enabled = authentication and not offline
         self.auth = TokenAuth(tracking_uri, enabled=enabled)
@@ -345,6 +349,20 @@ class AnemoiMLflowLogger(MLFlowLogger):
             prefix=prefix,
             run_id=run_id,
         )
+
+        # Track logged metrics to prevent duplicate logs
+        # 2000 has been chosen as this should contain metrics form many steps
+        self._logged_metrics = FixedLengthSet(maxlen=2000)  # Track (key, step)
+
+    def _check_dry_run(self, run: mlflow.entities.Run) -> None:
+        """Check if the parent run is a dry run.
+
+        A dry run is a run that is used as template base run
+        but do not contain any checkpoints.
+        """
+        dry_run = run.data.tags.get("dry_run", "False") == "True"
+        LOGGER.info("Parent run is a Dry Run: %s", dry_run)
+        self._parent_dry_run = dry_run
 
     def _check_server2server_lineage(self, run: mlflow.entities.Run) -> bool:
         """Address lineage and metadata for server2server runs.
@@ -398,6 +416,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
                 parent_run = mlflow_client.get_run(parent_run_id)
                 run_name = parent_run.info.run_name
                 self._check_server2server_lineage(parent_run)
+                self._check_dry_run(parent_run)
                 tags["mlflow.parentRunId"] = parent_run_id
                 tags["resumedRun"] = "True"  # tags can't take boolean values
             # This block is used when a run ID is specified without child runs option activated
@@ -406,6 +425,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
                 run = mlflow_client.get_run(run_id)
                 run_name = run.info.run_name
                 self._check_server2server_lineage(run)
+                self._check_dry_run(parent_run)
                 mlflow_client.update_run(run_id=run_id, status="RUNNING")
                 tags["resumedRun"] = "True"
             # This block is used when a run is forked and an existing run ID is specified
@@ -415,6 +435,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
                 parent_run = mlflow_client.get_run(parent_run_id)
                 run_name = parent_run.info.run_name
                 self._check_server2server_lineage(parent_run)
+                self._check_dry_run(parent_run)
                 tags["mlflow.parentRunId"] = config_run_id  # We want to be linked to the main run ID
                 tags["resumedRun"] = "True"  # We want to be linked to the main run ID
                 tags["forkedRun"] = "True"  # This is a forked run
@@ -426,6 +447,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
                 tags["forkedRunId"] = parent_run_id
                 run = mlflow_client.get_run(parent_run_id)
                 self._check_server2server_lineage(run)
+                self._check_dry_run(run)
 
         if not run_name:
             import uuid
@@ -437,11 +459,24 @@ class AnemoiMLflowLogger(MLFlowLogger):
 
         return run_id, run_name, tags
 
+    @override
     @property
     def experiment(self) -> MLFlowLogger.experiment:
         if rank_zero_only.rank == 0:
             self.auth.authenticate()
         return super().experiment
+
+    @override
+    @rank_zero_only
+    def log_metrics(self, metrics: Mapping[str, float], step: int | None = None) -> None:
+        cleaned_metrics = metrics.copy()
+        for k in metrics:
+            metric_id = (k, step or 0)
+            if metric_id in self._logged_metrics:
+                cleaned_metrics.pop(k)
+                continue
+            self._logged_metrics.add(metric_id)
+        return super().log_metrics(metrics=cleaned_metrics, step=step)
 
     @rank_zero_only
     def log_system_metrics(self) -> None:
@@ -474,6 +509,10 @@ class AnemoiMLflowLogger(MLFlowLogger):
                     LOGGER.warning("Failed to init AMD GPU Monitor: %s", e)
 
         mlflow.enable_system_metrics_logging()
+        # https://mlflow.org/docs/latest/system-metrics/
+        # By default, system metrics are sampled every 10 seconds
+        # we choose to update this to 100 - system metrics are logged every 1 min 30 seconds
+        mlflow.set_system_metrics_sampling_interval(interval=100)
         system_monitor = CustomSystemMetricsMonitor(
             self.run_id,
             resume_logging=self.run_id is not None,
@@ -521,6 +560,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
             params,
             expand_keys=expand_keys,
             log_hyperparams=self._flag_log_hparams,
+            max_params_length=self._max_params_length,
         )
 
     @rank_zero_only
@@ -545,6 +585,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
         expand_keys: list[str] | None = None,
         log_hyperparams: bool | None = True,
         clean_params: bool = True,
+        max_params_length: int | None = MAX_PARAMS_LENGTH,
     ) -> None:
         """Log hyperparameters to MLflow server.
 
@@ -566,6 +607,8 @@ class AnemoiMLflowLogger(MLFlowLogger):
             by default None.
         log_hyperparams : bool | None, optional
             Whether to log hyperparameters, by default True.
+        max_params_length: int | None, optional
+            Maximum number of params to be logged to Mlflow
         """
         if log_hyperparams:
             params = _convert_params(params)
@@ -577,10 +620,10 @@ class AnemoiMLflowLogger(MLFlowLogger):
             import mlflow
             from mlflow.entities import Param
 
-            truncation_length = 250
-
-            if Version(mlflow.VERSION) >= Version("1.28.0"):
-                truncation_length = 500
+            try:  # Check maximum param value length is available and use it
+                truncation_length = mlflow.utils.validation.MAX_PARAM_VAL_LENGTH
+            except AttributeError:  # Fallback (in case of MAX_PARAM_VAL_LENGTH not available)
+                truncation_length = 250  # Historical default value
 
             AnemoiMLflowLogger.log_hyperparams_as_mlflow_artifact(client=client, run_id=run_id, params=params)
 
@@ -600,6 +643,15 @@ class AnemoiMLflowLogger(MLFlowLogger):
             )  # Flatten dict with '.' to not break API queries
             if clean_params:
                 expanded_params = clean_config_params(expanded_params)
+
+            LOGGER.info("Logging %s parameters", len(expanded_params))
+            if len(expanded_params) > max_params_length:
+                msg = (
+                    f"Too many params: {len(expanded_params)} > {max_params_length}",
+                    "Please revisit the fields being logged and add redundant or irrelevant "
+                    "ones to the clean_config_params function.",
+                )
+                raise ValueError(msg)
 
             # Truncate parameter values.
             params_list = [Param(key=k, value=str(v)[:truncation_length]) for k, v in expanded_params.items()]

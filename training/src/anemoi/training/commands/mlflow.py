@@ -8,10 +8,9 @@
 # nor does it submit to any jurisdiction.
 
 
-from __future__ import annotations
-
 import argparse
 import getpass
+import json
 import logging
 from pathlib import Path
 
@@ -123,7 +122,7 @@ class MlFlow(Command):
         )
         prepare.add_argument(
             "--output",
-            default="./mlflow_run_id.yaml",
+            default="./mlflow_metadata.json",
             type=Path,
             help="Output file path.",
         )
@@ -136,7 +135,7 @@ class MlFlow(Command):
     @staticmethod
     def run(args: argparse.Namespace) -> None:
         if args.subcommand == "login":
-            from anemoi.training.diagnostics.mlflow.auth import TokenAuth
+            from anemoi.utils.mlflow.auth import TokenAuth
 
             url = args.url or TokenAuth.load_config().get("url")
 
@@ -148,11 +147,11 @@ class MlFlow(Command):
             return
 
         if args.subcommand == "sync":
-            from anemoi.training.diagnostics.mlflow.utils import health_check
             from anemoi.training.utils.mlflow_sync import MlFlowSync
+            from anemoi.utils.mlflow.utils import health_check
 
             if args.authentication:
-                from anemoi.training.diagnostics.mlflow.auth import TokenAuth
+                from anemoi.utils.mlflow.auth import TokenAuth
 
                 auth = TokenAuth(url=args.destination)
                 auth.login()
@@ -177,8 +176,8 @@ class MlFlow(Command):
             from hydra import compose
             from hydra import initialize
 
-            from anemoi.training.diagnostics.mlflow.client import AnemoiMlflowClient
             from anemoi.training.diagnostics.mlflow.logger import AnemoiMLflowLogger
+            from anemoi.utils.mlflow.client import AnemoiMlflowClient
 
             # Load configuration and resolve schema
             with initialize(version_base=None, config_path="./"):
@@ -212,6 +211,7 @@ class MlFlow(Command):
             # Log metadata to MLflow server
             mlflow.set_tracking_uri(config.diagnostics.log.mlflow.tracking_uri)
             client.set_tag(run_id, "mlflow.user", args.owner)
+            client.set_tag(run_id, "dry_run", True)
             client.set_tag(run_id, "mlflow.source.name", "anemoi-training mlflow prepare")
             AnemoiMLflowLogger.log_hyperparams_in_mlflow(
                 client,
@@ -224,8 +224,14 @@ class MlFlow(Command):
 
             # Dump run ID in output file
             LOGGER.info("Saving run id in file in %s.", args.output)
-            with args.output.open("w") as f:
-                f.write(run_id)
+            mlflow_metadata = {
+                "run_id": run_id,
+                "experiment_id": experiment_id,
+                "experiment_name": config.diagnostics.log.mlflow.experiment_name,
+                "tracking_uri": config.diagnostics.log.mlflow.tracking_uri,
+            }
+            with Path.open(args.output, "w") as fp:
+                json.dump(mlflow_metadata, fp)
 
             return
         return

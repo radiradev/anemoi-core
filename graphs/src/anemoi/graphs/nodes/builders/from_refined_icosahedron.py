@@ -7,7 +7,6 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
-from __future__ import annotations
 
 import logging
 from abc import ABC
@@ -18,10 +17,7 @@ import numpy as np
 import torch
 from torch_geometric.data import HeteroData
 
-from anemoi.graphs.generate.hex_icosahedron import create_hex_nodes
 from anemoi.graphs.generate.masks import KNNAreaMaskBuilder
-from anemoi.graphs.generate.tri_icosahedron import create_stretched_tri_nodes
-from anemoi.graphs.generate.tri_icosahedron import create_tri_nodes
 from anemoi.graphs.nodes.builders.base import BaseNodeBuilder
 
 LOGGER = logging.getLogger(__name__)
@@ -107,6 +103,8 @@ class TriNodes(IcosahedralNodes):
     multi_scale_edge_cls: str = "anemoi.graphs.generate.multi_scale_edges.TriNodesEdgeBuilder"
 
     def create_nodes(self) -> tuple[nx.Graph, np.ndarray, list[int]]:
+        from anemoi.graphs.generate.tri_icosahedron import create_tri_nodes
+
         return create_tri_nodes(resolution=max(self.resolutions))
 
 
@@ -119,6 +117,8 @@ class HexNodes(IcosahedralNodes):
     multi_scale_edge_cls: str = "anemoi.graphs.generate.multi_scale_edges.HexNodesEdgeBuilder"
 
     def create_nodes(self) -> tuple[nx.Graph, np.ndarray, list[int]]:
+        from anemoi.graphs.generate.hex_icosahedron import create_hex_nodes
+
         return create_hex_nodes(resolution=max(self.resolutions))
 
 
@@ -136,6 +136,8 @@ class LimitedAreaTriNodes(LimitedAreaIcosahedralNodes):
     multi_scale_edge_cls: str = "anemoi.graphs.generate.multi_scale_edges.TriNodesEdgeBuilder"
 
     def create_nodes(self) -> tuple[nx.Graph, np.ndarray, list[int]]:
+        from anemoi.graphs.generate.tri_icosahedron import create_tri_nodes
+
         return create_tri_nodes(resolution=max(self.resolutions), area_mask_builder=self.area_mask_builder)
 
 
@@ -153,6 +155,8 @@ class LimitedAreaHexNodes(LimitedAreaIcosahedralNodes):
     multi_scale_edge_cls: str = "anemoi.graphs.generate.multi_scale_edges.HexNodesEdgeBuilder"
 
     def create_nodes(self) -> tuple[nx.Graph, np.ndarray, list[int]]:
+        from anemoi.graphs.generate.hex_icosahedron import create_hex_nodes
+
         return create_hex_nodes(resolution=max(self.resolutions), area_mask_builder=self.area_mask_builder)
 
 
@@ -196,6 +200,8 @@ class StretchedTriNodes(StretchedIcosahedronNodes):
     multi_scale_edge_cls: str = "anemoi.graphs.generate.multi_scale_edges.StretchedTriNodesEdgeBuilder"
 
     def create_nodes(self) -> tuple[nx.Graph, np.ndarray, list[int]]:
+        from anemoi.graphs.generate.tri_icosahedron import create_stretched_tri_nodes
+
         return create_stretched_tri_nodes(
             base_resolution=self.global_resolution,
             lam_resolution=max(self.resolutions),
