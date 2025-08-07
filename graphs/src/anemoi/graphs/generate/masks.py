@@ -7,7 +7,6 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
-from __future__ import annotations
 
 import logging
 
@@ -59,7 +58,7 @@ class KNNAreaMaskBuilder:
             self.reference_node_name in graph.node_types
         ), f'Reference node "{self.reference_node_name}" not found in the graph.'
 
-        coords_rad = graph[self.reference_node_name].x.numpy()
+        coords_rad = graph[self.reference_node_name].x
         if self.mask_attr_name is not None:
             assert (
                 self.mask_attr_name in graph[self.reference_node_name].node_attrs()
@@ -67,7 +66,7 @@ class KNNAreaMaskBuilder:
             mask = graph[self.reference_node_name][self.mask_attr_name].squeeze()
             coords_rad = coords_rad[mask]
 
-        return coords_rad
+        return coords_rad.cpu().numpy()
 
     def fit_coords(self, coords_rad: np.ndarray):
         """Fit the KNN model to the coordinates in radians."""

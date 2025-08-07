@@ -7,29 +7,28 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
-from __future__ import annotations
 
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
 
+import pytorch_lightning as pl
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
 
-if TYPE_CHECKING:
-    import pytorch_lightning as pl
+from anemoi.training.schemas.base_schema import BaseSchema
+from anemoi.training.schemas.base_schema import convert_to_omegaconf
 
 LOGGER = logging.getLogger(__name__)
 
 
-def get_mlflow_logger(config: DictConfig) -> None:
+def get_mlflow_logger(config: BaseSchema) -> None:
     if not config.diagnostics.log.mlflow.enabled:
         LOGGER.debug("MLFlow logging is disabled.")
         return None
 
     # 35 retries allow for 1 hour of server downtime
-    http_max_retries = config.diagnostics.log.mlflow.get("http_max_retries", 35)
+    http_max_retries = config.diagnostics.log.mlflow.http_max_retries
 
     os.environ["MLFLOW_HTTP_REQUEST_MAX_RETRIES"] = str(http_max_retries)
     os.environ["_MLFLOW_HTTP_REQUEST_MAX_RETRIES_LIMIT"] = str(http_max_retries + 1)
@@ -37,6 +36,8 @@ def get_mlflow_logger(config: DictConfig) -> None:
     os.environ["MLFLOW_HTTP_REQUEST_BACKOFF_FACTOR"] = "2"
     os.environ["MLFLOW_HTTP_REQUEST_BACKOFF_JITTER"] = "1"
 
+    from anemoi.training.diagnostics.mlflow.logger import LOG_MODEL
+    from anemoi.training.diagnostics.mlflow.logger import MAX_PARAMS_LENGTH
     from anemoi.training.diagnostics.mlflow.logger import AnemoiMLflowLogger
 
     resumed = config.training.run_id is not None
@@ -53,7 +54,7 @@ def get_mlflow_logger(config: DictConfig) -> None:
 
     if (resumed or forked) and (offline):  # when resuming or forking offline -
         # tracking_uri = ${hardware.paths.logs.mlflow}
-        tracking_uri = save_dir
+        tracking_uri = str(save_dir)
     # create directory if it does not exist
     Path(config.hardware.paths.logs.mlflow).mkdir(parents=True, exist_ok=True)
 
@@ -69,6 +70,10 @@ def get_mlflow_logger(config: DictConfig) -> None:
         )
         log_hyperparams = False
 
+    max_params_length = getattr(config.diagnostics.log.mlflow, "max_params_length", MAX_PARAMS_LENGTH)
+    LOGGER.info("Maximum number of params allowed to be logged is: %s", max_params_length)
+    log_model = getattr(config.diagnostics.log.mlflow, "log_model", LOG_MODEL)
+
     logger = AnemoiMLflowLogger(
         experiment_name=config.diagnostics.log.mlflow.experiment_name,
         project_name=config.diagnostics.log.mlflow.project_name,
@@ -77,19 +82,19 @@ def get_mlflow_logger(config: DictConfig) -> None:
         run_name=config.diagnostics.log.mlflow.run_name,
         run_id=config.training.run_id,
         fork_run_id=config.training.fork_run_id,
-        log_model=config.diagnostics.log.mlflow.log_model,
+        log_model=log_model,
         offline=offline,
         resumed=resumed,
         forked=forked,
         log_hyperparams=log_hyperparams,
         authentication=config.diagnostics.log.mlflow.authentication,
         on_resume_create_child=config.diagnostics.log.mlflow.on_resume_create_child,
+        max_params_length=max_params_length,
     )
-    config_params = OmegaConf.to_container(config, resolve=True)
-
+    config_params = OmegaConf.to_container(convert_to_omegaconf(config), resolve=True)
     logger.log_hyperparams(
         config_params,
-        expand_keys=config.diagnostics.log.mlflow.get("expand_hyperparams", ["config"]),
+        expand_keys=config.diagnostics.log.mlflow.expand_hyperparams,
     )
 
     if config.diagnostics.log.mlflow.terminal:
@@ -110,7 +115,7 @@ def get_tensorboard_logger(config: DictConfig) -> pl.loggers.TensorBoardLogger |
 
     Returns
     -------
-    Optional[pl.loggers.TensorBoardLogger]
+    pl.loggers.TensorBoardLogger | None
         Logger object, or None
 
     """
@@ -138,7 +143,7 @@ def get_wandb_logger(config: DictConfig, model: pl.LightningModule) -> pl.logger
 
     Returns
     -------
-    Optional[pl.loggers.WandbLogger]
+    pl.loggers.WandbLogger | None
         Logger object
 
     Raises

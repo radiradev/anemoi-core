@@ -1,6 +1,6 @@
 data: ???
-grids: ???
 output: ???
+truncation: null
 logs:
   base: ${hardware.paths.output}logs/
   wandb: ${hardware.paths.logs.base}
@@ -10,3 +10,4 @@ checkpoints: ${hardware.paths.output}checkpoint/
 plots: ${hardware.paths.output}plots/
 profiler: ${hardware.paths.output}profiler/
 graph: ${hardware.paths.output}graphs/
+warm_start: null

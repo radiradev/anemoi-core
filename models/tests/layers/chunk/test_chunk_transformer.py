@@ -9,24 +9,24 @@
 
 
 import pytest
-from hydra.utils import instantiate
 
 from anemoi.models.layers.block import TransformerProcessorBlock
 from anemoi.models.layers.chunk import TransformerProcessorChunk
 from anemoi.models.layers.utils import load_layer_kernels
 
 
-class TestGraphTransformerProcessorChunk:
+class TestTransformerProcessorChunk:
     @pytest.fixture
     def init(self):
         num_channels = 512
         num_layers = 3
         num_heads: int = 16
         mlp_hidden_ratio: int = 4
-        activation: str = "GELU"
         window_size: int = 13
         dropout_p: float = 0.1
-        layer_kernels = instantiate(load_layer_kernels())
+        layer_kernels = load_layer_kernels()
+        attention_implementation = "scaled_dot_product_attention"
+        qk_norm = True
 
         # num_heads must be evenly divisible by num_channels for MHSA
         return (
@@ -35,9 +35,10 @@ class TestGraphTransformerProcessorChunk:
             layer_kernels,
             num_heads,
             mlp_hidden_ratio,
-            activation,
             window_size,
             dropout_p,
+            attention_implementation,
+            qk_norm,
         )
 
     @pytest.fixture
@@ -48,9 +49,10 @@ class TestGraphTransformerProcessorChunk:
             layer_kernels,
             num_heads,
             mlp_hidden_ratio,
-            activation,
             window_size,
             dropout_p,
+            attention_implementation,
+            qk_norm,
         ) = init
         return TransformerProcessorChunk(
             num_channels=num_channels,
@@ -58,9 +60,10 @@ class TestGraphTransformerProcessorChunk:
             layer_kernels=layer_kernels,
             num_heads=num_heads,
             mlp_hidden_ratio=mlp_hidden_ratio,
-            activation=activation,
+            qk_norm=qk_norm,
             window_size=window_size,
             dropout_p=dropout_p,
+            attention_implementation=attention_implementation,
         )
 
     def test_all_blocks(self, processor_chunk):

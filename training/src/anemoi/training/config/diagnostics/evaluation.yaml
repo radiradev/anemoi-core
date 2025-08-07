@@ -1,8 +1,12 @@
 ---
 defaults:
   - plot: detailed
-  - callbacks: pretraining
+  - callbacks: placeholder
   - benchmark_profiler: detailed
+
+# another alternative if you don't have any callbacks is to remove it from the
+# defaults list and just use
+# callbacks: []
 
 debug:
   # this will detect and trace back NaNs / Infs etc. but will slow down training
@@ -42,17 +46,18 @@ log:
     enabled: False
     offline: False
     authentication: False
-    log_model: False
     tracking_uri: ???
     experiment_name: 'anemoi-debug'
     project_name: 'Anemoi'
-    system: True
+    system: False
     terminal: True
     run_name: null # If set to null, the run name will be the a random UUID
     on_resume_create_child: True
     expand_hyperparams: # Which keys in hyperparams to expand
       - config
-  interval: 100
+    http_max_retries: 35
+    max_params_length: 2000
+  interval: 100 # passed to trainer.log_every_n_steps
 
 enable_progress_bar: True
 print_memory_summary: False

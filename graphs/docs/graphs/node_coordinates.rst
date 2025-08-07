@@ -20,8 +20,9 @@ a file using the following methods:
 .. toctree::
    :maxdepth: 1
 
-   node_coordinates/zarr_dataset
+   node_coordinates/anemoi_dataset
    node_coordinates/npz_file
+   node_coordinates/reduced_gaussian
    node_coordinates/icon_mesh
    node_coordinates/text_file
    node_coordinates/latlon_arrays

@@ -7,18 +7,14 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
-from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
+from omegaconf import DictConfig
 from pytorch_lightning.callbacks import LearningRateMonitor as pl_LearningRateMonitor
 from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging as pl_StochasticWeightAveraging
 
 LOGGER = logging.getLogger(__name__)
-
-if TYPE_CHECKING:
-    from omegaconf import DictConfig
 
 
 class LearningRateMonitor(pl_LearningRateMonitor):
@@ -42,7 +38,7 @@ class StochasticWeightAveraging(pl_StochasticWeightAveraging):
         config: DictConfig,
         swa_lrs: int | None = None,
         swa_epoch_start: int | None = None,
-        annealing_epoch: int | None = None,
+        annealing_epochs: int | None = None,
         annealing_strategy: str | None = None,
         device: str | None = None,
         **kwargs,
@@ -57,7 +53,7 @@ class StochasticWeightAveraging(pl_StochasticWeightAveraging):
             Stochastic Weight Averaging Learning Rate, by default None
         swa_epoch_start : int, optional
             Epoch start, by default 0.75 * config.training.max_epochs
-        annealing_epoch : int, optional
+        annealing_epochs : int, optional
             Annealing Epoch, by default 0.25 * config.training.max_epochs
         annealing_strategy : str, optional
             Annealing Strategy, by default 'cos'
@@ -69,7 +65,7 @@ class StochasticWeightAveraging(pl_StochasticWeightAveraging):
             int(0.75 * config.training.max_epochs),
             config.training.max_epochs - 1,
         )
-        kwargs["annealing_epoch"] = annealing_epoch or max(int(0.25 * config.training.max_epochs), 1)
+        kwargs["annealing_epochs"] = annealing_epochs or max(int(0.25 * config.training.max_epochs), 1)
         kwargs["annealing_strategy"] = annealing_strategy or "cos"
         kwargs["device"] = device
 

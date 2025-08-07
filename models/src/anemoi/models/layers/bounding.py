@@ -17,6 +17,7 @@ import torch
 from torch import nn
 
 from anemoi.models.data_indices.tensor import InputTensorIndex
+from anemoi.models.layers.activations import leaky_hardtanh
 
 
 class BaseBounding(nn.Module, ABC):
@@ -82,6 +83,14 @@ class ReluBounding(BaseBounding):
         return x
 
 
+class LeakyReluBounding(BaseBounding):
+    """Initializes the bounding with a Leaky ReLU activation / zero clamping."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x[..., self.data_index] = torch.nn.functional.leaky_relu(x[..., self.data_index])
+        return x
+
+
 class NormalizedReluBounding(BaseBounding):
     """Bounding variable with a ReLU activation and customizable normalized thresholds."""
 
@@ -135,23 +144,28 @@ class NormalizedReluBounding(BaseBounding):
                 "The length of the min_val list must match the number of variables in NormalizedReluBounding."
             )
 
-        self.norm_min_val = torch.zeros(len(variables))
+        # Create data index for the variables to be bounded in order from configuration
+        self.data_index = torch.tensor([name_to_index[var] for var in variables], dtype=self.data_index.dtype)
+        # Compute normalized min values
+        norm_min_val = torch.zeros(len(variables))
         for ii, variable in enumerate(variables):
             stat_index = self.name_to_index_stats[variable]
             if self.normalizer[ii] == "mean-std":
                 mean = self.statistics["mean"][stat_index]
                 std = self.statistics["stdev"][stat_index]
-                self.norm_min_val[ii] = (min_val[ii] - mean) / std
+                norm_min_val[ii] = (min_val[ii] - mean) / std
             elif self.normalizer[ii] == "min-max":
                 min_stat = self.statistics["min"][stat_index]
                 max_stat = self.statistics["max"][stat_index]
-                self.norm_min_val[ii] = (min_val[ii] - min_stat) / (max_stat - min_stat)
+                norm_min_val[ii] = (min_val[ii] - min_stat) / (max_stat - min_stat)
             elif self.normalizer[ii] == "max":
                 max_stat = self.statistics["max"][stat_index]
-                self.norm_min_val[ii] = min_val[ii] / max_stat
+                norm_min_val[ii] = min_val[ii] / max_stat
             elif self.normalizer[ii] == "std":
                 std = self.statistics["stdev"][stat_index]
-                self.norm_min_val[ii] = min_val[ii] / std
+                norm_min_val[ii] = min_val[ii] / std
+        # register the normalized min values as a buffer to ensure they are moved to the correct device
+        self.register_buffer("norm_min_val", norm_min_val)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Applies the ReLU activation with the normalized minimum values to the input tensor.
@@ -166,9 +180,18 @@ class NormalizedReluBounding(BaseBounding):
         torch.Tensor
             The processed tensor with bounding applied.
         """
-        self.norm_min_val = self.norm_min_val.to(x.device)
         x[..., self.data_index] = (
             torch.nn.functional.relu(x[..., self.data_index] - self.norm_min_val) + self.norm_min_val
+        )
+        return x
+
+
+class NormalizedLeakyReluBounding(NormalizedReluBounding):
+    """Initializes the bounding with a Leaky ReLU activation and customizable normalized thresholds."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x[..., self.data_index] = (
+            torch.nn.functional.leaky_relu(x[..., self.data_index] - self.norm_min_val) + self.norm_min_val
         )
         return x
 
@@ -186,6 +209,10 @@ class HardtanhBounding(BaseBounding):
         The minimum value for the HardTanh activation.
     max_val : float
         The maximum value for the HardTanh activation.
+    statistics : dict, optional
+        A dictionary containing the statistics of the variables.
+    name_to_index_stats : dict, optional
+        A dictionary mapping the variable names to their corresponding indices in the statistics dictionary.
     """
 
     def __init__(
@@ -209,7 +236,15 @@ class HardtanhBounding(BaseBounding):
         return x
 
 
-class FractionBounding(HardtanhBounding):
+class LeakyHardtanhBounding(HardtanhBounding):
+    """Initializes the bounding with a Leaky HardTanh activation."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x[..., self.data_index] = leaky_hardtanh(x[..., self.data_index], min_val=self.min_val, max_val=self.max_val)
+        return x
+
+
+class FractionBounding(BaseBounding):
     """Initializes the FractionBounding with specified parameters.
 
     Parameters
@@ -225,6 +260,10 @@ class FractionBounding(HardtanhBounding):
     total_var : str
         A string representing a variable from which a secondary variable is derived. For
         example, in the case of convective precipitation (Cp), total_var = Tp (total precipitation).
+    statistics : dict, optional
+        A dictionary containing the statistics of the variables.
+    name_to_index_stats : dict, optional
+        A dictionary mapping the variable names to their corresponding indices in the statistics dictionary.
     """
 
     def __init__(
@@ -238,12 +277,27 @@ class FractionBounding(HardtanhBounding):
         statistics: Optional[dict] = None,
         name_to_index_stats: Optional[dict] = None,
     ) -> None:
-        super().__init__(variables=variables, name_to_index=name_to_index, min_val=min_val, max_val=max_val)
+        super().__init__(variables=variables, name_to_index=name_to_index)
+        self.min_val = min_val
+        self.max_val = max_val
         self.total_variable = self._create_index(variables=[total_var])
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Apply the HardTanh bounding  to the data_index variables
-        x = super().forward(x)
+        x[..., self.data_index] = torch.nn.functional.hardtanh(
+            x[..., self.data_index], min_val=self.min_val, max_val=self.max_val
+        )
+        # Calculate the fraction of the total variable
+        x[..., self.data_index] *= x[..., self.total_variable]
+        return x
+
+
+class LeakyFractionBounding(FractionBounding):
+    """Initializes the bounding with a Leaky HardTanh activation and a fraction of the total variable."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Apply the LeakyHardTanh bounding  to the data_index variables
+        x[..., self.data_index] = leaky_hardtanh(x[..., self.data_index], min_val=self.min_val, max_val=self.max_val)
         # Calculate the fraction of the total variable
         x[..., self.data_index] *= x[..., self.total_variable]
         return x
