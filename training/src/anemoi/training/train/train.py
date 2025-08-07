@@ -215,9 +215,7 @@ class AnemoiTrainer:
         # Load checkpoint weights if configured (before applying model modifiers)
         model = self._load_checkpoint_if_configured(model)
 
-        model = self.model_modifier.process(model, self.config)
-
-        return model
+        return self.model_modifier.process(model, self.config)
 
     def _load_checkpoint_if_configured(self, model: Any) -> Any:
         """Load checkpoint weights if checkpoint_loading is configured."""
@@ -233,7 +231,9 @@ class AnemoiTrainer:
         from anemoi.training.utils.model_loading import load_model_from_checkpoint
 
         LOGGER.info(
-            "Loading checkpoint from %s using %s loader", checkpoint_config.source, checkpoint_config.loader_type,
+            "Loading checkpoint from %s using %s loader",
+            checkpoint_config.source,
+            checkpoint_config.loader_type,
         )
 
         # Extract parameters from checkpoint config
@@ -243,14 +243,12 @@ class AnemoiTrainer:
         if hasattr(checkpoint_config, "skip_mismatched"):
             loader_kwargs["skip_mismatched"] = checkpoint_config.skip_mismatched
 
-        model = load_model_from_checkpoint(
+        return load_model_from_checkpoint(
             model=model,
             checkpoint_source=checkpoint_config.source,
             loader_type=checkpoint_config.loader_type,
             **loader_kwargs,
         )
-
-        return model
 
     @rank_zero_only
     def _get_mlflow_run_id(self) -> str:

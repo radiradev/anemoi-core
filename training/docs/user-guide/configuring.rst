@@ -423,3 +423,124 @@ error reported is not very intuitive and indeed hides the real issue. We
 will work on improving this on future releases, but mean time we
 recommend to double check the schemas and the config files to make sure
 they are correctly defined.
+
+********************
+ Checkpoint Loading
+********************
+
+Anemoi Training supports flexible checkpoint loading to initialize model
+weights from saved checkpoints. This system supports multiple sources
+and loading strategies.
+
+Configuration
+=============
+
+To configure checkpoint loading, add a ``checkpoint_loading`` section to
+your training config:
+
+.. code:: yaml
+
+   training:
+      checkpoint_loading:
+         source: "/path/to/checkpoint.ckpt"
+         loader_type: "weights_only"
+         strict: true
+
+Available Options
+=================
+
+-  **source**: Path or URL to checkpoint file (local, S3, HTTP, GCS,
+   Azure)
+-  **loader_type**: Strategy for loading ("weights_only",
+   "transfer_learning", "standard")
+-  **strict**: Whether to require exact parameter matching (optional)
+-  **skip_mismatched**: Skip parameters with shape mismatches (optional,
+   transfer learning only)
+
+Loader Types
+============
+
+**weights_only**
+   Load only model weights, ignore optimizer and scheduler states
+
+**transfer_learning**
+   Load weights with size mismatch handling for cross-model transfer
+
+**standard**
+   Full Lightning checkpoint loading (weights + optimizer + scheduler)
+
+Remote Checkpoints
+==================
+
+The system supports loading from various remote sources:
+
+.. code:: yaml
+
+   training:
+      checkpoint_loading:
+         # S3 bucket
+         source: "s3://my-bucket/models/checkpoint.ckpt"
+
+         # HTTP URL
+         source: "https://example.com/models/checkpoint.ckpt"
+
+         # Google Cloud Storage
+         source: "gs://my-bucket/models/checkpoint.ckpt"
+
+         # Azure Blob Storage
+         source: "azure://account.blob.core.windows.net/container/checkpoint.ckpt"
+
+*****************
+ Model Modifiers
+*****************
+
+Model modifiers allow you to transform models after loading (e.g.,
+freezing layers). These are applied after checkpoint loading if both are
+configured.
+
+Configuration
+=============
+
+.. code:: yaml
+
+   training:
+      model_modifier:
+         modifiers:
+            - _target_: "anemoi.training.train.modify.FreezingModelModifier"
+              submodules_to_freeze: ["encoder", "processor.0"]
+
+Available Modifiers
+===================
+
+**FreezingModelModifier**
+   Freeze specific submodules to exclude them from training
+
+**TransferLearningModelModifier**
+   Load weights with transfer learning (alternative to
+   checkpoint_loading)
+
+Combined Workflow
+=================
+
+A typical fine-tuning workflow combines checkpoint loading with
+freezing:
+
+.. code:: yaml
+
+   training:
+      # 1. Load pretrained weights
+      checkpoint_loading:
+         source: "/path/to/pretrained.ckpt"
+         loader_type: "transfer_learning"
+         strict: false
+         skip_mismatched: true
+
+      # 2. Freeze specific layers
+      model_modifier:
+         modifiers:
+            - _target_: "anemoi.training.train.modify.FreezingModelModifier"
+              submodules_to_freeze: ["encoder"]
+
+This workflow: 1. Loads pretrained weights with size mismatch handling
+2. Freezes the encoder to prevent overfitting 3. Allows only unfrozen
+layers to adapt during training

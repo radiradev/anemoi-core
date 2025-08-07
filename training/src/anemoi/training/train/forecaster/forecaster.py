@@ -419,8 +419,8 @@ class GraphForecaster(pl.LightningModule):
         ----------
         batch : torch.Tensor
             Batch to transfer
-        dataloader_idx : int
-            Dataloader index
+        _ : int
+            Dataloader index (unused)
 
         Returns
         -------
@@ -508,6 +508,8 @@ class GraphForecaster(pl.LightningModule):
             Ground truth (target).
         rollout_step: int
             Rollout step
+        grid_shard_slice : slice | None, optional
+            Grid shard slice for distributed computing
 
         Returns
         -------

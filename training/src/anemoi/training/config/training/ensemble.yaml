@@ -5,8 +5,14 @@ defaults:
 # resume or fork a training from a checkpoint last.ckpt or specified in hardware.files.warm_start
 run_id: null
 fork_run_id: null
-transfer_learning: False # activate to perform transfer learning
-load_weights_only: False # only load model weights, do not restore optimiser states etc.
+# For model modification (weight loading, freezing, fine-tuning), use model_modifier configuration
+# See examples in config/training/model_modifier/ directory
+# model_modifier:
+#   modifiers:
+#     - _target_: "anemoi.training.train.modify.TransferLearningModelModifier"
+#       checkpoint_source: "path/to/checkpoint.pt"
+#     - _target_: "anemoi.training.train.modify.FreezingModelModifier"
+#       submodules_to_freeze: ["encoder", "processor.0"]
 
 # run in deterministic mode ; slows down
 deterministic: False
@@ -124,5 +130,3 @@ lr:
 # Changes in per-gpu batch_size should come with a rescaling of the local_lr
 # in order to keep a constant global_lr
 # global_lr = local_lr * num_gpus_per_node * num_nodes / gpus_per_model
-
-submodules_to_freeze: []

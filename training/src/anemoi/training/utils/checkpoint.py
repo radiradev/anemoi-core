@@ -71,7 +71,7 @@ def save_inference_checkpoint(model: torch.nn.Module, metadata: dict, save_path:
 
 
 def transfer_learning_loading(model: torch.nn.Module, ckpt_path: Path | str) -> nn.Module:
-
+    """Load model with transfer learning compatibility."""
     # Load the checkpoint
     checkpoint = torch.load(ckpt_path, weights_only=False, map_location=model.device)
 
@@ -88,7 +88,7 @@ def transfer_learning_loading(model: torch.nn.Module, ckpt_path: Path | str) -> 
 
             del state_dict[key]  # Remove the mismatched key
 
-    # Load the filtered st-ate_dict into the model
+    # Load the filtered state_dict into the model
     model.load_state_dict(state_dict, strict=False)
     # Needed for data indices check
     model._ckpt_model_name_to_index = checkpoint["hyper_parameters"]["data_indices"].name_to_index
