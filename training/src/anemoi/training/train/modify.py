@@ -46,7 +46,7 @@ class FreezingModelModifier(ModelModifier):
         """
         self.submodules_to_freeze = submodules_to_freeze
 
-    def apply(self, model: torch.nn.Module) -> torch.nn.Module:
+    def apply(self, model: torch.nn.Module, config: DictConfig) -> torch.nn.Module:
         LOGGER.info("The following submodules will NOT be trained: %s", self.submodules_to_freeze)
         for module_name in self.submodules_to_freeze:
             self._freeze_submodule_by_name(model, module_name)
@@ -73,92 +73,50 @@ class FreezingModelModifier(ModelModifier):
                 self._freeze_submodule_by_name(child, target_name)
 
 
-class WeightsInitModelModifier(ModelModifier):
-    """Modifier for initializing model weights."""
-
-    def __init__(self, checkpoint_path: str | Path) -> None:
-        """Initialize the weights initialization model modifier with a path.
-
-        Parameters
-        ----------
-        checkpoint_path : str | Path
-            The path to the checkpoint file for weight initialization.
-        """
-        self.checkpoint_path = checkpoint_path
-
-    def apply(self, model: torch.nn.Module) -> torch.nn.Module:
-        """Apply weight initialization to the model.
-
-        Parameters
-        ----------
-        model : torch.nn.Module
-            The model to initialize weights for
-
-        Returns
-        -------
-        torch.nn.Module
-            Model with initialized weights
-        """
-        model.load_from_checkpoint(
-            model.checkpoint_path,
-            config=model.config,
-            data_indices=model.data_indices,
-            graph_data=model.graph_data,
-            truncation_data=model.truncation_data,
-            metadata=model.metadata,
-            statistics=model.statistics,
-            statistics_tendencies=model.statistics_tendencies,
-            supporting_arrays=model.supporting_arrays,
-            strict=False,
-        )
-        LOGGER.info("Restoring only model weights from %s", model.last_checkpoint)
-        return model
-
-
 class TransferLearningModelModifier(ModelModifier):
     """Modifier for applying transfer learning from checkpoint."""
 
-    def __init__(self, checkpoint_path: Path | str) -> None:
-        """Initialize the transfer learning model modifier with a path.
+    def __init__(self, checkpoint_path: Path | str, strict: bool = False, skip_mismatched: bool = True) -> None:
+        """Initialize the transfer learning model modifier with a checkpoint path.
 
         Parameters
         ----------
         checkpoint_path : str | Path
             The path to the checkpoint file for transfer learning.
+        strict : bool, default False
+            Whether to strictly enforce that the keys in state_dict match
+        skip_mismatched : bool, default True
+            Whether to skip parameters with shape mismatches
         """
         self.checkpoint_path = checkpoint_path
+        self.strict = strict
+        self.skip_mismatched = skip_mismatched
 
-    def apply(self, model: torch.nn.Module) -> torch.nn.Module:
+    def apply(self, model: torch.nn.Module, config: DictConfig) -> torch.nn.Module:
         """Load weights from checkpoint with size mismatch handling.
 
         Parameters
         ----------
         model : torch.nn.Module
             The model to load weights into
+        config : DictConfig
+            Configuration object
 
         Returns
         -------
         torch.nn.Module
             Model with loaded weights
         """
-        # Load the checkpoint
-        checkpoint = torch.load(self.checkpoint_path, weights_only=False, map_location=model.device)
+        from anemoi.training.utils.model_loading import load_model_from_checkpoint
 
-        # Filter out layers with size mismatch
-        state_dict = checkpoint["state_dict"]
-        model_state_dict = model.state_dict()
-
-        for key in state_dict.copy():
-            if key in model_state_dict and state_dict[key].shape != model_state_dict[key].shape:
-                LOGGER.info("Skipping loading parameter: %s", key)
-                LOGGER.info("Checkpoint shape: %s", str(state_dict[key].shape))
-                LOGGER.info("Model shape: %s", str(model_state_dict[key].shape))
-                del state_dict[key]  # Remove the mismatched key
-
-        # Load the filtered state_dict into the model
-        model.load_state_dict(state_dict, strict=False)
-        model.weights_initialized = True
-        LOGGER.info("Transfer learning applied successfully from %s", self.checkpoint_path)
+        # Use #458's transfer learning loader
+        model = load_model_from_checkpoint(
+            model=model,
+            checkpoint_source=self.checkpoint_path,
+            loader_type="transfer_learning",
+            strict=self.strict,
+            skip_mismatched=self.skip_mismatched,
+        )
 
         return model
 
@@ -170,11 +128,17 @@ class ModelModifierApplier:
         """Apply enabled modifiers in correct order."""
         model = base_model
 
+        # Check if model_modifier config exists and has modifiers
+        if not hasattr(config.training, "model_modifier") or not hasattr(config.training.model_modifier, "modifiers"):
+            LOGGER.info("No model modifiers configured, returning model as-is")
+            return model
+
         model_modifier_order = (
             instantiate(model_modifier) for model_modifier in config.training.model_modifier.modifiers
         )
 
         for model_modifier in model_modifier_order:
-            model = model_modifier.apply(model)
+            LOGGER.info("Applying model modifier: %s", type(model_modifier).__name__)
+            model = model_modifier.apply(model, config)
 
         return model

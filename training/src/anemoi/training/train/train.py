@@ -76,7 +76,6 @@ class AnemoiTrainer:
             LOGGER.info("Skipping config validation.")
 
         self.start_from_checkpoint = bool(self.config.training.run_id) or bool(self.config.training.fork_run_id)
-        self.load_weights_only = self.config.training.load_weights_only
         self.model_modifier = ModelModifierApplier()
         self.parent_uuid = None
 
@@ -213,9 +212,42 @@ class AnemoiTrainer:
         model_task = get_class(self.config.training.model_task)
         model = model_task(**kwargs)
 
-        self.model_modifier.process(
-            model,
-            self.config,
+        # Load checkpoint weights if configured (before applying model modifiers)
+        model = self._load_checkpoint_if_configured(model)
+
+        model = self.model_modifier.process(model, self.config)
+
+        return model
+
+    def _load_checkpoint_if_configured(self, model: Any) -> Any:
+        """Load checkpoint weights if checkpoint_loading is configured."""
+        if not hasattr(self.config.training, "checkpoint_loading") or not self.config.training.checkpoint_loading:
+            return model
+
+        checkpoint_config = self.config.training.checkpoint_loading
+
+        if not checkpoint_config.source:
+            LOGGER.warning("checkpoint_loading configured but no source specified")
+            return model
+
+        from anemoi.training.utils.model_loading import load_model_from_checkpoint
+
+        LOGGER.info(
+            "Loading checkpoint from %s using %s loader", checkpoint_config.source, checkpoint_config.loader_type,
+        )
+
+        # Extract parameters from checkpoint config
+        loader_kwargs = {}
+        if hasattr(checkpoint_config, "strict"):
+            loader_kwargs["strict"] = checkpoint_config.strict
+        if hasattr(checkpoint_config, "skip_mismatched"):
+            loader_kwargs["skip_mismatched"] = checkpoint_config.skip_mismatched
+
+        model = load_model_from_checkpoint(
+            model=model,
+            checkpoint_source=checkpoint_config.source,
+            loader_type=checkpoint_config.loader_type,
+            **loader_kwargs,
         )
 
         return model
@@ -484,10 +516,13 @@ class AnemoiTrainer:
 
         LOGGER.debug("Starting training..")
 
+        # Skip PyTorch Lightning checkpoint loading if model weights were already loaded by ModelModifiers
+        # This matches the original load_weights_only=True behavior
+        skip_checkpoint_loading = getattr(self.model, "skip_checkpoint_loading", False)
         trainer.fit(
             self.model,
             datamodule=self.datamodule,
-            ckpt_path=None if (self.load_weights_only) else self.last_checkpoint,
+            ckpt_path=None if skip_checkpoint_loading else self.last_checkpoint,
         )
 
         if self.config.diagnostics.print_memory_summary:
