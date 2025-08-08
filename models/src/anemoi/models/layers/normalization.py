@@ -16,8 +16,6 @@ from torch import Size
 from torch import Tensor
 from torch import nn
 
-from anemoi.models.compile.conditional import ConditionalCompile
-
 LOG = logging.getLogger(__name__)
 
 
@@ -62,7 +60,6 @@ class ConditionalLayerNorm(nn.Module):
             nn.init.zeros_(self.bias.weight)
             nn.init.zeros_(self.bias.bias)
 
-    @ConditionalCompile(dynamic=True)
     def forward(self, x: Tensor, cond: Tensor) -> Tensor:
         """Conditional Layer Normalization.
 

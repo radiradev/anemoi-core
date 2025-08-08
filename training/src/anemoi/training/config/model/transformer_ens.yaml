@@ -102,13 +102,17 @@ attributes:
   - edge_dirs
   nodes: []
 
-# A list of elements to be compiled. these will be given the self.compile=True variable, which will then be
-# acted on by ConditionalCompile
-# TODO figure out how to pass env vars
+# Torch compile configuration
+# A list of modules present in the model, which will be compiled
+# You can optionally pass options to torch.compile with the 'options' key
 compile:
-  - anemoi.models.layers.normalization.ConditionalLayerNorm
-  - anemoi.models.layers.conv.GraphTransformerConv
-
+  - module: anemoi.models.layers.conv.GraphTransformerConv
+    options:
+      dynamic: false
+      #mode: max-autotune # an example of setting the compilation mode
+  - module: anemoi.models.layers.normalization.ConditionalLayerNorm
+    options:
+      dynamic: false
 
 # Bounding configuration
 bounding: #These are applied in order
