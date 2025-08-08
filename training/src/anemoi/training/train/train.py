@@ -181,24 +181,25 @@ class AnemoiTrainer:
         return truncation_data
 
     def set_compile_flags(self, compile_config):
-        #I guess min triton version is enforced by torch 2.6
+        # I guess min triton version is enforced by torch 2.6
         # TODO allow setting different requirements for each class
         import torch_geometric
+
         req = torch.__version__ >= "2.6" and torch_geometric.__version__ >= "2.6"
         if not req:
-            LOGGER.info(f"Minimum library requirements not met to compile, not compiling...")
+            LOGGER.info("Minimum library requirements not met to compile, not compiling...")
             return
 
         # Convert class paths to actual classes
         compile_classes = [get_class(entry.module) for entry in compile_config]
         LOGGER.info(f"The following modules will be compiled: {compile_config}")
-        default_compile_options={}
+        default_compile_options = {}
 
-        #Loop through all modules
+        # Loop through all modules
         for name, module in self.model.named_modules():
-            #If it is listed in the compile config
+            # If it is listed in the compile config
             if type(module) in compile_classes:
-                #retrieve its entry
+                # retrieve its entry
                 entry = next((entry for entry in compile_config if get_class(entry["module"]) == type(module)), None)
                 if entry is None:
                     # Somehow we dont have a match
@@ -209,7 +210,7 @@ class AnemoiTrainer:
                 LOGGER.debug(f"{module} will be compiled with the following options: {options}")
                 compiled_module = torch.compile(module, **options)
 
-                #Update the model with the new compiled module
+                # Update the model with the new compiled module
                 if name == "":
                     self.model = compiled_module
                 else:
@@ -542,10 +543,9 @@ class AnemoiTrainer:
             enable_progress_bar=self.config.diagnostics.enable_progress_bar,
         )
 
-        #cant have this inside model() or we get an infinite loop
+        # cant have this inside model() or we get an infinite loop
         if hasattr(self.config.model, "compile"):
             self.set_compile_flags(self.config.model.compile)
-
 
         LOGGER.debug("Starting training..")
 
