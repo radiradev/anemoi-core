@@ -108,6 +108,7 @@ validation_metrics:
 #  pl: [q, t, u, v, w, z]
 #
 # still works
+# param is an alias for the variable name in the case of no metadata.
 
 variable_groups:
   default: sfc
