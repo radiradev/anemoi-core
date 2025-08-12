@@ -31,11 +31,13 @@ def edge_index():
 
 
 def test_truncation_mapper_init(graph_data):
-    _ = TruncationMapper(graph_data, data_nodes="data", truncation_nodes="hidden", weight="edge_length")
+    _ = TruncationMapper(graph_data, data_nodes="data", truncation_nodes="hidden", edge_weight_attribute="edge_length")
 
 
 def test_forward(graph_data):
-    mapper = TruncationMapper(graph_data, data_nodes="data", truncation_nodes="hidden", weight="edge_length")
+    mapper = TruncationMapper(
+        graph_data, data_nodes="data", truncation_nodes="hidden", edge_weight_attribute="edge_length"
+    )
     x = torch.randn(5, 2, 2, 2, 3)  # (batch, dates, ensemble, grid, features)
     x_truncated = mapper.forward(x)
     assert x_truncated.shape == (5, 2, 2, 3)  # (batch, ensemble, coarse_grid, features)
