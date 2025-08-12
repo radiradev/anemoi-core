@@ -9,11 +9,11 @@ nodes:
   lowres:
     node_builder:
       _target_: anemoi.graphs.nodes.AnemoiDatasetNodes # options: AnemoiDatasetNodes, NPZFileNodes
-      dataset: ${data.data_handlers.lowres.dataset}
+      dataset: ${data.sources.lowres.dataset}
   hires:
     node_builder:
       _target_: anemoi.graphs.nodes.AnemoiDatasetNodes # options: AnemoiDatasetNodes, NPZFileNodes
-      dataset: ${data.data_handlers.hires.dataset}
+      dataset: ${data.sources.hires.dataset}
     attributes: ${graph.attributes.nodes}
   # Hidden nodes
   hidden:

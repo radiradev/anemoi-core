@@ -55,6 +55,6 @@ def convert_data_config(config) -> Dict:
 
 def get_config_dict(config: DictConfig) -> Dict:
     return dict(
-        data=convert_data_config(config["data"]["data_handlers"]),
+        data=convert_data_config(config["data"]["sources"]),
         sample=convert_sample_config(config["model"]["sample"]),
     )

@@ -9,12 +9,12 @@ nodes:
   regional:
     node_builder:
       _target_: anemoi.graphs.nodes.AnemoiDatasetNodes # options: AnemoiDatasetNodes, NPZFileNodes
-      dataset: ${data.data_handlers.regional.dataset}
+      dataset: ${data.sources.regional.dataset}
     attributes: ${graph.attributes.nodes}
   global:
     node_builder:
       _target_: anemoi.graphs.nodes.AnemoiDatasetNodes # options: AnemoiDatasetNodes, NPZFileNodes
-      dataset: ${data.data_handlers.global.dataset}
+      dataset: ${data.sources.global.dataset}
   # Hidden nodes
   hidden:
     node_builder:

@@ -9,9 +9,9 @@ grid_size = 123
 
 def fake_data(config: dict, key: str) -> dict[str, torch.Tensor]:
     assert key in ["input", "output"]
-    data_handlers = config.model.model[key]
+    sources = config.model.model[key]
     sample = {}
-    for data_name, vars in data_handlers.items():
+    for data_name, vars in sources.items():
         sample[data_name] = torch.rand((batch_size, 1, grid_size, len(vars)))
     return sample
 

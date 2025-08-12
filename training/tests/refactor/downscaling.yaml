@@ -28,7 +28,7 @@ model:
           - t_100
 
 data:
-  data_handlers:
+  sources:
     era5:
       dataset:
         dataset: aifs-od-an-oper-0001-mars-o96-2016-2023-6h-v6

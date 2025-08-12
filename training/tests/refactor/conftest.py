@@ -12,7 +12,7 @@ def new_config() -> DictConfig:
             "data": {
                 "frequency": "6h",
                 "timestep": "6h",
-                "data_handlers": {
+                "sources": {
                     "era5": {
                         "dataset": {
                             # "set_group": "era5",

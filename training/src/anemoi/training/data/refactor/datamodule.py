@@ -42,7 +42,7 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
             Job configuration
         """
         super().__init__()
-        data_dict = convert_data_config(config.data.data_handlers)
+        data_dict = convert_data_config(config.data.sources)
         sample_dict = convert_sample_config(config.model.sample)
 
         training_context = dict(sources=data_dict, **config.dataloader.sampler.training)
@@ -64,9 +64,9 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
             keys_to_ignore=dl_keys_to_ignore,
         )
 
-        # data_handlers[stage.TRAINING].check_no_overlap(data_handlers[stage.VALIDATION])
-        # data_handlers[stage.TRAINING].check_no_overlap(data_handlers[stage.TEST])
-        # data_handlers[stage.VALIDATION].check_no_overlap(data_handlers[stage.TEST])
+        # sources[stage.TRAINING].check_no_overlap(sources[stage.VALIDATION])
+        # sources[stage.TRAINING].check_no_overlap(sources[stage.TEST])
+        # sources[stage.VALIDATION].check_no_overlap(sources[stage.TEST])
 
     def train_dataloader(self) -> dict[str, DataLoader]:
         dataset = NativeGridMultDataset(self.training_samples)

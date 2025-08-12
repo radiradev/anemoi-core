@@ -9,7 +9,7 @@ nodes:
   era5:
     node_builder:
       _target_: anemoi.graphs.nodes.AnemoiDatasetNodes # options: AnemoiDatasetNodes, NPZFileNodes
-      dataset: ${data.data_handlers.era5.dataset}
+      dataset: ${data.sources.era5.dataset}
     attributes: ${graph.attributes.nodes}
   # Hidden nodes
   hidden:

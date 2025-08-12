@@ -5,7 +5,7 @@ frequency: 6h
 timestep: 6h
 
 
-data_handlers:
+sources:
   global:
     dataset: ${hardware.files.global_dataset}
     # processors including imputers and normalizers are applied in order of definition

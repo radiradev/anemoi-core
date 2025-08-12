@@ -10,7 +10,7 @@ from anemoi.training.data.refactor.read_config import get_sample_config_dict
 
 
 def test_sampleprovider(new_config: DictConfig):
-    dhs_config = get_data_config_dict(new_config.data.data_handlers, "obs")
+    dhs_config = get_data_config_dict(new_config.data.sources, "obs")
     sample_config = get_sample_config_dict(new_config.model.sample, "obs")
 
     context = Context("training", sources=dhs_config, start=2019, end=2020)
