@@ -485,7 +485,18 @@ class GraphForecaster(pl.LightningModule):
 
             y = batch[:, self.multi_step + rollout_step, ..., self.data_indices.internal_data.output.full]
             # y includes the auxiliary variables, so we must leave those out when computing the loss
-            loss = checkpoint(self.loss, y_pred, y, use_reentrant=False) if training_mode else None
+            # TODO: dict that sets the ARSIL depth as function of rollout, hard coded hack for testing
+            depth = {   
+                1: 1,
+                2: 1,
+                4: 2,
+                5: 2,
+                6: 3,
+                7: 3,
+                8: 4,
+            }
+            }
+            loss = checkpoint(self.loss, y_pred, y, depth=depth[rollout_step], use_reentrant=False) if training_mode else None
 
             x = self.advance_input(x, y_pred, batch, rollout_step)
 

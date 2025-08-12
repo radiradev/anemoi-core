@@ -56,7 +56,7 @@ class WeightedAreaRelatetSortedIntensityLoss(BaseWeightedLoss):
         ) 
         #TODO: remove original_node_weights and determine node_weights
         # of correct shape only once, of no change of depth during run time necessary
-        # self.register_buffer("original_node_weights", node_weights, persistent=True)
+        self.register_buffer("original_node_weights", self.node_weights, persistent=True)
 
     def _aggregate(self,
                   x: torch.Tensor, 
@@ -152,6 +152,7 @@ class WeightedAreaRelatetSortedIntensityLoss(BaseWeightedLoss):
         squash: bool = True,
         scalar_indices: tuple[int, ...] | None = None,
         without_scalars: list[str] | list[int] | None = None,
+        depth: int = 1,
     ) -> torch.Tensor:
         """Calculates the lat-weighted MSE loss.
 
@@ -168,28 +169,29 @@ class WeightedAreaRelatetSortedIntensityLoss(BaseWeightedLoss):
         without_scalars: list[str] | list[int] | None, optional
             list of scalars to exclude from scaling. Can be list of names or dimensions to exclude.
             By default None
-
+        depth: int, optional
+            number of recursive coarsening steps in area related sorting
         Returns
         -------
         torch.Tensor
-            Weighted MSE loss
+            Weighted ARSIL loss
         """
 
         # do aggretation
         pred = self._aggregate(pred, num_neighbors=self.num_neighbors, depth=self.depth, sort=True) 
         target = self._aggregate(target, num_neighbors=self.num_neighbors, depth=self.depth, sort=True)
 
-        #TODO: original_node_weights should become unneccary of no regular change
-        # of depth is neede, otherwise just determine reshpaed node_weights once
+        #TODO: original_node_weights should become unneccary if no regular change
+        # of depth is needed, otherwise just determine reshpaed node_weights once
         # Further the sorting of node_weights is not uniquely defined, since pred 
         # and target are sorted differently -> solution: define coarse node_weights
         # appropriate for target resolution where loss is defined deterministically
-        # self.node_weights = self._aggregate_node_weights(
-        #     self.original_node_weights, 
-        #     num_neighbors=self.num_neighbors, 
-        #     depth=depth,
-        #     sort=False,
-        # ) 
+        self.node_weights = self._aggregate_node_weights(
+            self.original_node_weights, 
+            num_neighbors=self.num_neighbors, 
+            depth=depth,
+            sort=False,
+        ) 
 
         out = torch.square(pred - target)
         out = self.scale(out, scalar_indices, without_scalars=without_scalars)
