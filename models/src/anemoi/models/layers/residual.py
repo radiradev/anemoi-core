@@ -1,3 +1,5 @@
+from typing import Optional
+
 import einops
 import torch
 from torch import nn
@@ -46,6 +48,7 @@ class TruncationMapper(nn.Module):
         num_truncation_nodes (int): Number of nodes in the truncated grid.
         sub_graph_down: Graph object containing edge_index and edge_length for down-projection.
         sub_graph_up: Graph object containing edge_index and edge_length for up-projection.
+        weight (str, optional): Name of the edge attribute to use as weights for the projections.
     """
 
     def __init__(
@@ -53,6 +56,7 @@ class TruncationMapper(nn.Module):
         graph,
         data_nodes: str,
         truncation_nodes: str,
+        weight: Optional[str] = None,
     ) -> None:
         super().__init__()
 
@@ -61,18 +65,25 @@ class TruncationMapper(nn.Module):
         sub_graph_up = graph[truncation_nodes, "to", data_nodes]
         sub_graph_down = graph[data_nodes, "to", truncation_nodes]
 
-        self.project_down = SparseProjector(
-            edge_index=sub_graph_down.edge_index,
-            weights=sub_graph_down.edge_length.squeeze(),
-            src_size=num_data_nodes,
-            dst_size=num_truncation_nodes,
-        )
+        if weight:
+            up_weight = sub_graph_up[weight].squeeze()
+            down_weight = sub_graph_down[weight].squeeze()
+        else:
+            up_weight = torch.ones(sub_graph_up.edge_index.shape[1], device=sub_graph_up.edge_index.device)
+            down_weight = torch.ones(sub_graph_down.edge_index.shape[1], device=sub_graph_down.edge_index.device)
 
         self.project_up = SparseProjector(
             edge_index=sub_graph_up.edge_index,
-            weights=sub_graph_up.edge_length.squeeze(),
+            weights=up_weight,
             src_size=num_truncation_nodes,
             dst_size=num_data_nodes,
+        )
+
+        self.project_down = SparseProjector(
+            edge_index=sub_graph_down.edge_index,
+            weights=down_weight,
+            src_size=num_data_nodes,
+            dst_size=num_truncation_nodes,
         )
 
     def forward(self, x, grid_shard_shapes=None, model_comm_group=None, *args, **kwargs):

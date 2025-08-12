@@ -19,3 +19,4 @@ class TruncationMapperSchema(BaseModel):
     target_: Literal["anemoi.models.layers.residual.TruncationMapper"] = Field(..., alias="_target_")
     data_nodes: str = Field(..., description="Name of data nodes in the graph.")
     truncation_nodes: str = Field(..., description="Name of truncation nodes in the graph")
+    weight: str | None = Field(None, description="Name of the edge attribute to use as weights for the projections.")
