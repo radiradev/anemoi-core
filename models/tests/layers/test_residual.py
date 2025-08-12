@@ -2,6 +2,8 @@ import pytest
 import torch
 from torch_geometric.data import HeteroData
 
+from anemoi.models.layers.residual import NoConnection
+from anemoi.models.layers.residual import SkipConnection
 from anemoi.models.layers.residual import TruncationMapper
 
 
@@ -40,3 +42,19 @@ def test_forward(graph_data):
     x = torch.randn(5, 2, 2, 2, 3)  # (batch, dates, ensemble, grid, features)
     x_truncated = mapper.forward(x)
     assert x_truncated.shape == (5, 2, 2, 3)  # (batch, ensemble, coarse_grid, features)
+
+
+def test_skipconnection(flat_data):
+    mapper = SkipConnection()
+    out = mapper.forward(flat_data)
+    expected_out = flat_data[:, -1, ...]  # Should return the last date
+
+    assert torch.allclose(out, expected_out), "SkipConnection did not return the expected output."
+
+
+def test_noconnection(flat_data):
+    mapper = NoConnection()
+    out = mapper.forward(flat_data)
+    expected_out = torch.zeros_like(flat_data[:, -1, ...])  # Should return zeros of the last date shape
+
+    assert torch.allclose(out, expected_out), "NoConnection did not return the expected output."
