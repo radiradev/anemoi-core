@@ -48,7 +48,7 @@ class TruncationMapper(nn.Module):
         num_truncation_nodes (int): Number of nodes in the truncated grid.
         sub_graph_down: Graph object containing edge_index and edge_length for down-projection.
         sub_graph_up: Graph object containing edge_index and edge_length for up-projection.
-        weight (str, optional): Name of the edge attribute to use as weights for the projections.
+        edge_weight_attribute (str, optional): Name of the edge attribute to use as weights for the projections.
     """
 
     def __init__(
@@ -56,7 +56,7 @@ class TruncationMapper(nn.Module):
         graph,
         data_nodes: str,
         truncation_nodes: str,
-        weight: Optional[str] = None,
+        edge_weight_attribute: Optional[str] = None,
     ) -> None:
         super().__init__()
 
@@ -65,9 +65,9 @@ class TruncationMapper(nn.Module):
         sub_graph_up = graph[truncation_nodes, "to", data_nodes]
         sub_graph_down = graph[data_nodes, "to", truncation_nodes]
 
-        if weight:
-            up_weight = sub_graph_up[weight].squeeze()
-            down_weight = sub_graph_down[weight].squeeze()
+        if edge_weight_attribute:
+            up_weight = sub_graph_up[edge_weight_attribute].squeeze()
+            down_weight = sub_graph_down[edge_weight_attribute].squeeze()
         else:
             up_weight = torch.ones(sub_graph_up.edge_index.shape[1], device=sub_graph_up.edge_index.device)
             down_weight = torch.ones(sub_graph_down.edge_index.shape[1], device=sub_graph_down.edge_index.device)
