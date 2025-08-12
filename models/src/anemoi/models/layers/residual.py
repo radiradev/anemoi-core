@@ -50,12 +50,16 @@ class TruncationMapper(nn.Module):
 
     def __init__(
         self,
-        num_data_nodes,
-        num_truncation_nodes,
-        sub_graph_down,
-        sub_graph_up,
+        graph,
+        data_nodes: str,
+        truncation_nodes: str,
     ) -> None:
         super().__init__()
+
+        num_data_nodes = graph[data_nodes].num_nodes
+        num_truncation_nodes = graph[truncation_nodes].num_nodes
+        sub_graph_up = graph[truncation_nodes, "to", data_nodes]
+        sub_graph_down = graph[data_nodes, "to", truncation_nodes]
 
         self.project_down = SparseProjector(
             edge_index=sub_graph_down.edge_index,
@@ -63,6 +67,7 @@ class TruncationMapper(nn.Module):
             src_size=num_data_nodes,
             dst_size=num_truncation_nodes,
         )
+
         self.project_up = SparseProjector(
             edge_index=sub_graph_up.edge_index,
             weights=sub_graph_up.edge_length.squeeze(),

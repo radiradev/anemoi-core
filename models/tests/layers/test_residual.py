@@ -10,16 +10,13 @@ from anemoi.models.layers.residual import TruncationMapper
 @pytest.fixture
 def graph_data():
     g = HeteroData()
+    g["data"].num_nodes = 2
+    g["hidden"].num_nodes = 1
     g["hidden", "to", "data"].edge_index = torch.tensor([[0, 0], [0, 1]])
     g["hidden", "to", "data"].edge_length = torch.tensor([1.0, 2.0])
     g["data", "to", "hidden"].edge_index = torch.tensor([[0, 1], [0, 0]])
     g["data", "to", "hidden"].edge_length = torch.tensor([1.0, 2.0])
-    return {
-        "sub_graph_down": g["data", "to", "hidden"],
-        "sub_graph_up": g["hidden", "to", "data"],
-        "num_data_nodes": 2,
-        "num_truncation_nodes": 1,
-    }
+    return g
 
 
 @pytest.fixture
@@ -34,11 +31,11 @@ def edge_index():
 
 
 def test_truncation_mapper_init(graph_data):
-    _ = TruncationMapper(**graph_data)
+    _ = TruncationMapper(graph_data, data_nodes="data", truncation_nodes="hidden")
 
 
 def test_forward(graph_data):
-    mapper = TruncationMapper(**graph_data)
+    mapper = TruncationMapper(graph_data, data_nodes="data", truncation_nodes="hidden")
     x = torch.randn(5, 2, 2, 2, 3)  # (batch, dates, ensemble, grid, features)
     x_truncated = mapper.forward(x)
     assert x_truncated.shape == (5, 2, 2, 3)  # (batch, ensemble, coarse_grid, features)
