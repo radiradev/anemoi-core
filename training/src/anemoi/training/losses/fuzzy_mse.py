@@ -49,11 +49,11 @@ class WeightedAreaRelatetSortedIntensityLoss(BaseWeightedLoss):
             if key in kwargs: setattr(self, key, kwargs[key]) 
 
         # aggregate node_weights to have the correct shape
-        self.node_weights = self._aggregate_node_weights(
-            self.node_weights, 
-            num_neighbors=self.num_neighbors, 
-            depth=self.depth,
-        ) 
+        # self.node_weights = self._aggregate_node_weights(
+        #     self.node_weights, 
+        #     num_neighbors=self.num_neighbors, 
+        #     depth=self.depth,
+        # ) 
         #TODO: remove original_node_weights and determine node_weights
         # of correct shape only once, of no change of depth during run time necessary
         self.register_buffer("original_node_weights", self.node_weights, persistent=True)
