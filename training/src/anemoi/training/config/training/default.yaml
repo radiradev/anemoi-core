@@ -44,7 +44,7 @@ optimizer:
     betas: [0.9, 0.95]
 
 # select model
-model_task: anemoi.training.train.forecaster.GraphForecaster
+model_task: anemoi.training.train.tasks.GraphForecaster
 
 # select strategy
 strategy:
@@ -108,6 +108,7 @@ validation_metrics:
 #  pl: [q, t, u, v, w, z]
 #
 # still works
+# param is an alias for the variable name in the case of no metadata.
 
 variable_groups:
   default: sfc
