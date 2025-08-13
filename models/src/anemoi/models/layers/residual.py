@@ -8,7 +8,7 @@ from anemoi.models.distributed.graph import gather_channels
 from anemoi.models.distributed.graph import shard_channels
 from anemoi.models.distributed.shapes import apply_shard_shapes
 from anemoi.models.distributed.shapes import get_shard_shapes
-from anemoi.models.sparse_projector import SparseProjector
+from anemoi.models.layers.sparse_projector import SparseProjector
 
 
 class SkipConnection(nn.Module):
