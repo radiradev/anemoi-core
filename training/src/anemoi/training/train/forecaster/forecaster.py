@@ -487,10 +487,11 @@ class GraphForecaster(pl.LightningModule):
             # y includes the auxiliary variables, so we must leave those out when computing the loss
             # TODO: dict that sets the ARSIL depth as function of rollout, hard coded hack for testing
             depth = {   
+                0: 2,
                 1: 2,
-                2: 2,
+                2: 3,
                 4: 3,
-                5: 3,
+                5: 4,
                 6: 4,
                 7: 4,
                 8: 4,
