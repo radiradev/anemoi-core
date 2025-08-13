@@ -180,10 +180,12 @@ class AnemoiTrainer:
 
         return truncation_data
 
-    def set_compile_flags(self, compile_config):
+    # Function which compiles parts of the model, based on the config
+    # The config is located under config.model.compile
+    def set_compile_flags(self, compile_config: DictConfig) -> None:
         # Convert class paths to actual classes
         compile_classes = [get_class(entry.module) for entry in compile_config]
-        LOGGER.info(f"The following modules will be compiled: {compile_config}")
+        LOGGER.info("The following modules will be compiled: %s", str(compile_config))
         default_compile_options = {}
 
         # Loop through all modules
@@ -191,14 +193,14 @@ class AnemoiTrainer:
             # If it is listed in the compile config
             if type(module) in compile_classes:
                 # retrieve its entry
-                entry = next((entry for entry in compile_config if get_class(entry["module"]) == type(module)), None)
+                entry = next((entry for entry in compile_config if get_class(entry["module"]) is type(module)), None)
                 if entry is None:
                     # Somehow we dont have a match
                     # Shouldn't be possible since we had to match on modules to get here
                     continue
                 options = entry.get("options", default_compile_options)
 
-                LOGGER.debug(f"{module} will be compiled with the following options: {options}")
+                LOGGER.debug("%s will be compiled with the following options: %s", str(module), str(options))
                 compiled_module = torch.compile(module, **options)
 
                 # Update the model with the new compiled module
@@ -210,7 +212,7 @@ class AnemoiTrainer:
                     parts = name.split(".")
                     for part in parts[:-1]:
                         parent = getattr(parent, part)
-                    LOGGER.debug(f"Replacing {parts[-1]} in parent with a compiled version")
+                    LOGGER.debug("Replacing %s in parent with a compiled version", str(parts[-1]))
                     setattr(parent, parts[-1], compiled_module)
 
     @cached_property
