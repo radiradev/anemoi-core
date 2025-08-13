@@ -57,6 +57,7 @@ class TruncationMapper(nn.Module):
         data_nodes: str,
         truncation_nodes: str,
         edge_weight_attribute: Optional[str] = None,
+        autocast: bool = False,
     ) -> None:
         super().__init__()
 
@@ -77,6 +78,7 @@ class TruncationMapper(nn.Module):
             weights=up_weight,
             src_size=num_truncation_nodes,
             dst_size=num_data_nodes,
+            autocast=autocast,
         )
 
         self.project_down = SparseProjector(
@@ -84,6 +86,7 @@ class TruncationMapper(nn.Module):
             weights=down_weight,
             src_size=num_data_nodes,
             dst_size=num_truncation_nodes,
+            autocast=autocast,
         )
 
     def forward(self, x, grid_shard_shapes=None, model_comm_group=None, *args, **kwargs):
@@ -133,9 +136,10 @@ class SparseProjector(nn.Module):
         row_normalize (bool): Whether to normalize weights per destination node.
     """
 
-    def __init__(self, edge_index, weights, src_size, dst_size, row_normalize=True):
+    def __init__(self, edge_index, weights, src_size, dst_size, row_normalize=True, autocast=False):
         super().__init__()
         weights = _row_normalize_weights(edge_index, weights, dst_size) if row_normalize else weights
+        self.autocast = autocast
 
         self.projection_matrix = (
             torch.sparse_coo_tensor(
@@ -150,12 +154,13 @@ class SparseProjector(nn.Module):
 
     def forward(self, x, *args, **kwargs):
         # This has to be called in the forward because sparse tensors cannot be registered as buffers,
-        # as ddp can't broadcast them correctly.
+        # as they can't be broadcast correctly when using DDP.
         self._to_device(x)
 
         out = []
-        for i in range(x.shape[0]):
-            out.append(torch.sparse.mm(self.projection_matrix, x[i, ...]))
+        with torch.amp.autocast(device_type="cuda", enabled=self.autocast):
+            for i in range(x.shape[0]):
+                out.append(torch.sparse.mm(self.projection_matrix, x[i, ...]))
         return torch.stack(out)
 
     def _to_device(self, x):

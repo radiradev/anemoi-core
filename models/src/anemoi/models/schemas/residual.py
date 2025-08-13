@@ -22,3 +22,4 @@ class TruncationMapperSchema(BaseModel):
     edge_weight_attribute: str | None = Field(
         None, description="Name of the edge attribute to use as weights for the projections."
     )
+    autocast: bool = Field(False, description="Whether to use autocasting for mixed precision training.")
