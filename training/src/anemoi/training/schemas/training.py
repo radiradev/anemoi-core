@@ -353,8 +353,6 @@ class BaseTrainingSchema(BaseModel):
     "List of metrics"
     model_modifier: Union[dict, None] = Field(default=None)
     "Model modifier configuration for weight loading, freezing, and fine-tuning."
-    checkpoint_loading: Union[dict, None] = Field(default=None)
-    "Checkpoint loading configuration for initializing model weights from saved checkpoints."
 
 
 class ForecasterSchema(BaseTrainingSchema):

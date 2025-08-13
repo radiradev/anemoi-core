@@ -502,83 +502,19 @@ specific point they can do this by setting
 ``config.hardware.files.warm_start`` to be the checkpoint they want to
 restart from..
 
-********************
- Checkpoint Loading
-********************
+*****************
+ Model Modifiers
+*****************
 
-Anemoi Training provides a flexible checkpoint loading system that
-allows you to initialize model weights from saved checkpoints. This
-system supports various sources (local files, S3, HTTP, etc.) and
-different loading strategies.
+Composable model modifications for transfer learning and parameter
+control.
 
-Configuration
-=============
+Transfer Learning
+=================
 
-To load checkpoint weights, configure the ``checkpoint_loading``
-section:
-
-.. code:: yaml
-
-   training:
-      checkpoint_loading:
-         source: "/path/to/checkpoint.ckpt"  # or s3://bucket/file.ckpt
-         loader_type: "weights_only"         # or "transfer_learning", "standard"
-         strict: true                        # require exact parameter matching
-
-Available Loader Types
-======================
-
--  **weights_only**: Load only model weights, ignoring optimizer and
-   scheduler states
--  **transfer_learning**: Load weights with size mismatch handling for
-   cross-model transfer
--  **standard**: Full Lightning checkpoint loading (weights + optimizer
-   + scheduler states)
-
-Remote Checkpoint Support
-=========================
-
-The system supports loading checkpoints from various remote sources:
-
-.. code:: yaml
-
-   # S3 checkpoint
-   source: "s3://my-bucket/models/checkpoint.ckpt"
-
-   # HTTP checkpoint
-   source: "https://example.com/models/checkpoint.ckpt"
-
-   # Google Cloud Storage
-   source: "gs://my-bucket/models/checkpoint.ckpt"
-
-   # Azure Blob Storage
-   source: "azure://account.blob.core.windows.net/container/checkpoint.ckpt"
-
-*******************
- Transfer Learning
-*******************
-
-Transfer learning allows the model to reuse knowledge from a previously
-trained checkpoint with automatic handling of size mismatches between
-models.
-
-Configuration
-=============
-
-Use the checkpoint loading system with ``transfer_learning`` loader
-type:
-
-.. code:: yaml
-
-   training:
-      checkpoint_loading:
-         source: "/path/to/pretrained.ckpt"
-         loader_type: "transfer_learning"
-         strict: false                # allow parameter mismatches
-         skip_mismatched: true        # skip layers with shape mismatches
-
-Alternatively, use the TransferLearningModelModifier for more complex
-scenarios:
+Load pretrained weights with automatic mismatch handling. Uses the
+multi-source checkpoint loading system to support local files, S3, HTTP,
+GCS, and Azure sources:
 
 .. code:: yaml
 
@@ -586,29 +522,21 @@ scenarios:
       model_modifier:
          modifiers:
             - _target_: "anemoi.training.train.modify.TransferLearningModelModifier"
-              checkpoint_path: "/path/to/pretrained.ckpt"
+              checkpoint_path: "s3://bucket/pretrained.ckpt"  # Any source
               strict: false
               skip_mismatched: true
 
-The transfer learning system automatically:
+The TransferLearningModelModifier automatically:
 
--  Identifies parameter shape mismatches
--  Logs which parameters are skipped due to mismatches
--  Loads only compatible weights
--  Preserves data indices for validation
+-  Detects source type from URL format
+-  Handles authentication for cloud sources
+-  Loads only compatible parameters
+-  Logs mismatched parameters for debugging
 
-****************
- Model Freezing
-****************
+Parameter Freezing
+==================
 
-Model freezing excludes specific submodules from training while keeping
-their parameters fixed. This is useful for fine-tuning scenarios where
-only certain parts of the model should adapt.
-
-Configuration
-=============
-
-Use the FreezingModelModifier to freeze specific submodules:
+Freeze specific layers during fine-tuning:
 
 .. code:: yaml
 
@@ -617,36 +545,21 @@ Use the FreezingModelModifier to freeze specific submodules:
          modifiers:
             - _target_: "anemoi.training.train.modify.FreezingModelModifier"
               submodules_to_freeze:
-                 - "encoder"        # freeze encoder layers
-                 - "processor.0"    # freeze first processor layer
-                 - "processor.1"    # freeze second processor layer
+                 - "encoder"        # freeze encoder
+                 - "processor.0"    # freeze first processor
 
-Combined Workflow Example
-=========================
+Combined Example
+================
 
-A typical fine-tuning workflow combines checkpoint loading with
-freezing:
+Transfer learning + parameter freezing:
 
 .. code:: yaml
 
    training:
-      # 1. Load pretrained weights with transfer learning
-      checkpoint_loading:
-         source: "/path/to/pretrained.ckpt"
-         loader_type: "transfer_learning"
-         strict: false
-         skip_mismatched: true
-
-      # 2. Freeze specific layers for fine-tuning
       model_modifier:
          modifiers:
+            - _target_: "anemoi.training.train.modify.TransferLearningModelModifier"
+              checkpoint_path: "s3://bucket/pretrained.ckpt"
+              strict: false
             - _target_: "anemoi.training.train.modify.FreezingModelModifier"
-              submodules_to_freeze:
-                 - "encoder"        # keep encoder frozen
-                 - "processor.0"    # keep early processor layers frozen
-
-This workflow:
-
-#. Loads pretrained weights with size mismatch handling
-#. Freezes specified submodules to prevent overfitting
-#. Allows only unfrozen layers to adapt during training
+              submodules_to_freeze: ["encoder"]

@@ -28,7 +28,7 @@ Core Features
 - **Configurable**: Full Hydra configuration support with validation
 - **Extensible**: Easy to add new modifier types for custom use cases
 - **Robust**: Comprehensive error handling and logging throughout
-- **Flexible**: Support for various checkpoint sources (local, S3, HTTP, etc.)
+- **Flexible**: Support for various checkpoint sources (requires checkpoint loading system)
 
 Quick Start Guide
 -----------------
@@ -189,9 +189,9 @@ Or using modifiers for more complex scenarios::
 
 See Also
 --------
-anemoi.training.utils.model_loading : Underlying checkpoint loading utilities
+anemoi.training.utils.model_loading : Underlying checkpoint loading utilities (external dependency)
 anemoi.training.train.train : Main training pipeline integration
-anemoi.training.utils.checkpoint_loaders : Checkpoint source handling
+anemoi.training.utils.checkpoint_loaders : Checkpoint source handling (external dependency)
 
 Notes
 -----
@@ -525,10 +525,10 @@ class TransferLearningModelModifier(ModelModifier):
     checkpoint into the current model. It provides flexible handling of architecture
     differences through configurable strict/mismatch policies.
 
-    The modifier leverages Anemoi's extensible checkpoint loading system (#458) which
-    supports multiple source types including local files, S3, HTTP URLs, and cloud
-    storage services. It provides robust error handling and detailed logging for
-    debugging weight loading issues.
+    The modifier leverages Anemoi's extensible checkpoint loading system (PR #458) which
+    must be available as a dependency. The checkpoint loading system supports multiple
+    source types including local files, S3, HTTP URLs, and cloud storage services.
+    It provides robust error handling and detailed logging for debugging weight loading issues.
 
     Parameters
     ----------
@@ -659,7 +659,7 @@ class TransferLearningModelModifier(ModelModifier):
     --------
     FreezingModelModifier : Freeze specific parameters after loading
     ModelModifierApplier : Chain multiple modifiers together
-    anemoi.training.utils.model_loading.load_model_from_checkpoint : Underlying loading function
+    anemoi.training.utils.model_loading.load_model_from_checkpoint : Underlying loading function (external dependency)
 
     Raises
     ------
@@ -802,7 +802,15 @@ class TransferLearningModelModifier(ModelModifier):
             for name, param in model.named_parameters():
                 print(f"{name}: {param.shape}")
         """
-        from anemoi.training.utils.model_loading import load_model_from_checkpoint
+        try:
+            from anemoi.training.utils.model_loading import load_model_from_checkpoint
+        except ImportError as e:
+            msg = (
+                "The checkpoint loading system is required for TransferLearningModelModifier. "
+                "Please ensure the checkpoint loading PR (#458) is merged and available. "
+                f"Import error: {e}"
+            )
+            raise ImportError(msg) from e
 
         LOGGER.info("Loading transfer learning weights from: %s", self.checkpoint_path)
 
