@@ -1,0 +1,4 @@
+source: null  # Path or URL to checkpoint file
+loader_type: "transfer_learning"  # Handle size mismatches
+strict: false  # Allow parameter mismatches
+skip_mismatched: true  # Skip parameters with shape mismatches

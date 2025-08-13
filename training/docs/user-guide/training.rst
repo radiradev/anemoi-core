@@ -281,64 +281,65 @@ specific point they can do this by setting
 ``config.hardware.files.warm_start`` to be the checkpoint they want to
 restart from..
 
+********************
+ Checkpoint Loading
+********************
+
+Multi-source checkpoint loading with automatic format detection.
+
+Quick Start
+===========
+
+.. code:: yaml
+
+   training:
+      checkpoint_loading:
+         source: "s3://bucket/model.ckpt"   # Any source
+         loader_type: "transfer_learning"   # Strategy
+         strict: false                      # Allow mismatches
+
+Sources
+=======
+
++----------+--------------------------------------+-----------------+
+| Source   | URL Format                           | Dependency      |
++==========+======================================+=================+
+| Local    | ``/path/to/file.ckpt``               | None            |
++----------+--------------------------------------+-----------------+
+| S3       | ``s3://bucket/file.ckpt``            | ``boto3``       |
++----------+--------------------------------------+-----------------+
+| HTTP     | ``https://url/file.ckpt``            | None            |
++----------+--------------------------------------+-----------------+
+| GCS      | ``gs://bucket/file.ckpt``            | ``google-cloud``|
++----------+--------------------------------------+-----------------+
+| Azure    | ``azure://account.../file.ckpt``     | ``azure-storage``|
++----------+--------------------------------------+-----------------+
+
+Loader Types
+============
+
+- **weights_only**: Model weights only
+- **transfer_learning**: Handle size mismatches
+- **standard**: Full checkpoint (weights + optimizer)
+
 *******************
  Transfer Learning
 *******************
 
-Transfer learning allows the model to reuse knowledge from a previously
-trained checkpoint. This is particularly useful when the new task is
-related to the old one, enabling faster convergence and often improving
-model performance.
-
-To enable transfer learning, set the config.training.transfer_learning
-flag to True in the configuration file.
+Transfer learning allows automatic handling of size mismatches between models:
 
 .. code:: yaml
 
    training:
-      # start the training from a checkpoint of a previous run
-      fork_run_id: ...
-      load_weights_only: True
-      transfer_learning: True
+      checkpoint_loading:
+         source: "/path/to/pretrained.ckpt"
+         loader_type: "transfer_learning"
+         strict: false                # allow parameter mismatches
+         skip_mismatched: true        # skip layers with shape mismatches
 
-When this flag is active and a checkpoint path is specified in
-config.hardware.files.warm_start or self.last_checkpoint, the system
-loads the pre-trained weights using the `transfer_learning_loading`
-function. This approach ensures only compatible weights are loaded and
-mismatched layers are handled appropriately.
+The transfer learning system automatically:
 
-For example, transfer learning might be used to adapt a weather
-forecasting model trained on one geographic region to another region
-with similar characteristics.
-
-****************
- Model Freezing
-****************
-
-Model freezing is a technique where specific parts (submodules) of a
-model are excluded from training. This is useful when certain parts of
-the model have been sufficiently trained or should remain unchanged for
-the current task.
-
-To specify which submodules to freeze, use the
-config.training.submodules_to_freeze field in the configuration. List
-the names of submodules to be frozen. During model initialization, these
-submodules will have their parameters frozen, ensuring they are not
-updated during training.
-
-For example with the following configuration, the processor will be
-frozen and only the encoder and decoder will be trained:
-
-.. code:: yaml
-
-   training:
-      # start the training from a checkpoint of a previous run
-      fork_run_id: ...
-      load_weights_only: True
-
-      submodules_to_freeze:
-         - processor
-
-Freezing can be particularly beneficial in scenarios such as fine-tuning
-when only specific components (e.g., the encoder, the decoder) need to
-adapt to a new task while keeping others (e.g., the processor) fixed.
+-  Identifies parameter shape mismatches
+-  Logs which parameters are skipped due to mismatches
+-  Loads only compatible weights
+-  Preserves data indices for validation

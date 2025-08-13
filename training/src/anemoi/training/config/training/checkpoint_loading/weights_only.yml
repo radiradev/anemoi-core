@@ -1,0 +1,3 @@
+source: null  # Path or URL to checkpoint file
+loader_type: "weights_only"  # Load only model weights
+strict: true  # Require exact parameter matching

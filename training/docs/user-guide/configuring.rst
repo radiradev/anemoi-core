@@ -420,3 +420,67 @@ error reported is not very intuitive and indeed hides the real issue. We
 will work on improving this on future releases, but mean time we
 recommend to double check the schemas and the config files to make sure
 they are correctly defined.
+
+********************
+ Checkpoint Loading
+********************
+
+Anemoi Training supports flexible checkpoint loading to initialize model
+weights from saved checkpoints. This system supports multiple sources
+and loading strategies.
+
+Configuration
+=============
+
+To configure checkpoint loading, add a ``checkpoint_loading`` section to
+your training config:
+
+.. code:: yaml
+
+   training:
+      checkpoint_loading:
+         source: "/path/to/checkpoint.ckpt"
+         loader_type: "weights_only"
+         strict: true
+
+Available Options
+=================
+
+-  **source**: Path or URL to checkpoint file (local, S3, HTTP, GCS,
+   Azure)
+-  **loader_type**: Strategy for loading ("weights_only",
+   "transfer_learning", "standard")
+-  **strict**: Whether to require exact parameter matching (optional)
+
+Loader Types
+============
+
+**weights_only**
+   Load only model weights, ignoring optimizer and scheduler states
+
+**transfer_learning**
+   Load weights with size mismatch handling for cross-model transfer
+
+**standard**
+   Full Lightning checkpoint loading (weights + optimizer + scheduler)
+
+Remote Sources
+==============
+
+The system supports loading from multiple remote sources:
+
+.. code:: yaml
+
+   training:
+      checkpoint_loading:
+         # S3 checkpoint
+         source: "s3://my-bucket/models/checkpoint.ckpt"
+
+         # HTTP checkpoint
+         source: "https://example.com/models/checkpoint.ckpt"
+
+         # Google Cloud Storage
+         source: "gs://my-bucket/models/checkpoint.ckpt"
+
+         # Azure Blob Storage
+         source: "azure://account.blob.core.windows.net/container/checkpoint.ckpt"

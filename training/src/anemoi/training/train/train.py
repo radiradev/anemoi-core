@@ -167,8 +167,13 @@ class AnemoiTrainer:
 
         model = GraphForecaster(**kwargs)
 
-        # Load the model weights
-        if self.load_weights_only:
+        # Load checkpoint weights if configured
+        model = self._load_checkpoint_if_configured(model)
+
+        # Legacy checkpoint loading (for compatibility)
+        if self.load_weights_only and not (
+            hasattr(self.config.training, "checkpoint_loading") and self.config.training.checkpoint_loading
+        ):
             if hasattr(self.config.training, "transfer_learning"):
                 # Sanify the checkpoint for transfer learning
                 if self.config.training.transfer_learning:
@@ -190,6 +195,39 @@ class AnemoiTrainer:
                 LOGGER.info("%s frozen successfully.", submodule_name.upper())
 
         return model
+
+    def _load_checkpoint_if_configured(self, model: torch.nn.Module) -> torch.nn.Module:
+        """Load checkpoint weights if checkpoint_loading is configured."""
+        if not hasattr(self.config.training, "checkpoint_loading") or not self.config.training.checkpoint_loading:
+            return model
+
+        checkpoint_config = self.config.training.checkpoint_loading
+
+        if not checkpoint_config.source:
+            LOGGER.warning("checkpoint_loading configured but no source specified")
+            return model
+
+        from anemoi.training.utils.model_loading import load_model_from_checkpoint
+
+        LOGGER.info(
+            "Loading checkpoint from %s using %s loader",
+            checkpoint_config.source,
+            checkpoint_config.loader_type,
+        )
+
+        # Extract parameters from checkpoint config
+        loader_kwargs = {}
+        if hasattr(checkpoint_config, "strict"):
+            loader_kwargs["strict"] = checkpoint_config.strict
+        if hasattr(checkpoint_config, "skip_mismatched"):
+            loader_kwargs["skip_mismatched"] = checkpoint_config.skip_mismatched
+
+        return load_model_from_checkpoint(
+            model=model,
+            checkpoint_source=checkpoint_config.source,
+            loader_type=checkpoint_config.loader_type,
+            **loader_kwargs,
+        )
 
     @rank_zero_only
     def _get_mlflow_run_id(self) -> str:

@@ -263,5 +263,7 @@ class TrainingSchema(BaseModel):
     "Configuration of the pressure level scaler apllied in the loss computation."
     metrics: list[str]
     "List of metrics"
+    checkpoint_loading: Union[dict, None] = Field(default=None)
+    "Checkpoint loading configuration for initializing model weights from saved checkpoints."
     node_loss_weights: NodeLossWeightsSchema
     "Node loss weights configuration."

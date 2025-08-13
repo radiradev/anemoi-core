@@ -1,0 +1,3 @@
+source: null  # Path or URL to checkpoint file
+loader_type: "standard"  # Full Lightning checkpoint loading
+strict: true  # Require exact parameter matching
