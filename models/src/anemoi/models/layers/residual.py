@@ -91,7 +91,7 @@ class TruncationMapper(nn.Module):
 
     def forward(self, x, grid_shard_shapes=None, model_comm_group=None, *args, **kwargs):
         batch_size = x.shape[0]
-        x = x[:, -1, ...]  # pick current date
+        x = x[:, -1, ...]  # pick latest step
 
         x = einops.rearrange(x, "batch ensemble grid features -> (batch ensemble) grid features")
         x = self._to_channel_shards(x, grid_shard_shapes, model_comm_group)
