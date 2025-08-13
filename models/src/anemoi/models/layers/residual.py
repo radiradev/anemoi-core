@@ -58,6 +58,7 @@ class TruncatedConnection(nn.Module):
         data_nodes: str,
         truncation_nodes: str,
         edge_weight_attribute: Optional[str] = None,
+        src_node_weight_attribute: Optional[str] = None,
         autocast: bool = False,
     ) -> None:
         super().__init__()
@@ -67,12 +68,16 @@ class TruncatedConnection(nn.Module):
         sub_graph_up = graph[truncation_nodes, "to", data_nodes]
         sub_graph_down = graph[data_nodes, "to", truncation_nodes]
 
+        up_weight = torch.ones(sub_graph_up.edge_index.shape[1], device=sub_graph_up.edge_index.device)
+        down_weight = torch.ones(sub_graph_down.edge_index.shape[1], device=sub_graph_down.edge_index.device)
+
         if edge_weight_attribute:
-            up_weight = sub_graph_up[edge_weight_attribute].squeeze()
-            down_weight = sub_graph_down[edge_weight_attribute].squeeze()
-        else:
-            up_weight = torch.ones(sub_graph_up.edge_index.shape[1], device=sub_graph_up.edge_index.device)
-            down_weight = torch.ones(sub_graph_down.edge_index.shape[1], device=sub_graph_down.edge_index.device)
+            up_weight = sub_graph_up[edge_weight_attribute].squeeze() * up_weight
+            down_weight = sub_graph_down[edge_weight_attribute].squeeze() * down_weight
+
+        if src_node_weight_attribute:
+            up_weight = sub_graph_up[src_node_weight_attribute].squeeze() * up_weight
+            down_weight = sub_graph_down[src_node_weight_attribute].squeeze() * down_weight
 
         self.project_up = SparseProjector(
             edge_index=sub_graph_up.edge_index,

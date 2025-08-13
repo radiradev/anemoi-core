@@ -17,9 +17,20 @@ class NoConnectionSchema(BaseModel):
 
 class TruncatedConnectionSchema(BaseModel):
     target_: Literal["anemoi.models.layers.residual.TruncatedConnectionSchema"] = Field(..., alias="_target_")
-    data_nodes: str = Field(..., description="Name of data nodes in the graph.")
-    truncation_nodes: str = Field(..., description="Name of truncation nodes in the graph")
-    edge_weight_attribute: str | None = Field(
-        None, description="Name of the edge attribute to use as weights for the projections."
+    data_nodes: str = Field(
+        ..., description="Name of the node set in the graph representing the original (full) resolution data."
     )
-    autocast: bool = Field(False, description="Whether to use autocasting for mixed precision training.")
+    truncation_nodes: str = Field(
+        ..., description="Name of the node set in the graph representing the truncated (reduced) resolution data."
+    )
+    edge_weight_attribute: str | None = Field(
+        None,
+        description="Optional name of the edge attribute to use as weights when projecting between data and truncation nodes.",
+    )
+    src_node_weight_attribute: str | None = Field(
+        None,
+        description="Optional name of an attribute on source nodes to use as multiplicative weights during projection.",
+    )
+    autocast: bool = Field(
+        False, description="Whether to enable mixed precision autocasting during projection operations."
+    )
