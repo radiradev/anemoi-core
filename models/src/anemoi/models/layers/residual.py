@@ -87,7 +87,6 @@ class TruncationMapper(nn.Module):
         )
 
     def forward(self, x, grid_shard_shapes=None, model_comm_group=None, *args, **kwargs):
-        self.to(x.device)
         batch_size = x.shape[0]
         x = x[:, -1, ...]  # pick current date
 
@@ -123,7 +122,7 @@ class SparseProjector(nn.Module):
     """Constructs and applies a sparse projection matrix for mapping features between grids.
 
     The projection matrix is constructed from edge indices and edge attributes (e.g., distances),
-    with optional Gaussian weighting and row normalization.
+    with optional row normalization.
 
     Parameters
     ----------
@@ -131,27 +130,38 @@ class SparseProjector(nn.Module):
         weights (Tensor): Raw edge attributes (e.g., distances) of shape (E,).
         src_size (int): Number of nodes in the source grid.
         dst_size (int): Number of nodes in the target grid.
-        apply_gaussian_weighting (bool): Whether to apply Gaussian weighting to the raw edge values.
         row_normalize (bool): Whether to normalize weights per destination node.
     """
 
-    def __init__(self, edge_index, weights, src_size, dst_size, apply_gaussian_weighting=True, row_normalize=True):
+    def __init__(self, edge_index, weights, src_size, dst_size, row_normalize=True):
         super().__init__()
-        weights = _gaussian_distance_weighting(weights) if apply_gaussian_weighting else weights
         weights = _row_normalize_weights(edge_index, weights, dst_size) if row_normalize else weights
 
-        self.projection_matrix = torch.sparse_coo_tensor(
-            edge_index,
-            weights,
-            (src_size, dst_size),
-            device=edge_index.device,
-        ).coalesce()
+        self.projection_matrix = (
+            torch.sparse_coo_tensor(
+                edge_index,
+                weights,
+                (src_size, dst_size),
+                device=edge_index.device,
+            )
+            .coalesce()
+            .T
+        )
 
     def forward(self, x, *args, **kwargs):
+        # This has to be called in the forward because sparse tensors cannot be registered as buffers,
+        # as ddp can't broadcast them correctly.
+        self._to_device(x)
+
         out = []
         for i in range(x.shape[0]):
-            out.append(torch.sparse.mm(self.projection_matrix.T, x[i, ...]))
+            out.append(torch.sparse.mm(self.projection_matrix, x[i, ...]))
         return torch.stack(out)
+
+    def _to_device(self, x):
+        if not hasattr(self, "_on_device"):
+            self._on_device = True
+            self.projection_matrix = self.projection_matrix.to(x.device)
 
 
 def _row_normalize_weights(
@@ -163,8 +173,3 @@ def _row_normalize_weights(
     norm = total.scatter_add_(0, edge_index[1].long(), weights)
     norm = norm[edge_index[1]]
     return weights / (norm + 1e-8)
-
-
-def _gaussian_distance_weighting(weights: torch.Tensor, sigma: float = 1.0) -> torch.Tensor:
-    """Apply Gaussian distance weighting to the weights."""
-    return torch.exp(-0.5 * (weights / sigma) ** 2)
