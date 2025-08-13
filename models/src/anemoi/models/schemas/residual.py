@@ -15,8 +15,8 @@ class NoConnectionSchema(BaseModel):
     target_: Literal["anemoi.models.layers.residual.NoConnection"] = Field(..., alias="_target_")
 
 
-class TruncationMapperSchema(BaseModel):
-    target_: Literal["anemoi.models.layers.residual.TruncationMapper"] = Field(..., alias="_target_")
+class TruncatedConnectionSchema(BaseModel):
+    target_: Literal["anemoi.models.layers.residual.TruncatedConnectionSchema"] = Field(..., alias="_target_")
     data_nodes: str = Field(..., description="Name of data nodes in the graph.")
     truncation_nodes: str = Field(..., description="Name of truncation nodes in the graph")
     edge_weight_attribute: str | None = Field(

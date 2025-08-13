@@ -35,7 +35,7 @@ class NoConnection(nn.Module):
         return torch.zeros_like(x, device=x.device, dtype=x.dtype)
 
 
-class TruncationMapper(nn.Module):
+class TruncatedConnection(nn.Module):
     """Applies a coarse-graining and reconstruction of input features using sparse projections to
     truncate high frequency features.
 

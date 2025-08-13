@@ -33,7 +33,7 @@ from .processor import GraphTransformerProcessorSchema  # noqa: TC001
 from .processor import TransformerProcessorSchema  # noqa: TC001
 from .residual import NoConnectionSchema
 from .residual import SkipConnectionSchema
-from .residual import TruncationMapperSchema
+from .residual import TruncatedConnectionSchema
 
 LOGGER = logging.getLogger(__name__)
 
@@ -191,7 +191,7 @@ class BaseModelSchema(PydanticBaseModel):
         ...,
         discriminator="target_",
     )
-    residual: Union[SkipConnectionSchema, TruncationMapperSchema, NoConnectionSchema] = Field(
+    residual: Union[SkipConnectionSchema, TruncatedConnectionSchema, NoConnectionSchema] = Field(
         default_factory=SkipConnectionSchema,
         discriminator="target_",
     )
