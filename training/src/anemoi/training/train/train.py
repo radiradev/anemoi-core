@@ -181,15 +181,6 @@ class AnemoiTrainer:
         return truncation_data
 
     def set_compile_flags(self, compile_config):
-        # I guess min triton version is enforced by torch 2.6
-        # TODO allow setting different requirements for each class
-        import torch_geometric
-
-        req = torch.__version__ >= "2.6" and torch_geometric.__version__ >= "2.6"
-        if not req:
-            LOGGER.info("Minimum library requirements not met to compile, not compiling...")
-            return
-
         # Convert class paths to actual classes
         compile_classes = [get_class(entry.module) for entry in compile_config]
         LOGGER.info(f"The following modules will be compiled: {compile_config}")
