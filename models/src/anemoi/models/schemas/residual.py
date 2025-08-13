@@ -16,7 +16,7 @@ class NoConnectionSchema(BaseModel):
 
 
 class TruncatedConnectionSchema(BaseModel):
-    target_: Literal["anemoi.models.layers.residual.TruncatedConnectionSchema"] = Field(..., alias="_target_")
+    target_: Literal["anemoi.models.layers.residual.TruncatedConnection"] = Field(..., alias="_target_")
     data_nodes: str = Field(
         ..., description="Name of the node set in the graph representing the original (full) resolution data."
     )
