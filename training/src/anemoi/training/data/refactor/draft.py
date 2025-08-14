@@ -1,7 +1,9 @@
+from collections import defaultdict
 import datetime
 import json
+import os
 import warnings
-from functools import cached_property
+from functools import cached_property, wraps
 
 import numpy as np
 import yaml
@@ -15,6 +17,85 @@ from rich.tree import Tree
 from anemoi.datasets import open_dataset
 from anemoi.utils.dates import frequency_to_string
 from anemoi.utils.dates import frequency_to_timedelta
+
+
+def format_shape(k, v):
+    return f"shape: {v}"
+
+
+def format_shorten(k, v):
+    if len(str(v)) < 50:
+        return f"{k}: {v}"
+    return f"{k}: {str(v)[:50]}..."
+
+
+def format_latlon(k, v):
+    try:
+        txt = f"[{np.min(v):.2f}, {np.max(v):.2f}]"
+    except ValueError:
+        txt = "[no np.min/np.max]"
+    return f"{k}: [{txt}]"
+
+
+def format_timedeltas(k, v):
+    try:
+        minimum = np.min(v)
+        maximum = np.max(v)
+        minimum = int(minimum)
+        maximum = int(maximum)
+        minimum = datetime.timedelta(seconds=minimum)
+        maximum = datetime.timedelta(seconds=maximum)
+        minimum = frequency_to_string(minimum)
+        maximum = frequency_to_string(maximum)
+    except ValueError:
+        minimum = "no np.min"
+        maximum = "no np.max"
+    return f"timedeltas: [{minimum},{maximum}]"
+
+
+def format_array(k, v):
+    return f"{k} : array of shape {v.shape} with mean {np.nanmean(v):.2f}"
+
+
+def format_data(k, v):
+    if isinstance(v, np.ndarray):
+        return format_array(k, v)
+    return f"data: ❌ {type(v)}"
+
+
+def format_default(k, v):
+    if isinstance(v, (str, int, float, bool)):
+        return f"{k} : {v}"
+    if isinstance(v, (list, tuple)):
+        return format_shorten(k, str(v))
+    if isinstance(v, np.ndarray):
+        return format_array(k, v)
+    return f"{k} : {v.__class__.__name__}"
+
+
+def format_none(k, v):
+    return None
+
+
+FORMATTERS = defaultdict(lambda: format_default)
+FORMATTERS.update(
+    dict(
+        shape=format_shape,
+        statistics=format_shorten,
+        latitudes=format_latlon,
+        longitudes=format_latlon,
+        timedeltas=format_timedeltas,
+        data=format_data,
+        dataspecs=format_none,
+    )
+)
+
+
+def format_key_value(key, v):
+    # todo: should read from utils.configs
+    if os.environ.get("ANEMOI_CONFIG_VERBOSE_STRUCTURE", "0") == "1":
+        return FORMATTERS[key](key, v)
+    return None
 
 
 def resolve_reference(config):
@@ -743,7 +824,7 @@ class TupleSampleProvider(SampleProvider):
     @property
     def processors(self):
         return [s.processors for s in self._samples]
-    
+
     @property
     def shape(self):
         return [s.shape for s in self._samples]
@@ -1180,7 +1261,7 @@ class DataHandler:
     @property
     def normaliser(self):
         return self._normaliser_config
-    
+
     @property
     def processors(self):
         processors = {}
@@ -1190,7 +1271,7 @@ class DataHandler:
         if len(self._imputer_config):
             processors["imputer"] = self._imputer_config
         return processors
-    
+
     @property
     def extra(self):
         return self._extra_config
@@ -1304,7 +1385,6 @@ class StructureMixin:
 
 class TupleStructure(StructureMixin, tuple):
     # beware, inheriting from tuple, do not use __init__ method
-
     def tree(self, prefix="", **kwargs):
         tree = Tree(prefix + "🔗")
         for v in self:
@@ -1314,23 +1394,44 @@ class TupleStructure(StructureMixin, tuple):
     def apply(self, func):
         return TupleStructure([x.apply(func) for x in self])
 
+    def apply_to_self(self, func):
+        return TupleStructure([x.apply_to_self(func) for x in self])
+
     def __call__(self, structure, **kwargs):
         assert isinstance(structure, TupleStructure), f"Expected TupleStructure, got {type(structure)}: {structure}"
         return TupleStructure(func(elt, **kwargs) for func, elt in zip(self, structure))
 
+    def content(self, args):
+        return [x.content(args) for x in self]
+
     def __getattr__(self, name):
+        if name.startswith("__") and name.endswith("__"):
+            return super().__getattr__(name)
         return [getattr(x, name) for x in self]
 
     def _as_native(self):
         return tuple(x._as_native() for x in self)
 
+    def is_compatible(self, other):
+        if not isinstance(other, TupleStructure):
+            return False
+        if len(self) != len(other):
+            return False
+        for a, b in zip(self, other):
+            if not a.is_compatible(b):
+                return False
+        return True
+
+    def update(self, other_tuple_structure):
+        if not isinstance(other_tuple_structure, TupleStructure):
+            raise ValueError(f"Expected TupleStructure, got {type(other_tuple_structure)}: {other_tuple_structure}")
+        if len(self) != len(other_tuple_structure):
+            raise ValueError(f"Length mismatch: {len(self)} vs {len(other_tuple_structure)}")
+        for a, b in zip(self, other_tuple_structure):
+            a.update(b)
+
 
 class DictStructure(StructureMixin, dict):
-    def __init__(self, content):
-        super().__init__(content)
-        for k in self.keys():
-            if not hasattr(self, k):
-                setattr(self, k, self[k])
 
     def tree(self, prefix="", **kwargs):
         tree = Tree(prefix + "📖")
@@ -1341,8 +1442,16 @@ class DictStructure(StructureMixin, dict):
     def apply(self, func):
         return DictStructure({k: v.apply(func) for k, v in self.items()})
 
+    def apply_to_self(self, func):
+        return DictStructure({k: v.apply_to_self(func) for k, v in self.items()})
+
+    def content(self, args):
+        return {k: v.content(args) for k, v in self.items()}
+
     def __getattr__(self, name: str):
-            return {k: getattr(v, name) for k, v in self.items()}
+        if name.startswith("__") and name.endswith("__"):
+            return super().__getattr__(name)
+        return {k: getattr(v, name) for k, v in self.items()}
 
     def __call__(self, structure, **kwargs):
         assert isinstance(structure, DictStructure), f"Expected DictStructure, got {type(structure)}: {structure}"
@@ -1352,55 +1461,104 @@ class DictStructure(StructureMixin, dict):
     def _as_native(self):
         return {k: v._as_native() for k, v in self.items()}
 
+    def is_compatible(self, other):
+        if not isinstance(other, DictStructure):
+            return False
+        if set(self.keys()) != set(other.keys()):
+            return False
+        for k in self.keys():
+            if not self[k].is_compatible(other[k]):
+                return False
+        return True
+
+    def update(self, other_dict_structure):
+        if not isinstance(other_dict_structure, DictStructure):
+            raise ValueError(f"Expected DictStructure, got {type(other_dict_structure)}: {other_dict_structure}")
+        if not set(other_dict_structure.keys()) == set(self.keys()):
+            raise ValueError(f"Keys do not match: {self.keys()} vs {other_dict_structure.keys()}")
+        for k, v in self.items():
+            v.update(other_dict_structure[k])
+
 
 class LeafStructure(StructureMixin):
+    """A final leave in the structure, contains always dataspecs
+    and hopefully some useful content.
+    """
+
     def __init__(self, **content):
-        for k, v in content.items():
-            setattr(self, k, v)
-        self._names = list(content.keys())
+        self._content = content
+        self._names = list(self._content.keys())
+
+    def content(self, args):
+        if isinstance(args, str):
+            return self._content[args]
+        return self.__class__({k: self._content[k] for k in args})
+
+    def __getattr__(self, name: str):
+        if name.startswith("__") and name.endswith("__"):
+            return super().__getattr__(name)
+        return self._content[name]
+
+    def is_compatible(self, other_leaf_structure):
+        if not isinstance(other_leaf_structure, self.__class__):
+            return False
+        if self._content["dataspecs"] != other_leaf_structure._content["dataspecs"]:
+            return False
+
+    def update(self, other_leaf_structure):
+        if not isinstance(other_leaf_structure, self.__class__):
+            raise ValueError(
+                f"Expected {self.__class__.__name__}, got {type(other_leaf_structure)}: {other_leaf_structure}"
+            )
+        if self._content["dataspecs"] != other_leaf_structure._content["dataspecs"]:
+            raise ValueError(
+                f"Dataspecs do not match: {self._content['dataspecs']} vs {other_leaf_structure._content['dataspecs']}"
+            )
+
+        for k, v in other_leaf_structure._content.items():
+            if k == "dataspecs":
+                continue
+            if k in self._content:
+                raise ValueError(
+                    f"Key {k} already exists, overwriting is not allowed yet. {self._names} vs {other_leaf_structure._names}"
+                )
+            self._content[k] = v
 
     def tree(self, prefix="", verbose=False, **kwargs):
-        tree = Tree(f"{prefix}  📦 {', '.join(self._names)}")
-        if hasattr(self, "shape"):
-            tree.add(f"Shape: {self.shape}")
-        if hasattr(self, "statistics"):
-            tree.add(f"Statistics: {str(self.statistics)[:50]}")
-        if hasattr(self, "latitudes"):
-            try:
-                txt = f"[{np.min(self.latitudes):.2f}, {np.max(self.latitudes):.2f}]"
-            except ValueError:
-                txt = f"[no np.min/np.max]"
-            tree.add(f"Latitudes: [{txt}")
-        if hasattr(self, "longitudes"):
-            try:
-                txt = f"[{np.min(self.longitudes):.2f}, {np.max(self.longitudes):.2f}]"
-            except ValueError:
-                txt = f"[no np.min/np.max]"
-            tree.add(f"Longitudes: [{txt}]")
-        if hasattr(self, "timedeltas"):
-            try:
-                minimum = np.min(self.timedeltas)
-                maximum = np.max(self.timedeltas)
-                minimum = int(minimum)
-                maximum = int(maximum)
-                minimum = datetime.timedelta(seconds=minimum)
-                maximum = datetime.timedelta(seconds=maximum)
-                minimum = frequency_to_string(minimum)
-                maximum = frequency_to_string(maximum)
-            except ValueError:
-                minimum = "no np.min"
-                maximum = "no np.max"
-            tree.add(f"Timedeltas: [{minimum},{maximum}]")
-        if hasattr(self, "data"):
-            tree.add(f"Data: array of shape {self.data.shape} with mean {np.nanmean(self.data):.2f}")
-        if hasattr(self, "dataspecs") and verbose:
-            tree.add(f"dataspecs: {self.dataspecs}")
+
+        if len(self._names) == 2:
+            key = (set(self._names) - {"dataspecs"}).pop()
+            v = self._content[key]
+            txt = format_key_value(key, v)
+            return Tree(f"{prefix} 📦 {txt}")
+
+        content_txt = " ".join(f"{k}" for k in self._content if k != "dataspecs")
+        tree = Tree(f"{prefix} 📦 {content_txt}")
+        for k, v in self._content.items():
+            txt = format_key_value(k, v)
+            if txt is not None:
+                tree.add(txt)
         return tree
 
     def apply(self, func):
-        new = func(**{k: getattr(self, k) for k in self._names})
+        if isinstance(func, str):
+            if func not in self._content:
+                raise ValueError(f"Function {func} not found in {self._content['dataspecs']}. Available: {self._names}")
+            func = self._content[func]
+        if not callable(func):
+            raise ValueError(f"Expected a callable function, got {type(func)}: {func}")
         name = func.__name__
-        return LeafStructure(**{"dataspecs": self.dataspecs, name: new})
+        print(func, name)
+        new = func(**{k: self._content[k] for k in self._names})
+        return self.__class__(**{"dataspecs": self._content["dataspecs"], name: new})
+
+    def apply_to_self(self, func):
+        """Apply a function to the content of the structure."""
+        if not callable(func):
+            raise ValueError(f"Expected a callable function, got {type(func)}: {func}")
+        name = func.__name__
+        new = func(**self._content)
+        return self.__class__(**self._content, **{name: new})
 
     def __call__(self, structure, function=None, input=None, result=None, **kwargs):
         assert isinstance(structure, LeafStructure), f"Expected LeafStructure, got {type(structure)}: {structure}"
@@ -1416,20 +1574,30 @@ class LeafStructure(StructureMixin):
         input_name = input or "data"
         result_name = result or input_name
 
-        func = getattr(self, function)
+        func = self._content[function]
 
         if not callable(func):
-            raise ValueError(f"Expected a callable function in {self.dataspecs}, got {type(func)}: {func}")
+            raise ValueError(f"Expected a callable function in {self._content["dataspecs"]}, got {type(func)}: {func}")
 
-        x = getattr(structure, input_name)
+        x = structure.content(input_name)
         y = func(x)
 
-        return LeafStructure(**{"dataspecs": structure.dataspecs, result_name: y})
+        return structure.__class__(**{"dataspecs": structure.dataspecs, result_name: y})
 
     def _as_native(self, key=None):
         if key is not None:
-            return getattr(self, key, None)
-        return {k: getattr(self, k) for k in self._names}
+            return self._content.get(key, None)
+        return self._content
+
+
+def decorator(func):
+    @wraps(func)
+    def wrapper(structure):
+        if not isinstance(structure, StructureMixin):
+            raise ValueError(f"Expected StructureMixin, got {type(structure)}: {structure}")
+        return structure.apply_to_self(func)
+
+    return wrapper
 
 
 def structure_factory(**content):
@@ -1464,7 +1632,9 @@ def check_structure(**content):
             assert isinstance(
                 v, dict
             ), f"Expected all values to be dict, got {type(v)} != {type(dataspecs)} whith {v} and {dataspecs}"
-            assert set(v.keys()) == set(dataspecs.keys()), f"Expected the same keys, got {list(v.keys())} vs. {list(dataspecs.keys())}"
+            assert set(v.keys()) == set(
+                dataspecs.keys()
+            ), f"Expected the same keys, got {list(v.keys())} vs. {list(dataspecs.keys())}"
 
         if isinstance(dataspecs, (list, tuple)):
             assert isinstance(
@@ -1641,8 +1811,8 @@ sample:
         end=None,
         frequency="6h",
     )
-    if True:
-        # if False:
+    # if True:
+    if False:
         # for key, config in sample_config["dictionary"].items():
         #     print(f"[yellow]- {key} : building sample_provider[/yellow]")
         #     print(yaml.dump(config, indent=2, sort_keys=False))
@@ -1707,14 +1877,14 @@ sample:
     obj = structure_factory(**content)
     print("Data as object :")
     print(obj)
-    print(f"{obj.fields.name_to_index=}")
-    print(f"{obj.fields.normaliser=}")
-    print(f"{obj.fields.extra=}")
-    print(f"{obj.fields.statistics=}")
-    print(f"{obj.fields.dataspecs=}")
-    print(f"{obj.observations[0].statistics=}")
-    print(f"{obj.observations[0].data=}")
-    print(f"{obj.observations[0].dataspecs=}")
+    print(f"{obj['fields'].name_to_index=}")
+    print(f"{obj['fields'].normaliser=}")
+    print(f"{obj['fields'].extra=}")
+    print(f"{obj['fields'].statistics=}")
+    print(f"{obj['fields'].dataspecs=}")
+    print(f"{obj['observations'][0].statistics=}")
+    print(f"{obj['observations'][0].data=}")
+    print(f"{obj['observations'][0].dataspecs=}")
 
     def my_function(name_to_index, statistics, normaliser, **kwargs):
         return f"Normalisers build from: {name_to_index=}, {statistics=}, {normaliser=}"
@@ -1722,26 +1892,38 @@ sample:
     result = obj.apply(my_function)
     print(result)
     print()
-    print(f"{result.observations[0].my_function=}")
-    print(f"{result.fields.my_function=}")
+    print(f"{result['observations'][0].my_function=}")
+    print(f"{result['fields'].my_function=}")
     print()
-    print(f"{result.fields=}")
-    print(f"{result.fields._as_native()}")
-    print(f"{result.fields._as_native('my_function')=}")
+    print(f"{result['fields']=}")
+    print(f"{result['fields']._as_native()}")
+    print(f"{result['fields']._as_native('my_function')=}")
 
     print(f"{str(sp.get_native(2))[:1000]=}")
     print(f"{sp.get_obj(2)=}")
     # print(sp.get_obj(2).__repr__(verbose=True))
 
-    def double_function(normaliser, **kwargs):
-        # print(normaliser)
-        # return Normaliser(config = normaliser)
+    def doubler(normaliser, **kwargs):
         return lambda x: x * 2
 
-    function_structure = obj.apply(double_function)
+    function_structure = obj.apply(doubler)
     print("Function structure:")
     print(function_structure)
-
     result = function_structure(obj)
     print("Result of applying the function to the structure:")
     print(result)
+
+    print("[blue]Result of applying the function to the structure:[/blue]")
+
+    @decorator
+    def times100(data, name_to_index, **kwargs):
+        # name_to_index is not used here, but could be useful in a real function
+        return data * 100
+
+    result = times100(obj)
+    print(result)
+
+    # obj.update(function_structure)
+    # print("Updated object with function structure:")
+    # print(obj)
+    # obj.apply("doubler")
