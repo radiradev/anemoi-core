@@ -178,8 +178,8 @@ class WeightedAreaRelatetSortedIntensityLoss(BaseWeightedLoss):
         """
 
         # do aggretation
-        pred = self._aggregate(pred, num_neighbors=self.num_neighbors, depth=self.depth, sort=True) 
-        target = self._aggregate(target, num_neighbors=self.num_neighbors, depth=self.depth, sort=True)
+        pred = self._aggregate(pred, num_neighbors=self.num_neighbors, depth=depth, sort=True) 
+        target = self._aggregate(target, num_neighbors=self.num_neighbors, depth=depth, sort=True)
 
         #TODO: original_node_weights should become unneccary if no regular change
         # of depth is needed, otherwise just determine reshpaed node_weights once
@@ -190,7 +190,7 @@ class WeightedAreaRelatetSortedIntensityLoss(BaseWeightedLoss):
             self.original_node_weights, 
             num_neighbors=self.num_neighbors, 
             depth=depth,
-            sort=False,
+            # sort=False,
         ) 
 
         out = torch.square(pred - target)
