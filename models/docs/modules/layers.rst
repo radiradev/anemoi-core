@@ -132,7 +132,7 @@ This environment variable controls the number of chunks used in the
  Truncated Connection
 **********************
 
-.. autoclass:: anemoi.models.layers.residual.TruncationMapper
+.. autoclass:: anemoi.models.layers.residual.TruncatedConnection
    :members:
    :no-undoc-members:
    :show-inheritance:
