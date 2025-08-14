@@ -1,9 +1,10 @@
-from collections import defaultdict
 import datetime
 import json
 import os
 import warnings
-from functools import cached_property, wraps
+from collections import defaultdict
+from functools import cached_property
+from functools import wraps
 
 import numpy as np
 import yaml
@@ -87,12 +88,12 @@ FORMATTERS.update(
         timedeltas=format_timedeltas,
         data=format_data,
         dataspecs=format_none,
-    )
+    ),
 )
 
 
 def format_key_value(key, v):
-    # todo: should read from utils.configs
+    # TODO: should read from utils.configs
     if os.environ.get("ANEMOI_CONFIG_VERBOSE_STRUCTURE", "0") == "1":
         return FORMATTERS[key](key, v)
     return None
@@ -293,13 +294,13 @@ class SampleProvider:
         raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
 
     def latitudes(self, item: int):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def longitudes(self, item: int):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def timedeltas(self, item: int):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @property
     def name_to_index(self, item: int):
@@ -370,7 +371,7 @@ class SampleProvider:
 
     @property
     def shape(self):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @property
     def frequency(self):
@@ -885,8 +886,7 @@ class TensorSampleProvider(SampleProvider):
                 elt_ = np.array(elt)
                 elt = self.transpose(elt_)
                 return elt
-            else:
-                return elt
+            return elt
 
         assert "data" in data, f"Expected 'data' key in {data}, got {data}"
         return {k: process_element(k, v) for k, v in data.items()}
@@ -924,7 +924,7 @@ class TensorSampleProvider(SampleProvider):
 
     @property
     def shape(self):
-        # todo read from data handler and have 'dynamic' shape
+        # TODO read from data handler and have 'dynamic' shape
         return self[0].shape
 
     def _flatten(self, x):
@@ -935,7 +935,7 @@ class TensorSampleProvider(SampleProvider):
         if isinstance(x, dict):
             return x
         raise NotImplementedError(
-            f"name_to_index not implemented for tensor with more than two dimensions: {self.dimensions}"
+            f"name_to_index not implemented for tensor with more than two dimensions: {self.dimensions}",
         )
 
     def transpose(self, array):
@@ -1491,6 +1491,7 @@ class LeafStructure(StructureMixin):
 
     def content(self, args):
         if isinstance(args, str):
+
             return self._content[args]
         return self.__class__({k: self._content[k] for k in args})
 
@@ -1508,11 +1509,11 @@ class LeafStructure(StructureMixin):
     def update(self, other_leaf_structure):
         if not isinstance(other_leaf_structure, self.__class__):
             raise ValueError(
-                f"Expected {self.__class__.__name__}, got {type(other_leaf_structure)}: {other_leaf_structure}"
+                f"Expected {self.__class__.__name__}, got {type(other_leaf_structure)}: {other_leaf_structure}",
             )
         if self._content["dataspecs"] != other_leaf_structure._content["dataspecs"]:
             raise ValueError(
-                f"Dataspecs do not match: {self._content['dataspecs']} vs {other_leaf_structure._content['dataspecs']}"
+                f"Dataspecs do not match: {self._content['dataspecs']} vs {other_leaf_structure._content['dataspecs']}",
             )
 
         for k, v in other_leaf_structure._content.items():
@@ -1520,7 +1521,7 @@ class LeafStructure(StructureMixin):
                 continue
             if k in self._content:
                 raise ValueError(
-                    f"Key {k} already exists, overwriting is not allowed yet. {self._names} vs {other_leaf_structure._names}"
+                    f"Key {k} already exists, overwriting is not allowed yet. {self._names} vs {other_leaf_structure._names}",
                 )
             self._content[k] = v
 
@@ -1610,18 +1611,18 @@ def structure_factory(**content):
     if isinstance(dataspecs, (list, tuple)):
         lst = []
         for i in range(len(dataspecs)):
-            lst.append(structure_factory(**{key: content[key][i] for key in content.keys()}))
+            lst.append(structure_factory(**{key: content[key][i] for key in content}))
         return TupleStructure(lst)
 
-    assert isinstance(dataspecs, dict), f"Expected dicts"
+    assert isinstance(dataspecs, dict), "Expected dicts"
     dic = {}
     for k in dataspecs.keys():
-        dic[k] = structure_factory(**{key: content[key][k] for key in content.keys()})
+        dic[k] = structure_factory(**{key: content[key][k] for key in content})
     return DictStructure(dic)
 
 
 def check_structure(**content):
-    assert "dataspecs" in content, f"Missing 'dataspecs' in content"
+    assert "dataspecs" in content, "Missing 'dataspecs' in content"
 
     dataspecs = content["dataspecs"]
     for v in content.values():
@@ -1630,15 +1631,15 @@ def check_structure(**content):
 
         if isinstance(dataspecs, dict):
             assert isinstance(
-                v, dict
+                v, dict,
             ), f"Expected all values to be dict, got {type(v)} != {type(dataspecs)} whith {v} and {dataspecs}"
             assert set(v.keys()) == set(
-                dataspecs.keys()
+                dataspecs.keys(),
             ), f"Expected the same keys, got {list(v.keys())} vs. {list(dataspecs.keys())}"
 
         if isinstance(dataspecs, (list, tuple)):
             assert isinstance(
-                v, (list, tuple)
+                v, (list, tuple),
             ), f"Expected all values to be lists or tuples, got {type(v)} != {type(dataspecs)} whith {v} and {dataspecs}"
             assert len(v) == len(dataspecs), f"Expected the same length as first, got ✅{v}✅ vs ❌{dataspecs}❌"
 
@@ -1771,7 +1772,7 @@ sample:
         import yaml
 
         path = yaml.safe_load(sys.argv[1])
-        with open(path, "r") as f:
+        with open(path) as f:
             yaml_str = f.read()
         CONFIG = yaml.safe_load(yaml_str)
         sample_config = CONFIG["sample"]
