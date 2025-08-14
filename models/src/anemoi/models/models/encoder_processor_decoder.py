@@ -322,7 +322,7 @@ class AnemoiModelEncProcDec(nn.Module):
 
         # Processor
         x_latent_proc = self.processor(
-            x_latent,
+            x=x_latent,
             batch_size=batch_size,
             shard_shapes=shard_shapes_hidden,
             model_comm_group=model_comm_group,
