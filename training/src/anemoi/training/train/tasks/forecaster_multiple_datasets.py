@@ -121,7 +121,6 @@ class GraphForecasterMultiDataset(pl.LightningModule):
             # data_indices=data_indices,
             metadata=metadata,
             sample_provider=sample_provider,
-            graph_data=graph_data,
             config=convert_to_omegaconf(config),
         )
         # self.indexer = sample_provider.get_indexer()
@@ -131,8 +130,6 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         # self.model_data_indices = {self.datasets[0]: self.model.model.data_indices}  # TODO: generalize
 
         # self.save_hyperparameters() # needed for storing the checkpoints
-
-        self.latlons_data = graph_data[config.graph.data].x  # TODO: Generalize, link graph key to DataHandler key
 
         self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
 
@@ -205,7 +202,7 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         self.reader_group_id = 0
         self.reader_group_rank = 0
 
-    def forward(self, x: torch.Tensor, graph: HeteroData) -> torch.Tensor:
+    def forward(self, x: dict[str, torch.Tensor], graph: HeteroData) -> dict[str, torch.Tensor]:
         return self.model(x, graph, model_comm_group=self.model_comm_group)
 
     def define_delayed_scalers(self) -> None:
@@ -324,7 +321,7 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         # graph = self.graph_editor.update_graph(self.graph_data, input_latlons, target_latlons)
 
         # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
-        y_pred = self(batch["input"], self.graph_data)
+        y_pred = self(batch["input"], self.graph_data.clone().to("cuda"))
 
         # y includes the auxiliary variables, so we must leave those out when computing the loss
         loss = checkpoint(self.loss, y_pred, batch["target"], use_reentrant=False)

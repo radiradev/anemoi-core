@@ -97,11 +97,20 @@ sample:
 
 model:
   _target_: anemoi.models.models.mult_encoder_processor_decoder.AnemoiMultiModel
-  encoder_input_names:
-  - lowres
+  encoders:
+  - name: enc
+    mapper: ${model.encoder}
+    sources: [ "lowres" ]
+    num_channels: 128
+  merge_latents: average # options: average, sum, concatenation
   hidden_name: "hidden"
-  decoder_target_names:
-  - hires
+  processor: ${model.processor}
+  decoders:
+  - name: dec
+    mapper: ${model.decoder}
+    sources: [ "hires" ]
+    num_channels: 128
+
 
 layer_kernels:
   # The layer_kernels can be adjusted per model component, but are defined here for convenience.
@@ -131,7 +140,7 @@ emb_data:
   hidden_dim: 128
   n_extra_layers: 0
   final_activation: GELU
-  layer_kernels: ${model.layer_kernels_processor}
+  layer_kernels: ${model.layer_kernels}
 
 processor:
   _target_: anemoi.models.layers.processor.DynamicGraphTransformerProcessor
