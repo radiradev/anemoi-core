@@ -176,7 +176,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
     def ds_train(self) -> NativeGridDataset:
         options={}
 
-        if (os.getenv("CACHE_SSD", "0") == "1")
+        if (os.getenv("CACHE_SSD", "0") == "1"):
             LOGGER.info("Caching datasets to tmpdir")
             options={'copy-to-ssd': True}
         return self._get_dataset(
