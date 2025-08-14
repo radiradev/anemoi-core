@@ -65,8 +65,8 @@ class TruncatedConnection(nn.Module):
 
         num_data_nodes = graph[data_nodes].num_nodes
         num_truncation_nodes = graph[truncation_nodes].num_nodes
-        sub_graph_up = graph[truncation_nodes, "to", data_nodes]
         sub_graph_down = graph[data_nodes, "to", truncation_nodes]
+        sub_graph_up = graph[truncation_nodes, "to", data_nodes]
 
         up_weight = torch.ones(sub_graph_up.edge_index.shape[1], device=sub_graph_up.edge_index.device)
         down_weight = torch.ones(sub_graph_down.edge_index.shape[1], device=sub_graph_down.edge_index.device)
@@ -76,8 +76,8 @@ class TruncatedConnection(nn.Module):
             down_weight = sub_graph_down[edge_weight_attribute].squeeze() * down_weight
 
         if src_node_weight_attribute:
-            up_weight = sub_graph_up[src_node_weight_attribute].squeeze() * up_weight
-            down_weight = sub_graph_down[src_node_weight_attribute].squeeze() * down_weight
+            down_weight = graph[data_nodes][src_node_weight_attribute].squeeze() * down_weight
+            up_weight = graph[truncation_nodes][src_node_weight_attribute].squeeze() * up_weight
 
         self.project_up = SparseProjector(
             edge_index=sub_graph_up.edge_index,
@@ -98,25 +98,25 @@ class TruncatedConnection(nn.Module):
     def forward(self, x, grid_shard_shapes=None, model_comm_group=None, *args, **kwargs):
         batch_size = x.shape[0]
         x = x[:, -1, ...]  # pick latest step
+        shard_shapes = self._get_shard_shapes(x, 0, grid_shard_shapes, model_comm_group)
 
         x = einops.rearrange(x, "batch ensemble grid features -> (batch ensemble) grid features")
-        x = self._to_channel_shards(x, grid_shard_shapes, model_comm_group)
+        x = self._to_channel_shards(x, shard_shapes, model_comm_group)
         x = self.project_down(x)
         x = self.project_up(x)
-        x = self._to_grid_shards(x, grid_shard_shapes, model_comm_group)
+        x = self._to_grid_shards(x, shard_shapes, model_comm_group)
         x = einops.rearrange(x, "(batch ensemble) grid features -> batch ensemble grid features", batch=batch_size)
 
         return x
 
-    def _to_channel_shards(self, x, grid_shard_shapes=None, model_comm_group=None):
-        return self._reshard(x, shard_channels, grid_shard_shapes, model_comm_group)
+    def _to_channel_shards(self, x, shard_shapes=None, model_comm_group=None):
+        return self._reshard(x, shard_channels, shard_shapes, model_comm_group)
 
-    def _to_grid_shards(self, x, grid_shard_shapes=None, model_comm_group=None):
-        return self._reshard(x, gather_channels, grid_shard_shapes, model_comm_group)
+    def _to_grid_shards(self, x, shard_shapes=None, model_comm_group=None):
+        return self._reshard(x, gather_channels, shard_shapes, model_comm_group)
 
-    def _reshard(self, x, fn, grid_shard_shapes=None, model_comm_group=None):
-        if grid_shard_shapes is not None:
-            shard_shapes = self._get_shard_shapes(x, 0, grid_shard_shapes, model_comm_group)
+    def _reshard(self, x, fn, shard_shapes=None, model_comm_group=None):
+        if shard_shapes is not None:
             x = fn(x, shard_shapes, model_comm_group)
         return x
 
