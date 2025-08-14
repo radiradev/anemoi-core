@@ -25,7 +25,6 @@ from anemoi.training.data.grid_indices import BaseGridIndices
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.utils.worker_init import worker_init_func
 from anemoi.utils.dates import frequency_to_seconds
-import
 
 LOGGER = logging.getLogger(__name__)
 
