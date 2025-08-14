@@ -70,7 +70,7 @@ class AnemoiModelInterface(torch.nn.Module):
         *,
         config: DotDict,
         sample_provider,
-        graph_data: HeteroData,
+        # graph_data: HeteroData,
         # data_indices: dict,
         metadata: dict,
     ) -> None:
@@ -78,7 +78,7 @@ class AnemoiModelInterface(torch.nn.Module):
         self.config = config
         self.id = str(uuid.uuid4())
         self.sample_provider = sample_provider
-        self.graph_data = graph_data
+        # self.graph_data = graph_data
         self.metadata = metadata
         self.supporting_arrays = {}
         self._build_model()
@@ -99,7 +99,7 @@ class AnemoiModelInterface(torch.nn.Module):
             # self.config.model.model,
             model_config=self.config,
             sample_provider=self.sample_provider,
-            graph_data=self.graph_data,
+            # graph_data=self.graph_data,
             # truncation_data=self.truncation_data,
             # _recursive_=False,  # Disables recursive instantiation by Hydra
         )

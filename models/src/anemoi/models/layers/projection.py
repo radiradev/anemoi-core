@@ -6,64 +6,48 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 #
-# from torch import nn
-import einops
+
 import torch
 from hydra.utils import instantiate
 from torch import nn
 from torch_geometric.data import HeteroData
 
-from anemoi.models.layers.utils import load_layer_kernels
-
-
-class GraphNodeEmbedder(nn.Module):
-    def __init__(self, num_input_channels: dict[str, int], out_channels: int, **kwargs):
-        super().__init__()
-        self.num_input_channels = num_input_channels
-        self.out_channels = out_channels
-
-    def forward(self, graph: HeteroData, **kwargs) -> HeteroData:
-        return graph
 
 
 class NodeEmbedder(nn.Module):
-    """Class to embed the node representations."""
-
     def __init__(
         self,
         config,
-        node_dim: int,
-        out_channels: int,
         num_input_channels: dict[str, int],
-    ) -> None:
+        num_output_channels: dict[str, int], 
+        sources: dict[str, str],
+        **kwargs
+    ):
         super().__init__()
+        self.num_input_channels = num_input_channels
+        self.num_output_channels = num_output_channels
+        self.sources = sources
+
         self.embedders = nn.ModuleDict(
             {
-                source: instantiate(config, in_features=in_channels + node_dim, out_features=out_channels)
-                for source, in_channels in num_input_channels.items()
+                in_source: instantiate(
+                    config, 
+                    _recursive_=False,
+                    in_features=num_input_channels[in_source], 
+                    out_features=num_output_channels[out_source],
+                )
+                for in_source, out_source in sources.items()
             }
         )
 
-    def forward(
-        self,
-        x: dict[str, torch.Tensor],
-        return_indices: bool = False,
-    ) -> torch.Tensor:
-        data_embs, idx, i = [], {}, 0
-        for data_name, t in x.items():
-            data_embs.append(
-                self.embedders[data_name](
-                    einops.rearrange(t.unsqueeze(0).unsqueeze(0), "bs ens t grid vars -> (bs ens grid) (t vars)")
-                )
-            )
-
-            if return_indices:
-                num_nodes = t.shape[1]
-                idx[data_name] = slice(i, i + num_nodes)
-                i += num_nodes
-
-        data_embs = torch.concat(data_embs, dim=0)
-        return (data_embs, idx) if return_indices else data_embs
+    def forward(self, x: dict[str, torch.Tensor], **kwargs) -> HeteroData:
+        new = {}
+        for data_source, encoded_source in self.sources.items():
+            new[encoded_source] = self.embedders[data_source](x[data_source])
+        
+        # input: [{"1": tensor, "1": tensor, "2": tensor, ...}]
+        # TODO: x_data_latent = concat_tensor_from_same_source(x_data_latent)
+        return new
 
 
 class NodeProjector(nn.Module):
@@ -71,32 +55,39 @@ class NodeProjector(nn.Module):
 
     def __init__(
         self,
-        config: dict,
-        in_features: int,
-        num_output_channels: dict[str, int],
-    ) -> None:
+        config,
+        num_input_channels: dict[str, int],
+        num_output_channels: dict[str, int], 
+        sources: dict[str, str],
+        **kwargs
+    ):
         super().__init__()
+        self.num_input_channels = num_input_channels
+        self.num_output_channels = num_output_channels
+        self.sources = sources
+
         self.projectors = nn.ModuleDict(
             {
-                source: instantiate(
-                    config,
+                out_source: instantiate(
+                    config, 
                     _recursive_=False,
-                    in_features=in_features,
-                    out_features=out_channels,
-                    layer_kernels=load_layer_kernels(config["layer_kernels"]),
+                    in_features=num_input_channels[in_source], 
+                    out_features=num_output_channels[out_source],
                 )
-                for source, out_channels in num_output_channels.items()
+                for in_source, out_source in sources.items()
             }
         )
 
-    def forward(self, x: torch.Tensor, slices: dict[str, slice], dim: int = 0) -> dict[str, torch.Tensor]:
+    def forward(
+        self, x: dict[str, torch.Tensor], slices: dict[str, dict[str, slice]], dim: int = 0
+    ) -> dict[str, torch.Tensor]:
         """Projects the tensor into the different datasets/report types.
 
         Arguments
         ---------
-        x : torch.Tensor
+        x : dict[str, torch.Tensor]
             Node embeddings of the shape (num_nodes, num_channels)
-        slice : dict[str, slice]
+        slice : dict[str, dict[str, slice]]
             A mapping of the slices corresponding to each dataset/report type.
             For example,
                 {"era": slice(0, 100), "synop": slice(100, num_nodes)}
@@ -107,4 +98,8 @@ class NodeProjector(nn.Module):
         dict[str, torch.Tensor]
             It returns a dict of each dataset/report type with tensors of shape (1, num_source_nodes, dim_source_nodes)
         """
-        return {name: self.projectors[name](x[indices]) for name, indices in slices.items()}
+        x_data_raws = {}
+        for name, x_out in x.items():
+            for data_name, node_slice in slices[name].items():
+                x_data_raws[data_name] = self.projectors[data_name](x_out[node_slice])
+        return x_data_raws

@@ -14,6 +14,7 @@ import torch
 from torch import nn
 
 from anemoi.utils.config import DotDict
+from anemoi.models.layers.utils import load_layer_kernels
 
 LOGGER = logging.getLogger(__name__)
 
@@ -58,9 +59,11 @@ class MLP(nn.Module):
         """
         super().__init__()
 
-        Linear = layer_kernels.Linear
-        LayerNorm = layer_kernels.LayerNorm
-        Activation = layer_kernels.Activation
+        self.layer_factory = load_layer_kernels(layer_kernels)
+
+        Linear = self.layer_factory.Linear
+        LayerNorm = self.layer_factory.LayerNorm
+        Activation = self.layer_factory.Activation
 
         self.mlp = nn.Sequential(Linear(in_features, hidden_dim), Activation())
         for _ in range(n_extra_layers + 1):
@@ -73,7 +76,7 @@ class MLP(nn.Module):
 
         self.layer_norm = None
         if layer_norm:
-            self.layer_norm = LayerNorm(normalized_shape=out_features)
+            self.layer_norm = LayerNorm(out_features)
 
     def forward(self, x: torch.Tensor, **layer_kwargs) -> torch.Tensor:
         x = self.mlp(x)

@@ -21,11 +21,61 @@ from torch.utils.checkpoint import checkpoint
 from torch_geometric.data import HeteroData
 
 from anemoi.models.distributed.shapes import get_shard_shapes
-from anemoi.models.layers.graph import NamedNodesAttributes
-from anemoi.models.layers.projection import GraphNodeEmbedder
+from anemoi.models.layers.projection import NodeEmbedder, NodeProjector
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
+
+
+NODE_COORDS_NDIMS = 4 # cos_lat, sin_lat, cos_lon, sin_lon
+EDGE_ATTR_NDIM = 3 # edge_length, edge_dir0, edge_dir1
+
+
+def extract_sources(config, reversed: bool = False) -> tuple[dict, dict[str, list[str]]]:
+    mapper_config, sources, num_channels = {}, {}, {}
+    for i, component in enumerate(config):
+        name = component.pop("name", f"{i+1}")
+        for source in component.pop("sources"):
+            if reversed:
+                sources[name] = source
+            else: 
+                sources[source] = name
+        mapper_config[name] = component["mapper"]
+        num_channels[name] = component["num_channels"]
+    return mapper_config, sources, num_channels
+
+
+def merge_nodes(graph: HeteroData, merged_name: str, nodes_names: list[str]) -> tuple[HeteroData, dict]:
+    if len(nodes_names) == 1:
+        graph = graph.rename(nodes_names[0], merged_name)
+        slices = {nodes_names[0]: slice(0, graph[nodes_names[0]].num_nodes)}
+        return graph, slices
+
+    num_nodes = {name: graph[name].num_nodes for name in nodes_names}
+    graph[merged_name].x = torch.cat([graph[nodes].x for nodes in nodes_names])
+    # TODO: Merge edge_index of all subgraphs
+    slices, count = {}, 0
+    for nodes in nodes_names:
+        num_nodes = graph[nodes].num_nodes
+        slices[nodes] = slice(count, count + num_nodes)
+        count += num_nodes
+    return graph, slices
+
+
+def merge_graph_sources(graph: HeteroData, sources: dict[str, str]) -> HeteroData:
+    if sources is None or len(sources) == 0:
+        return graph, None
+    
+    new = {}
+    for k, v in sources.items():
+        new[v] = (new[v] + [k]) if v in new else  [k]
+
+    slices = {}
+    for new_node_names, old_node_names in new.items():
+        graph, nodes_slices = merge_nodes(graph, new_node_names, old_node_names)
+        slices[new_node_names] = nodes_slices
+
+    return graph, slices
 
 
 class AnemoiMultiModel(nn.Module):
@@ -34,9 +84,8 @@ class AnemoiMultiModel(nn.Module):
     def __init__(
         self,
         *,
-        sample_provider: "SampleProvider",
+        sample_provider: "Structure",
         model_config: DotDict,
-        graph_data: HeteroData,
     ) -> None:
         """Initializes the graph neural network.
 
@@ -49,14 +98,11 @@ class AnemoiMultiModel(nn.Module):
         """
         super().__init__()
         model_config = DotDict(model_config)
-        self._graph_data = graph_data
 
-        self.multi_step = model_config.training.multistep_input
         self.num_channels = model_config.model.num_channels
 
-        self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)
-
         self.latent_residual_connection = True
+        self.merge_latents_method = model_config.model.model.merge_latents
         self._define_residual_connection_indices(
             sample_provider.name_to_index["input"],
             sample_provider.name_to_index["target"],
@@ -67,53 +113,58 @@ class AnemoiMultiModel(nn.Module):
             return len(name_to_index["variables"]) * len(name_to_index["offset"])
 
         sample_provider = sample_provider.apply(num_channels)
-        self.num_input_channels: dict[str, int] = sample_provider["input"].num_channels
+        self.num_input_channels: dict[str, int] = {k: v + 4 for k, v in sample_provider["input"].num_channels.items()}
         self.num_target_channels: dict[str, int] = sample_provider["target"].num_channels
-        self.input_names: list[str] = model_config.model.model.encoder_input_names
+        
         self.hidden_name: str = model_config.model.model.hidden_name
-        self.target_names: list[str] = model_config.model.model.decoder_target_names
+        encoders, self.encoder_sources, num_encoded_channels = extract_sources(model_config.model.model.encoders)
+        decoders, self.decoder_sources, num_decoded_channels = extract_sources(model_config.model.model.decoders, reversed=True)
 
         # Embedding layers
-        self.graph_node_embedder = GraphNodeEmbedder(
-            num_input_channels=self.num_target_channels | self.num_input_channels, out_channels=self.num_channels
+        self.node_embedder = NodeEmbedder(
+            model_config.model.emb_data,
+            num_input_channels=self.num_input_channels, 
+            num_output_channels=num_encoded_channels,
+            sources=self.encoder_sources,
         )
-        # self.unembed_data = NodeProjector(
-        #    model_config.model.emb_data,
-        #    in_features=self.num_channels,
-        #    num_output_channels=self.num_target_channels
-        # )
+        self.node_projector = NodeProjector(
+            model_config.model.emb_data,
+            num_input_channels=num_decoded_channels,
+            num_output_channels=self.num_target_channels,
+            sources=self.decoder_sources
+        )
 
-        # Encoder data -> hidden
+        # Encoders: ??? -> hidden
         self.encoders = nn.ModuleDict({})
-        for input_name in self.input_names:
-            self.encoders[input_name] = instantiate(
-                model_config.model.encoder,
+        for enc_name, encoder_config in encoders.items():
+            self.encoders[enc_name] = instantiate(
+                encoder_config,
                 _recursive_=False,
-                in_channels_src=self.num_input_channels[input_name] + 4,
-                in_channels_dst=4,
-                hidden_dim=self.num_channels,
-                edge_dim=3,
+                in_channels_src=num_encoded_channels[enc_name],
+                in_channels_dst=NODE_COORDS_NDIMS,
+                hidden_dim=num_encoded_channels[enc_name],
+                edge_dim=EDGE_ATTR_NDIM,
             )
 
         # Processor hidden -> hidden
         self.processor = instantiate(
-            model_config.model.processor,
+            model_config.model.model.processor,
             _recursive_=False,
             num_channels=self.num_channels,
-            edge_dim=3,
+            edge_dim=EDGE_ATTR_NDIM,
         )
 
-        # Decoder hidden -> data
+        # Decoders: hidden -> ???
         self.decoders = nn.ModuleDict({})
-        for target_name in self.target_names:
-            self.decoders[target_name] = instantiate(
-                model_config.model.decoder,
+        for dec_name, decoder_config in decoders.items():
+            self.decoders[dec_name] = instantiate(
+                decoder_config,
                 _recursive_=False,
                 in_channels_src=self.num_channels,
-                in_channels_dst=self.num_input_channels[target_name] + 4,
-                hidden_dim=self.num_channels,
-                out_channels_dst=self.num_target_channels[target_name],
-                edge_dim=3,
+                in_channels_dst=NODE_COORDS_NDIMS,
+                hidden_dim=num_decoded_channels[dec_name],
+                out_channels_dst=num_decoded_channels[dec_name],
+                edge_dim=EDGE_ATTR_NDIM,
             )
 
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
@@ -146,60 +197,38 @@ class AnemoiMultiModel(nn.Module):
             input_idx = [target_vars[v] for v in common_vars]
             self.residual_connection_indices[source] = target_idx, input_idx
 
-    def _assemble_input(self, name: str, x: torch.Tensor, batch_size: int) -> tuple[torch.Tensor, torch.Tensor]:
-        # x.shape: (batch_size, multi_step, ens_dim, grid_size, num_vars)
+    def _assemble_dict(
+            self, x: dict[str, torch.Tensor], graph: HeteroData, batch_size: int
+        ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+        # IN: x.values() shape: (batch_size, multi_step, ens_dim, grid_size, num_vars)
+        # OUT: x_data.values() shape: ( (batch_size * ens_dim * grid_size), (multi_step * num_vars) )
 
-        # x_src_data_latent = self.graph_node_embedder(
-        #   graph[name],
-        #   einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
-        #   name,
-        #   batch_size=batch_size
-        # )
+        x_data, x_data_skip = {}, {}
+        for name, x_source_raw in x.items():
+            x_data[name] = self._assemble_tensor(name, x_source_raw, graph, batch_size=batch_size)
+            x_data[name] = torch.cat(
+                (
+                    einops.rearrange(x_source_raw, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
+                    self.get_node_coords(graph, name),
+                    # TODO: add node trainable parameters
+                ),
+                dim=-1,  # feature dimension
+            )
 
-        # normalize and add data positional info (lat/lon)
-        x_src_data_latent = torch.cat(
-            (
-                einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
-                self.node_attributes(name, batch_size=batch_size),
-            ),
-            dim=-1,  # feature dimension
-        )
+            x_data_skip[name] = x_source_raw[:, -1, :, :, :]
 
-        x_skip = x[:, -1, :, :, :]
+        return x_data, x_data_skip
 
-        return x_src_data_latent, x_skip
-
-    def _assemble_target(self, name: str, x: torch.Tensor, batch_size: int) -> tuple[torch.Tensor, torch.Tensor]:
-        # x_dst_data_latent = self.graph_node_embedder(
-        #   graph[name],
-        #   name,
-        #   batch_size=batch_size
-        # )
+    def _assemble_tensor(self, name: str, x: torch.Tensor, graph: HeteroData, batch_size: int) -> tuple[torch.Tensor, torch.Tensor]:
         x_dst_data_latent = torch.cat(
             (
                 einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
-                self.node_attributes(name, batch_size=batch_size),
+                self.get_node_coords(graph, name),
+                # TODO: add node trainable parameters
             ),
             dim=-1,  # feature dimension
         )
         return x_dst_data_latent
-
-    def _disassemble_target(
-        self,
-        x: torch.Tensor,
-        batch_size: int,
-        ensemble_size: int,
-    ) -> dict[str, torch.Tensor]:
-        return (
-            einops.rearrange(
-                x,
-                "(batch ensemble grid) vars -> batch ensemble grid vars",
-                batch=batch_size,
-                ensemble=ensemble_size,
-            )
-            .to(dtype=torch.float32)
-            .clone()
-        )
 
     def _run_mapper(
         self,
@@ -254,27 +283,31 @@ class AnemoiMultiModel(nn.Module):
         batch_size: int,
         model_comm_group: Optional[ProcessGroup] = None,
     ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor], dict[str, torch.Tensor]]:
-        x_data, x_hidden = x
+        x_data_raw, x_hidden_raw = x
+        x_data_latents = self.node_embedder(x_data_raw)
 
-        x_data_latent, x_hidden_latent, x_data_skip = {}, {}, {}
-        for name in self.input_names:
-            x_input_data, x_data_skip[name] = self._assemble_input(name, x_data[name], batch_size)
+        # TODO: Merge subgraph
+        graph, _ = merge_graph_sources(graph, self.encoder_sources)
 
-            shard_shapes_input_data = get_shard_shapes(x_input_data, 0, model_comm_group)
+        x_hidden_latents = {}
+        for encoder_name, x_data_latent in x_data_latents.items():
+            shard_shapes_input_data = get_shard_shapes(x_data_latent, 0, model_comm_group)
 
-            x_data_latent[name], x_hidden_latent[name] = self._run_mapper(
-                self.encoders[name],
-                (x_input_data, x_hidden),
-                sub_graph=graph[(name, "to", self.hidden_name)].to(x_input_data.device),
+            _, x_hidden_latents[encoder_name] = self._run_mapper(
+                self.encoders[encoder_name],
+                (x_data_latent, x_hidden_raw),
+                sub_graph=graph[(encoder_name, "to", self.hidden_name)].to(x_data_latent.device),
                 batch_size=batch_size,
                 shard_shapes=(shard_shapes_input_data, shard_shapes_hidden),
                 model_comm_group=model_comm_group,
             )
 
-        return x_data_latent, x_hidden_latent, x_data_skip
+        x_hidden_latent = self.merge_latents(x_hidden_latents)
+
+        return x_data_latents, x_hidden_latent
 
     def merge_latents(self, latents: dict[str, torch.Tensor]) -> torch.Tensor:
-        # TODO: implement different strategies: sum, average, learnable, ...
+        # TODO: implement different strategies: sum, average, concat, learnable, ...
         return latents[list(latents.keys())[0]]
 
     def decode(
@@ -286,32 +319,31 @@ class AnemoiMultiModel(nn.Module):
         ensemble_size: int,
         model_comm_group: Optional[ProcessGroup] = None,
     ):
-        x_hidden_latent, x_encoded_latents, x_raw_target = x
+        x_hidden_latent, x_raw_target = x
+
+        sources = {v: k for k, v in self.decoder_sources.items()}
+        graph, node_slices = merge_graph_sources(graph, sources)
 
         x_out = {}
-        for name in self.target_names:
-            if name in x_encoded_latents:
-                x_target_latent = x_encoded_latents[name]
+        for dec_name in self.decoders.keys():
+            if dec_name in x_raw_target:
+                x_target_latent = self._assemble_tensor(dec_name, x_raw_target[dec_name], graph, batch_size=batch_size)
             else:
-                if name in x_raw_target:
-                    x_target_latent = self._assemble_target(name, x_raw_target[name], batch_size)
-                else:
-                    x_target_latent = self.node_attributes(name, batch_size=batch_size)
+                x_target_latent = self.get_node_coords(graph, dec_name)
 
-            shard_shapes_target_data = get_shard_shapes(
-                x_target_latent, 0, model_comm_group
-            )  # This may be passed when name in x_target_data
+            shard_shapes_target_data = get_shard_shapes(x_target_latent, 0, model_comm_group)
+            # This may be passed when name in x_target_data
 
-            x_out[name] = self._run_mapper(
-                self.decoders[name],
+            x_out[dec_name] = self._run_mapper(
+                self.decoders[dec_name],
                 (x_hidden_latent, x_target_latent),
-                sub_graph=graph[(self.hidden_name, "to", name)].to(x_hidden_latent.device),
+                sub_graph=graph[(self.hidden_name, "to", dec_name)].to(x_hidden_latent.device),
                 batch_size=batch_size,
                 shard_shapes=(shard_shapes_hidden, shard_shapes_target_data),
                 model_comm_group=model_comm_group,
             )
 
-            x_out[name] = self._disassemble_target(x_out[name], batch_size, ensemble_size)
+        x_out = self.node_projector(x_out, node_slices)
 
         return x_out
 
@@ -334,6 +366,10 @@ class AnemoiMultiModel(nn.Module):
             y[tensor_name] = pred
 
         return y
+    
+    def get_node_coords(self, graph: HeteroData, name: str) -> torch.Tensor:
+        assert name in graph.node_types, f"{name} do not exist. Valid graph nodes: {graph.node_types}."
+        return torch.cat([torch.sin(graph[name].x), torch.cos(graph[name].x)], dim=-1)
 
     def forward(
         self, x: dict[str, Tensor], graph: HeteroData, *, model_comm_group: Optional[ProcessGroup] = None, **kwargs
@@ -341,21 +377,18 @@ class AnemoiMultiModel(nn.Module):
         batch_size = x[list(x.keys())[0]].shape[0]
         ensemble_size = 1
 
-        x_hidden = self.node_attributes(self.hidden_name, batch_size=batch_size)
-        # x_hidden = self.graph_node_embedder(
-        #   graph[self.hidden_name], None, self.hidden_name, batch_size=batch_size
-        # )
+        x_hidden = self.get_node_coords(graph, self.hidden_name)
         shard_shapes_hidden = get_shard_shapes(x_hidden, 0, model_comm_group)
 
-        x_data_latent, x_hidden_latent, x_data_skip = self.encode(
-            (x, x_hidden),
+        x_data_latents, x_data_skip = self._assemble_dict(x, graph, batch_size=batch_size)
+
+        x_data_latents, x_hidden_latent = self.encode(
+            (x_data_latents, x_hidden),
             graph,
-            shard_shapes_hidden=shard_shapes_hidden,
             batch_size=batch_size,
+            shard_shapes_hidden=shard_shapes_hidden,
             model_comm_group=model_comm_group,
         )
-
-        x_hidden_latent = self.merge_latents(x_hidden_latent)
 
         x_latent_proc = self.processor(
             x_hidden_latent,
@@ -369,7 +402,7 @@ class AnemoiMultiModel(nn.Module):
             x_latent_proc = x_latent_proc + x_hidden_latent
 
         x_out = self.decode(
-            (x_hidden_latent, x_data_latent, x),
+            (x_latent_proc, x_data_latents),
             graph,
             shard_shapes_hidden=shard_shapes_hidden,
             batch_size=batch_size,
@@ -379,4 +412,5 @@ class AnemoiMultiModel(nn.Module):
 
         x_out = self.residual_connection(x_out, x_data_skip)
         x_out = self.bound(x_out)
+
         return x_out
