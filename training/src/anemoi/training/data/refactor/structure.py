@@ -10,14 +10,15 @@ import datetime
 import inspect
 import json
 import os
-from collections import defaultdict
 from functools import wraps
 
 import numpy as np
+import torch
 import yaml
 from rich import print
 from rich.console import Console
 from rich.tree import Tree
+from torch import Tensor
 
 from anemoi.training.data.refactor.sample_provider import sample_provider_factory
 from anemoi.utils.dates import frequency_to_string
@@ -58,13 +59,16 @@ def format_timedeltas(k, v):
 
 
 def format_array(k, v):
-    return f"{k} : array of shape {v.shape} with mean {np.nanmean(v):.2f}"
+    if isinstance(v, np.ndarray):
+        return f"{k} : np.array of shape {v.shape} with mean {np.nanmean(v):.2f}"
+    if isinstance(v, Tensor):
+        device = v.device if hasattr(v, "device") else "cpu"
+        return f"{k} : tensor of shape {v.shape} with mean {torch.nanmean(v):.2f} on {device}"
+    return f"{k} : ❌ {type(v)}"
 
 
 def format_data(k, v):
-    if isinstance(v, np.ndarray):
-        return format_array(k, v)
-    return f"data: ❌ {type(v)}"
+    return format_array(k, v)
 
 
 def format_default(k, v):
@@ -81,7 +85,7 @@ def format_none(k, v):
     return None
 
 
-FORMATTERS = defaultdict(lambda: format_default)
+FORMATTERS = {}
 FORMATTERS.update(
     dict(
         shape=format_shape,
@@ -93,12 +97,18 @@ FORMATTERS.update(
         dataspecs=format_none,
     ),
 )
+FORMATTERS.update({Tensor: format_array, np.ndarray: format_array})
 
 
 def format_key_value(key, v):
     # TODO: should read from utils.configs
     if os.environ.get("ANEMOI_CONFIG_VERBOSE_STRUCTURE", "0") == "1":
-        return FORMATTERS[key](key, v)
+        if key in FORMATTERS:
+            return FORMATTERS[key](key, v)
+        if type(v) in FORMATTERS:
+            return FORMATTERS[type(v)](key, v)
+        print(type(v), type(v) is Tensor)
+        return format_default(key, v)
     return None
 
 
@@ -145,6 +155,10 @@ class TupleStructure(StructureMixin, tuple):
 
     def content(self, args):
         return [x.content(args) for x in self]
+
+    def to_device(self, *args, **kwargs):
+        for i in self:
+            i.to_device(*args, **kwargs)
 
     def __getattr__(self, name):
         if name.startswith("__") and name.endswith("__"):
@@ -193,6 +207,10 @@ class DictStructure(StructureMixin, dict):
 
     def content(self, args):
         return {k: v.content(args) for k, v in self.items()}
+
+    def to_device(self, *args, **kwargs):
+        for k, v in self.items():
+            v.to_device(*args, **kwargs)
 
     def __getattr__(self, name: str):
         if name.startswith("__") and name.endswith("__"):
@@ -245,6 +263,14 @@ class LeafStructure(StructureMixin):
             return self._content[args]
         return self.__class__({k: self._content[k] for k in args})
 
+    def to_device(self, *args, **kwargs):
+        """Move the content of the structure to the specified device."""
+        for k, v in self._content.items():
+            if hasattr(v, "to_device"):
+                v = v.to_device(*args, **kwargs)
+            self._content[k] = v
+        return self
+
     def __getattr__(self, name: str):
         if name.startswith("__") and name.endswith("__"):
             return super().__getattr__(name)
@@ -289,8 +315,8 @@ class LeafStructure(StructureMixin):
             v = self._content[key]
             txt = format_key_value(key, v)
             if txt is None:
-                txt = type(v)
-            return Tree(f"{prefix} 📦 {key}:{txt}")
+                txt = f"{key}: {type(v)}"
+            return Tree(f"{prefix} 📦 {txt}")
 
         content_txt = " ".join(f"{k}" for k in self._content if k != "dataspecs")
         tree = Tree(f"{prefix} 📦 {content_txt}")
