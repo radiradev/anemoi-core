@@ -406,6 +406,12 @@ class AnemoiMultiModel(AnemoiModel):
     def forward(
         self, x: dict[str, Tensor], graph: HeteroData, *, model_comm_group: Optional[ProcessGroup] = None, **kwargs
     ) -> dict[str, Tensor]:
+
+        if self.sample_static_info.keys() != x.keys():
+            print(self.sample_static_info)
+            print(x)
+            raise ValueError(f"Input keys x={x.keys()} do not match static info keys {self.sample_static_info.keys()}.")
+
         batch_size = x[list(x.keys())[0]].shape[0]
         ensemble_size = 1
 

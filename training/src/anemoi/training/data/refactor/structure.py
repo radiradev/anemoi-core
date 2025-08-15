@@ -114,6 +114,13 @@ class StructureMixin:
         other = _structure_factory(dataspecs=self.dataspecs, **kwargs)
         self.update(other)
 
+    def format_native(self, **kwargs):
+        return _structure_factory(dataspecs=self.dataspecs, **kwargs)
+
+    def merge(self, other):
+        merged = {}
+        return _structure_factory(dataspecs=self.dataspecs, **merged)
+
 
 Structure = StructureMixin
 
@@ -714,8 +721,8 @@ sample:
         assert False, "Expected new_content not an object with attributes."
     except AttributeError:
         pass
-    obj.add_from_native(new=native)
-    print(obj)
+
+    print(f"{obj.format_native(new=native)=}")
 
     print("------------------------")
 
