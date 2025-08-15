@@ -85,7 +85,7 @@ class AnemoiMultiModel(nn.Module):
     def __init__(
         self,
         *,
-        sample_provider: "Structure",
+        sample_static_info: "Structure",
         model_config: DotDict,
     ) -> None:
         """Initializes the graph neural network.
@@ -105,17 +105,17 @@ class AnemoiMultiModel(nn.Module):
         self.latent_residual_connection = True
         self.merge_latents_method = model_config.model.model.merge_latents
         self._define_residual_connection_indices(
-            sample_provider.name_to_index["input"],
-            sample_provider.name_to_index["target"],
+            sample_static_info.name_to_index["input"],
+            sample_static_info.name_to_index["target"],
             residual_connections=model_config.model.get("residual_connections", []),
         )
 
         def num_channels(name_to_index, **kwargs):
             return len(name_to_index["variables"]) * len(name_to_index["offset"])
 
-        sample_provider = sample_provider.apply(num_channels)
-        self.num_input_channels: dict[str, int] = {k: v + 4 for k, v in sample_provider["input"].num_channels.items()}
-        self.num_target_channels: dict[str, int] = sample_provider["target"].num_channels
+        num_channels_ = sample_static_info.apply(num_channels)
+        self.num_input_channels: dict[str, int] = {k: v + 4 for k, v in num_channels_["input"].num_channels.items()}
+        self.num_target_channels: dict[str, int] = num_channels_["target"].num_channels
 
         self.hidden_name: str = model_config.model.model.hidden_name
         encoders, self.encoder_sources, num_encoded_channels = extract_sources(model_config.model.model.encoders)
@@ -177,9 +177,9 @@ class AnemoiMultiModel(nn.Module):
         #    [
         #        instantiate(
         #            cfg,
-        #            name_to_index=sample_provider.target.name_to_index,
-        #            statistics=sample_provider.input.statistics,
-        #            name_to_index_stats=sample_provider.input.name_to_index,
+        #            name_to_index=sample_static_info.target.name_to_index,
+        #            statistics=sample_static_info.input.statistics,
+        #            name_to_index_stats=sample_static_info.input.name_to_index,
         #        )
         #        for cfg in getattr(model_config.model, "bounding", [])
         #    ]

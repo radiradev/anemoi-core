@@ -115,6 +115,9 @@ class StructureMixin:
         self.update(other)
 
 
+Structure = StructureMixin
+
+
 class TupleStructure(StructureMixin, tuple):
     # beware, inheriting from tuple, do not use __init__ method
     def tree(self, prefix="", **kwargs):
@@ -362,7 +365,7 @@ class LeafStructure(StructureMixin):
         return self._content
 
 
-def decorator(*args, output=None, **kwargs):
+def on_structure(*args, output=None, **kwargs):
     def _decorator(func):
         @wraps(func)
         def wrapper(structure):
@@ -685,14 +688,14 @@ sample:
 
     print("[blue]Result of applying the function to the structure:[/blue]")
 
-    @decorator(output="new_content")
+    @on_structure(output="new_content")
     def times100(data, name_to_index, **kwargs):
         # name_to_index is not used here, but could be useful in a real function
         return data * 100
 
     print(times100(obj))
 
-    # @decorator(output=["new1", "new2"])
+    # @on_structure(output=["new1", "new2"])
     # def times100_(data, name_to_index, **kwargs):
     #     # name_to_index is not used here, but could be useful in a real function
     #     return data * 100, data * 10
@@ -716,7 +719,7 @@ sample:
 
     print("------------------------")
 
-    @decorator
+    @on_structure
     def times_100(data, name_to_index, **kwargs):
         # name_to_index is not used here, but could be useful in a real function
         return dict(new_content=data - 100)

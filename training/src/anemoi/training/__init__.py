@@ -15,3 +15,6 @@ try:
 except ImportError:  # pragma: no cover
     # Local copy or not installed with setuptools
     __version__ = "999"
+
+from anemoi.training.data.refactor.structure import Structure  # noqa: F401
+from anemoi.training.data.refactor.structure import on_structure  # noqa: F401

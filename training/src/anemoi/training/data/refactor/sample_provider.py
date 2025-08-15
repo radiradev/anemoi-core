@@ -208,14 +208,16 @@ class SampleProvider:
     def static_info(self):
         from anemoi.training.data.refactor.structure import structure_factory
 
-        return structure_factory(content={
-            "name_to_index": self.name_to_index,
-            "statistics": self.statistics,
-            "processors": self.processors,
-            "normaliser": self.normaliser,
-            "extra": self.extra,
-            "dataspecs": self.dataspecs,
-        })
+        return structure_factory(
+            content={
+                "name_to_index": self.name_to_index,
+                "statistics": self.statistics,
+                "processors": self.processors,
+                "normaliser": self.normaliser,
+                "extra": self.extra,
+                "dataspecs": self.dataspecs,
+            },
+        )
 
     def set_min_max_offsets(self, minimum=None, maximum=None, dropped_samples=None):
         self.min_offset = minimum

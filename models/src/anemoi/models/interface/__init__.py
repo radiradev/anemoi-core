@@ -21,7 +21,8 @@ from anemoi.models.distributed.shapes import apply_shard_shapes
 from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.models.mult_encoder_processor_decoder import AnemoiMultiModel
 from anemoi.models.preprocessing import Processors
-from anemoi.training.data.refactor.structure import decorator
+from anemoi.models.preprocessing.normalizer import normaliser_factory
+from anemoi.training import on_structure
 from anemoi.utils.config import DotDict
 
 
@@ -31,24 +32,6 @@ def processor_factory(name_to_index, statistics, processors, **kwargs) -> list[l
         [name, instantiate(cfg, name_to_index=name_to_index["variables"], statistics=statistics["variables"])]
         for name, cfg in processors.items()
     ]
-
-
-@decorator(output="normaliser_", merge=True)
-def normaliser_factory(name_to_index, statistics, normaliser, **kwargs):
-    if "_target_" not in normaliser:
-        config = normaliser
-    elif normaliser.get("_target_") == "anemoi.models.preprocessing.normalizer.InputNormalizer":
-        config = normaliser["config"]
-    else:
-        raise NotImplementedError("TODO: use hydra instanciate for this custom normaliser")
-
-    from anemoi.models.preprocessing.normalizer import InputNormalizer
-
-    return InputNormalizer(
-        name_to_index=name_to_index["variables"],
-        statistics=statistics["variables"],
-        config=config,
-    )
 
 
 class AnemoiModelInterface(torch.nn.Module):
@@ -121,7 +104,7 @@ class AnemoiModelInterface(torch.nn.Module):
         self.model = AnemoiMultiModel(
             # self.config.model.model,
             model_config=self.config,
-            sample_provider=self.sample_static_info,  # ❌❌ TODO
+            sample_static_info=self.sample_static_info,
             # graph_data=self.graph_data,
             # truncation_data=self.truncation_data,
             # _recursive_=False,  # Disables recursive instantiation by Hydra

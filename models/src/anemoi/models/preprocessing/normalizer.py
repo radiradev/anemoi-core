@@ -16,8 +16,29 @@ import numpy as np
 import torch
 
 from anemoi.models.preprocessing import BasePreprocessor
+from anemoi.training import on_structure
 
 LOGGER = logging.getLogger(__name__)
+
+
+@on_structure(output="normaliser_", merge=False)
+def normaliser_factory(name_to_index, statistics, normaliser, **kwargs):
+    if "_target_" not in normaliser:
+        # If the normaliser is not a Hydra instantiation, use the config directly
+        config = normaliser
+    elif normaliser.get("_target_") == "anemoi.models.preprocessing.normalizer.InputNormalizer":
+        # if the normaliser uses the default class, use the config directly
+        config = normaliser["config"]
+    else:
+        raise NotImplementedError("TODO: use hydra instanciate for this custom normaliser")
+
+    from anemoi.models.preprocessing.normalizer import InputNormalizer
+
+    return InputNormalizer(
+        name_to_index=name_to_index["variables"],
+        statistics=statistics["variables"],
+        config=config,
+    )
 
 
 class InputNormalizer(BasePreprocessor):
