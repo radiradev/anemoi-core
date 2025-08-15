@@ -22,6 +22,7 @@ from torch.utils.data import IterableDataset
 from anemoi.training.data.grid_indices import BaseGridIndices
 from anemoi.training.utils.seeding import get_base_seed
 from anemoi.training.utils.usable_indices import get_usable_indices
+import os
 
 LOGGER = logging.getLogger(__name__)
 
@@ -204,6 +205,12 @@ class NativeGridDataset(IterableDataset):
         shard_size = len(self.valid_date_indices) // self.sample_comm_num_groups
         shard_start = self.sample_comm_group_id * shard_size
         shard_end = (self.sample_comm_group_id + 1) * shard_size
+
+        if (os.getenv("DONT_SPLIT_DDP", "0") == "1"):
+            LOGGER.info("Not spliting dataset across model instances")
+            shard_size = len(self.valid_date_indices) 
+            shard_start = 0
+            shard_end = shard_size 
 
         shard_len = shard_end - shard_start
         self.n_samples_per_worker = shard_len // n_workers
