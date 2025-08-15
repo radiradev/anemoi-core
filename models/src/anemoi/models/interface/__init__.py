@@ -97,7 +97,7 @@ class AnemoiModelInterface(torch.nn.Module):
 
         from anemoi.training.data.refactor.structure import StructureMixin
 
-        assert isinstance(self.sample_provider, StructureMixin), "Sample provider must be an instance of SampleProvider"
+        assert isinstance(self.sample_provider, StructureMixin), "Sample provider must be an Structure (actually not a SampleProvider)"
         # normalisers = normaliser_factory(self.sample_provider)
 
         # Assign the processor list pre- and post-processors
