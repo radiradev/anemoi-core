@@ -23,13 +23,25 @@ from torch_geometric.data import HeteroData
 from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.layers.projection import NodeEmbedder
 from anemoi.models.layers.projection import NodeProjector
+from anemoi.models.preprocessing import Processors
+from anemoi.models.preprocessing.normalizer import normaliser_factory
 from anemoi.utils.config import DotDict
+
+from .base import AnemoiModel
 
 LOGGER = logging.getLogger(__name__)
 
 
 NODE_COORDS_NDIMS = 4  # cos_lat, sin_lat, cos_lon, sin_lon
 EDGE_ATTR_NDIM = 3  # edge_length, edge_dir0, edge_dir1
+
+
+def processor_factory(name_to_index, statistics, processors, **kwargs) -> list[list]:
+
+    return [
+        [name, instantiate(cfg, name_to_index=name_to_index["variables"], statistics=statistics["variables"])]
+        for name, cfg in processors.items()
+    ]
 
 
 def extract_sources(config, reversed: bool = False) -> tuple[dict, dict[str, list[str]]]:
@@ -79,7 +91,7 @@ def merge_graph_sources(graph: HeteroData, sources: dict[str, str]) -> HeteroDat
     return graph, slices
 
 
-class AnemoiMultiModel(nn.Module):
+class AnemoiMultiModel(AnemoiModel):
     """Message passing graph neural network."""
 
     def __init__(
@@ -97,8 +109,21 @@ class AnemoiMultiModel(nn.Module):
         graph_data : HeteroData
             Graph definition
         """
+        print(f"✅ model : {self.__class__.__name__}")
         super().__init__()
         model_config = DotDict(model_config)
+
+        self.sample_static_info = sample_static_info
+
+        # Instantiate processors
+        self.normalisers = normaliser_factory(self.sample_static_info)
+
+        preprocessors = self.sample_static_info.apply(processor_factory)
+        # Assign the processor list pre- and post-processors
+        self.input_pre_processors = Processors(preprocessors["input"].processor_factory)
+        self.target_pre_processors = Processors(preprocessors["target"].processor_factory)
+        self.target_post_processors = Processors(preprocessors["target"].processor_factory, inverse=True)
+        # TODO: Implemente structure.processor_factory (not only at LeafStructure)
 
         self.num_channels = model_config.model.num_channels
 

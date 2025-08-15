@@ -29,7 +29,6 @@ from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
 from scipy.sparse import load_npz
 
-from anemoi.training.data.refactor.structure import structure_factory
 from anemoi.training.diagnostics.callbacks import get_callbacks
 from anemoi.training.diagnostics.logger import get_mlflow_logger
 from anemoi.training.diagnostics.logger import get_tensorboard_logger
@@ -176,7 +175,7 @@ class AnemoiTrainer:
     def model(self) -> pl.LightningModule:
         """Provide the model instance."""
         # TODO: Move check to ??? mapper instantiation? schema validation?
-        #assert (
+        # assert (
         #    not (
         #        "GLU" in self.config.model.processor.layer_kernels["Activation"]["_target_"]
         #        and ".Transformer" in self.config.model.processor.target_
@@ -189,8 +188,8 @@ class AnemoiTrainer:
         #        "GLU" in self.config.model.decoder.layer_kernels["Activation"]["_target_"]
         #        and ".Transformer" in self.config.model.decoder.target_
         #    )
-        #), "GLU activation function is not supported in Transformer models, due to fixed dimensions. "
-        #"Please use a different activation function."
+        # ), "GLU activation function is not supported in Transformer models, due to fixed dimensions. "
+        # "Please use a different activation function."
 
         sample_static_info = self.datamodule.training_samples.static_info
 
@@ -203,6 +202,7 @@ class AnemoiTrainer:
         }
 
         model_task = get_class(self.config.training.model_task)
+        print(f"✅ {model_task=}")
         model = model_task(**kwargs)  # GraphForecaster -> pl.LightningModule
 
         # Load the model weights

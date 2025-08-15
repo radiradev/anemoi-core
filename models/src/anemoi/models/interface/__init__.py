@@ -20,18 +20,7 @@ from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.shapes import apply_shard_shapes
 from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.models.mult_encoder_processor_decoder import AnemoiMultiModel
-from anemoi.models.preprocessing import Processors
-from anemoi.models.preprocessing.normalizer import normaliser_factory
-from anemoi.training import on_structure
 from anemoi.utils.config import DotDict
-
-
-def processor_factory(name_to_index, statistics, processors, **kwargs) -> list[list]:
-
-    return [
-        [name, instantiate(cfg, name_to_index=name_to_index["variables"], statistics=statistics["variables"])]
-        for name, cfg in processors.items()
-    ]
 
 
 class AnemoiModelInterface(torch.nn.Module):
@@ -86,19 +75,6 @@ class AnemoiModelInterface(torch.nn.Module):
 
     def _build_model(self) -> None:
         """Builds the model and pre- and post-processors."""
-        # Instantiate processors
-        preprocessors = self.sample_static_info.apply(processor_factory)
-
-        from anemoi.training.data.refactor.structure import StructureMixin
-
-        assert isinstance(self.sample_static_info, StructureMixin), type(self.sample_static_info)
-        normalisers = normaliser_factory(self.sample_static_info)
-
-        # Assign the processor list pre- and post-processors
-        self.input_pre_processors = Processors(preprocessors["input"].processor_factory)
-        self.target_pre_processors = Processors(preprocessors["target"].processor_factory)
-        self.target_post_processors = Processors(preprocessors["target"].processor_factory, inverse=True)
-        # TODO: Implemente structure.processor_factory (not only at LeafStructure)
 
         # Instantiate the model
         self.model = AnemoiMultiModel(
@@ -132,6 +108,10 @@ class AnemoiModelInterface(torch.nn.Module):
         torch.Tensor
             Predicted data.
         """
+
+        # TODO: this method is only used for inference (unpickle + run predict_step)
+        # this method should be moved to the model where things are defined.
+        # This should be done along with the integration with inference
         batch = self.pre_processors(batch, in_place=False)
 
         with torch.no_grad():

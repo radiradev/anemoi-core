@@ -407,8 +407,8 @@ class BaseForecasterModule(BaseGraphModule):
 
         # for validation not normalized in-place because remappers cannot be applied in-place
         # We need shape: (bath_size, time, ens, latlons, n_vars)
-        batch["input"] = self.model.input_pre_processors(batch["input"], in_place=not validation_mode)
-        batch["target"] = self.model.target_pre_processors(batch["target"], in_place=not validation_mode)
+        batch["input"] = self.model.model.input_pre_processors(batch["input"], in_place=not validation_mode)
+        batch["target"] = self.model.model.target_pre_processors(batch["target"], in_place=not validation_mode)
 
         # Delayed scalers need to be initialized after the pre-processors once
         if False:  # self.is_first_step:
