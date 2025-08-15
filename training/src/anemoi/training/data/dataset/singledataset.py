@@ -205,11 +205,6 @@ class NativeGridDataset(IterableDataset):
         shard_size = len(self.valid_date_indices) // self.sample_comm_num_groups
         shard_start = self.sample_comm_group_id * shard_size
         shard_end = (self.sample_comm_group_id + 1) * shard_size
-        if os.getenv("DDP_DONT_SPLIT_DATASET", "0") = "1":
-            shard_size = len(self.valid_date_indices)
-            shard_start = 0
-            shard_end = shard_size
-
 
         if (os.getenv("DONT_SPLIT_DDP", "0") == "1"):
             LOGGER.info("Not spliting dataset across model instances")
