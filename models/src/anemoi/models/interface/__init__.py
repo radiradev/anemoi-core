@@ -21,16 +21,23 @@ from anemoi.models.distributed.shapes import apply_shard_shapes
 from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.models.mult_encoder_processor_decoder import AnemoiMultiModel
 from anemoi.models.preprocessing import Processors
+from anemoi.training.data.refactor.structure import decorator
 from anemoi.utils.config import DotDict
 
 
 def processor_factory(name_to_index, statistics, processors, **kwargs) -> list[list]:
-    from anemoi.models.preprocessing.normalizer import InputNormalizer
 
     return [
         [name, instantiate(cfg, name_to_index=name_to_index["variables"], statistics=statistics["variables"])]
         for name, cfg in processors.items()
     ]
+
+
+@decorator
+def normaliser_factory(name_to_index, statistics, **kwargs):
+    from anemoi.models.preprocessing.normalizer import InputNormalizer
+
+    return InputNormalizer(name_to_index=name_to_index["variables"], statistics=statistics["variables"])
 
 
 class AnemoiModelInterface(torch.nn.Module):
@@ -87,6 +94,11 @@ class AnemoiModelInterface(torch.nn.Module):
         """Builds the model and pre- and post-processors."""
         # Instantiate processors
         preprocessors = self.sample_provider.apply(processor_factory)
+
+        from anemoi.training.data.refactor.structure import StructureMixin
+
+        assert isinstance(self.sample_provider, StructureMixin), "Sample provider must be an Structure (actually not a SampleProvider)"
+        # normalisers = normaliser_factory(self.sample_provider)
 
         # Assign the processor list pre- and post-processors
         self.input_pre_processors = Processors(preprocessors["input"].processor_factory)

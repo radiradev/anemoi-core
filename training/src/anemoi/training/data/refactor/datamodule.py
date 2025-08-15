@@ -18,7 +18,7 @@ from torch.utils.data import DataLoader
 from anemoi.training.data.refactor.dataset import NativeGridMultDataset
 from anemoi.training.data.refactor.read_config import convert_data_config
 from anemoi.training.data.refactor.read_config import convert_sample_config
-from anemoi.training.data.refactor.sample_provider import sample_provider_factory
+from anemoi.training.data.refactor.structure import sample_provider_factory
 from anemoi.training.data.utils import get_dataloader_config
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.utils.worker_init import worker_init_func

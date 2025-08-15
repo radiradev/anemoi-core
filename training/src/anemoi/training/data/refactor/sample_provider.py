@@ -1,3 +1,12 @@
+# (C) Copyright 2025 Anemoi contributors.
+#
+# This software is licensed under the terms of the Apache Licence Version 2.0
+# which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
+#
+# In applying this licence, ECMWF does not waive the privileges and immunities
+# granted to it by virtue of its status as an intergovernmental organisation
+# nor does it submit to any jurisdiction.
+
 import datetime
 import warnings
 from functools import cached_property
@@ -10,15 +19,10 @@ from rich import print
 from rich.console import Console
 from rich.tree import Tree
 
-from anemoi.training.data.refactor.data_handler import DataHandler
-from anemoi.training.data.refactor.dimension import DataDimension
-from anemoi.training.data.refactor.dimension import IterableDimension
-from anemoi.training.data.refactor.dimension import VariablesDimension
-from anemoi.training.data.refactor.dimension import VariablesList
-from anemoi.training.data.refactor.dimension import dimension_factory
-from anemoi.training.data.refactor.structure import structure_factory
 from anemoi.utils.dates import frequency_to_string
 from anemoi.utils.dates import frequency_to_timedelta
+
+from .data_handler import DataHandler
 
 
 def resolve_reference(config):
@@ -128,6 +132,67 @@ class Context:
         return f"Context(start={self.start}, end={self.end}, offset={self.offset})"
 
 
+class VariablesList:
+    def __init__(self, variables: list[str] | dict, data=None):
+        if data is not None:
+            warnings.warn(
+                "Using 'data' argument is deprecated, use variables with '.' instead",
+                DeprecationWarning,
+            )
+            if not isinstance(variables, (list, tuple)):
+                raise ValueError(
+                    f"Expected list or tuple for variables, got {type(variables)}: {variables}, data={data}",
+                )
+            self.lst = [f"{data}.{v}" for v in variables]
+            return
+
+        assert data is None, data
+
+        if isinstance(variables, dict):
+            self.lst = []
+            for group, vars_ in variables.items():
+                if isinstance(vars_, str):
+                    vars_ = [vars_]
+                if not isinstance(vars_, (list, tuple)):
+                    raise ValueError(f"Expected list or tuple for variables, got {type(vars_)}: {vars_}")
+                for v in vars_:
+                    if not isinstance(v, str):
+                        raise ValueError(f"Expected string for variable, got {type(v)}: {v}")
+                    if "." in v:
+                        raise ValueError(
+                            f"Variable '{v}' should not contain a group name ('.' expected) in {variables})",
+                        )
+                self.lst += [f"{group}.{v}" for v in vars_]
+            return
+
+        if not isinstance(variables, (list, tuple)):
+            raise ValueError(f"Expected list or tuple for variables, got {type(variables)}: {variables}")
+
+        for v in variables:
+            if not isinstance(v, str):
+                raise ValueError(f"Expected string for variable, got {type(v)}: {v} in {variables}")
+            if "." not in v:
+                raise ValueError(f"Variable '{v}' does not contain a group name ('.' expected) in {variables})")
+        self.lst = variables
+
+    @property
+    def as_list(self):
+        return self.lst
+
+    @cached_property
+    def as_dict(self):
+        dic = {}
+        for v in self.lst:
+            group, var = v.split(".", 1)
+            if group not in dic:
+                dic[group] = []
+            dic[group].append(var)
+        return dic
+
+    def __repr__(self):
+        return f"({', '.join(self.lst)})"
+
+
 class SampleProvider:
     min_offset = None
     max_offset = None
@@ -205,30 +270,35 @@ class SampleProvider:
         return dic
 
     def get_obj(self, item):
+        from anemoi.training.data.refactor.structure import structure_factory
+
         raw = self.get_native(item)
         if "dataspecs" not in raw:
             raw["dataspecs"] = self.dataspecs
-        return structure_factory(**raw)
+        return structure_factory(content=raw)
 
     def get_things_that_do_not_depend_on_the_index(self):
         """Returns a structure that does not depend on the index."""
+        from anemoi.training.data.refactor.structure import structure_factory
+
         return structure_factory(
-            name_to_index=self.name_to_index,
-            statistics=self.statistics,
-            dataspecs=self.dataspecs,
-            extra=self.extra,
-            normaliser=self.normaliser,
-            imputer=self.imputer,
+            content=dict(
+                name_to_index=self.name_to_index,
+                statistics=self.statistics,
+                dataspecs=self.dataspecs,
+                extra=self.extra,
+                normaliser=self.normaliser,
+                imputer=self.imputer,
+            ),
         )
 
     def create_structure_from_batch(self, batch):
         """Creates a structure from a batch of data."""
         if not isinstance(batch, dict):
             raise TypeError(f"Expected dict for batch, got {type(batch)}: {batch}")
-        return structure_factory(
-            dataspecs=self.dataspecs,
-            **batch,
-        )
+        from anemoi.training.data.refactor.structure import structure_factory
+
+        return structure_factory(dataspecs=self.dataspecs, native=batch)
 
     @property
     def shape(self):
@@ -481,6 +551,110 @@ class OffsetSampleProvider(_FilterSampleProvider):
     emoji = "⏱️"
     label = "Offset"
     keyword = "offset"
+
+
+class Dimension:
+    def __init__(self, **raw):
+        self.raw = raw
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({', '.join(f'{k}={v}' for k, v in self.raw.items())})"
+
+
+class IterableDimension(Dimension):
+    name = None
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        key = list(kwargs.keys())[0]
+        assert key == self.name
+        if isinstance(kwargs[key], ListConfig):
+            kwargs[self.name] = list(kwargs[key])
+        self.values = kwargs[key]
+        self.check()
+
+    def check(self):
+        if not isinstance(self.values, (list, tuple)):
+            raise ValueError(f"Not implemented for non-list values in {self.name}: {self.values}")
+
+    def __repr__(self):
+        return f"{self.name}({', '.join(map(str, self.values))})"
+
+    def __len__(self):
+        return len(self.values)
+
+
+class OffsetDimension(IterableDimension):
+    name = "offset"
+
+
+class VariablesDimension(IterableDimension):
+    name = "variables"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if isinstance(self.values, dict):
+            self.values = [f"{k}.{v}" for k, vals in self.values.items() for v in vals]
+
+    def check(self):
+        pass
+
+
+class RepeatDimension(IterableDimension):
+    name = "repeat"
+
+
+class DataDimension(Dimension):
+    name = "data"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if "name" in kwargs:
+            self.name = kwargs["name"]
+
+    def __len__(self):
+        return "undefined length, not iterable"
+
+
+class SelectionDimension(Dimension):
+    # not really used, yet
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        key = list(kwargs.keys())[0]
+        assert key == self.name
+        self.values = kwargs[key]
+
+
+class EnsembleDimension(SelectionDimension):
+    name = "ensembles"
+
+
+class ValuesDimension(SelectionDimension):
+    name = "values"
+
+
+def dimension_factory(raw_dim):
+    if isinstance(raw_dim, Dimension):
+        return raw_dim
+    if isinstance(raw_dim, DictConfig):
+        raw_dim = dict(raw_dim)
+    assert isinstance(raw_dim, dict), f"Expected dict, got {type(raw_dim)}: {raw_dim}"
+    if "variables" in raw_dim:
+        return VariablesDimension(**raw_dim)
+    if "offset" in raw_dim:
+        return OffsetDimension(**raw_dim)
+    if "ensembles" in raw_dim:
+        warnings.warn("Ensemble dimensions are not implemented yet, ignoring the config")
+        return EnsembleDimension(**raw_dim)
+    if "values" in raw_dim:
+        warnings.warn("Values dimensions are not implemented yet, ignoring the config")
+        return ValuesDimension(**raw_dim)
+    if "repeat" in raw_dim:
+        warnings.warn("repeat should only be used for testing.")
+        return RepeatDimension(**raw_dim)
+    if "lat_lon" in raw_dim:
+        raise ValueError("'lat_lon' dimension is not supported'")
+    return DataDimension(**raw_dim)
 
 
 class TupleSampleProvider(SampleProvider):

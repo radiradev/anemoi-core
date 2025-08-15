@@ -6,6 +6,8 @@ import numpy as np
 import torch
 from torch.utils.data import IterableDataset
 
+# from typing import TYPE_CHECKING
+# if TYPE_CHECKING
 from anemoi.training.data.refactor.sample_provider import SampleProvider
 from anemoi.training.data.utils import GroupName
 
