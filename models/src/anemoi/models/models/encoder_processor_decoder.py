@@ -63,7 +63,8 @@ class AnemoiModelEncProcDec(nn.Module):
         self._truncation_data = truncation_data
 
         model_config = DotDict(model_config)
-        self._graph_name_data = model_config.graph.data
+        self.interpolate_batch = model_config.model.interpolate_batch
+        self._graph_name_data = model_config.graph.data if not self.interpolate_batch else model_config.graph.data_intp
         self._graph_name_hidden = model_config.graph.hidden
         self.multi_step = model_config.training.multistep_input
         self.num_channels = model_config.model.num_channels
@@ -74,7 +75,7 @@ class AnemoiModelEncProcDec(nn.Module):
         self._assert_matching_indices(data_indices)
 
         # we can't register these as buffers because DDP does not support sparse tensors
-        # these will be moved to the GPU when first used via sefl.interpolate_down/interpolate_up
+        # these will be moved to the GPU when first used via self.interpolate_down/interpolate_up
         self.A_down, self.A_up = None, None
         if "down" in self._truncation_data:
             self.A_down = self._make_truncation_matrix(self._truncation_data["down"])
@@ -182,7 +183,8 @@ class AnemoiModelEncProcDec(nn.Module):
     def _assemble_input(self, x, batch_size, grid_shard_shapes=None, model_comm_group=None):
         x_skip = x[:, -1, ...]
         x_skip = einops.rearrange(x_skip, "batch ensemble grid vars -> (batch ensemble) grid vars")
-        x_skip = self._apply_truncation(x_skip, grid_shard_shapes, model_comm_group)
+        if not self.interpolate_batch:
+            x_skip = self._apply_truncation(x_skip, grid_shard_shapes, model_comm_group)
         x_skip = einops.rearrange(x_skip, "(batch ensemble) grid vars -> batch ensemble grid vars", batch=batch_size)
 
         node_attributes_data = self.node_attributes(self._graph_name_data, batch_size=batch_size)

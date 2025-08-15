@@ -15,6 +15,7 @@ from abc import ABC
 from abc import abstractmethod
 from typing import TYPE_CHECKING
 
+import einops
 import pytorch_lightning as pl
 import torch
 from hydra.utils import instantiate
@@ -22,9 +23,12 @@ from timm.scheduler import CosineLRScheduler
 from torch.distributed.optim import ZeroRedundancyOptimizer
 
 from anemoi.models.data_indices.collection import IndexCollection
+from anemoi.models.distributed.graph import gather_channels
 from anemoi.models.distributed.graph import gather_tensor
+from anemoi.models.distributed.graph import shard_channels
 from anemoi.models.distributed.shapes import apply_shard_shapes
 from anemoi.models.interface import AnemoiModelInterface
+from anemoi.training.data.grid_indices import FullGrid
 from anemoi.training.losses import get_loss_function
 from anemoi.training.losses.base import BaseLoss
 from anemoi.training.losses.loss import get_metric_ranges
@@ -278,6 +282,12 @@ class BaseGraphModule(pl.LightningModule, ABC):
                 ", ".join(self.metrics.keys()),
             )
 
+        self.interpolate_batch = config.model.interpolate_batch
+
+        if self.interpolate_batch:
+            self.grid_indices_intp = FullGrid(nodes_name="data_intp", reader_group_size=reader_group_size)
+            self.grid_indices_intp.setup(graph_data)
+
         LOGGER.debug("Multistep: %d", self.multi_step)
 
         # lazy init model and reader group info, will be set by the DDPGroupStrategy:
@@ -387,6 +397,52 @@ class BaseGraphModule(pl.LightningModule, ABC):
 
         return loss, metrics_next
 
+    def _interpolate_batch(self, batch: torch.Tensor) -> tuple[torch.Tensor, list[int] | None, slice | None]:
+        """Interpolate the batch to the full grid size if needed.
+
+        Parameters
+        ----------
+        batch : torch.Tensor
+            Batch to interpolate
+
+        Returns
+        -------
+        tuple[torch.Tensor, list[int] | None, slice | None]
+            Interpolated batch, grid shard shapes, and grid shard slice
+        """
+        batch_size, multi_step, ensemble_size, _, _ = batch.shape
+        batch = einops.rearrange(batch, "batch steps ensemble grid vars -> (batch steps ensemble) grid vars")
+
+        if self.grid_shard_shapes is not None:
+            shard_shapes = apply_shard_shapes(batch, self.grid_dim, self.grid_shard_shapes)
+            batch = shard_channels(batch, shard_shapes, self.model_comm_group)
+
+        if self.model.model.A_down is not None:
+            self.model.model.A_down = self.model.model.A_down.to(batch.device)
+            batch = self.model.model._truncate_fields(batch, self.model.model.A_down)
+        if self.model.model.A_up is not None:
+            self.model.model.A_up = self.model.model.A_up.to(batch.device)
+            batch = self.model.model._truncate_fields(batch, self.model.model.A_up)
+
+        if self.grid_shard_shapes is not None:
+            # adjust shapes to interpolated grid
+            for i, shape in enumerate(self.grid_indices_intp.shard_shapes):
+                shard_shapes[i][self.grid_dim] = shape
+            batch = gather_channels(batch, shard_shapes, self.model_comm_group)
+
+        batch = einops.rearrange(
+            batch,
+            "(batch steps ensemble) grid vars -> batch steps ensemble grid vars",
+            batch=batch_size,
+            steps=multi_step,
+            ensemble=ensemble_size,
+        )
+
+        self.grid_shard_shapes = self.grid_indices_intp.shard_shapes
+        self.grid_shard_slice = self.grid_indices_intp.get_shard_indices(self.reader_group_rank)
+
+        return batch
+
     def on_after_batch_transfer(self, batch: torch.Tensor, _: int) -> torch.Tensor:
         """Assemble batch after transfer to GPU by gathering the batch shards if needed.
 
@@ -406,6 +462,9 @@ class BaseGraphModule(pl.LightningModule, ABC):
         else:
             batch = self.allgather_batch(batch)
             self.grid_shard_shapes, self.grid_shard_slice = None, None
+
+        if self.interpolate_batch:
+            batch = self._interpolate_batch(batch)
 
         return batch
 
