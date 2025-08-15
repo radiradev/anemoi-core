@@ -356,6 +356,14 @@ class LeafStructure(StructureMixin):
         input_name = input or "data"
         result_name = result or input_name
 
+        if function is None:
+            if len(self._names) > 2:
+                raise ValueError(f"Too many candidates for function: {self._names}")
+            for k in self._names:
+                if k == "dataspecs":
+                    continue
+                function = k
+
         func = self._content[function]
 
         if not callable(func):

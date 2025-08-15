@@ -142,4 +142,13 @@ class NativeGridMultDataset(IterableDataset):
             shuffled_chunk_indices = self.valid_date_indices  # [self.chunk_index_range]
 
         for i in shuffled_chunk_indices:
-            yield self.sample_provider[i]
+            data = self.sample_provider[i]
+
+            print(f"{self.__class__.__name__} provided {data.keys()}")
+            for key, value in data.items():
+                if isinstance(value, dict):
+                    print(f"  {key}: {list(value.keys())}")
+                else:
+                    print(f"  {key}: {type(value)}")
+
+            yield data

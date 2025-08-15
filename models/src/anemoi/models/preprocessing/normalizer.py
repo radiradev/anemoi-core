@@ -22,7 +22,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 @on_structure(output="normaliser_", merge=False)
-def normaliser_factory(name_to_index, statistics, normaliser, **kwargs):
+def normaliser_function(name_to_index, statistics, normaliser, **kwargs):
     if "_target_" not in normaliser:
         # If the normaliser is not a Hydra instantiation, use the config directly
         config = normaliser
@@ -34,11 +34,16 @@ def normaliser_factory(name_to_index, statistics, normaliser, **kwargs):
 
     from anemoi.models.preprocessing.normalizer import InputNormalizer
 
-    return InputNormalizer(
+    n = InputNormalizer(
         name_to_index=name_to_index["variables"],
         statistics=statistics["variables"],
         config=config,
     )
+
+    def func(*args, **kwargs):
+        return n.transform(*args, **kwargs)
+
+    return func
 
 
 class InputNormalizer(BasePreprocessor):

@@ -24,7 +24,7 @@ from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.layers.projection import NodeEmbedder
 from anemoi.models.layers.projection import NodeProjector
 from anemoi.models.preprocessing import Processors
-from anemoi.models.preprocessing.normalizer import normaliser_factory
+from anemoi.models.preprocessing.normalizer import normaliser_function
 from anemoi.utils.config import DotDict
 
 from .base import AnemoiModel
@@ -116,7 +116,7 @@ class AnemoiMultiModel(AnemoiModel):
         self.sample_static_info = sample_static_info
 
         # Instantiate processors
-        self.normalisers = normaliser_factory(self.sample_static_info)
+        self.normalisers = normaliser_function(self.sample_static_info)
 
         preprocessors = self.sample_static_info.apply(processor_factory)
         # Assign the processor list pre- and post-processors
@@ -416,7 +416,7 @@ class AnemoiMultiModel(AnemoiModel):
         batch = self.sample_static_info["input"].format_native(data=x)
         print(f"Input batch: {batch}")
 
-        # print(self.normalisers["input"])
+        print(f"Normalisers : {self.normalisers['input']}")
         # normalised_batch = self.normalisers["input"](batch)
         # print("Normalised batch: ", normalised_batch)
 
