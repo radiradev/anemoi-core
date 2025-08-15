@@ -26,6 +26,7 @@ class SourceSpec:
     def __init__(self, variables: list[str], steps: list[int]) -> None:
         self.variables = variables
         self.steps = steps
+        raise NotImplementedError("Dead code?")
 
     @property
     def num_variables(self) -> int:
@@ -39,6 +40,7 @@ class SourceSpec:
 class RecordSpec(dict):
     @property
     def record_names(self) -> list[str]:
+        raise NotImplementedError("Dead code?")
         return list(self.keys())
 
     @property
@@ -51,12 +53,14 @@ class RecordSpec(dict):
 
     @property
     def num_channels(self) -> dict[str, int]:
+        raise NotImplementedError("Dead code?")
         return {name: spec.num_steps * spec.num_variables for name, spec in self.items()}
 
 
 class SampleSpec(dict):
     @property
     def input_names(self) -> list[str]:
+        raise NotImplementedError("Dead code?")
         return self["input"].record_names
 
     @property
@@ -77,6 +81,7 @@ class SampleSpec(dict):
 
 
 def parse_date(date: str | int) -> datetime:
+    raise NotImplementedError("Dead code?")
     try:
         return pd.to_datetime(str(date))
     except ValueError as e:
@@ -84,6 +89,7 @@ def parse_date(date: str | int) -> datetime:
 
 
 def specify_datahandler_config(config: dict, key: str) -> dict:
+    raise NotImplementedError("Dead code?")
     dataset = config[key]
     base_dataset = {"dataset": config["dataset"]} if isinstance(config["dataset"], str) else config["dataset"]
 
