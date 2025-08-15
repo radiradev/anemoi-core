@@ -417,8 +417,8 @@ class AnemoiMultiModel(AnemoiModel):
         print(f"Input batch: {batch}")
 
         print(f"Normalisers : {self.normalisers['input']}")
-        normalised_batch = self.normalisers["input"](batch)
-        print("Normalised batch: ", normalised_batch)
+        # normalised_batch = self.normalisers["input"](batch)
+        # print("Normalised batch: ", normalised_batch)
 
         batch_size = x[list(x.keys())[0]].shape[0]
         ensemble_size = 1
