@@ -45,8 +45,8 @@ class BaseGraphModule(pl.LightningModule, ABC):
         self,
         *,
         config: BaseSchema,
-        sample_provider: SampleProvider,
         graph_data: HeteroData,
+        sample_static_info: SampleProvider,
         metadata: dict,
     ) -> None:
         super().__init__()
@@ -58,10 +58,9 @@ class BaseGraphModule(pl.LightningModule, ABC):
         # self.output_mask = instantiate(config.model_dump(by_alias=True).model.output_mask, graph_data=graph_data)
 
         self.model = AnemoiModelInterface(
-            # data_indices=data_indices,
-            metadata=metadata,
-            sample_provider=sample_provider,
             config=convert_to_omegaconf(config),
+            sample_static_info=sample_static_info,
+            metadata=metadata,
         )
 
         self.config = config

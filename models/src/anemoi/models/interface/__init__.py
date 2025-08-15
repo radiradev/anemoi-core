@@ -33,7 +33,7 @@ def processor_factory(name_to_index, statistics, processors, **kwargs) -> list[l
     ]
 
 
-@decorator(output="normaliser", merge=False)
+@decorator(output="normaliser_", merge=True)
 def normaliser_factory(name_to_index, statistics, normaliser, **kwargs):
     if "_target_" not in normaliser:
         config = normaliser
@@ -87,7 +87,7 @@ class AnemoiModelInterface(torch.nn.Module):
         self,
         *,
         config: DotDict,
-        sample_provider,
+        sample_static_info,
         # graph_data: HeteroData,
         # data_indices: dict,
         metadata: dict,
@@ -95,7 +95,7 @@ class AnemoiModelInterface(torch.nn.Module):
         super().__init__()
         self.config = config
         self.id = str(uuid.uuid4())
-        self.sample_provider = sample_provider
+        self.sample_static_info = sample_static_info
         # self.graph_data = graph_data
         self.metadata = metadata
         self.supporting_arrays = {}
@@ -104,14 +104,12 @@ class AnemoiModelInterface(torch.nn.Module):
     def _build_model(self) -> None:
         """Builds the model and pre- and post-processors."""
         # Instantiate processors
-        preprocessors = self.sample_provider.apply(processor_factory)
+        preprocessors = self.sample_static_info.apply(processor_factory)
 
         from anemoi.training.data.refactor.structure import StructureMixin
 
-        assert isinstance(
-            self.sample_provider, StructureMixin
-        ), "Sample provider must be an Structure (actually not a SampleProvider)"
-        normalisers = normaliser_factory(self.sample_provider)
+        assert isinstance(self.sample_static_info, StructureMixin), type(self.sample_static_info)
+        normalisers = normaliser_factory(self.sample_static_info)
 
         # Assign the processor list pre- and post-processors
         self.input_pre_processors = Processors(preprocessors["input"].processor_factory)
@@ -123,7 +121,7 @@ class AnemoiModelInterface(torch.nn.Module):
         self.model = AnemoiMultiModel(
             # self.config.model.model,
             model_config=self.config,
-            sample_provider=self.sample_provider,
+            sample_provider=self.sample_static_info,  # ❌❌ TODO
             # graph_data=self.graph_data,
             # truncation_data=self.truncation_data,
             # _recursive_=False,  # Disables recursive instantiation by Hydra
