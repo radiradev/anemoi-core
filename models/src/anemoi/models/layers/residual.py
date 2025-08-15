@@ -76,8 +76,8 @@ class TruncatedConnection(nn.Module):
             down_weight = sub_graph_down[edge_weight_attribute].squeeze() * down_weight
 
         if src_node_weight_attribute:
-            down_weight = graph[data_nodes][src_node_weight_attribute].squeeze() * down_weight
-            up_weight = graph[truncation_nodes][src_node_weight_attribute].squeeze() * up_weight
+            down_weight = graph[data_nodes][src_node_weight_attribute].squeeze()[sub_graph_down.edge_index[0]]
+            up_weight = graph[truncation_nodes][src_node_weight_attribute].squeeze()[sub_graph_up.edge_index[0]]
 
         self.project_up = SparseProjector(
             edge_index=sub_graph_up.edge_index,
