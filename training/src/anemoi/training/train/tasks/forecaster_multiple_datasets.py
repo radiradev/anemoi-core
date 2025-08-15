@@ -24,7 +24,6 @@ from anemoi.graphs.edges import CutOffEdges
 from anemoi.graphs.edges import KNNEdges
 from anemoi.graphs.nodes import LatLonNodes
 from anemoi.models.interface import AnemoiModelInterface
-from anemoi.training.data.refactor.sample_provider import SampleProvider
 from anemoi.training.data.utils import RecordProviderName
 from anemoi.training.losses import get_loss_function
 from anemoi.training.losses.base import BaseLoss
@@ -40,6 +39,8 @@ if TYPE_CHECKING:
 
     from torch.distributed.distributed_c10d import ProcessGroup
     from torch_geometric.data import HeteroData
+
+    from anemoi.training.data.refactor.structure import SampleProvider
 
 
 LOGGER = logging.getLogger(__name__)
