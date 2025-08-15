@@ -33,11 +33,22 @@ def processor_factory(name_to_index, statistics, processors, **kwargs) -> list[l
     ]
 
 
-@decorator
-def normaliser_factory(name_to_index, statistics, **kwargs):
+@decorator(output="normaliser", merge=False)
+def normaliser_factory(name_to_index, statistics, normaliser, **kwargs):
+    if "_target_" not in normaliser:
+        config = normaliser
+    elif normaliser.get("_target_") == "anemoi.models.preprocessing.normalizer.InputNormalizer":
+        config = normaliser["config"]
+    else:
+        raise NotImplementedError("TODO: use hydra instanciate for this custom normaliser")
+
     from anemoi.models.preprocessing.normalizer import InputNormalizer
 
-    return InputNormalizer(name_to_index=name_to_index["variables"], statistics=statistics["variables"])
+    return InputNormalizer(
+        name_to_index=name_to_index["variables"],
+        statistics=statistics["variables"],
+        config=config,
+    )
 
 
 class AnemoiModelInterface(torch.nn.Module):
@@ -97,8 +108,10 @@ class AnemoiModelInterface(torch.nn.Module):
 
         from anemoi.training.data.refactor.structure import StructureMixin
 
-        assert isinstance(self.sample_provider, StructureMixin), "Sample provider must be an Structure (actually not a SampleProvider)"
-        # normalisers = normaliser_factory(self.sample_provider)
+        assert isinstance(
+            self.sample_provider, StructureMixin
+        ), "Sample provider must be an Structure (actually not a SampleProvider)"
+        normalisers = normaliser_factory(self.sample_provider)
 
         # Assign the processor list pre- and post-processors
         self.input_pre_processors = Processors(preprocessors["input"].processor_factory)

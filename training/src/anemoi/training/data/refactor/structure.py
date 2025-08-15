@@ -7,6 +7,7 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 import datetime
+import inspect
 import json
 import os
 from collections import defaultdict
@@ -20,7 +21,6 @@ from rich.tree import Tree
 
 from anemoi.training.data.refactor.sample_provider import sample_provider_factory
 from anemoi.utils.dates import frequency_to_string
-
 
 
 def format_shape(k, v):
@@ -302,13 +302,26 @@ class LeafStructure(StructureMixin):
         new = func(**{k: self._content[k] for k in self._names})
         return self.__class__(**{"dataspecs": self._content["dataspecs"], name: new})
 
-    def apply_to_self(self, func, output, **kwargs):
+    def apply_to_self(self, func, output, merge=False, **kwargs):
         """Apply a function to the content of the structure."""
         if not callable(func):
             raise ValueError(f"Expected a callable function, got {type(func)}: {func}")
 
-        # TODO: use introspection to avoid forcing the function having **kwargs
-        result = func(**self._content)
+        # Use introspection to call func with only the arguments it accepts
+        sig = inspect.signature(func)
+        params = sig.parameters
+        # Exclude 'self' if present
+        arg_names = [
+            name for name, param in params.items() if param.kind in (param.POSITIONAL_OR_KEYWORD, param.KEYWORD_ONLY)
+        ]
+        selected_content = {}
+        for a in arg_names:
+            if a not in self._content:
+                raise ValueError(
+                    f"Function requests argument {a}, but it's not found in {self._content['dataspecs']}. Available: {self._names}",
+                )
+            selected_content[a] = self._content[a]
+        result = func(**selected_content)
 
         if output is dict or output is None:
             new = result
@@ -322,7 +335,10 @@ class LeafStructure(StructureMixin):
             new = {name: result for name, result in zip(output, result)}
         else:
             raise ValueError(f"Unknown output type {type(output)}: {output}")
-        return _structure_factory(**self._content, **new)
+
+        if merge:
+            return _structure_factory(**self._content, **new)
+        return _structure_factory(dataspecs=self._content["dataspecs"], **new)
 
     def __call__(self, structure, function=None, input=None, result=None, **kwargs):
         assert isinstance(structure, LeafStructure), f"Expected LeafStructure, got {type(structure)}: {structure}"
@@ -346,11 +362,11 @@ class LeafStructure(StructureMixin):
         return self._content
 
 
-def decorator(*args, output=None):
+def decorator(*args, output=None, **kwargs):
     def _decorator(func):
         @wraps(func)
         def wrapper(structure):
-            return structure.apply_to_self(func, output=output)
+            return structure.apply_to_self(func, output=output, **kwargs)
 
         return wrapper
 

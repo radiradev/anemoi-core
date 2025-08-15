@@ -195,6 +195,7 @@ class AnemoiTrainer:
             "name_to_index": self.datamodule.training_samples.name_to_index,
             "statistics": self.datamodule.training_samples.statistics,
             "processors": self.datamodule.training_samples.processors,
+            "normaliser": self.datamodule.training_samples.normaliser,
             "extra": self.datamodule.training_samples.extra,
             "dataspecs": self.datamodule.training_samples.dataspecs,
         }
