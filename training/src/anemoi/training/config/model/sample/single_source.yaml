@@ -1,0 +1,9 @@
+input:
+  data:
+    variables: ["z500", "lsm"]
+    offset: ["-6h", "0h"]
+
+target:
+  data:
+    variables: ["z500", "tp"]
+    offset: ["-6h", "0h"]

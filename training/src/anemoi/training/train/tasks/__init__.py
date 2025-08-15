@@ -9,7 +9,6 @@
 
 from .ensforecaster import GraphEnsForecaster
 from .forecaster import GraphForecaster
-from .forecaster_multiple_datasets import GraphForecasterMultiDataset
 from .interpolator import GraphInterpolator
 
-__all__ = ["GraphEnsForecaster", "GraphForecaster", "GraphForecasterMultiDataset", "GraphInterpolator"]
+__all__ = ["GraphEnsForecaster", "GraphForecaster", "GraphInterpolator"]

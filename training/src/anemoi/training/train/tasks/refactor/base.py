@@ -11,21 +11,20 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from abc import ABC
+from collections.abc import Generator
 
+import einops
 import pytorch_lightning as pl
 import torch
-from einops import rearrange
 from timm.scheduler import CosineLRScheduler
+from torch.distributed.distributed_c10d import ProcessGroup
 from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.utils.checkpoint import checkpoint
+from torch_geometric.data import HeteroData
 
-from anemoi.graphs.edges import CutOffEdges
-from anemoi.graphs.edges import KNNEdges
-from anemoi.graphs.nodes import LatLonNodes
 from anemoi.models.interface import AnemoiModelInterface
 from anemoi.training.data.refactor.sample_provider import SampleProvider
-from anemoi.training.data.utils import RecordProviderName
 from anemoi.training.losses import get_loss_function
 from anemoi.training.losses.base import BaseLoss
 from anemoi.training.losses.dict import DictLoss
@@ -33,61 +32,12 @@ from anemoi.training.losses.scaler_tensor import grad_scaler
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.schemas.base_schema import convert_to_omegaconf
 from anemoi.training.utils.enums import TensorDim
-from anemoi.utils.config import DotDict
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
-
-    from torch.distributed.distributed_c10d import ProcessGroup
-    from torch_geometric.data import HeteroData
-
 
 LOGGER = logging.getLogger(__name__)
 
 
-class DynamicGraphEditor:
-    """Dynamic Graph Editor"""
-
-    _IN_DATA_NAME: str = "data_in"
-    _OUT_DATA_NAME: str = "data_out"
-
-    def __init__(self, hidden_nodes_name: str, edge_attributes: DotDict):
-        self._hidden_data_nodes_name = hidden_nodes_name
-        self.edge_attributes = edge_attributes
-
-        self.enc_edge_builder = CutOffEdges(self._IN_DATA_NAME, self._hidden_data_nodes_name, cutoff_factor=0.7)
-        self.dec_edge_builder = KNNEdges(self._hidden_data_nodes_name, self._OUT_DATA_NAME, num_nearest_neighbours=5)
-
-    def add_nodes(self, graph: HeteroData, in_latlons: torch.Tensor, out_latlons: torch.Tensor) -> HeteroData:
-        graph = LatLonNodes(
-            latitudes=in_latlons[:, 0],
-            longitudes=in_latlons[:, 1],
-            name=self._IN_DATA_NAME,
-        ).update_graph(graph)
-        graph = LatLonNodes(
-            latitudes=out_latlons[:, 0],
-            longitudes=out_latlons[:, 1],
-            name=self._OUT_DATA_NAME,
-        ).update_graph(graph)
-        return graph
-
-    def add_edges(self, graph: HeteroData) -> HeteroData:
-        graph = self.enc_edge_builder.update_graph(graph, self.edge_attributes)
-        graph = self.dec_edge_builder.update_graph(graph, self.edge_attributes)
-        return graph
-
-    def update_graph(self, graph: HeteroData, x_latlons: torch.Tensor, y_latlons: torch.Tensor) -> HeteroData:
-        if x_latlons.size() == 0 or y_latlons.size() == 0:
-            return graph
-
-        graph = graph.copy()
-        graph = self.add_nodes(graph, x_latlons, y_latlons)
-        graph = self.add_edges(graph)
-        return graph.to(x_latlons.device)
-
-
-class GraphForecasterMultiDataset(pl.LightningModule):
-    """Graph neural network forecaster for PyTorch Lightning."""
+class BaseGraphModule(pl.LightningModule, ABC):
+    """Abstract base class for Anemoi GNN forecasters using PyTorch Lightning."""
 
     def __init__(
         self,
@@ -97,18 +47,6 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         graph_data: HeteroData,
         metadata: dict,
     ) -> None:
-        """Initialize graph neural network forecaster.
-
-        Parameters
-        ----------
-        config : DictConfig
-            Job configuration
-        graph_data : HeteroData
-            Graph object
-        metadata : dict
-            Provenance information
-
-        """
         super().__init__()
 
         self.graph_data = graph_data.to(self.device)
@@ -123,11 +61,8 @@ class GraphForecasterMultiDataset(pl.LightningModule):
             sample_provider=sample_provider,
             config=convert_to_omegaconf(config),
         )
-        # self.indexer = sample_provider.get_indexer()
-        # self.graph_editor = DynamicGraphEditor("hidden", DotDict({}))
 
         self.config = config
-        # self.model_data_indices = {self.datasets[0]: self.model.model.data_indices}  # TODO: generalize
 
         # self.save_hyperparameters() # needed for storing the checkpoints
 
@@ -205,12 +140,6 @@ class GraphForecasterMultiDataset(pl.LightningModule):
     def forward(self, x: dict[str, torch.Tensor], graph: HeteroData) -> dict[str, torch.Tensor]:
         return self.model(x, graph, model_comm_group=self.model_comm_group)
 
-    def define_delayed_scalers(self) -> None:
-        """Update delayed scalers such as the loss weights mask for imputed variables."""
-        for name, scaler_builder in self.delayed_scaler_builders.items():
-            self.scalers[name] = scaler_builder.get_delayed_scaling(model=self.model)
-            self.loss.update_scaler(scaler=self.scalers[name][1], name=name)
-
     def set_model_comm_group(
         self,
         model_comm_group: ProcessGroup,
@@ -236,101 +165,6 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         self.reader_group_id = reader_group_id
         self.reader_group_rank = reader_group_rank
         self.reader_group_size = reader_group_size
-
-    def advance_input(
-        self,
-        x: torch.Tensor,
-        y_pred: torch.Tensor,
-        batch: torch.Tensor,
-        rollout_step: int,
-    ) -> torch.Tensor:
-        x = x.roll(-1, dims=1)
-
-        # Get prognostic variables
-        x[:, -1, :, :, self.data_indices.internal_model.input.prognostic] = y_pred[
-            ...,
-            self.data_indices.internal_model.output.prognostic,
-        ]
-
-        x[:, -1] = self.output_mask.rollout_boundary(
-            x[:, -1],
-            batch[:, self.multi_step + rollout_step],
-            self.data_indices,
-        )
-
-        # get new "constants" needed for time-varying fields
-        x[:, -1, :, :, self.data_indices.internal_model.input.forcing] = batch[
-            :,
-            self.multi_step + rollout_step,
-            :,
-            :,
-            self.data_indices.internal_data.input.forcing,
-        ]
-        return x
-
-    def _step(
-        self,
-        batch: dict[RecordProviderName, dict[str, torch.Tensor]],
-        batch_idx: int,
-        validation_mode: bool = False,
-    ) -> Generator[tuple[torch.Tensor | None, dict, list], None, None]:
-        """Rollout step for the forecaster.
-
-        Will run pre_processors on batch, but not post_processors on predictions.
-
-        Parameters
-        ----------
-        batch : torch.Tensor
-            Batch to use for rollout
-        rollout : Optional[int], optional
-            Number of times to rollout for, by default None
-            If None, will use self.rollout
-        training_mode : bool, optional
-            Whether in training mode and to calculate the loss, by default True
-            If False, loss will be None
-        validation_mode : bool, optional
-            Whether in validation mode, and to calculate validation metrics, by default False
-            If False, metrics will be empty
-
-        Yields
-        ------
-        Generator[tuple[Union[torch.Tensor, None], dict, list], None, None]
-            Loss value, metrics, and predictions (per step)
-        """
-        del batch_idx
-        # batch = self.allgather_batch(batch)
-
-        batch = {
-            k: {n: rearrange(t, "bs v t ens xy -> bs t ens xy v") for n, t in v.items()}
-            for k, v in batch["data"].items()
-        }
-
-        # for validation not normalized in-place because remappers cannot be applied in-place
-        # We need shape: (bath_size, time, ens, latlons, n_vars)
-        batch["input"] = self.model.input_pre_processors(batch["input"], in_place=not validation_mode)
-        batch["target"] = self.model.target_pre_processors(batch["target"], in_place=not validation_mode)
-
-        # Delayed scalers need to be initialized after the pre-processors once
-        if False:  # self.is_first_step:
-            self.define_delayed_scalers()
-            self.is_first_step = False
-
-        # input_latlons = self.indexer.get_latlons(batch["input"])  # (G, S=1, B, 2)
-        # target_latlons = self.indexer.get_latlons(batch["target"])  # (G, S=1, B, 2)
-
-        # graph = self.graph_editor.update_graph(self.graph_data, input_latlons, target_latlons)
-
-        # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
-        y_pred = self(batch["input"], self.graph_data.clone().to("cuda"))
-
-        # y includes the auxiliary variables, so we must leave those out when computing the loss
-        loss = checkpoint(self.loss, y_pred, batch["target"], use_reentrant=False)
-
-        metrics_next = {}
-        if validation_mode:
-            metrics_next = self.calculate_val_metrics(y_pred, batch["target"], rollout_step=0)
-
-        return loss, metrics_next, y_pred
 
     def allgather_batch(self, batch: torch.Tensor) -> torch.Tensor:
         """Allgather the batch-shards across the reader group.
@@ -369,58 +203,6 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         )
 
         return torch.cat(tensor_list, dim=-2)
-
-    def calculate_val_metrics(
-        self,
-        y_pred: torch.Tensor,
-        y: torch.Tensor,
-        rollout_step: int,
-    ) -> tuple[dict, list[torch.Tensor]]:
-        """Calculate metrics on the validation output.
-
-        Parameters
-        ----------
-        y_pred: torch.Tensor
-            Predicted ensemble
-        y: torch.Tensor
-            Ground truth (target).
-        rollout_step: int
-            Rollout step
-
-        Returns
-        -------
-        val_metrics, preds:
-            validation metrics and predictions
-        """
-        if len(self.metrics) == 0:
-            return {}
-
-        metrics = {}
-        y_postprocessed = self.model.target_post_processors(y, in_place=False)
-        y_pred_postprocessed = self.model.target_post_processors(y_pred, in_place=False)
-
-        for metric_name, metric in self.metrics.items():
-
-            if isinstance(metric, BaseLoss):
-                assert isinstance(metric, DictLoss), type(metric)
-
-            if not isinstance(metric, BaseLoss):
-                # If not a loss, we cannot feature scale, so call normally
-                metrics[f"{metric_name}_metric/{rollout_step + 1}"] = metric(y_pred_postprocessed, y_postprocessed)
-                continue
-
-            for mkey, indices in self.val_metric_ranges.items():
-                metric_step_name = f"{metric_name}_metric/{mkey}/{rollout_step + 1}"
-                if len(metric.scaler.subset_by_dim(TensorDim.VARIABLE.value)):
-                    exception_msg = (
-                        "Validation metrics cannot be scaled over the variable dimension"
-                        " in the post processed space."
-                    )
-                    raise ValueError(exception_msg)
-
-                metrics[metric_step_name] = metric(y_pred_postprocessed, y_postprocessed, scaler_indices=[..., indices])
-
-        return metrics
 
     def training_step(
         self,
@@ -532,3 +314,121 @@ class GraphForecasterMultiDataset(pl.LightningModule):
         )
 
         return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
+
+    def calculate_val_metrics(
+        self,
+        y_pred: torch.Tensor,
+        y: torch.Tensor,
+        rollout_step: int,
+    ) -> tuple[dict, list[torch.Tensor]]:
+        """Calculate metrics on the validation output.
+
+        Parameters
+        ----------
+        y_pred: torch.Tensor
+            Predicted ensemble
+        y: torch.Tensor
+            Ground truth (target).
+        rollout_step: int
+            Rollout step
+
+        Returns
+        -------
+        val_metrics, preds:
+            validation metrics and predictions
+        """
+        if len(self.metrics) == 0:
+            return {}
+
+        metrics = {}
+        y_postprocessed = self.model.target_post_processors(y, in_place=False)
+        y_pred_postprocessed = self.model.target_post_processors(y_pred, in_place=False)
+
+        for metric_name, metric in self.metrics.items():
+
+            if isinstance(metric, BaseLoss):
+                assert isinstance(metric, DictLoss), type(metric)
+
+            if not isinstance(metric, BaseLoss):
+                # If not a loss, we cannot feature scale, so call normally
+                metrics[f"{metric_name}_metric/{rollout_step + 1}"] = metric(y_pred_postprocessed, y_postprocessed)
+                continue
+
+            for mkey, indices in self.val_metric_ranges.items():
+                metric_step_name = f"{metric_name}_metric/{mkey}/{rollout_step + 1}"
+                if len(metric.scaler.subset_by_dim(TensorDim.VARIABLE.value)):
+                    exception_msg = (
+                        "Validation metrics cannot be scaled over the variable dimension"
+                        " in the post processed space."
+                    )
+                    raise ValueError(exception_msg)
+
+                metrics[metric_step_name] = metric(y_pred_postprocessed, y_postprocessed, scaler_indices=[..., indices])
+
+        return metrics
+
+
+class BaseForecasterModule(BaseGraphModule):
+    def _step(
+        self,
+        batch: dict[str, dict[str, torch.Tensor]],
+        batch_idx: int,
+        validation_mode: bool = False,
+    ) -> Generator[tuple[torch.Tensor | None, dict, list], None, None]:
+        """Rollout step for the forecaster.
+
+        Will run pre_processors on batch, but not post_processors on predictions.
+
+        Parameters
+        ----------
+        batch : torch.Tensor
+            Batch to use for rollout
+        rollout : Optional[int], optional
+            Number of times to rollout for, by default None
+            If None, will use self.rollout
+        training_mode : bool, optional
+            Whether in training mode and to calculate the loss, by default True
+            If False, loss will be None
+        validation_mode : bool, optional
+            Whether in validation mode, and to calculate validation metrics, by default False
+            If False, metrics will be empty
+
+        Yields
+        ------
+        Generator[tuple[Union[torch.Tensor, None], dict, list], None, None]
+            Loss value, metrics, and predictions (per step)
+        """
+        del batch_idx
+        # batch = self.allgather_batch(batch)
+
+        batch = {
+            k: {n: einops.rearrange(t, "bs v t ens xy -> bs t ens xy v") for n, t in v.items()}
+            for k, v in batch["data"].items()
+        }
+
+        # for validation not normalized in-place because remappers cannot be applied in-place
+        # We need shape: (bath_size, time, ens, latlons, n_vars)
+        batch["input"] = self.model.input_pre_processors(batch["input"], in_place=not validation_mode)
+        batch["target"] = self.model.target_pre_processors(batch["target"], in_place=not validation_mode)
+
+        # Delayed scalers need to be initialized after the pre-processors once
+        if False:  # self.is_first_step:
+            self.define_delayed_scalers()
+            self.is_first_step = False
+
+        # input_latlons = self.indexer.get_latlons(batch["input"])  # (G, S=1, B, 2)
+        # target_latlons = self.indexer.get_latlons(batch["target"])  # (G, S=1, B, 2)
+
+        # graph = self.graph_editor.update_graph(self.graph_data, input_latlons, target_latlons)
+
+        # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
+        y_pred = self(batch["input"], self.graph_data.clone().to("cuda"))
+
+        # y includes the auxiliary variables, so we must leave those out when computing the loss
+        loss = checkpoint(self.loss, y_pred, batch["target"], use_reentrant=False)
+
+        metrics_next = {}
+        if validation_mode:
+            metrics_next = self.calculate_val_metrics(y_pred, batch["target"], rollout_step=0)
+
+        return loss, metrics_next, y_pred

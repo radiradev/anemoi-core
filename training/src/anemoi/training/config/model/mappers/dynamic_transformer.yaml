@@ -1,0 +1,57 @@
+layer_kernels:
+  # The layer_kernels can be adjusted per model component, but are defined here for convenience.
+  LayerNorm:
+    _target_: torch.nn.LayerNorm
+  Linear:
+    _target_: torch.nn.Linear
+  Activation:
+    _target_: torch.nn.GELU
+  QueryNorm:
+    _target_: anemoi.models.layers.normalization.AutocastLayerNorm
+    bias: False
+  KeyNorm:
+    _target_: anemoi.models.layers.normalization.AutocastLayerNorm
+    bias: False
+
+emb_data:
+  _target_: anemoi.models.layers.mlp.MLP
+  hidden_dim: 128
+  n_extra_layers: 0
+  final_activation: GELU
+  layer_kernels: ${model.layer_kernels}
+
+processor:
+  _target_: anemoi.models.layers.processor.TransformerProcessor
+  # activation: ${model.activation}
+  subgraph_edge_attributes: ${model.attributes.edges}
+  num_layers: 16
+  num_chunks: 2
+  mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
+  num_heads: 16 # GraphTransformer or Transformer only
+  qk_norm: False
+  cpu_offload: ${model.cpu_offload}
+  layer_kernels: ${model.layer_kernels}
+
+
+encoder:
+  _target_: anemoi.models.layers.mapper.DynamicGraphTransformerForwardMapper
+  subgraph_edge_attributes: ${model.attributes.edges}
+  # activation: ${model.activation}
+  num_chunks: 1
+  mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
+  num_heads: 16 # GraphTransformer or Transformer only
+  qk_norm: False
+  cpu_offload: ${model.cpu_offload}
+  layer_kernels: ${model.layer_kernels}
+
+decoder:
+  _target_: anemoi.models.layers.mapper.DynamicGraphTransformerBackwardMapper
+  subgraph_edge_attributes: ${model.attributes.edges}
+  # activation: ${model.activation}
+  num_chunks: 1
+  mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
+  num_heads: 16 # GraphTransformer or Transformer only
+  initialise_data_extractor_zero: False
+  qk_norm: False
+  cpu_offload: ${model.cpu_offload}
+  layer_kernels: ${model.layer_kernels}

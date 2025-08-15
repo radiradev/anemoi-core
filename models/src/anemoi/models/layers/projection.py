@@ -13,13 +13,12 @@ from torch import nn
 from torch_geometric.data import HeteroData
 
 
-
 class NodeEmbedder(nn.Module):
     def __init__(
         self,
         config,
         num_input_channels: dict[str, int],
-        num_output_channels: dict[str, int], 
+        num_output_channels: dict[str, int],
         sources: dict[str, str],
         **kwargs
     ):
@@ -31,9 +30,9 @@ class NodeEmbedder(nn.Module):
         self.embedders = nn.ModuleDict(
             {
                 in_source: instantiate(
-                    config, 
+                    config,
                     _recursive_=False,
-                    in_features=num_input_channels[in_source], 
+                    in_features=num_input_channels[in_source],
                     out_features=num_output_channels[out_source],
                 )
                 for in_source, out_source in sources.items()
@@ -44,7 +43,7 @@ class NodeEmbedder(nn.Module):
         new = {}
         for data_source, encoded_source in self.sources.items():
             new[encoded_source] = self.embedders[data_source](x[data_source])
-        
+
         # input: [{"1": tensor, "1": tensor, "2": tensor, ...}]
         # TODO: x_data_latent = concat_tensor_from_same_source(x_data_latent)
         return new
@@ -57,7 +56,7 @@ class NodeProjector(nn.Module):
         self,
         config,
         num_input_channels: dict[str, int],
-        num_output_channels: dict[str, int], 
+        num_output_channels: dict[str, int],
         sources: dict[str, str],
         **kwargs
     ):
@@ -69,9 +68,9 @@ class NodeProjector(nn.Module):
         self.projectors = nn.ModuleDict(
             {
                 out_source: instantiate(
-                    config, 
+                    config,
                     _recursive_=False,
-                    in_features=num_input_channels[in_source], 
+                    in_features=num_input_channels[in_source],
                     out_features=num_output_channels[out_source],
                 )
                 for in_source, out_source in sources.items()

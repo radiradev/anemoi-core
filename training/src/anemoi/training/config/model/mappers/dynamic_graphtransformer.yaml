@@ -1,0 +1,35 @@
+processor:
+  _target_: anemoi.models.layers.processor.DynamicGraphTransformerProcessor
+  # activation: ${model.activation}
+  subgraph_edge_attributes: ${model.attributes.edges}
+  num_layers: 16
+  num_chunks: 2
+  mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
+  num_heads: 16 # GraphTransformer or Transformer only
+  qk_norm: False
+  cpu_offload: ${model.cpu_offload}
+  layer_kernels: ${model.layer_kernels}
+
+
+encoder:
+  _target_: anemoi.models.layers.mapper.DynamicGraphTransformerForwardMapper
+  subgraph_edge_attributes: ${model.attributes.edges}
+  # activation: ${model.activation}
+  num_chunks: 1
+  mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
+  num_heads: 16 # GraphTransformer or Transformer only
+  qk_norm: False
+  cpu_offload: ${model.cpu_offload}
+  layer_kernels: ${model.layer_kernels}
+
+decoder:
+  _target_: anemoi.models.layers.mapper.DynamicGraphTransformerBackwardMapper
+  subgraph_edge_attributes: ${model.attributes.edges}
+  # activation: ${model.activation}
+  num_chunks: 1
+  mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
+  num_heads: 16 # GraphTransformer or Transformer only
+  initialise_data_extractor_zero: False
+  qk_norm: False
+  cpu_offload: ${model.cpu_offload}
+  layer_kernels: ${model.layer_kernels}

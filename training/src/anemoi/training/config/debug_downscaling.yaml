@@ -47,6 +47,7 @@ dataloader:
     training: 2
     validation: 2
 training:
+  model_task: anemoi.training.train.tasks.refactor.DownscalingModule
   max_epochs: 2
   training_loss:
     # loss classes to initialise

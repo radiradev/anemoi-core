@@ -13,8 +13,8 @@ import logging
 import torch
 from torch import nn
 
-from anemoi.utils.config import DotDict
 from anemoi.models.layers.utils import load_layer_kernels
+from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
 

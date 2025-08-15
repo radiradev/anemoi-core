@@ -1,0 +1,13 @@
+# The layer_kernels can be adjusted per model component, but are defined here for convenience.
+LayerNorm:
+  _target_: torch.nn.LayerNorm
+Linear:
+  _target_: torch.nn.Linear
+Activation:
+  _target_: torch.nn.GELU
+QueryNorm:
+  _target_: anemoi.models.layers.normalization.AutocastLayerNorm
+  bias: False
+KeyNorm:
+  _target_: anemoi.models.layers.normalization.AutocastLayerNorm
+  bias: False

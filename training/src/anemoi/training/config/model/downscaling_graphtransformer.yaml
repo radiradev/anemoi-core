@@ -1,182 +1,37 @@
-activation: GELU
+---
+defaults:
+  - layer_kernels: default
+  - sample: downscaling
+  - mappers: dynamic_graphtransformer
+
+
 num_channels: 1024
 cpu_offload: False
-#output_mask: null # moved this to config.training to have one mask per output
+keep_batch_sharded: True
+output_mask: null # moved this to config.training to have one mask per output
 
-
-sample:
-  input:
-    lowres:
-      variables:
-      - "cos_latitude"
-      - "cos_longitude"
-      - "sin_latitude"
-      - "sin_longitude"
-      - "cos_julian_day"
-      - "cos_local_time"
-      - "sin_julian_day"
-      - "sin_local_time"
-      - "lsm"
-      - "z"
-      - "sp"
-      - "msl"
-      - "sdor"
-      - "slor"
-      - "10u"
-      - "10v"
-      - "2t"
-      - "2d"
-      - "q_100"
-      - "q_300"
-      - "q_700"
-      - "q_1000"
-      - "t_100"
-      - "t_300"
-      - "t_700"
-      - "t_1000"
-      - "u_100"
-      - "u_300"
-      - "u_700"
-      - "u_1000"
-      - "v_100"
-      - "v_300"
-      - "v_700"
-      - "v_1000"
-      - "w_100"
-      - "w_300"
-      - "w_700"
-      - "w_1000"
-      - "z_100"
-      - "z_300"
-      - "z_700"
-      - "z_1000"
-      offset: ["0h"]
-    hires:
-      variables:
-      - "cos_latitude"
-      - "cos_longitude"
-      - "sin_latitude"
-      - "sin_longitude"
-      - "cos_julian_day"
-      - "cos_local_time"
-      - "sin_julian_day"
-      - "sin_local_time"
-      - "orog"
-      - "lsm"
-      - "skt"
-      offset: ["0h"]
-  target:
-    hires:
-      variables:
-      #- "10u"
-      #- "10v"
-      #- "2t"
-      #- "2d"
-      - "q_100"
-      - "q_300"
-      - "q_700"
-      - "q_1000"
-      - "t_100"
-      - "t_300"
-      - "t_700"
-      - "t_1000"
-      - "u_100"
-      - "u_300"
-      - "u_700"
-      - "u_1000"
-      - "v_100"
-      - "v_300"
-      - "v_700"
-      - "v_1000"
-      - "z_100"
-      - "z_300"
-      - "z_700"
-      - "z_1000"
-      - "tp"
-      offset: ["0h"]
 
 model:
   _target_: anemoi.models.models.mult_encoder_processor_decoder.AnemoiMultiModel
+  emb_data:
+    _target_: anemoi.models.layers.mlp.MLP
+    hidden_dim: 128
+    n_extra_layers: 0
+    final_activation: GELU
+    layer_kernels: ${model.layer_kernels}
   encoders:
   - name: enc
-    mapper: ${model.encoder}
+    mapper: ${model.mappers.encoder}
     sources: [ "lowres" ]
-    num_channels: 128
+    num_channels: ${model.num_channels}
   merge_latents: average # options: average, sum, concatenation
   hidden_name: "hidden"
-  processor: ${model.processor}
+  processor: ${model.mappers.processor}
   decoders:
   - name: dec
-    mapper: ${model.decoder}
+    mapper: ${model.mappers.decoder}
     sources: [ "hires" ]
-    num_channels: 128
-
-
-layer_kernels:
-  # The layer_kernels can be adjusted per model component, but are defined here for convenience.
-  LayerNorm:
-    _target_: torch.nn.LayerNorm
-  Linear:
-    _target_: torch.nn.Linear
-  Activation:
-    _target_: torch.nn.GELU
-
-layer_kernels_processor:
-  LayerNorm:
-    _target_: torch.nn.LayerNorm
-  Linear:
-    _target_: torch.nn.Linear
-  Activation:
-    _target_: torch.nn.GELU
-  QueryNorm:
-    _target_: anemoi.models.layers.normalization.AutocastLayerNorm
-    bias: False
-  KeyNorm:
-    _target_: anemoi.models.layers.normalization.AutocastLayerNorm
-    bias: False
-
-emb_data:
-  _target_: anemoi.models.layers.mlp.MLP
-  hidden_dim: 128
-  n_extra_layers: 0
-  final_activation: GELU
-  layer_kernels: ${model.layer_kernels}
-
-processor:
-  _target_: anemoi.models.layers.processor.DynamicGraphTransformerProcessor
-  # activation: ${model.activation}
-  subgraph_edge_attributes: ${model.attributes.edges}
-  num_layers: 16
-  num_chunks: 2
-  mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
-  num_heads: 16 # GraphTransformer or Transformer only
-  qk_norm: False
-  cpu_offload: ${model.cpu_offload}
-  layer_kernels: ${model.layer_kernels_processor}
-
-
-encoder:
-  _target_: anemoi.models.layers.mapper.DynamicGraphTransformerForwardMapper
-  subgraph_edge_attributes: ${model.attributes.edges}
-  # activation: ${model.activation}
-  num_chunks: 1
-  mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
-  num_heads: 16 # GraphTransformer or Transformer only
-  qk_norm: False
-  cpu_offload: ${model.cpu_offload}
-  layer_kernels: ${model.layer_kernels}
-
-decoder:
-  _target_: anemoi.models.layers.mapper.DynamicGraphTransformerBackwardMapper
-  subgraph_edge_attributes: ${model.attributes.edges}
-  # activation: ${model.activation}
-  num_chunks: 1
-  mlp_hidden_ratio: 4 # GraphTransformer or Transformer only
-  num_heads: 16 # GraphTransformer or Transformer only
-  initialise_data_extractor_zero: False
-  qk_norm: False
-  cpu_offload: ${model.cpu_offload}
-  layer_kernels: ${model.layer_kernels}
+    num_channels: ${model.num_channels}
 
 
 trainable_parameters:
