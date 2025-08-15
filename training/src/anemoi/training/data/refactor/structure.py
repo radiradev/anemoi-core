@@ -349,7 +349,7 @@ class LeafStructure(StructureMixin):
         func = self._content[function]
 
         if not callable(func):
-            raise ValueError(f"Expected a callable function in {self._content["dataspecs"]}, got {type(func)}: {func}")
+            raise ValueError(f"Expected a callable function in {self._content['dataspecs']}, got {type(func)}: {func}")
 
         x = structure.content(input_name)
         y = func(x)
