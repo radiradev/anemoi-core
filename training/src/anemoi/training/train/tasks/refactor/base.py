@@ -33,7 +33,6 @@ from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.schemas.base_schema import convert_to_omegaconf
 from anemoi.training.utils.enums import TensorDim
 
-
 LOGGER = logging.getLogger(__name__)
 
 
