@@ -22,6 +22,7 @@ from anemoi.training.data.refactor.sample_provider import sample_provider_factor
 from anemoi.utils.dates import frequency_to_string
 
 
+
 def format_shape(k, v):
     return f"shape: {v}"
 
