@@ -7,7 +7,6 @@ from torch import nn
 from anemoi.models.distributed.graph import gather_channels
 from anemoi.models.distributed.graph import shard_channels
 from anemoi.models.distributed.shapes import apply_shard_shapes
-from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.layers.sparse_projector import SparseProjector
 
 
@@ -98,7 +97,7 @@ class TruncatedConnection(nn.Module):
     def forward(self, x, grid_shard_shapes=None, model_comm_group=None, *args, **kwargs):
         batch_size = x.shape[0]
         x = x[:, -1, ...]  # pick latest step
-        shard_shapes = self._get_shard_shapes(x, 0, grid_shard_shapes, model_comm_group)
+        shard_shapes = apply_shard_shapes(x, 0, grid_shard_shapes) if grid_shard_shapes is not None else None
 
         x = einops.rearrange(x, "batch ensemble grid features -> (batch ensemble) grid features")
         x = self._to_channel_shards(x, shard_shapes, model_comm_group)
@@ -119,9 +118,3 @@ class TruncatedConnection(nn.Module):
         if shard_shapes is not None:
             x = fn(x, shard_shapes, model_comm_group)
         return x
-
-    def _get_shard_shapes(self, x, dim=0, shard_shapes_dim=None, model_comm_group=None):
-        if shard_shapes_dim is None:
-            return get_shard_shapes(x, dim, model_comm_group)
-        else:
-            return apply_shard_shapes(x, dim, shard_shapes_dim)
