@@ -6,4 +6,4 @@ input:
 target:
   data:
     variables: ["z500", "tp"]
-    offset: ["-6h", "0h"]
+    offset: ["6h", "12h"]

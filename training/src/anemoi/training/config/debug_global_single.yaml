@@ -45,8 +45,12 @@ dataloader:
     training: 2
     validation: 2
 training:
-  model_task: anemoi.training.train.tasks.refactor.ForecastingModule
+  model_task: anemoi.training.train.tasks.refactor.RolloutForecastingModule
   max_epochs: 2
+  rollout:
+    start: 1
+    epoch_increment: 0 # increase rollout every n epochs
+    max: 1 # maximum rollout to use
   training_loss:
     # loss classes to initialise
     regional:
