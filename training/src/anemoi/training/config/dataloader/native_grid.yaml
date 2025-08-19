@@ -50,9 +50,9 @@ grid_indices:
 # See https://anemoi-datasets.readthedocs.io
 # ============
 
-dataset:
+dataset_defaults:
 
-  dataset: ???
+  dataset: 'aifs-ea-an-oper-0001-mars-o96-1979-2022-6h-v6'
   # Either a path to a dataset, a dataset name or a nested dictionary
   # when using dataset names, make sure the search path is set in the anemoi-datasets config
   # as described in the anemoi-datasets documentation
@@ -65,18 +65,18 @@ dataset:
   # select: []
 
 training:
-  dataset: ${dataloader.dataset}
+  dataset: ${dataloader.dataset_defaults}
   start: null
   end: 2020
 
 validation_rollout: 1 # number of rollouts to use for validation, must be equal or greater than rollout expected by callbacks
 
 validation:
-  dataset: ${dataloader.dataset}
+  dataset: ${dataloader.dataset_defaults}
   start: 2021
   end: 2021
 
 test:
-  dataset: ${dataloader.dataset}
+  dataset: ${dataloader.dataset_defaults}
   start: 2022
   end: null
