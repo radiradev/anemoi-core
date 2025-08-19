@@ -79,6 +79,7 @@ def merge_graph_sources(graph: HeteroData, sources: dict[str, str]) -> HeteroDat
     if sources is None or len(sources) == 0:
         return graph, None
 
+    graph = graph.clone()
     new = {}
     for k, v in sources.items():
         new[v] = (new[v] + [k]) if v in new else [k]
@@ -314,7 +315,7 @@ class AnemoiMultiModel(AnemoiModel):
         shard_shapes_hidden: tuple[list],
         batch_size: int,
         model_comm_group: Optional[ProcessGroup] = None,
-    ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+    ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
         x_data_raw, x_hidden_raw = x
         x_data_latents = self.node_embedder(x_data_raw)
 
@@ -430,7 +431,7 @@ class AnemoiMultiModel(AnemoiModel):
 
         x_data_latents, x_hidden_latent = self.encode(
             (x_data_latents, x_hidden),
-            graph.clone(),
+            graph,
             batch_size=batch_size,
             shard_shapes_hidden=shard_shapes_hidden,
             model_comm_group=model_comm_group,
