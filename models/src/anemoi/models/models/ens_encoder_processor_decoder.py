@@ -58,9 +58,8 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
         self.input_dim += 1
 
     def _assemble_input(self, x, fcstep, batch_ens_size, grid_shard_shapes=None, model_comm_group=None):
-        x_skip = x[:, -1, :, :, self._internal_input_idx]
+        x_skip = self.residual(x, grid_shard_shapes, model_comm_group)[..., self._internal_input_idx]
         x_skip = einops.rearrange(x_skip, "batch ensemble grid vars -> (batch ensemble) grid vars")
-        x_skip = self._apply_truncation(x_skip, grid_shard_shapes, model_comm_group)
 
         node_attributes_data = self.node_attributes(self._graph_name_data, batch_size=batch_ens_size)
         if grid_shard_shapes is not None:
