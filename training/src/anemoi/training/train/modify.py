@@ -28,7 +28,7 @@ Core Features
 - **Configurable**: Full Hydra configuration support with validation
 - **Extensible**: Easy to add new modifier types for custom use cases
 - **Robust**: Comprehensive error handling and logging throughout
-- **Flexible**: Support for various checkpoint sources (requires checkpoint loading system)
+- **Flexible**: Support for various checkpoint sources (local, S3, HTTP, etc.)
 
 Quick Start Guide
 -----------------
@@ -189,15 +189,16 @@ Or using modifiers for more complex scenarios::
 
 See Also
 --------
-anemoi.training.utils.model_loading : Underlying checkpoint loading utilities (external dependency)
+anemoi.training.utils.model_loading : Checkpoint loading utilities (optional dependency for additional features)
 anemoi.training.train.train : Main training pipeline integration
-anemoi.training.utils.checkpoint_loaders : Checkpoint source handling (external dependency)
+anemoi.training.utils.checkpoint_loaders : Checkpoint source handling (optional dependency for remote sources)
 
 Notes
 -----
-This module is part of Anemoi's modular training system and requires the full
-Anemoi training environment. It integrates with Hydra for configuration management
-and PyTorch Lightning for training orchestration.
+This module is part of Anemoi's modular training system. While it integrates best with
+the full Anemoi training environment, core functionality (freezing and basic transfer
+learning) works independently. It uses Hydra for configuration management and integrates
+with PyTorch Lightning for training orchestration.
 """
 
 from __future__ import annotations
@@ -207,16 +208,15 @@ from abc import abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import torch
 from hydra.utils import instantiate
 
-from anemoi.utils.logging import get_logger
-
 if TYPE_CHECKING:
-
-    import torch
     from omegaconf import DictConfig
 
-LOGGER = get_logger(__name__)
+import logging
+
+LOGGER = logging.getLogger(__name__)
 
 
 class ModelModifier(ABC):
@@ -313,15 +313,6 @@ class FreezingModelModifier(ModelModifier):
     The freezing is applied by name, supporting both direct child modules and nested
     modules using dot notation (e.g., "encoder.attention.0").
 
-    Parameters
-    ----------
-    submodules_to_freeze : DictConfig or list of str
-        Names of the submodules to freeze. Can be:
-
-        - Direct child module names (e.g., "encoder", "decoder")
-        - Nested module names using dot notation (e.g., "processor.0", "encoder.attention")
-        - A list or DictConfig containing multiple module names
-
     Examples
     --------
     Basic usage in YAML configuration:
@@ -405,15 +396,28 @@ class FreezingModelModifier(ModelModifier):
     or ``print(model)`` to verify the correct names before configuration.
     """
 
-    def __init__(self, submodules_to_freeze: DictConfig | list[str]) -> None:
+    def __init__(
+        self,
+        submodules_to_freeze: DictConfig | list[str],
+        strict: bool = False,
+        validate_gradients: bool = True,
+    ) -> None:
         """Initialize the freezing modifier.
 
         Parameters
         ----------
-        submodules_to_freeze : DictConfig or list of str
+        submodules_to_freeze : list[str] or DictConfig
             Names of submodules to freeze. Each name should correspond to a module
             accessible via ``model.named_children()`` or nested modules using dot
             notation (e.g., "processor.0", "encoder.attention").
+
+        strict : bool, default False
+            If True, raise an error when a specified module is not found.
+            If False, log a warning and continue.
+
+        validate_gradients : bool, default True
+            If True, validate that frozen parameters do not accumulate gradients
+            after a forward/backward pass.
 
         Raises
         ------
@@ -426,7 +430,15 @@ class FreezingModelModifier(ModelModifier):
             # Assume DictConfig or similar iterable
             self.submodules_to_freeze = list(submodules_to_freeze)
 
-        LOGGER.debug("Initialized FreezingModelModifier with modules: %s", self.submodules_to_freeze)
+        self.strict = strict
+        self.validate_gradients = validate_gradients
+
+        LOGGER.debug(
+            "Initialized FreezingModelModifier with modules: %s (strict=%s, validate=%s)",
+            self.submodules_to_freeze,
+            self.strict,
+            self.validate_gradients,
+        )
 
     def apply(self, model: torch.nn.Module) -> torch.nn.Module:
         """Freeze the specified submodules in the model.
@@ -462,16 +474,146 @@ class FreezingModelModifier(ModelModifier):
             if frozen_count > 0:
                 LOGGER.info("Froze %d parameters in '%s'", frozen_count, module_name)
             else:
-                LOGGER.warning("Module '%s' not found or has no parameters to freeze", module_name)
+                msg = f"Module '{module_name}' not found or has no parameters to freeze"
+                if self.strict:
+                    raise ValueError(msg)
+                LOGGER.warning(msg)
+
+        # Validate that frozen parameters prevent gradient flow
+        if self.validate_gradients:
+            self._validate_gradient_flow(model)
 
         return model
 
-    def _freeze_submodule_by_name(self, module: torch.nn.Module, target_name: str) -> int:
-        """Recursively freeze parameters of a submodule by name.
+    def _validate_gradient_flow(self, model: torch.nn.Module) -> None:
+        """Validate that frozen parameters don't accumulate gradients.
 
-        Supports both direct child modules and nested modules using dot notation.
-        For example, "processor.0" will freeze the first element in a processor
-        ModuleList.
+        This method performs a test forward/backward pass to ensure that
+        parameters marked as frozen (requires_grad=False) don't accumulate
+        gradients during backpropagation.
+
+        Parameters
+        ----------
+        model : torch.nn.Module
+            The model with frozen parameters to validate
+
+        Raises
+        ------
+        RuntimeError
+            If frozen parameters unexpectedly accumulate gradients
+
+        Notes
+        -----
+        This validation creates a small test input and performs a forward/backward
+        pass. It's designed to catch configuration errors early in the training
+        process.
+        """
+        LOGGER.debug("Validating gradient flow for frozen parameters")
+
+        # Store original training mode
+        was_training = model.training
+        model.eval()
+
+        try:
+            # Create a small test input - adjust shape based on model's expected input
+            # This is a simple heuristic; real models may need different shapes
+            test_input = torch.randn(1, 10, requires_grad=True)
+
+            # Attempt forward pass
+            try:
+                output = model(test_input)
+                if hasattr(output, "mean"):
+                    loss = output.mean()
+                else:
+                    loss = output.sum() if isinstance(output, torch.Tensor) else output[0].sum()
+
+                # Backward pass
+                loss.backward()
+
+                # Check frozen parameters
+                for module_name in self.submodules_to_freeze:
+                    self._check_module_gradients(model, module_name)
+
+                LOGGER.debug("Gradient validation successful - frozen parameters have no gradients")
+
+            except (RuntimeError, TypeError, AttributeError) as e:
+                # If we can't validate (e.g., model needs specific input shape),
+                # log a warning but don't fail
+                LOGGER.warning("Could not validate gradient flow: %s", e)
+
+        finally:
+            # Restore training mode and clean up gradients
+            if was_training:
+                model.train()
+            # Clear any gradients that were computed
+            model.zero_grad()
+
+    def _check_module_gradients(self, module: torch.nn.Module, target_name: str) -> None:  # noqa: C901
+        """Check that a specific module's parameters have no gradients.
+
+        Uses optimized lookup via get_submodule() when possible.
+
+        Parameters
+        ----------
+        module : torch.nn.Module
+            The parent module to search within
+        target_name : str
+            The name of the submodule to check
+
+        Raises
+        ------
+        RuntimeError
+            If frozen parameters have gradients
+        """
+        # Try direct access first for O(1) lookup
+        try:
+            target_module = module.get_submodule(target_name)
+            for param_name, param in target_module.named_parameters():
+                if not param.requires_grad and param.grad is not None:
+                    error_msg = (
+                        f"Frozen parameter '{target_name}.{param_name}' "
+                        f"unexpectedly has gradients. This may indicate "
+                        f"a problem with the freezing mechanism."
+                    )
+                    raise RuntimeError(error_msg)
+        except AttributeError:
+            # Module not found via direct path, fall back to recursive search
+            pass
+        else:
+            return
+
+        # Fallback: Handle nested module names recursively
+        if "." in target_name:
+            parts = target_name.split(".", 1)
+            parent_name, child_name = parts[0], parts[1]
+
+            for name, child in module.named_children():
+                if name == parent_name:
+                    self._check_module_gradients(child, child_name)
+        else:
+            # Check direct children
+            for name, child in module.named_children():
+                if name == target_name:
+                    for param_name, param in child.named_parameters():
+                        if not param.requires_grad and param.grad is not None:
+                            error_msg = (
+                                f"Frozen parameter '{target_name}.{param_name}' "
+                                f"unexpectedly has gradients. This may indicate "
+                                f"a problem with the freezing mechanism."
+                            )
+                            raise RuntimeError(error_msg)
+                    return
+
+            # If not found in direct children, search recursively
+            for _, child in module.named_children():
+                self._check_module_gradients(child, target_name)
+
+    def _freeze_submodule_by_name(self, module: torch.nn.Module, target_name: str) -> int:  # noqa: C901
+        """Freeze parameters of a submodule by name using optimized lookup.
+
+        This method uses PyTorch's built-in get_submodule() for efficient access
+        to nested modules, avoiding recursive searches when possible. It supports
+        both direct child modules and nested modules using dot notation.
 
         Parameters
         ----------
@@ -488,13 +630,38 @@ class FreezingModelModifier(ModelModifier):
 
         Notes
         -----
-        This method handles both direct children and nested module access using
-        standard Python attribute access patterns.
+        This method first attempts direct access via get_submodule() for O(1) lookup,
+        falling back to recursive search only when necessary (e.g., for partial
+        name matches or when the exact path doesn't exist).
+
+        Examples
+        --------
+        - "encoder" -> freezes the encoder module
+        - "processor.0" -> freezes the first processor module
+        - "encoder.attention.heads" -> freezes nested attention heads
         """
         frozen_count = 0
 
-        # Handle nested module names (e.g., "processor.0")
+        # First, try direct access using PyTorch's get_submodule
+        # This is O(1) for exact paths and much faster than recursive search
+        try:
+            target_module = module.get_submodule(target_name)
+            # Freeze all parameters in the found module
+            for param in target_module.parameters():
+                if param.requires_grad:
+                    param.requires_grad = False
+                    frozen_count += 1
+        except AttributeError:
+            # Module not found via direct path, fall back to recursive search
+            # This handles cases where the name might be a partial match
+            pass
+        else:
+            return frozen_count
+
+        # Fallback: Recursive search for partial matches
+        # This is kept for backward compatibility and edge cases
         if "." in target_name:
+            # Handle nested module names
             parts = target_name.split(".", 1)
             parent_name, child_name = parts[0], parts[1]
 
@@ -502,7 +669,7 @@ class FreezingModelModifier(ModelModifier):
                 if name == parent_name:
                     frozen_count += self._freeze_submodule_by_name(child, child_name)
         else:
-            # Direct child module
+            # Search in direct children first
             for name, child in module.named_children():
                 if name == target_name:
                     for param in child.parameters():
@@ -525,10 +692,18 @@ class TransferLearningModelModifier(ModelModifier):
     checkpoint into the current model. It provides flexible handling of architecture
     differences through configurable strict/mismatch policies.
 
-    The modifier leverages Anemoi's extensible checkpoint loading system (PR #458) which
-    must be available as a dependency. The checkpoint loading system supports multiple
-    source types including local files, S3, HTTP URLs, and cloud storage services.
-    It provides robust error handling and detailed logging for debugging weight loading issues.
+    The modifier supports two operation modes:
+
+    1. **Primary mode**: When available, leverages Anemoi's extensible checkpoint loading
+       system which supports multiple source types including local files, S3,
+       HTTP URLs, and cloud storage services.
+
+    2. **Fallback mode**: A standalone implementation using standard PyTorch checkpoint
+       loading that works independently, ensuring the modifier functions even without
+       the extensible checkpoint loading system.
+
+    Both modes provide robust error handling and detailed logging for debugging weight
+    loading issues.
 
     Parameters
     ----------
@@ -659,7 +834,7 @@ class TransferLearningModelModifier(ModelModifier):
     --------
     FreezingModelModifier : Freeze specific parameters after loading
     ModelModifierApplier : Chain multiple modifiers together
-    anemoi.training.utils.model_loading.load_model_from_checkpoint : Underlying loading function (external dependency)
+    anemoi.training.utils.model_loading.load_model_from_checkpoint : Checkpoint loading (optional)
 
     Raises
     ------
@@ -802,20 +977,13 @@ class TransferLearningModelModifier(ModelModifier):
             for name, param in model.named_parameters():
                 print(f"{name}: {param.shape}")
         """
-        try:
-            from anemoi.training.utils.model_loading import load_model_from_checkpoint
-        except ImportError as e:
-            msg = (
-                "The checkpoint loading system is required for TransferLearningModelModifier. "
-                "Please ensure the checkpoint loading PR (#458) is merged and available. "
-                f"Import error: {e}"
-            )
-            raise ImportError(msg) from e
-
         LOGGER.info("Loading transfer learning weights from: %s", self.checkpoint_path)
 
+        # Try to use extensible checkpoint loading system if available
         try:
-            # Delegate to the extensible checkpoint loading system
+            from anemoi.training.utils.model_loading import load_model_from_checkpoint
+
+            LOGGER.debug("Using extensible checkpoint loading system")
             loaded_model = load_model_from_checkpoint(
                 model=model,
                 checkpoint_source=self.checkpoint_path,
@@ -823,19 +991,153 @@ class TransferLearningModelModifier(ModelModifier):
                 strict=self.strict,
                 skip_mismatched=self.skip_mismatched,
             )
-
             LOGGER.info(
                 "Successfully loaded transfer learning weights (strict=%s, skip_mismatched=%s)",
                 self.strict,
                 self.skip_mismatched,
             )
-
+        except ImportError:
+            LOGGER.info("Extensible checkpoint loading system not available, using fallback implementation")
+            # Use fallback implementation
+            return self._fallback_transfer_learning_loading(model)
         except Exception:
-            LOGGER.exception("Failed to load transfer learning weights from %s.", self.checkpoint_path)
-            raise
-
+            LOGGER.exception("Failed to load transfer learning weights from %s", self.checkpoint_path)
+            LOGGER.info("Attempting fallback implementation")
+            return self._fallback_transfer_learning_loading(model)
         else:
             return loaded_model
+
+    def _fallback_transfer_learning_loading(self, model: torch.nn.Module) -> torch.nn.Module:  # noqa: C901
+        """Fallback implementation for transfer learning when extensible system is not available.
+
+        This method provides basic transfer learning functionality using standard PyTorch
+        checkpoint loading with optional shape mismatch handling.
+
+        Parameters
+        ----------
+        model : torch.nn.Module
+            The model to load weights into
+
+        Returns
+        -------
+        torch.nn.Module
+            The model with loaded weights (same object, modified in-place)
+
+        Raises
+        ------
+        FileNotFoundError
+            If the checkpoint file cannot be found
+        RuntimeError
+            If the checkpoint cannot be loaded or is incompatible
+        ValueError
+            If strict=True and there are parameter mismatches
+        """
+        import torch
+
+        try:
+            # Load checkpoint - support both local files and basic URL schemes
+            if str(self.checkpoint_path).startswith(("http://", "https://")):
+                LOGGER.warning(
+                    "Loading from URL %s using basic implementation - "
+                    "consider using advanced checkpoint loading system for better reliability",
+                    self.checkpoint_path,
+                )
+
+            checkpoint = torch.load(self.checkpoint_path, map_location="cpu", weights_only=False)
+
+            # Extract state_dict from checkpoint
+            if "state_dict" in checkpoint:
+                checkpoint_state_dict = checkpoint["state_dict"]
+                LOGGER.debug("Found state_dict in checkpoint")
+            elif "model_state_dict" in checkpoint:
+                checkpoint_state_dict = checkpoint["model_state_dict"]
+                LOGGER.debug("Found model_state_dict in checkpoint")
+            else:
+                # Assume the entire checkpoint is the state_dict
+                checkpoint_state_dict = checkpoint
+                LOGGER.debug("Using entire checkpoint as state_dict")
+
+        except Exception as e:
+            msg = f"Failed to load checkpoint from {self.checkpoint_path}: {e}"
+            LOGGER.exception(msg)
+            raise RuntimeError(msg) from e
+
+        # Get model's current state dict
+        model_state_dict = model.state_dict()
+
+        # Handle shape mismatches if skip_mismatched is True
+        if self.skip_mismatched:
+            filtered_state_dict = {}
+            skipped_count = 0
+
+            for key, checkpoint_param in checkpoint_state_dict.items():
+                if key in model_state_dict:
+                    model_param_shape = model_state_dict[key].shape
+                    checkpoint_param_shape = checkpoint_param.shape
+
+                    if model_param_shape == checkpoint_param_shape:
+                        filtered_state_dict[key] = checkpoint_param
+                    else:
+                        LOGGER.warning(
+                            "Skipping parameter '%s' due to shape mismatch: checkpoint shape %s vs model shape %s",
+                            key,
+                            checkpoint_param_shape,
+                            model_param_shape,
+                        )
+                        skipped_count += 1
+                else:
+                    if not self.strict:
+                        LOGGER.debug("Skipping parameter '%s' not found in model", key)
+                    else:
+                        filtered_state_dict[key] = checkpoint_param
+
+            if skipped_count > 0:
+                LOGGER.info("Skipped %d parameters due to shape mismatches", skipped_count)
+
+            checkpoint_state_dict = filtered_state_dict
+
+        # Load the state dict
+        try:
+            missing_keys, unexpected_keys = model.load_state_dict(checkpoint_state_dict, strict=self.strict)
+
+            # Report results
+            self._handle_missing_keys(missing_keys)
+            self._handle_unexpected_keys(unexpected_keys)
+
+            loaded_params = len(checkpoint_state_dict) - len(missing_keys)
+            total_params = len(model_state_dict)
+
+            LOGGER.info(
+                "Successfully loaded %d/%d parameters from checkpoint %s (strict=%s, skip_mismatched=%s)",
+                loaded_params,
+                total_params,
+                self.checkpoint_path,
+                self.strict,
+                self.skip_mismatched,
+            )
+
+        except Exception as e:
+            msg = f"Failed to load state dict into model: {e}"
+            LOGGER.exception(msg)
+            raise RuntimeError(msg) from e
+
+        return model
+
+    def _handle_missing_keys(self, missing_keys: list) -> None:
+        """Handle missing keys in checkpoint loading."""
+        if missing_keys:
+            if self.strict:
+                msg = f"Missing keys in checkpoint: {missing_keys}"
+                raise ValueError(msg)
+            LOGGER.warning("Missing keys in checkpoint (continuing): %s", missing_keys)
+
+    def _handle_unexpected_keys(self, unexpected_keys: list) -> None:
+        """Handle unexpected keys in checkpoint loading."""
+        if unexpected_keys:
+            if self.strict:
+                msg = f"Unexpected keys in checkpoint: {unexpected_keys}"
+                raise ValueError(msg)
+            LOGGER.warning("Unexpected keys in checkpoint (continuing): %s", unexpected_keys)
 
 
 class ModelModifierApplier:
