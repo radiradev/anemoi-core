@@ -16,7 +16,7 @@ class RolloutForecastingModule(ForecastingModule):
         y_pred: dict[str, torch.Tensor],
         batch: dict[str, dict[str, torch.Tensor]],
         rollout_step: int,
-    ) -> torch.Tensor:
+    ) -> dict[str, torch.Tensor]:
         num_target_time = 1 # If f(x_t-1, x_t) = [x_t+1, x_t+2], we should rollout 2 steps instead of 1.
         x = x.roll(-num_target_time, dims=1) # Roll accross TIME dim
 
