@@ -7,6 +7,49 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
+"""Comprehensive test suite for the Checkpoint Loading System.
+
+This module tests the extensible checkpoint loading infrastructure that enables
+loading PyTorch model checkpoints from various sources including local filesystem,
+cloud storage (S3, GCS, Azure), and HTTP/HTTPS endpoints.
+
+Test Coverage
+=============
+
+1. **LocalCheckpointLoader**: Tests for local filesystem checkpoint loading
+2. **RemoteCheckpointLoader**: Tests for remote URL and cloud storage loading
+3. **CheckpointLoaderRegistry**: Tests for loader registration and selection
+4. **Integration Tests**: End-to-end tests with multiple loaders
+5. **Error Handling**: Tests for various failure scenarios
+
+Key Testing Scenarios
+=====================
+
+- Source type detection (local vs remote)
+- File existence validation
+- Network error handling
+- Cloud authentication simulation
+- Registry pattern functionality
+- Fallback mechanisms
+
+Test Organization
+=================
+
+- TestLocalCheckpointLoader: Local filesystem operations
+- TestRemoteCheckpointLoader: Remote source operations
+- TestCheckpointLoaderRegistry: Registry management
+- TestIntegration: Combined loader workflows
+
+Testing Principles
+==================
+
+- Mock external dependencies (network, cloud APIs)
+- Use temporary files for local testing
+- Validate error messages for debugging
+- Test both success and failure paths
+- Ensure proper resource cleanup
+"""
+
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock
@@ -22,10 +65,30 @@ from anemoi.training.utils.checkpoint_loaders import load_checkpoint_from_source
 
 
 class TestLocalCheckpointLoader:
-    """Test LocalCheckpointLoader functionality."""
+    """Tests for the LocalCheckpointLoader implementation.
+
+    The LocalCheckpointLoader is responsible for loading checkpoints from
+    the local filesystem. These tests verify:
+
+    - Correct source type detection (local paths vs URLs)
+    - File loading functionality
+    - Error handling for missing files
+    - Path object and string path compatibility
+    - Cross-platform path handling
+    """
 
     def test_supports_local_path(self) -> None:
-        """Test that local paths are supported."""
+        """Test that various local path formats are correctly identified.
+
+        Validates that the loader recognizes:
+        - pathlib.Path objects
+        - Absolute string paths
+        - Relative string paths
+        - Simple filenames
+
+        This ensures the loader can handle all common ways users might
+        specify local checkpoint paths.
+        """
         loader = LocalCheckpointLoader()
 
         # Test Path object
@@ -38,7 +101,12 @@ class TestLocalCheckpointLoader:
         assert loader.supports_source("model.ckpt")
 
     def test_does_not_support_urls(self) -> None:
-        """Test that URLs are not supported by local loader."""
+        """Test that remote URLs are correctly rejected by the local loader.
+
+        Ensures proper separation of concerns - the local loader should
+        not attempt to handle remote sources, leaving them for the
+        RemoteCheckpointLoader to handle.
+        """
         loader = LocalCheckpointLoader()
 
         assert not loader.supports_source("http://example.com/model.ckpt")
@@ -46,7 +114,17 @@ class TestLocalCheckpointLoader:
         assert not loader.supports_source("s3://bucket/model.ckpt")
 
     def test_load_existing_checkpoint(self) -> None:
-        """Test loading an existing checkpoint file."""
+        """Test successful loading of a valid checkpoint file.
+
+        This test:
+        1. Creates a temporary checkpoint with known data
+        2. Loads it using the LocalCheckpointLoader
+        3. Verifies the loaded data matches the original
+        4. Ensures proper cleanup of temporary files
+
+        This validates the core functionality of checkpoint loading
+        and ensures data integrity is maintained.
+        """
         loader = LocalCheckpointLoader()
 
         # Create a temporary checkpoint file
@@ -64,7 +142,15 @@ class TestLocalCheckpointLoader:
             tmp_path.unlink()
 
     def test_load_nonexistent_checkpoint(self) -> None:
-        """Test error handling for non-existent checkpoint."""
+        """Test proper error handling when checkpoint file doesn't exist.
+
+        Validates that:
+        - FileNotFoundError is raised with appropriate message
+        - No system crashes or undefined behavior occurs
+        - Error message helps users identify the problem
+
+        This is important for user experience and debugging.
+        """
         loader = LocalCheckpointLoader()
 
         with pytest.raises(FileNotFoundError):

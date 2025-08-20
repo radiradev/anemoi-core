@@ -7,6 +7,51 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
+"""Comprehensive test suite for the Model Loading System.
+
+This module tests the model loading strategies that handle different scenarios
+for loading PyTorch model weights from checkpoints, including standard loading,
+transfer learning with architecture mismatches, and weights-only loading.
+
+Test Coverage
+=============
+
+1. **StandardModelLoader**: Tests for exact architecture match loading
+2. **TransferLearningModelLoader**: Tests for flexible loading with mismatches
+3. **WeightsOnlyModelLoader**: Tests for parameter-only loading
+4. **ModelLoaderRegistry**: Tests for strategy registration and selection
+5. **Integration**: End-to-end tests combining loaders with checkpoint sources
+
+Key Testing Scenarios
+=====================
+
+- Exact architecture matches
+- Parameter size mismatches
+- Missing layers in checkpoint
+- Extra layers in checkpoint
+- Metadata preservation
+- Hyperparameter handling
+- Error conditions and recovery
+
+Test Organization
+=================
+
+- DummyModel: Simple test model with known architecture
+- TestStandardModelLoader: Standard loading strategy tests
+- TestTransferLearningModelLoader: Transfer learning tests
+- TestModelLoaderRegistry: Registry pattern tests
+- TestIntegration: Combined workflow tests
+
+Testing Principles
+==================
+
+- Use dummy models with known architectures
+- Mock checkpoint loading to isolate logic
+- Test both successful and error cases
+- Validate metadata preservation
+- Ensure proper state dict handling
+"""
+
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock
