@@ -693,14 +693,14 @@ class TensorSampleProvider(SampleProvider):
         data = self._tuple_sample_provider._get_item(request, item)
         # we assume here that all data depending on the item are (numpy) arrays to be stacked
 
-        @st.apply_on_leaf
+        @st.apply_to_each_leaf
         def stack_tensors(*args):
             assert all(
                 isinstance(a, (list, tuple, np.ndarray)) for a in args
             ), f"Expected all elements to be list, tuple, or ndarray, got {[type(a) for a in args]}"
             return np.stack(args)
 
-        @st.apply_on_box
+        @st.apply_to_each_box
         def transpose_if_needed(box):
             assert isinstance(box, dict), f"Expected a dict, got {type(box)}: {box}"
             if "data" in box:
