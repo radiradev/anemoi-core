@@ -15,10 +15,11 @@ from typing import Optional
 import numpy as np
 import torch
 
-from anemoi.models.preprocessing import BasePreprocessor
 import anemoi.training.data.refactor.structure as st
+from anemoi.models.preprocessing import BasePreprocessor
 
 LOGGER = logging.getLogger(__name__)
+
 
 @st.function_on_box
 def build_normaliser(static):
@@ -30,16 +31,16 @@ def build_normaliser(static):
     if "_target_" not in config:
         # If the normaliser is not a Hydra instantiation, use the config directly
         config = config
-    elif config.get("_target_") == "anemoi.models.preprocessing.normalizer.InputNormalizer":
+    elif config.get("_target_") == "anemoi.models.preprocessing.normaliser.InputNormaliser":
         # if the normaliser uses the default class, use the config directly
+        config = config["config"]
+    elif config.get("_target_") == "anemoi.models.preprocessing.normalizer.InputNormalizer":
+        # if the normaliser uses the old class with 'z', use the config directly
         config = config["config"]
     else:
         raise NotImplementedError("TODO: use hydra instanciate for this custom normaliser")
 
-    from anemoi.models.preprocessing.normalizer import InputNormalizer
-
-
-    obj = InputNormalizer(
+    obj = InputNormaliser(
         config=static["normaliser"],
         name_to_index=static["name_to_index"],
         statistics=static["statistics"],
@@ -51,7 +52,7 @@ def build_normaliser(static):
     return func
 
 
-class InputNormalizer(BasePreprocessor):
+class InputNormaliser(BasePreprocessor):
     """Normalizes input data with a configurable method."""
 
     def __init__(
@@ -59,6 +60,7 @@ class InputNormalizer(BasePreprocessor):
         config=None,
         name_to_index=None,
         statistics=None,
+        in_place: bool = True,
         dataset: Optional = None,
     ) -> None:
         """Initialize the normalizer.
@@ -71,9 +73,12 @@ class InputNormalizer(BasePreprocessor):
             Data indices for input and output variables
         statistics : dict
             Data statistics dictionary
+        in_place: bool
+            Do it in place.
         """
         super().__init__(config, dataset)
 
+        self.in_place = in_place
         minimum = statistics["minimum"]
         maximum = statistics["maximum"]
         mean = statistics["mean"]
@@ -137,7 +142,7 @@ class InputNormalizer(BasePreprocessor):
 
     def _validate_normalization_inputs(self, name_to_index_training_input: dict, minimum, maximum, mean, stdev):
         assert len(self.methods) == sum(len(v) for v in self.method_config.values()), (
-            f"Error parsing methods in InputNormalizer methods ({len(self.methods)}) "
+            f"Error parsing methods in InputNormaliser methods ({len(self.methods)}) "
             f"and entries in config ({sum(len(v) for v in self.method_config)}) do not match."
         )
 
@@ -159,9 +164,7 @@ class InputNormalizer(BasePreprocessor):
                 "none",
             ], f"{method} is not a valid normalisation method"
 
-    def transform(
-        self, x: torch.Tensor, in_place: bool = True, data_index: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+    def transform(self, x: torch.Tensor) -> torch.Tensor:
         """Normalizes an input tensor x of shape [..., nvars].
 
         Normalization done in-place unless specified otherwise.
@@ -173,30 +176,26 @@ class InputNormalizer(BasePreprocessor):
         ----------
         x : torch.Tensor
             Data to normalize
-        in_place : bool, optional
-            Normalize in-place, by default True
-        data_index : Optional[torch.Tensor], optional
-            Normalize only the specified indices, by default None
 
         Returns
         -------
         torch.Tensor
             _description_
         """
-        if not in_place:
+        if not self.in_place:
             x = x.clone()
 
-        assert x.ndim == 5, "x should be (batch, time, n_vars, ens, latlons)"
-        if data_index is not None:
-            x.mul_(self._norm_mul[data_index]).add_(self._norm_add[data_index])
-        else:
-            x.mul_(self._norm_mul).add_(self._norm_add)
+        print("TODO rearrange somewhere else")
+        from einops import rearrange
 
+        x = rearrange(x, "b v latlon -> b latlon v")
+
+        assert x.ndim == 5, f"x should be (batch, time, n_vars, ens, latlons), got {x.ndim}"
+
+        x.mul_(self._norm_mul).add_(self._norm_add)
         return x
 
-    def inverse_transform(
-        self, x: torch.Tensor, in_place: bool = True, data_index: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+    def inverse_transform(self, x: torch.Tensor) -> torch.Tensor:
         """Denormalizes an input tensor x of shape [..., nvars | nvars_pred].
 
         Denormalization done in-place unless specified otherwise.
@@ -208,24 +207,18 @@ class InputNormalizer(BasePreprocessor):
         ----------
         x : torch.Tensor
             Data to denormalize
-        in_place : bool, optional
-            Denormalize in-place, by default True
-        data_index : Optional[torch.Tensor], optional
-            Denormalize only the specified indices, by default None
 
         Returns
         -------
         torch.Tensor
             Denormalized data
         """
-        if not in_place:
+        if not self.in_place:
             x = x.clone()
+        print("TODO rearrange somewhere else")
+        from einops import rearrange
 
-        # Denormalize dynamic or full tensors
-        # input and predicted tensors have different shapes
-        # hence, we mask out the forcing indices
-        if data_index is not None:
-            x.subtract_(self._norm_add[data_index]).div_(self._norm_mul[data_index])
-        else:
-            x.subtract_(self._norm_add).div_(self._norm_mul)
+        x = rearrange(x, "b v latlon -> b latlon v")
+
+        x.subtract_(self._norm_add).div_(self._norm_mul)
         return x
