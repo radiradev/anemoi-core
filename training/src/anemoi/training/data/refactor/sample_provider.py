@@ -240,7 +240,7 @@ class SampleProvider:
         raise NotImplementedError
 
     @property
-    def dataspecs(self):
+    def dataschema(self):
         raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
 
     def _path(self, prefix):
@@ -297,8 +297,8 @@ class ForwardSampleProvider(SampleProvider):
         return self._forward._path(prefix)
 
     @property
-    def dataspecs(self):
-        return self._forward.dataspecs
+    def dataschema(self):
+        return self._forward.dataschema
 
     @property
     def imputer(self):
@@ -382,8 +382,8 @@ class DictSampleProvider(SampleProvider):
         return {k: v._get_static(request) for k, v in self._samples.items()}
 
     @property
-    def dataspecs(self):
-        return dict(type="dict", specs={k: v.dataspecs for k, v in self._samples.items()})
+    def dataschema(self):
+        return dict(type="dict", children={k: v.dataschema for k, v in self._samples.items()})
 
     def _path(self, prefix):
         first_dot = "" if prefix == "" else "."
@@ -442,8 +442,8 @@ class _FilterSampleProvider(SampleProvider):
         return self._forward._get_static(request)
 
     @property
-    def dataspecs(self):
-        return self._forward.dataspecs
+    def dataschema(self):
+        return self._forward.dataschema
 
     def tree(self, prefix: str = ""):
         tree = self._forward.tree()
@@ -631,8 +631,8 @@ class TupleSampleProvider(SampleProvider):
         return static
 
     @property
-    def dataspecs(self):
-        return dict(type="tuple", specs=[s.dataspecs for s in self._samples])
+    def dataschema(self):
+        return dict(type="tuple", children=[s.dataschema for s in self._samples])
 
     def _path(self, prefix):
         return [s._path(f"{prefix}.{i}") for i, s in enumerate(self._samples)]
@@ -725,8 +725,8 @@ class TensorSampleProvider(SampleProvider):
         return self._tuple_sample_provider._get_static(request)
 
     @property
-    def dataspecs(self):
-        return dict(type="box", specs=self._template_sample_provider.dataspecs)
+    def dataschema(self):
+        return self._template_sample_provider.dataschema
 
     def _path(self, prefix):
         return {
@@ -886,8 +886,8 @@ class VariablesSampleProvider(SampleProvider):
         return self.data_handler.get_static(request=request)
 
     @property
-    def dataspecs(self):
-        return self.data_handler._dataspecs
+    def dataschema(self):
+        return self.data_handler._dataschema
 
     def tree(self, prefix: str = ""):
         def _(x):

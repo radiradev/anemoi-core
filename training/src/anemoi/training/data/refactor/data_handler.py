@@ -24,11 +24,14 @@ class DataHandler:
         self._imputer_config = self.config.get("imputer", {})
         self._normaliser_config = self.config.get("normaliser", {})
         self._extra_config = self.config.get("extra", {})
-        self._dataspecs = dict(
-            latitude=dict(type="tensor"),
-            longitude=dict(type="tensor"),
-            timedeltas=dict(type="tensor"),
-            data=dict(type="tensor"),
+        self._dataschema = dict(
+            type="box",
+            children=dict(
+                latitude=dict(type="tensor"),
+                longitude=dict(type="tensor"),
+                timedeltas=dict(type="tensor"),
+                data=dict(type="tensor"),
+            ),
         )
 
         variables = [f"{group}.{v}" for v in variables]

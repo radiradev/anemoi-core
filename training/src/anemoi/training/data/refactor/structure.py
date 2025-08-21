@@ -97,39 +97,39 @@ def format_key_value(key, v):
     return format_default(key, v)
 
 
-def repr_specs(specs, name="Specs"):
-    tree = _repr_specs(specs, name=name)
+def repr_schema(schema, name="schema"):
+    tree = _repr_schema(schema, name=name)
     return _tree_to_string(tree)
 
 
-def _repr_specs(specs, name="Specs"):
-    if "type" not in specs:
-        raise ValueError(f"Specs must contain 'type' key: {specs}")
-    _type = specs["type"]
-
-    if _type in ["dict", "box", "tuple"]:
-        if "specs" not in specs:
-            raise ValueError(f"Dict specs must contain 'specs' key: {specs}")
+def _repr_schema(schema, name="schema"):
+    if "type" not in schema:
+        raise ValueError(f"schema must contain 'type' key: {schema}")
+    _type = schema["type"]
 
     if _type in ["dict", "box"]:
-        if not isinstance(specs["specs"], dict):
-            raise ValueError(f"Inconsistent specs, type={_type} but specs is not a dict: {specs}")
+        if "children" not in schema:
+            raise ValueError(f"Dict/tuple/box schema must contain 'children' key: {schema}")
+        if not isinstance(schema["children"], dict):
+            raise ValueError(f"Inconsistent schema, type={_type} but 'children' is not a dict: {schema}")
     if _type in ["tuple"]:
-        if not isinstance(specs["specs"], (list, tuple)):
-            raise ValueError(f"Inconsistent specs, type={_type} but specs is not a list or tuple: {specs}")
+        if "children" not in schema:
+            raise ValueError(f"Dict/tuple/box schema must contain 'children' key: {schema}")
+        if not isinstance(schema["children"], (list, tuple)):
+            raise ValueError(f"Inconsistent schema, type={_type} but 'children' is not a list or tuple: {schema}")
 
     if _type == "dict":
         tree = Tree(f"📖 {name}: {_type}")
-        for k, v in specs["specs"].items():
-            tree.add(_repr_specs(v, name=k))
+        for k, v in schema["children"].items():
+            tree.add(_repr_schema(v, name=k))
     elif _type == "box":
         tree = Tree(f"📦 {name}: {_type}")
-        for k, v in specs["specs"].items():
-            tree.add(_repr_specs(v, name=k))
+        for k, v in schema["children"].items():
+            tree.add(_repr_schema(v, name=k))
     elif _type == "tuple":
         tree = Tree(f"🔗 {name}: {_type}")
-        for i, v in enumerate(specs["specs"]):
-            tree.add(_repr_specs(v, name=str(i)))
+        for i, v in enumerate(schema["children"]):
+            tree.add(_repr_schema(v, name=str(i)))
     else:
         tree = Tree(f"🌱 {name}: {_type}")
     return tree
@@ -143,8 +143,8 @@ def repr_function(func, name="Function"):
     return _repr(func._anemoi["structure"], name, _boxed=False)
 
 
-def repr(nested, name="Nested", **kwargs):
-    return repr_leaf(nested, name, **kwargs)
+def repr(nested, name="Data", **kwargs):
+    return repr_box(nested, name, **kwargs)
 
 
 def repr_leaf(nested, name="Nested", **kwargs):
@@ -155,10 +155,10 @@ def repr_box(nested, name="Batch", **kwargs):
     return _repr(nested, name, _boxed=True, **kwargs)
 
 
-def _repr(nested, name, _boxed=True, _specs=None):
-    if _specs is None:
-        _specs = guess_specs(nested)
-    tree = _tree(_specs, name, nested, _boxed=_boxed)
+def _repr(nested, name, _boxed=True, _schema=None):
+    if _schema is None:
+        _schema = guess_schema(nested)
+    tree = _tree(_schema, name, nested, _boxed=_boxed)
     return _tree_to_string(tree)
 
 
@@ -169,15 +169,15 @@ def _tree_to_string(tree):
     return capture.get()
 
 
-def _tree(specs, key, nested, **kwargs):
+def _tree(schema, key, nested, **kwargs):
     box = "📦 " if kwargs.get("_boxed") else ""
     leaf = "🌱 "
     # leaf = "" if _boxed else "🌱 "
-    if specs_is_final(specs):
+    if final_schema(schema):
         txt = format_key_value(key, nested)
         return Tree(f"{leaf}{txt}")
 
-    if specs_is_box(specs):
+    if box_schema(schema):
         if not _verbose_structure():
             return Tree(f"{box}{key} : {" ".join(f"{k}" for k in nested)}")
 
@@ -188,19 +188,19 @@ def _tree(specs, key, nested, **kwargs):
                 tree.add(f"{leaf}{txt}")
         return tree
 
-    if specs_is_tuple(specs):
+    if tuple_schema(schema):
         tree = Tree(str(key))
         for i, v in enumerate(nested):
-            tree.add(_tree(specs["specs"][i], i, v, **kwargs))
+            tree.add(_tree(schema["children"][i], i, v, **kwargs))
         return tree
 
-    if specs_is_dict(specs):
+    if dict_schema(schema):
         tree = Tree(str(key))
         for k, v in nested.items():
-            tree.add(_tree(specs["specs"][k], k, v, **kwargs))
+            tree.add(_tree(schema["children"][k], k, v, **kwargs))
         return tree
 
-    raise ValueError(f"Unknown specs type: {specs}")
+    raise ValueError(f"Unknown schema type: {schema}")
 
 
 def _all_arguments(args, kwargs):
@@ -222,7 +222,7 @@ def probe_value(value):
         assert isinstance(value, dict)
         for k, v in value.items():
             p = probe_value(v)
-            if specs_is_final(p):
+            if final_schema(p):
                 return dict(type="box")
         return dict(type="dict")
     if isinstance(value, (list, tuple)):
@@ -234,142 +234,146 @@ def probe_value(value):
     return dict(type=type(value).__name__)
 
 
-def check_specs(specs):
-    if not isinstance(specs, dict):
-        raise ValueError(f"Expected specs to be a dict, got {type(specs)} : {specs}")
-    assert isinstance(specs.get("type"), str), f"Specs must contain a 'type' key with a string value: {specs}"
+def check_schema(schema):
+    if not isinstance(schema, dict):
+        raise ValueError(f"Expected schema to be a dict, got {type(schema)} : {schema}")
+    assert isinstance(schema.get("type"), str), f"schema must contain a 'type' key with a string value: {schema}"
 
 
-def specs_is_final(spec):
-    return spec["type"] not in [
+def final_schema(schema):
+    return schema["type"] not in [
         "box",
         "dict",
         "tuple",
     ]
 
 
-def specs_is_box(specs):
-    return specs["type"] == "box"
+def box_schema(schema):
+    return schema["type"] == "box"
 
 
-def specs_is_dict(specs):
-    return specs["type"] == "dict"
+def dict_schema(schema):
+    return schema["type"] == "dict"
 
 
-def specs_is_tuple(specs):
-    return specs["type"] == "tuple"
+def tuple_schema(schema):
+    return schema["type"] == "tuple"
 
 
-def guess_specs(*args):
-    return _guess_specs(*args)
+def guess_schema(*args):
+    return _guess_schema(*args)
 
 
-def _guess_specs(*args, kwargs={}, no_recurse=[]):
+def _guess_schema(*args, kwargs={}, no_recurse=[]):
     # force kwargs and no_recurse to be keywords to avoid name collision
     kwargs = dict(_recursable_arguments(args, kwargs, no_recurse))
 
-    # if any arguments is final, we found the specs
+    # if any arguments is final, we found the schema
     for k, v in kwargs.items():
-        spec = probe_value(v)
-        if specs_is_final(spec):
-            return spec
+        schema = probe_value(v)
+        if final_schema(schema):
+            return schema
 
     # else, all arguments in kwargs are not final
-    # return the specs of the first recursable argument
+    # return the schema of the first recursable argument
     first = kwargs[next(iter(kwargs))]
-    spec = probe_value(first)
-    if specs_is_tuple(spec):
-        # found a tuple or a list, add sub-specs
-        spec["specs"] = [_guess_specs(v_) for v_ in first]
-    elif specs_is_dict(spec) or specs_is_box(spec):
-        # found a dict or a box, add sub-specs
-        spec["specs"] = {k_: _guess_specs(v_) for k_, v_ in first.items()}
-        if specs_is_box(spec):
-            for k, v in spec["specs"].items():
-                if specs_is_final(v):
+    schema = probe_value(first)
+    if tuple_schema(schema):
+        # found a tuple or a list, add sub-schema
+        schema["children"] = [_guess_schema(v_) for v_ in first]
+    elif dict_schema(schema) or box_schema(schema):
+        # found a dict or a box, add sub-schema
+        schema["children"] = {k_: _guess_schema(v_) for k_, v_ in first.items()}
+        if box_schema(schema):
+            for k, v in schema["children"].items():
+                if final_schema(v):
                     continue
                 # This is a little hacky here, so let's add an assert
-                # the specs are infered deeply in spec['specs']
+                # the schema are infered deeply in schema['children']
                 # but we want(?) to stop at the box level.
-                assert len(v) == 2, f"Expected 2 elements in spec for {k}, got {len(v)}: {v}"
+                assert len(v) == 2, f"Expected 2 elements in schema for {k}, got {len(v)}: {v}"
                 v["type"] = "dict" if v["type"] == "box" else v["type"]
-                v.pop("specs")
+                v["children"] = {}
 
-            if any(specs_is_box(v) for k, v in spec["specs"].items()):
-                spec["type"] = "dict"
+            if any(box_schema(v) for k, v in schema["children"].items()):
+                schema["type"] = "dict"
             else:
-                spec["type"] = "box"
-    return spec
+                schema["type"] = "box"
+    return schema
 
 
-def assert_compatible_specs(a, b):
+def assert_compatible_schema(a, b):
     log = [
-        (specs_is_dict(a), specs_is_dict(b)),
-        (specs_is_box(a), specs_is_box(b)),
-        (specs_is_tuple(a), specs_is_tuple(b)),
-        (specs_is_final(a), specs_is_final(b)),
+        (dict_schema(a), dict_schema(b)),
+        (box_schema(a), box_schema(b)),
+        (tuple_schema(a), tuple_schema(b)),
+        (final_schema(a), final_schema(b)),
     ]
-    if specs_is_tuple(a):
-        assert specs_is_tuple(b), f"Specs mismatch: {a} vs {b}"
-        a = a["specs"]
-        b = b["specs"]
-        assert len(a) == len(b), f"Specs mismatch: {len(a)} != {len(b)} in {a} vs {b}"
+    if tuple_schema(a):
+        assert tuple_schema(b), f"Schema mismatch: {a} vs {b}"
+        a = a["children"]
+        b = b["children"]
+        assert len(a) == len(b), f"schema mismatch: {len(a)} != {len(b)} in {a} vs {b}"
         for a_, b_ in zip(a, b):
-            assert_compatible_specs(a_, b_)
-    elif specs_is_dict(a):
-        assert specs_is_dict(b), f"Specs mismatch: {a} vs {b}"
-    elif specs_is_box(a):
-        assert specs_is_box(b), f"Specs mismatch: {a} vs {b}"
-    elif specs_is_tuple(a) or specs_is_box(a):
-        a = a["specs"]
-        b = b["specs"]
-        assert len(a) == len(b), f"Specs mismatch: {len(a)} != {len(b)} in {a} vs {b}"
+            assert_compatible_schema(a_, b_)
+    elif dict_schema(a):
+        assert dict_schema(b), f"schema mismatch: {a} vs {b}"
+    elif box_schema(a):
+        assert box_schema(b), f"schema mismatch: {a} vs {b}"
+    elif tuple_schema(a) or box_schema(a):
+        a = a["children"]
+        b = b["children"]
+        assert len(a) == len(b), f"schema mismatch: {len(a)} != {len(b)} in {a} vs {b}"
         for k in a:
-            assert_compatible_specs(a[k], b[k])
+            assert_compatible_schema(a[k], b[k])
     else:
-        assert specs_is_final(a) and specs_is_final(b), f"Specs mismatch: {a} vs {b}. {log}"
+        assert final_schema(a) and final_schema(b), f"schema mismatch: {a} vs {b}. {log}"
 
 
-def compare_specs(a, b):
+def compare_schema(a, b):
     if isinstance(a, list):
         a = tuple(a)
     if isinstance(b, list):
         b = tuple(b)
     if isinstance(a, tuple):
-        return all(compare_specs(a_, b_) for a_, b_ in zip(a, b))
+        return all(compare_schema(a_, b_) for a_, b_ in zip(a, b))
     if isinstance(a, dict):
-        if (specs_is_final(a) or specs_is_box(a)) and (specs_is_final(b) or specs_is_box(b)):
+        if (final_schema(a) or box_schema(a)) and (final_schema(b) or box_schema(b)):
             return True
         if set(a.keys()) != set(b.keys()):
             return False
         for k in set(a.keys()) | set(b.keys()):
             if k not in b:
                 return False
-            if not compare_specs(a[k], b[k]):
+            if not compare_schema(a[k], b[k]):
                 return False
         return True
     return a == b
 
 
-def _apply(*args, _make_callable=False, **kwargs):
-    structure = _apply_(*args, **kwargs)
+def _call_func_now_and_make_callable_if_needed(*args, _make_callable=False, **kwargs):
+    structure = _call_func_now_not_callable(*args, **kwargs)
     if not _make_callable:
         return structure
-    specs = kwargs.get("specs")
-    return _structure_to_callable(structure, specs=specs)
+    print(f"----------- *args ={args}, kwargs={kwargs}")
+    print(repr_leaf(structure, name="Structure"))
+    schema = kwargs.get("schema")
+    func = _structure_to_callable(structure, schema=schema)
+    print(repr_function(func, name="Function"))
+    return func
 
 
-def _apply_(func, args, kwargs, _apply_on_boxes, no_recurse=[], specs=None):
-    # print(f"DEBUG: Applying {func.__name__} with args={args}, kwargs={kwargs}, no_recurse={no_recurse}, specs={specs}")
-    if specs is None:
-        specs = _guess_specs(*args, kwargs=kwargs, no_recurse=no_recurse)
-    check_specs(specs)
-    # print("DEBUG", repr_specs(specs))
+def _call_func_now_not_callable(func, args, kwargs, _apply_on_boxes, no_recurse=[], schema=None):
+    # print(f"DEBUG: Applying {func.__name__} with args={args}, kwargs={kwargs}, no_recurse={no_recurse}, schema={schema}")
+    if schema is None:
+        schema = _guess_schema(*args, kwargs=kwargs, no_recurse=no_recurse)
+    check_schema(schema)
+    # print("DEBUG", repr_schema(schema))
 
-    if specs_is_final(specs):
+    if final_schema(schema):
         return func(*args, **kwargs)
 
-    if _apply_on_boxes and specs_is_box(specs):
+    if _apply_on_boxes and box_schema(schema):
         return func(*args, **kwargs)
 
     def recurse(v, name, key):
@@ -377,48 +381,48 @@ def _apply_(func, args, kwargs, _apply_on_boxes, no_recurse=[], specs=None):
         return v[key] if name not in no_recurse else v
 
     def next_apply(key):
-        return _apply_(
+        return _call_func_now_not_callable(
             func,
             args=[recurse(v, i, key) for i, v in enumerate(args)],
             kwargs={k_: recurse(v, k_, key) for k_, v in kwargs.items()},
             no_recurse=no_recurse,
             _apply_on_boxes=_apply_on_boxes,
-            specs=specs["specs"][key],
+            schema=schema["children"][key],
         )
 
-    if specs_is_dict(specs) or (specs_is_box(specs) and not _apply_on_boxes):
-        keys = specs["specs"].keys()
+    if dict_schema(schema) or (box_schema(schema) and not _apply_on_boxes):
+        keys = schema["children"].keys()
         for k, v in _recursable_arguments(args, kwargs, no_recurse):
             if not isinstance(v, dict):
-                raise ValueError(f"Expected dict content for argument {k}, got {type(v)}. {specs}")
+                raise ValueError(f"Expected dict content for argument {k}, got {type(v)}. {schema}")
             if set(v.keys()) != set(keys):
-                raise ValueError(f"Keys mismatch for {k}: {set(v.keys())} != {set(keys)}")
+                raise ValueError(f"Keys mismatch for {k}: {set(v.keys())} != {set(keys)}, {_apply_on_boxes}")
         return {key: next_apply(key) for key in keys}
 
-    if specs_is_tuple(specs):
-        length = len(specs["specs"])
+    if tuple_schema(schema):
+        length = len(schema["children"])
         for k, v in _recursable_arguments(args, kwargs, no_recurse):
             if not isinstance(v, (list, tuple)):
-                raise ValueError(f"Expected list or tuple content for argument {k}, got {type(v)}. {specs}")
+                raise ValueError(f"Expected list or tuple content for argument {k}, got {type(v)}. {schema}")
             if len(v) != length:
-                raise ValueError(f"Length mismatch for {k}: {len(v)} != {length} in {specs}")
+                raise ValueError(f"Length mismatch for {k}: {len(v)} != {length} in {schema}")
         return tuple([next_apply(key) for key in range(length)])
-    raise ValueError(f"Unknown specs type: {specs}")
+    raise ValueError(f"Unknown schema type: {schema}")
 
 
 # def function_on_box(*args=None,**options):
-#    return apply_on_box(specs_or_callable, **options)
+#    return apply_to_each_box(callable_or_schema, **options)
 #
-# def function_on_leaf(specs_or_callable=None,**options):
+# def function_on_leaf(callable_or_schema=None,**options):
 #    raise NotImplementedError("TODO")
 
 
-def _structure_to_callable(structure, specs=None):
+def _structure_to_callable(structure, schema=None):
     """From a structure with all leaves callable, create a function to be apply to strctures with same schema"""
-    if specs is None:
-        specs = guess_specs(structure)
+    if schema is None:
+        schema = guess_schema(structure)
 
-    @apply_on_leaf
+    @apply_to_each_leaf
     def assert_is_callable(x):
         assert callable(x), f"Expected callable, got {type(x)}, in {repr(structure)}"
 
@@ -426,61 +430,95 @@ def _structure_to_callable(structure, specs=None):
 
     def func(*args, **kwargs):
 
-        @apply_on_leaf
+        @apply_to_each_leaf
         def func_(x, *args, **kwargs):
             return x(*args, **kwargs)
 
         return func_(structure, *args, **kwargs)
 
-    func._anemoi = dict(structure=structure, specs=specs)
+    func._anemoi = dict(structure=structure, schema=schema)
     return func
 
 
-def function_on_box(specs_or_callable=None, **options):
-    return _apply_on_x(specs_or_callable, **options, _apply_on_boxes=True, _make_callable=True)
+def function_on_box(callable_or_schema=None, **options):
+    return _apply_on_x(callable_or_schema, **options, _apply_on_boxes=True, _make_callable=True)
 
 
-def function_on_leaf(specs_or_callable=None, **options):
-    return _apply_on_x(specs_or_callable, **options, _apply_on_boxes=False, _make_callable=True)
+def function_on_leaf(callable_or_schema=None, **options):
+    return _apply_on_x(callable_or_schema, **options, _apply_on_boxes=False, _make_callable=True)
 
 
-def apply_on_leaf(specs_or_callable=None, **options):
-    return _apply_on_x(specs_or_callable, **options, _apply_on_boxes=False, _make_callable=False)
+def apply_to_each_leaf(callable_or_schema=None, **options):
+    return _apply_on_x(callable_or_schema, **options, _apply_on_boxes=False, _make_callable=False)
 
 
-def apply_on_box(specs_or_callable=None, **options):
-    return _apply_on_x(specs_or_callable, **options, _apply_on_boxes=True, _make_callable=False)
+def apply_to_each_box(callable_or_schema=None, **options):
+    return _apply_on_x(callable_or_schema, **options, _apply_on_boxes=True, _make_callable=False)
 
 
-def _apply_on_x(specs_or_callable=None, **options):
+def _apply_on_x(callable_or_schema=None, **options):
     def inner(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            return _apply(func, args, kwargs, **options)
+            return _call_func_now_and_make_callable_if_needed(func, args, kwargs, **options)
 
         return wrapper
 
     # decorator called with no parameters, apply the wrapper around the first arg
     no_arguments = set(options.keys()) == {"_apply_on_boxes", "_make_callable"}
-    if no_arguments and callable(specs_or_callable):
-        return inner(specs_or_callable)
+    if no_arguments and callable(callable_or_schema):
+        return inner(callable_or_schema)
 
-    # decorator called with parameters, if present, first arg is the specs
-    specs = specs_or_callable
-    if options.get("specs") is not None and specs is not None:
-        raise ValueError("Multiple values for argument 'specs'.")
-    options["specs"] = specs
+    # decorator called with parameters, if present, first arg is the schema
+    schema = callable_or_schema
+    if options.get("schema") is not None and schema is not None:
+        raise ValueError("Multiple values for argument 'schema'.")
+    options["schema"] = schema
 
     return inner
 
 
+@apply_to_each_box
+def merge(a, b, i=1):
+    if not isinstance(a, dict):
+        raise ValueError(f"Expected dict for a, got {type(a)}")
+    if not isinstance(b, dict):
+
+        raise ValueError(f"Expected dict for b, got {type(b)}")
+    return {**a, **b}
+
+
+@apply_to_each_box
+def _pop(a, key):
+    if not isinstance(a, dict):
+        raise ValueError(f"Expected dict for a, got {type(a)}")
+    if key not in a:
+        raise ValueError(f"Key {key} not found in dict. Available keys are: {list(a.keys())}")
+    value = a.pop(key)
+    return {key: value}
+
+
+@apply_to_each_box(no_recurse=["key"])
+def _pop(a, key):
+    if not isinstance(a, dict):
+        raise ValueError(f"Expected dict for a, got {type(a)}")
+    if key not in a:
+        raise ValueError(f"Key {key} not found in dict. Available keys are: {list(a.keys())}")
+    value = a.pop(key)
+    return {key: value}
+
+
+def pop(a, key):
+    return _pop(a, key=key)
+
+
 class Structure:
-    def __init__(self, content, specs=None):
+    def __init__(self, content, schema=None):
         self.content = content
-        self.specs = specs
+        self.schema = schema
 
     def __call__(self, *args, **kwargs):
-        @apply_on_leaf()
+        @apply_to_each_leaf()
         def wrapper(content, *_args, **_kwargs):
             return content(*_args, **_kwargs)
 
@@ -660,21 +698,25 @@ sample:
     )
 
     cfg = """dictionary:
-            fields:
-              tensor:
-                - variables: ["era5.2t", "era5.10u", "era5.10v"]
-                - offset: ["-6h"]
-            other_fields:
-              tensor:
-                - offset: ["-6h", "+6h"]
-                - variables: ["era5.2t", "era5.10u"]
-            #observations:
-            #  tuple:
-            #    loop:
-            #      - offset: ["-6h", "0h", "+6h"]
-            #    template:
-            #      tensor:
-            #        - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+                input:
+                  dictionary:
+                    fields:
+                    #  tensor:
+                         variables: ["era5.2t", "era5.10u", "era5.10v"]
+                    #    - offset: ["-6h"]
+                    #other_fields:
+                    #  tuple:
+                    #    loop:
+                    #      - offset: ["-6h", "+6h"]
+                    #    template:
+                    #      variables: ["era5.2t", "era5.10u"]
+                    #observations:
+                    #  tuple:
+                    #    loop:
+                    #      - offset: ["-6h", "0h", "+6h"]
+                    #    template:
+                    #      tensor:
+                    #        - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
         """
     config = yaml.safe_load(cfg)
 
@@ -682,56 +724,52 @@ sample:
     from anemoi.training.data.refactor.sample_provider import sample_provider_factory
 
     sp = sample_provider_factory(**training_context, **config)
+    schema = sp.dataschema
 
-    specs = sp.dataspecs
-    print(specs)
-    print(repr_specs(specs))
-    # print(repr(specs, _specs=specs, name="Specs"))
+    # print(schema)
+    print(repr_schema(schema, "schema"))
+
+    print(repr(sp.static_info, name="✅ sp.static_info"))
+    print(sp.static_info)
 
     data = sp[1]
+    print(repr(data, name="✅ Data"))
     print(data)
-    print(repr_box(data, name="Data"))
-    guessed = guess_specs(data)
-    print(f"Guessed specs: {repr_specs(guessed)}")
-    print("Specs=", repr_specs(specs))
-    assert_compatible_specs(specs, guessed)
+
+    guessed = guess_schema(data)
+    # print(f"Guessed schema: {repr_schema(guessed)}")
+    # print("schema=", repr_schema(schema))
+    assert_compatible_schema(schema, guessed)
+
+    data = merge(data, sp.static_info, i=7)
+    print(repr(data, name="✅ Data merged with sp.static_info"))
+    print(guess_schema(data))
+
+    pop(data, "extra")
+    print(repr(data, name="Data after popping extra"))
+    exit()
 
     print("----- select -------")
 
-    @apply_on_box(specs, no_recurse=["key"])
+    @apply_to_each_box(schema, no_recurse=["key"])
+    def select(content, key):
+        return {key: content[key]}
+
+    latitudes = select(content=data, key="latitudes")
+    print(repr(latitudes, name="Lat"))
+
+    @function_on_box(schema, no_recurse=["key"])
     def select(content, key):
         return content[key]
 
     latitudes = select(content=data, key="latitudes")
-    print(repr(latitudes, name="Lat"))
+    print(repr(latitudes, name="Lat2"))
+
+    exit()
+
     longitudes = select(data, key="longitudes")
     print(repr(longitudes, name="Long"))
-    print(guess_specs(longitudes))
-
-    print("----- merge -------")
-
-    # @apply_on_box(specs, no_recurse=["**kwargs"]) # not implemented
-    @apply_on_box
-    def merge(**kwargs):
-        return dict(**kwargs)
-
-    print(
-        repr_box(
-            merge(data=data, lat=latitudes),
-            name="merge(data=data, lat=latitudes)",
-        ),
-    )
-
-    @apply_on_leaf
-    def merge_element(**kwargs):
-        return dict(**kwargs)
-
-    print(
-        repr_box(
-            merge_element(latitudes=latitudes, longitudes=longitudes),
-            name="merge_element(latitudes=latitudes, longitudes=longitudes)",
-        ),
-    )
+    print(guess_schema(longitudes))
 
     print("------")
 
@@ -740,25 +778,26 @@ sample:
         mean = np.mean(statistics["longitudes"])
         # mean = statistics["mean"]
 
-        def func(box):
-            box['data'] = box['data'] - mean
+        def func(box, device):
+            box[data].to_device(device)
+            box["normalized_data"] = box["data"] - mean
             return box
             # return {apply_on_key: box[apply_on_key] - mean}
 
-        # norm = Normaliser(mean)
+        # norm = Normaliser(mean,...)
         # def f(x):
         #    return norm.transform(x["data"])
 
         return func
 
     normaliser = build_normaliser(data)
-    print(repr_box(data))
-    print(repr(normaliser(data), name="normaliser(data)"))
+    print(repr(data))
+    print(repr(normaliser(data, device="gpu"), name="normaliser(data)"))
     # print(repr(normaliser(data, apply_on_key="data"), name="normaliser(data)"))
 
     exit()
 
-    @apply_on_leaf
+    @apply_to_each_leaf
     def apply_func(func, data):
         return func(data)
 
@@ -769,8 +808,8 @@ sample:
         ),
     )
     print(sp.static_info)
-    print(guess_specs(sp.static_info))
-    print(repr_box(sp.static_info, name="sp.static_info"))
+    print(guess_schema(sp.static_info))
+    print(repr(sp.static_info, name="sp.static_info"))
 
 
 if __name__ == "__main__":
