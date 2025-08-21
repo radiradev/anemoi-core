@@ -19,7 +19,7 @@ from rich import print
 from rich.console import Console
 from rich.tree import Tree
 
-import anemoi.training.data.refactor.structure2 as st
+import anemoi.training.data.refactor.structure as st
 from anemoi.utils.dates import frequency_to_string
 from anemoi.utils.dates import frequency_to_timedelta
 

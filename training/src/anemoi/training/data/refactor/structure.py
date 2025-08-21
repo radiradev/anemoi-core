@@ -377,7 +377,7 @@ def _apply_(func, args, kwargs, _apply_on_boxes, no_recurse=[], specs=None):
         return v[key] if name not in no_recurse else v
 
     def next_apply(key):
-        return _apply(
+        return _apply_(
             func,
             args=[recurse(v, i, key) for i, v in enumerate(args)],
             kwargs={k_: recurse(v, k_, key) for k_, v in kwargs.items()},
@@ -740,8 +740,8 @@ sample:
         mean = np.mean(statistics["longitudes"])
         # mean = statistics["mean"]
 
-        def func(box, apply_on_key):
-            box[apply_on_key] = box[apply_on_key] - mean
+        def func(box):
+            box['data'] = box['data'] - mean
             return box
             # return {apply_on_key: box[apply_on_key] - mean}
 
@@ -753,7 +753,8 @@ sample:
 
     normaliser = build_normaliser(data)
     print(repr_box(data))
-    print(repr(normaliser(data, apply_on_key="data"), name="normaliser(data)"))
+    print(repr(normaliser(data), name="normaliser(data)"))
+    # print(repr(normaliser(data, apply_on_key="data"), name="normaliser(data)"))
 
     exit()
 
