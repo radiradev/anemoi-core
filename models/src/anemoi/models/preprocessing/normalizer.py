@@ -16,31 +16,37 @@ import numpy as np
 import torch
 
 from anemoi.models.preprocessing import BasePreprocessor
-from anemoi.training import on_structure
+import anemoi.training.data.refactor.structure as st
 
 LOGGER = logging.getLogger(__name__)
 
+@st.function_on_box
+def build_normaliser(static):
+    if "normaliser" not in static:
+        raise ValueError(f"No 'normaliser' found in box. {static=}")
 
-@on_structure(output="normaliser_", merge=False)
-def normaliser_function(name_to_index, statistics, normaliser, **kwargs):
-    if "_target_" not in normaliser:
+    config = static["normaliser"]
+
+    if "_target_" not in config:
         # If the normaliser is not a Hydra instantiation, use the config directly
-        config = normaliser
-    elif normaliser.get("_target_") == "anemoi.models.preprocessing.normalizer.InputNormalizer":
+        config = config
+    elif config.get("_target_") == "anemoi.models.preprocessing.normalizer.InputNormalizer":
         # if the normaliser uses the default class, use the config directly
-        config = normaliser["config"]
+        config = config["config"]
     else:
         raise NotImplementedError("TODO: use hydra instanciate for this custom normaliser")
 
     from anemoi.models.preprocessing.normalizer import InputNormalizer
 
-    stats = statistics["variables"]
-    # TODO: move to gpu somewhere else
-    stats = {k: torch.tensor(v, device="cuda", dtype=torch.float32) for k, v in stats.items()}
-    n = InputNormalizer(name_to_index=name_to_index["variables"], statistics=stats, config=config)
 
-    def func(*args, **kwargs):
-        return n.transform(*args, **kwargs)
+    obj = InputNormalizer(
+        config=static["normaliser"],
+        name_to_index=static["name_to_index"],
+        statistics=static["statistics"],
+    )
+
+    def func(box):
+        return dict(data=obj.transform(box["data"]))
 
     return func
 
