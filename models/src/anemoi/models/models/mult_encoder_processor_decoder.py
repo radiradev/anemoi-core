@@ -92,6 +92,14 @@ def merge_graph_sources(graph: HeteroData, sources: dict[str, str]) -> HeteroDat
     return graph, slices
 
 
+@func_to_leaf(no_recursive=["**kwargs"])
+def num_channels(name_to_index, **kwargs):
+    num_channels = len(name_to_index["variables"]) * len(name_to_index["offset"])
+    if "add_channels" in kwargs:
+        num_channels += kwargs["add_channels"]
+    return num_channels
+
+
 class AnemoiMultiModel(AnemoiModel):
     """Message passing graph neural network."""
 
@@ -136,12 +144,8 @@ class AnemoiMultiModel(AnemoiModel):
             residual_connections=model_config.model.get("residual_connections", []),
         )
 
-        def num_channels(name_to_index, **kwargs):
-            return len(name_to_index["variables"]) * len(name_to_index["offset"])
-
-        num_channels_ = sample_static_info.apply(num_channels)
-        self.num_input_channels: dict[str, int] = {k: v + 4 for k, v in num_channels_["input"].num_channels.items()}
-        self.num_target_channels: dict[str, int] = num_channels_["target"].num_channels
+        self.num_input_channels = num_channels(sample_static_info["input"], add_channels=NODE_COORDS_NDIMS)
+        self.num_target_channels = num_channels(sample_static_info["target"])
 
         self.hidden_name: str = model_config.model.model.hidden_name
         encoders, self.encoder_sources, num_encoded_channels = extract_sources(model_config.model.model.encoders)
