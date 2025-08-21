@@ -679,7 +679,7 @@ sample:
     config = yaml.safe_load(cfg)
 
     print("✅✅✅✅✅✅✅✅✅✅✅✅✅✅")
-    from anemoi.training.data.refactor.sample_provider2 import sample_provider_factory
+    from anemoi.training.data.refactor.sample_provider import sample_provider_factory
 
     sp = sample_provider_factory(**training_context, **config)
 

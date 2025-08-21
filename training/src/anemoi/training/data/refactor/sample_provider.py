@@ -19,6 +19,7 @@ from rich import print
 from rich.console import Console
 from rich.tree import Tree
 
+import anemoi.training.data.refactor.structure2 as st
 from anemoi.utils.dates import frequency_to_string
 from anemoi.utils.dates import frequency_to_timedelta
 
@@ -55,14 +56,7 @@ class Context:
         sources=None,
         offset=None,
         _parent=None,
-        **kwargs,
     ):
-        if "data_config" in kwargs:
-            raise ValueError("The 'data_config' argument is deprecated. Use 'sources' instead.")
-        if kwargs:
-            raise ValueError(f"Unexpected keyword arguments: {kwargs}")
-        del kwargs
-
         self._parent = _parent
         self._copy_from_parent(_parent)
 
@@ -204,20 +198,22 @@ class SampleProvider:
         self._frequency = _context.frequency
         self.offset = frequency_to_timedelta(_context.offset)
 
+    # public
     @property
     def static_info(self):
-        from anemoi.training.data.refactor.structure import structure_factory
+        return self._get_static(None)
 
-        return structure_factory(
-            content={
-                "name_to_index": self.name_to_index,
-                "statistics": self.statistics,
-                "processors": self.processors,
-                "normaliser": self.normaliser,
-                "extra": self.extra,
-                "dataspecs": self.dataspecs,
-            },
-        )
+    # public
+    def __getitem__(self, item):
+        return self._get_item(None, item)
+
+    # private ?
+    def _get_static(self, request):
+        raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
+
+    # private ?
+    def _get_item(self, request, item):
+        raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
 
     def set_min_max_offsets(self, minimum=None, maximum=None, dropped_samples=None):
         self.min_offset = minimum
@@ -244,26 +240,10 @@ class SampleProvider:
         raise NotImplementedError
 
     @property
-    def name_to_index(self, item: int):
-        raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
-
-    @property
-    def statistics(self):
-        raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
-
-    @property
     def dataspecs(self):
-        return self._path(prefix="")
+        raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
 
     def _path(self, prefix):
-        raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
-
-    @property
-    def extra(self):
-        raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
-
-    @property
-    def normaliser(self):
         raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
 
     @property
@@ -277,43 +257,6 @@ class SampleProvider:
     @property
     def configs(self):
         raise ValueError("Obsolete, please use self.normaliser or self.imputer or self.extra instead")
-
-    def get_native(self, item: int):
-        dic = self[item]
-        if "dataspecs" not in dic:
-            dic["dataspecs"] = self.dataspecs
-        return dic
-
-    def get_obj(self, item):
-        from anemoi.training.data.refactor.structure import structure_factory
-
-        raw = self.get_native(item)
-        if "dataspecs" not in raw:
-            raw["dataspecs"] = self.dataspecs
-        return structure_factory(content=raw)
-
-    def get_things_that_do_not_depend_on_the_index(self):
-        """Returns a structure that does not depend on the index."""
-        from anemoi.training.data.refactor.structure import structure_factory
-
-        return structure_factory(
-            content=dict(
-                name_to_index=self.name_to_index,
-                statistics=self.statistics,
-                dataspecs=self.dataspecs,
-                extra=self.extra,
-                normaliser=self.normaliser,
-                imputer=self.imputer,
-            ),
-        )
-
-    def create_structure_from_batch(self, batch):
-        """Creates a structure from a batch of data."""
-        if not isinstance(batch, dict):
-            raise TypeError(f"Expected dict for batch, got {type(batch)}: {batch}")
-        from anemoi.training.data.refactor.structure import structure_factory
-
-        return structure_factory(dataspecs=self.dataspecs, native=batch)
 
     @property
     def shape(self):
@@ -350,24 +293,12 @@ class ForwardSampleProvider(SampleProvider):
     def __len__(self):
         return len(self._forward)
 
-    @property
-    def name_to_index(self):
-        return self._forward.name_to_index
-
-    @property
-    def statistics(self):
-        return self._forward.statistics
-
     def _path(self, prefix):
         return self._forward._path(prefix)
 
     @property
-    def extra(self):
-        return self._forward.extra
-
-    @property
-    def normaliser(self):
-        return self._forward.normaliser
+    def dataspecs(self):
+        return self._forward.dataspecs
 
     @property
     def imputer(self):
@@ -399,9 +330,9 @@ class ShuffledSampleProvider(ForwardSampleProvider):
             np.random.seed(seed)
         self.idx = np.random.permutation(self.idx)
 
-    def __getitem__(self, item: int):
+    def _get_item(self, request, item: int):
         print(f"Shuffling : requested {item}, provided {self.idx[item]}")
-        return self._forward.__getitem__(self.idx[item])
+        return self._forward._get_item(request, self.idx[item])
 
     def tree(self, prefix=""):
         tree = Tree(prefix + self.emoji + self.label + f" (seed={self.seed})")
@@ -444,42 +375,19 @@ class DictSampleProvider(SampleProvider):
             return self._samples[key]
         raise AttributeError(f"{type(self).__name__} has no attribute '{key}'")
 
-    def __getitem__(self, item):
-        dict_of_dict = {k: s[item] for k, s in self._samples.items()}
-        first = dict_of_dict[list(dict_of_dict.keys())[0]]
-        keys = list(first.keys())
-        dic = {}
-        for key in keys:
-            dic[key] = {k: dict_of_dict[k][key] for k in self._samples.keys()}
-        return dic
+    def _get_item(self, request, item):
+        return {k: v._get_item(request, item) for k, v in self._samples.items()}
+
+    def _get_static(self, request):
+        return {k: v._get_static(request) for k, v in self._samples.items()}
 
     @property
-    def name_to_index(self):
-        return {k: v.name_to_index for k, v in self._samples.items()}
-
-    @property
-    def statistics(self):
-        return {k: v.statistics for k, v in self._samples.items()}
+    def dataspecs(self):
+        return dict(type="dict", specs={k: v.dataspecs for k, v in self._samples.items()})
 
     def _path(self, prefix):
         first_dot = "" if prefix == "" else "."
         return {k: v._path(f"{prefix}{first_dot}{k}") for k, v in self._samples.items()}
-
-    @property
-    def extra(self):
-        return {k: v.extra for k, v in self._samples.items()}
-
-    @property
-    def normaliser(self):
-        return {k: v.normaliser for k, v in self._samples.items()}
-
-    @property
-    def imputer(self):
-        return {k: v.imputer for k, v in self._samples.items()}
-
-    @property
-    def processors(self):
-        return {k: v.processors for k, v in self._samples.items()}
 
     @property
     def shape(self):
@@ -519,39 +427,23 @@ class _FilterSampleProvider(SampleProvider):
 
         # shift = self._offset_as_timedelta // self._forward.frequency
 
-    @property
-    def name_to_index(self):
-        return self._forward.name_to_index
-
-    @property
-    def statistics(self):
-        return self._forward.statistics
-
     def _path(self, prefix):
         return self._forward._path(prefix)
-
-    @property
-    def extra(self):
-        return self._forward.extra
-
-    @property
-    def normaliser(self):
-        return self._forward.normaliser
-
-    @property
-    def imputer(self):
-        return self._forward.imputer
-
-    @property
-    def processors(self):
-        return self._forward.processors
 
     @property
     def shape(self):
         return self._forward.shape
 
-    def __getitem__(self, item: int):
-        return self._forward.__getitem__(item)
+    def _get_item(self, request, item: int):
+        return self._forward._get_item(request, item)
+
+    def _get_static(self, request):
+        warnings.warn("TODO: change the metadata for offseted data?")
+        return self._forward._get_static(request)
+
+    @property
+    def dataspecs(self):
+        return self._forward.dataspecs
 
     def tree(self, prefix: str = ""):
         tree = self._forward.tree()
@@ -694,6 +586,7 @@ class TupleSampleProvider(SampleProvider):
         self.template = template
 
     def __len__(self):
+        warnings.warn("len of tuple may be wrong")
         lenghts = [len(s) for s in self._samples]
         assert len(set(lenghts)) == 1, f"Samples in tuple have different lengths: {lenghts}. Cannot determine length."
         return lenghts[0]
@@ -727,50 +620,22 @@ class TupleSampleProvider(SampleProvider):
         }
         return sample_provider_factory(self._context, _parent=self._parent, **new_config)
 
-    def __getitem__(self, item: int):
-        def recurse(x):
-            if isinstance(x, SampleProvider):
-                return x.__getitem__(item)
-            if isinstance(x, tuple):
-                tuple_of_dicts = tuple(recurse(elt) for elt in x)
-                first = tuple_of_dicts[0]
-                keys = list(first.keys())
-                dic = {}
-                for key in keys:
-                    # (tuple_of_dicts[key][i] for i in range(len(tuple_of_dicts))) for key in keys()}
-                    _tuple = tuple(tuple_of_dicts[i][key] for i in range(len(tuple_of_dicts)))
-                    dic[key] = _tuple
-                return dic
-            assert False, f"Unknown type {type(x)} : {x}"
+    def _get_item(self, request, item: int):
+        return tuple(v._get_item(request, item) for v in self._samples)
 
-        return recurse(self._samples)
+    def _get_static(self, request):
+        return tuple(v._get_static(request) for v in self._samples)
+        static = tuple(v._get_static(request) for v in self._samples)
+        while isinstance(static, tuple):
+            static = static[0]
+        return static
 
     @property
-    def name_to_index(self):
-        return [s.name_to_index for s in self._samples]
-
-    @property
-    def statistics(self):
-        return [s.statistics for s in self._samples]
+    def dataspecs(self):
+        return dict(type="tuple", specs=[s.dataspecs for s in self._samples])
 
     def _path(self, prefix):
         return [s._path(f"{prefix}.{i}") for i, s in enumerate(self._samples)]
-
-    @property
-    def extra(self):
-        return [s.extra for s in self._samples]
-
-    @property
-    def normaliser(self):
-        return [s.normaliser for s in self._samples]
-
-    @property
-    def imputer(self):
-        return [s.imputer for s in self._samples]
-
-    @property
-    def processors(self):
-        return [s.processors for s in self._samples]
 
     @property
     def shape(self):
@@ -824,49 +689,52 @@ class TensorSampleProvider(SampleProvider):
     def __len__(self):
         return len(self._tuple_sample_provider)
 
-    def __getitem__(self, item: int):
-        data = self._tuple_sample_provider.__getitem__(item)
+    def _get_item(self, request, item: int):
+        data = self._tuple_sample_provider._get_item(request, item)
+        # we assume here that all data depending on the item are (numpy) arrays to be stacked
 
-        def process_element(k, elt):
-            if k == "data":
-                elt_ = np.array(elt)
-                elt = self.transpose(elt_)
-                return elt
-            return elt
+        @st.apply_on_leaf
+        def stack_tensors(*args):
+            assert all(
+                isinstance(a, (list, tuple, np.ndarray)) for a in args
+            ), f"Expected all elements to be list, tuple, or ndarray, got {[type(a) for a in args]}"
+            return np.stack(args)
 
-        assert "data" in data, f"Expected 'data' key in {data}, got {data}"
-        return {k: process_element(k, v) for k, v in data.items()}
+        @st.apply_on_box
+        def transpose_if_needed(box):
+            assert isinstance(box, dict), f"Expected a dict, got {type(box)}: {box}"
+            if "data" in box:
+                box["data"] = self.transpose(box["data"])
+            return box
+
+        # print(1, data)
+        # print(1, repr_boxes(data))
+        while isinstance(data, (list, tuple)):
+            data = stack_tensors(*data)
+
+        # print(2, data)
+        # print(2,repr_boxes(data))
+
+        data = transpose_if_needed(data)
+        # print(3,data)
+        # print(3,repr(data))
+
+        return data
+
+    def _get_static(self, request):
+        return self._tuple_sample_provider._get_static(request)
 
     @property
-    def name_to_index(self):
-        name_to_index = dict(variables=self._template_sample_provider.name_to_index)
-        if hasattr(self._tuple_sample_provider, "iterables"):
-            for dim in self._tuple_sample_provider.iterables:
-                name_to_index[dim.name] = dict(enumerate(dim.values))
-        return name_to_index
-
-    @property
-    def statistics(self):
-        return dict(variables=self._template_sample_provider.statistics)
+    def dataspecs(self):
+        return dict(type="box", specs=self._template_sample_provider.dataspecs)
 
     def _path(self, prefix):
-        return f"{prefix}.tensor"
-
-    @property
-    def extra(self):
-        return self._template_sample_provider.extra
-
-    @property
-    def normaliser(self):
-        return self._template_sample_provider.normaliser
-
-    @property
-    def imputer(self):
-        return self._template_sample_provider.imputer
-
-    @property
-    def processors(self):
-        return self._template_sample_provider.processors
+        return {
+            "data": dict(_type="tensor"),
+            "latitudes": dict(_type="tensor"),
+            "longitudes": dict(_type="tensor"),
+            "timedeltas": dict(_type="tensor"),
+        }
 
     @property
     def shape(self):
@@ -954,32 +822,8 @@ class VariablesSampleProvider(SampleProvider):
         dic = self.variables.as_dict
         self.group = list(dic.keys())[0]
 
-    @property
-    def name_to_index(self):
-        return self.data_handler.name_to_index
-
-    @property
-    def statistics(self):
-        return self.data_handler.statistics
-
     def _path(self, prefix):
         assert False, "Should not be called, Tensor should be a parent and handle the request"
-
-    @property
-    def extra(self):
-        return self.data_handler.extra
-
-    @property
-    def normaliser(self):
-        return self.data_handler.normaliser
-
-    @property
-    def imputer(self):
-        return self.data_handler.imputer
-
-    @property
-    def processors(self):
-        return self.data_handler.processors
 
     @property
     def shape(self):
@@ -1023,7 +867,10 @@ class VariablesSampleProvider(SampleProvider):
         simple_names = self.variables.as_dict[self.group]
         return DataHandler(self.group, variables=simple_names, sources=self._context.sources)
 
-    def __getitem__(self, item):
+    def _get_item(self, request, item):
+        if not request:
+            request = ["data", "latitudes", "longitudes", "timedeltas"]
+
         actual_item = item + self.i_offset
 
         if actual_item < 0 or actual_item >= len(self.data_handler):
@@ -1031,7 +878,16 @@ class VariablesSampleProvider(SampleProvider):
             msg = f"Item {item} ({actual_item}) is out of bounds with i_offset {self.i_offset}, lenght of the dataset is {len(self.data_handler)} and dropped_samples is {self.dropped_samples}."
             raise IndexError(msg)
 
-        return self.data_handler._get(actual_item, request=["data", "latitudes", "longitudes", "timedeltas"])
+        return self.data_handler.get_dynamic(request=request, item=actual_item)
+
+    def _get_static(self, request):
+        if request is None:
+            request = ["name_to_index", "statistics", "normaliser", "extra"]
+        return self.data_handler.get_static(request=request)
+
+    @property
+    def dataspecs(self):
+        return self.data_handler._dataspecs
 
     def tree(self, prefix: str = ""):
         def _(x):
