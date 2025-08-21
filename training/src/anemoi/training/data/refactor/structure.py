@@ -479,11 +479,10 @@ def _apply_on_x(callable_or_schema=None, **options):
 
 
 @apply_to_each_box
-def merge(a, b, i=1):
+def merge(a, b):
     if not isinstance(a, dict):
         raise ValueError(f"Expected dict for a, got {type(a)}")
     if not isinstance(b, dict):
-
         raise ValueError(f"Expected dict for b, got {type(b)}")
     return {**a, **b}
 
@@ -510,6 +509,19 @@ def _pop(a, key):
 
 def pop(a, key):
     return _pop(a, key=key)
+
+
+@apply_to_each_box(no_recurse=["key", "default"])
+def _filter(a, key):
+    if not isinstance(a, dict):
+        raise ValueError(f"Expected dict for a, got {type(a)}")
+    if key not in a:
+        raise ValueError(f"Key {key} not found in dict. Available keys are: {list(a.keys())}")
+    return {key: a.get(key)}
+
+
+def filter(a, key):
+    return _filter(a, key=key)
 
 
 class Structure:
@@ -741,33 +753,21 @@ sample:
     # print("schema=", repr_schema(schema))
     assert_compatible_schema(schema, guessed)
 
-    data = merge(data, sp.static_info, i=7)
+    data = merge(data, sp.static_info)
     print(repr(data, name="✅ Data merged with sp.static_info"))
     print(guess_schema(data))
 
     pop(data, "extra")
     print(repr(data, name="Data after popping extra"))
-    exit()
 
     print("----- select -------")
 
-    @apply_to_each_box(schema, no_recurse=["key"])
-    def select(content, key):
-        return {key: content[key]}
-
-    latitudes = select(content=data, key="latitudes")
-    print(repr(latitudes, name="Lat"))
-
-    @function_on_box(schema, no_recurse=["key"])
-    def select(content, key):
-        return content[key]
-
-    latitudes = select(content=data, key="latitudes")
-    print(repr(latitudes, name="Lat2"))
+    latitudes = filter(data, "latitudes")
+    print(repr(latitudes, name="Latitudes"))
 
     exit()
 
-    longitudes = select(data, key="longitudes")
+    longitudes = filter(data, key="longitudes")
     print(repr(longitudes, name="Long"))
     print(guess_schema(longitudes))
 
