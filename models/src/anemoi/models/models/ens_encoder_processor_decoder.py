@@ -52,10 +52,9 @@ class AnemoiEnsModelEncProcDec(AnemoiModelEncProcDec):
             num_channels=self.num_channels,
         )
 
-    def _calculate_shapes_and_indices(self, data_indices: dict) -> None:
-        super()._calculate_shapes_and_indices(data_indices)
-        self.input_dim += self.num_input_channels_prognostic
-        self.input_dim += 1
+    def _calculate_input_dim(self, model_config):
+        base_input_dim = super()._calculate_input_dim(model_config)
+        return base_input_dim + self.num_input_channels_prognostic + 1
 
     def _assemble_input(self, x, fcstep, batch_ens_size, grid_shard_shapes=None, model_comm_group=None):
         x_skip = self.residual(x, grid_shard_shapes, model_comm_group)[..., self._internal_input_idx]
