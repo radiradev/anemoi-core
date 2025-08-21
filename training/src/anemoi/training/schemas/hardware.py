@@ -7,21 +7,18 @@
 # nor does it submit to any jurisdiction.
 #
 
-from __future__ import annotations
 
 from functools import partial
-from pathlib import Path  # noqa: TC003
+from pathlib import Path
 from typing import Annotated
-from typing import Union
 
 from pydantic import AfterValidator
 from pydantic import BaseModel as PydanticBaseModel
 from pydantic import Field
 from pydantic import NonNegativeInt
 
-from anemoi.training.schemas.utils import allowed_values
-
-from .utils import BaseModel
+from anemoi.utils.schemas import BaseModel
+from anemoi.utils.schemas.errors import allowed_values
 
 
 class Checkpoint(BaseModel):
@@ -34,39 +31,48 @@ class Checkpoint(BaseModel):
 
 
 class FilesSchema(PydanticBaseModel):
-    dataset: Union[Path, dict[str, Path], None] = Field(default=None)  # dict option for multiple datasets
+    dataset: Path | dict[str, Path] | None = Field(default=None)  # dict option for multiple datasets
     "Path to the dataset file."
-    graph: Union[Path, None] = None
+    graph: Path | None = None
     "Path to the graph file."
+    truncation: Path | None = None
+    "Path to the truncation matrix file."
+    truncation_inv: Path | None = None
+    "Path to the inverse truncation matrix file."
     checkpoint: dict[str, str]
     "Each dictionary key is a checkpoint name, and the value is the path to the checkpoint file."
-    warm_start: Union[str, None] = None
+    warm_start: str | None = None
+    "Name of the checkpoint file to use for warm starting the training"
 
 
 class Logs(PydanticBaseModel):
-    wandb: Union[Path, None] = None
+    wandb: Path | None = None
     "Path to output wandb logs."
-    mlflow: Union[Path, None] = None
+    mlflow: Path | None = None
     "Path to output mlflow logs."
-    tensorboard: Union[Path, None] = None
+    tensorboard: Path | None = None
     "Path to output tensorboard logs."
 
 
 class PathsSchema(BaseModel):
-    data: Union[Path, dict[str, Path], None] = None
+    data: Path | dict[str, Path] | None = None
     "Path to the data directory."
-    graph: Union[Path, None] = None
+    graph: Path | None = None
     "Path to the graph directory."
-    output: Union[Path, None] = None
+    truncation: Path | None = None
+    "Path to the truncation matrix directory."
+    output: Path | None = None
     "Path to the output directory."
-    logs: Union[Logs, None] = None
+    logs: Logs | None = None
     "Logging directories."
     checkpoints: Path
     "Path to the checkpoints directory."
-    plots: Union[Path, None] = None
+    plots: Path | None = None
     "Path to the plots directory."
-    profiler: Union[Path, None]
+    profiler: Path | None
     "Path to the profiler directory."
+    warm_start: str | None = None
+    "Path to the checkpoint to use for warm starting the training"
 
 
 class HardwareSchema(BaseModel):
@@ -81,6 +87,8 @@ class HardwareSchema(BaseModel):
     "Number of nodes."
     num_gpus_per_model: NonNegativeInt = 1
     "Number of GPUs per model."
+    num_gpus_per_ensemble: NonNegativeInt = 1
+    "Number of GPUs per ensemble."
     files: FilesSchema
     "Files schema."
     paths: PathsSchema

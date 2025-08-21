@@ -7,7 +7,6 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
-from __future__ import annotations
 
 import logging
 import os
@@ -16,19 +15,16 @@ from datetime import datetime
 from datetime import timezone
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import hydra
 import pandas as pd
+import pytorch_lightning as pl
+from omegaconf import DictConfig
+from pytorch_lightning.loggers.logger import Logger
 from pytorch_lightning.utilities import rank_zero_only
 from rich.console import Console
 
-if TYPE_CHECKING:
-    from anemoi.training.data.datamodule import AnemoiDatasetsDataModule
-    from pytorch_lightning.loggers.logger import Logger
-    from omegaconf import DictConfig
-    import pytorch_lightning as pl
-
+from anemoi.training.data.datamodule import AnemoiDatasetsDataModule
 from anemoi.training.diagnostics.profilers import BenchmarkProfiler
 from anemoi.training.diagnostics.profilers import ProfilerProgressBar
 from anemoi.training.train.train import AnemoiTrainer
@@ -306,6 +302,8 @@ class AnemoiProfiler(AnemoiTrainer):
         datamodule = super().datamodule
         # to generate a model summary with shapes we need a sample input array
         batch = next(iter(datamodule.train_dataloader()))
+        if type(batch) in [list, tuple]:
+            batch = batch[0]
         self.example_input_array = batch[
             :,
             0 : self.config.training.multistep_input,

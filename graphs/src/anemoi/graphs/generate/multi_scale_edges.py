@@ -7,7 +7,6 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
-from __future__ import annotations
 
 from abc import ABC
 from abc import abstractmethod
@@ -19,18 +18,18 @@ class BaseIcosahedronEdgeStrategy(ABC):
     """Abstract base class for different edge-building strategies."""
 
     @abstractmethod
-    def add_edges(self, nodes: NodeStorage, x_hops: int) -> NodeStorage: ...
+    def add_edges(self, nodes: NodeStorage, x_hops: int, scale_resolutions: list[int]) -> NodeStorage: ...
 
 
 class TriNodesEdgeBuilder(BaseIcosahedronEdgeStrategy):
     """Edge builder for TriNodes and LimitedAreaTriNodes."""
 
-    def add_edges(self, nodes: NodeStorage, x_hops: int) -> NodeStorage:
+    def add_edges(self, nodes: NodeStorage, x_hops: int, scale_resolutions: list[int]) -> NodeStorage:
         from anemoi.graphs.generate import tri_icosahedron
 
         nodes["_nx_graph"] = tri_icosahedron.add_edges_to_nx_graph(
             nodes["_nx_graph"],
-            resolutions=nodes["_resolutions"],
+            resolutions=scale_resolutions,
             x_hops=x_hops,
             area_mask_builder=nodes.get("_area_mask_builder", None),
         )
@@ -40,12 +39,12 @@ class TriNodesEdgeBuilder(BaseIcosahedronEdgeStrategy):
 class HexNodesEdgeBuilder(BaseIcosahedronEdgeStrategy):
     """Edge builder for HexNodes and LimitedAreaHexNodes."""
 
-    def add_edges(self, nodes: NodeStorage, x_hops: int) -> NodeStorage:
+    def add_edges(self, nodes: NodeStorage, x_hops: int, scale_resolutions: list[int]) -> NodeStorage:
         from anemoi.graphs.generate import hex_icosahedron
 
         nodes["_nx_graph"] = hex_icosahedron.add_edges_to_nx_graph(
             nodes["_nx_graph"],
-            resolutions=nodes["_resolutions"],
+            resolutions=scale_resolutions,
             x_hops=x_hops,
         )
         return nodes
@@ -54,7 +53,7 @@ class HexNodesEdgeBuilder(BaseIcosahedronEdgeStrategy):
 class StretchedTriNodesEdgeBuilder(BaseIcosahedronEdgeStrategy):
     """Edge builder for StretchedTriNodes."""
 
-    def add_edges(self, nodes: NodeStorage, x_hops: int) -> NodeStorage:
+    def add_edges(self, nodes: NodeStorage, x_hops: int, scale_resolutions: list[int]) -> NodeStorage:
         from anemoi.graphs.generate import tri_icosahedron
         from anemoi.graphs.generate.masks import KNNAreaMaskBuilder
 
@@ -63,7 +62,7 @@ class StretchedTriNodesEdgeBuilder(BaseIcosahedronEdgeStrategy):
 
         nodes["_nx_graph"] = tri_icosahedron.add_edges_to_nx_graph(
             nodes["_nx_graph"],
-            resolutions=nodes["_resolutions"],
+            resolutions=scale_resolutions,
             x_hops=x_hops,
             area_mask_builder=all_points_mask_builder,
         )
