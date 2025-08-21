@@ -351,16 +351,11 @@ def compare_schema(a, b):
     return a == b
 
 
-def _call_func_now_and_make_callable_if_needed(*args, _make_callable=False, **kwargs):
-    structure = _call_func_now_not_callable(*args, **kwargs)
-    if not _make_callable:
-        return structure
-    print(f"----------- *args ={args}, kwargs={kwargs}")
-    print(repr_leaf(structure, name="Structure"))
-    schema = kwargs.get("schema")
-    func = _structure_to_callable(structure, schema=schema)
-    print(repr_function(func, name="Function"))
-    return func
+def _call_func_now_and_make_callable_if_needed(*args, _make_callable=False, schema=None, **kwargs):
+    res = _call_func_now_not_callable(*args, schema=schema, **kwargs)
+    if _make_callable:
+        res = _structure_to_callable(res, schema=schema)
+    return res
 
 
 def _call_func_now_not_callable(func, args, kwargs, _apply_on_boxes, no_recurse=[], schema=None):
@@ -408,13 +403,6 @@ def _call_func_now_not_callable(func, args, kwargs, _apply_on_boxes, no_recurse=
                 raise ValueError(f"Length mismatch for {k}: {len(v)} != {length} in {schema}")
         return tuple([next_apply(key) for key in range(length)])
     raise ValueError(f"Unknown schema type: {schema}")
-
-
-# def function_on_box(*args=None,**options):
-#    return apply_to_each_box(callable_or_schema, **options)
-#
-# def function_on_leaf(callable_or_schema=None,**options):
-#    raise NotImplementedError("TODO")
 
 
 def _structure_to_callable(structure, schema=None):
@@ -760,26 +748,18 @@ sample:
     pop(data, "extra")
     print(repr(data, name="Data after popping extra"))
 
-    print("----- select -------")
-
+    print("----- filter -------")
     latitudes = filter(data, "latitudes")
     print(repr(latitudes, name="Latitudes"))
-
-    exit()
-
-    longitudes = filter(data, key="longitudes")
-    print(repr(longitudes, name="Long"))
-    print(guess_schema(longitudes))
-
     print("------")
 
     @function_on_box
-    def build_normaliser(statistics):
-        mean = np.mean(statistics["longitudes"])
+    def build_normaliser(static):
+        mean = np.mean(static["statistics"]["mean"])
         # mean = statistics["mean"]
 
-        def func(box, device):
-            box[data].to_device(device)
+        def func(box):
+            # box[data].to_device(device)
             box["normalized_data"] = box["data"] - mean
             return box
             # return {apply_on_key: box[apply_on_key] - mean}
@@ -790,10 +770,10 @@ sample:
 
         return func
 
-    normaliser = build_normaliser(data)
+    normaliser = build_normaliser(sp.static_info)
     print(repr(data))
-    print(repr(normaliser(data, device="gpu"), name="normaliser(data)"))
-    # print(repr(normaliser(data, apply_on_key="data"), name="normaliser(data)"))
+    print(repr(normaliser(data), name="normaliser(data)"))
+    # print(repr(normaliser(data, device="gpu"), name="normaliser(data)"))
 
     exit()
 
