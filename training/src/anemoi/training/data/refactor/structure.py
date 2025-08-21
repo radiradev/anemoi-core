@@ -203,18 +203,13 @@ def _tree(schema, key, nested, **kwargs):
     raise ValueError(f"Unknown schema type: {schema}")
 
 
-def _all_arguments(args, kwargs):
-    for i, v in enumerate(args):
-        yield (i, v)
-    for k, v in kwargs.items():
-        yield (k, v)
-
-
 def _recursable_arguments(args, kwargs, no_recurse):
-    for k, v in _all_arguments(args, kwargs):
-        if k in no_recurse:
-            continue
-        yield (k, v)
+    for i, v in enumerate(args):
+        if i not in no_recurse:
+            yield (i, v)
+    for k, v in kwargs.items():
+        if k not in no_recurse:
+            yield (k, v)
 
 
 def probe_value(value):
@@ -264,41 +259,45 @@ def guess_schema(*args):
     return _guess_schema(*args)
 
 
-def _guess_schema(*args, kwargs={}, no_recurse=[]):
-    # force kwargs and no_recurse to be keywords to avoid name collision
-    kwargs = dict(_recursable_arguments(args, kwargs, no_recurse))
+def _guess_schema(obj):
+    schema = probe_value(obj)
 
-    # if any arguments is final, we found the schema
-    for k, v in kwargs.items():
-        schema = probe_value(v)
-        if final_schema(schema):
-            return schema
+    if final_schema(schema):
+        pass
 
-    # else, all arguments in kwargs are not final
-    # return the schema of the first recursable argument
-    first = kwargs[next(iter(kwargs))]
-    schema = probe_value(first)
-    if tuple_schema(schema):
-        # found a tuple or a list, add sub-schema
-        schema["children"] = [_guess_schema(v_) for v_ in first]
-    elif dict_schema(schema) or box_schema(schema):
-        # found a dict or a box, add sub-schema
-        schema["children"] = {k_: _guess_schema(v_) for k_, v_ in first.items()}
-        if box_schema(schema):
-            for k, v in schema["children"].items():
-                if final_schema(v):
-                    continue
-                # This is a little hacky here, so let's add an assert
-                # the schema are infered deeply in schema['children']
-                # but we want(?) to stop at the box level.
-                assert len(v) == 2, f"Expected 2 elements in schema for {k}, got {len(v)}: {v}"
-                v["type"] = "dict" if v["type"] == "box" else v["type"]
-                v["children"] = {}
+    elif box_schema(schema):
+        # found a box
+        children = {k_: _guess_schema(v_) for k_, v_ in obj.items()}
 
-            if any(box_schema(v) for k, v in schema["children"].items()):
-                schema["type"] = "dict"
-            else:
-                schema["type"] = "box"
+        # clean children to make sure they are not boxes and don't have sub-children
+
+        def box_to_dict(s):
+            if box_schema(s):
+                assert len(s) == 2, f"Expected 2 elements in schema got {len(s)}: {s}"
+                return {"type": "dict", "children": {}}
+            return s
+
+        children = {k: box_to_dict(v) for k, v in children.items()}
+
+        def remove_children(s):
+            if "children" in s:
+                s["children"] = {}
+
+        children = {k: remove_children(v) for k, v in children.items()}
+
+        schema["children"] = children
+
+    elif tuple_schema(schema):
+        # found a tuple/list, add sub-schemas
+        schema["children"] = [_guess_schema(v_) for v_ in obj]
+
+    elif dict_schema(schema):
+        # found a dict, add sub-schemas
+        schema["children"] = {k_: _guess_schema(v_) for k_, v_ in obj.items()}
+
+    else:
+        assert False, f"Unknown schema type: {schema}"
+
     return schema
 
 
@@ -358,18 +357,18 @@ def _call_func_now_and_make_callable_if_needed(*args, _make_callable=False, sche
     return res
 
 
-def _call_func_now_not_callable(func, args, kwargs, _apply_on_boxes, no_recurse=[], schema=None):
-    # print(f"DEBUG: Applying {func.__name__} with args={args}, kwargs={kwargs}, no_recurse={no_recurse}, schema={schema}")
+def _call_func_now_not_callable(func, fargs, fkwargs, _apply_on_boxes, no_recurse=[], schema=None):
+    # print(f"DEBUG: Applying {func.__name__} with fargs={fargs}, fkwargs={fkwargs}, no_recurse={no_recurse}, schema={schema}")
     if schema is None:
-        schema = _guess_schema(*args, kwargs=kwargs, no_recurse=no_recurse)
+        schema = _guess_schema(fargs[0])
     check_schema(schema)
     # print("DEBUG", repr_schema(schema))
 
     if final_schema(schema):
-        return func(*args, **kwargs)
+        return func(*fargs, **fkwargs)
 
     if _apply_on_boxes and box_schema(schema):
-        return func(*args, **kwargs)
+        return func(*fargs, **fkwargs)
 
     def recurse(v, name, key):
         # pick key in dict only if argument is recursable
@@ -378,8 +377,8 @@ def _call_func_now_not_callable(func, args, kwargs, _apply_on_boxes, no_recurse=
     def next_apply(key):
         return _call_func_now_not_callable(
             func,
-            args=[recurse(v, i, key) for i, v in enumerate(args)],
-            kwargs={k_: recurse(v, k_, key) for k_, v in kwargs.items()},
+            fargs=[recurse(v, i, key) for i, v in enumerate(fargs)],
+            fkwargs={k_: recurse(v, k_, key) for k_, v in fkwargs.items()},
             no_recurse=no_recurse,
             _apply_on_boxes=_apply_on_boxes,
             schema=schema["children"][key],
@@ -387,7 +386,7 @@ def _call_func_now_not_callable(func, args, kwargs, _apply_on_boxes, no_recurse=
 
     if dict_schema(schema) or (box_schema(schema) and not _apply_on_boxes):
         keys = schema["children"].keys()
-        for k, v in _recursable_arguments(args, kwargs, no_recurse):
+        for k, v in _recursable_arguments(fargs, fkwargs, no_recurse):
             if not isinstance(v, dict):
                 raise ValueError(f"Expected dict content for argument {k}, got {type(v)}. {schema}")
             if set(v.keys()) != set(keys):
@@ -396,12 +395,13 @@ def _call_func_now_not_callable(func, args, kwargs, _apply_on_boxes, no_recurse=
 
     if tuple_schema(schema):
         length = len(schema["children"])
-        for k, v in _recursable_arguments(args, kwargs, no_recurse):
+        for k, v in _recursable_arguments(fargs, fkwargs, no_recurse):
             if not isinstance(v, (list, tuple)):
                 raise ValueError(f"Expected list or tuple content for argument {k}, got {type(v)}. {schema}")
             if len(v) != length:
                 raise ValueError(f"Length mismatch for {k}: {len(v)} != {length} in {schema}")
         return tuple([next_apply(key) for key in range(length)])
+
     raise ValueError(f"Unknown schema type: {schema}")
 
 
@@ -447,8 +447,8 @@ def apply_to_each_box(callable_or_schema=None, **options):
 def _apply_on_x(callable_or_schema=None, **options):
     def inner(func):
         @wraps(func)
-        def wrapper(*args, **kwargs):
-            return _call_func_now_and_make_callable_if_needed(func, args, kwargs, **options)
+        def wrapper(*fargs, **fkwargs):
+            return _call_func_now_and_make_callable_if_needed(func, fargs, fkwargs, **options)
 
         return wrapper
 
