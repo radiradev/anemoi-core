@@ -24,6 +24,12 @@ class DataHandler:
         self._imputer_config = self.config.get("imputer", {})
         self._normaliser_config = self.config.get("normaliser", {})
         self._extra_config = self.config.get("extra", {})
+        self._dataspecs = dict(
+            latitude=dict(type="tensor"),
+            longitude=dict(type="tensor"),
+            timedeltas=dict(type="tensor"),
+            data=dict(type="tensor"),
+        )
 
         variables = [f"{group}.{v}" for v in variables]
         self.variables = variables
@@ -98,7 +104,15 @@ class DataHandler:
         )
         return self._name_to_index
 
-    def _get(self, item: int, request):
+    def get_static(self, request):
+        static = self._get(request, None)
+        static["version"] = "0.0"
+        return static
+
+    def get_dynamic(self, item, request):
+        return self._get(request, item)
+
+    def _get(self, request, item: int):
         assert isinstance(item, (type(None), int, np.integer)), f"Expected integer for item, got {type(item)}: {item}"
         assert isinstance(
             request,
@@ -115,6 +129,9 @@ class DataHandler:
             "shape": self.get_shape,
             "name_to_index": self.get_name_to_index,  # moved to sample_provider.name_to_index
             "statistics": self.get_statistics,  # moved to sample_provider.statistics
+            "normaliser": lambda x: self._normaliser_config,
+            "imputer": lambda x: self._imputer_config,
+            "extra": lambda x: self._extra_config,
         }
 
         def do_action(r, item):

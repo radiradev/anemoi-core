@@ -34,11 +34,10 @@ def normaliser_function(name_to_index, statistics, normaliser, **kwargs):
 
     from anemoi.models.preprocessing.normalizer import InputNormalizer
 
-    n = InputNormalizer(
-        name_to_index=name_to_index["variables"],
-        statistics=statistics["variables"],
-        config=config,
-    )
+    stats = statistics["variables"]
+    # TODO: move to gpu somewhere else
+    stats = {k: torch.tensor(v, device="cuda", dtype=torch.float32) for k, v in stats.items()}
+    n = InputNormalizer(name_to_index=name_to_index["variables"], statistics=stats, config=config)
 
     def func(*args, **kwargs):
         return n.transform(*args, **kwargs)
@@ -136,7 +135,6 @@ class InputNormalizer(BasePreprocessor):
             f"and entries in config ({sum(len(v) for v in self.method_config)}) do not match."
         )
 
-        # Check that all sizes align
         n = minimum.size
         assert maximum.size == n, (maximum.size, n)
         assert mean.size == n, (mean.size, n)
