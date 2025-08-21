@@ -187,7 +187,9 @@ class TransformerProcessor(BaseProcessor):
                 model_comm_group.size() == 1 or batch_size == 1
             ), "Only batch size of 1 is supported when model is sharded accross GPUs"
 
-        (x,) = self.run_layers((x,), shape_nodes, batch_size, model_comm_group, act_checkpointing=act_checkpointing, **kwargs)
+        (x,) = self.run_layers(
+            (x,), shape_nodes, batch_size, model_comm_group, act_checkpointing=act_checkpointing, **kwargs
+        )
 
         return x
 
@@ -290,7 +292,12 @@ class GNNProcessor(GraphEdgeMixin, BaseProcessor):
         edge_attr = shard_tensor(edge_attr, 0, shapes_edge_attr, model_comm_group)
 
         x, edge_attr = self.run_layers(
-            (x, edge_attr), edge_index, (shape_nodes, shape_nodes), model_comm_group, act_checkpointing=act_checkpointing, **kwargs
+            (x, edge_attr),
+            edge_index,
+            (shape_nodes, shape_nodes),
+            model_comm_group,
+            act_checkpointing=act_checkpointing,
+            **kwargs,
         )
 
         return x

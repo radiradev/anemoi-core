@@ -334,7 +334,9 @@ class AnemoiModelEncProcDec(nn.Module):
             **kwargs,
         }
         # Determine if checkpointing is needed, GTM with edge sharding has custom checkpointing
-        no_ckpt = (not act_checkpointing) or (isinstance(mapper, GraphTransformerBaseMapper) and mapper.shard_strategy == "edges") 
+        no_ckpt = (not act_checkpointing) or (
+            isinstance(mapper, GraphTransformerBaseMapper) and mapper.shard_strategy == "edges"
+        )
         if no_ckpt:
             return mapper(data, **mapper_args)
         return checkpoint(mapper, data, **mapper_args, use_reentrant=False)
