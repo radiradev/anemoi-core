@@ -383,7 +383,7 @@ class DictSampleProvider(SampleProvider):
 
     @property
     def dataschema(self):
-        return dict(type="dict", children={k: v.dataschema for k, v in self._samples.items()})
+        return dict(type="dict", content={k: v.dataschema for k, v in self._samples.items()}, _anemoi_schema=True)
 
     def _path(self, prefix):
         first_dot = "" if prefix == "" else "."
@@ -632,7 +632,7 @@ class TupleSampleProvider(SampleProvider):
 
     @property
     def dataschema(self):
-        return dict(type="tuple", children=[s.dataschema for s in self._samples])
+        return dict(type="tuple", content=[s.dataschema for s in self._samples], _anemoi_schema=True)
 
     def _path(self, prefix):
         return [s._path(f"{prefix}.{i}") for i, s in enumerate(self._samples)]
@@ -693,31 +693,31 @@ class TensorSampleProvider(SampleProvider):
         data = self._tuple_sample_provider._get_item(request, item)
         # we assume here that all data depending on the item are (numpy) arrays to be stacked
 
-        @st.apply_to_each_leaf
-        def stack_tensors(*args):
-            assert all(
-                isinstance(a, (list, tuple, np.ndarray)) for a in args
-            ), f"Expected all elements to be list, tuple, or ndarray, got {[type(a) for a in args]}"
-            return np.stack(args)
+        @st.apply_to_box
+        def stack_tensors(**box):
+            for leaf in box:
+                assert all(
+                    isinstance(a, (list, tuple, np.ndarray)) for a in leaf
+                ), f"Expected all elements to be list, tuple, or ndarray, got {[type(a) for a in leaf]}"
+            return {k: np.stack(v) for k, v in box.items()}
 
-        @st.apply_to_each_box
-        def transpose_if_needed(box):
-            assert isinstance(box, dict), f"Expected a dict, got {type(box)}: {box}"
-            if "data" in box:
-                box["data"] = self.transpose(box["data"])
-            return box
-
-        # print(1, data)
-        # print(1, repr_boxes(data))
         while isinstance(data, (list, tuple)):
-            data = stack_tensors(*data)
+            # print(st.to_str(data, "1 Tensor get_item"))
+            # data = st.apply(stack_tensors, data)
+            data = stack_tensors(data)
 
-        # print(2, data)
-        # print(2,repr_boxes(data))
+        @st.apply_to_box
+        def transpose_if_needed(data, **kwargs):
+            # print('applying transposeif needed to' , data)
+            data = self.transpose(data)
+            return dict(data=data, **kwargs)
 
+        # print(st.to_str(transpose_if_needed,"transpose_if_needed"))
+        # print(st.to_str(data, "2 Tensor get_item"))
+        # data = st.apply(transpose_if_needed, data)
         data = transpose_if_needed(data)
-        # print(3,data)
-        # print(3,repr(data))
+
+        # print(st.to_str(data, "3 Tensor get_item"))
 
         return data
 

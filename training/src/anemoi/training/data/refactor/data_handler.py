@@ -26,11 +26,12 @@ class DataHandler:
         self._extra_config = self.config.get("extra", {})
         self._dataschema = dict(
             type="box",
-            children=dict(
-                latitude=dict(type="tensor"),
-                longitude=dict(type="tensor"),
-                timedeltas=dict(type="tensor"),
-                data=dict(type="tensor"),
+            content=dict(
+                latitudes=dict(type="tensor", content=None),
+                longitudes=dict(type="tensor", content=None),
+                timedeltas=dict(type="tensor", content=None),
+                data=dict(type="tensor", content=None),
+                _anemoi_schema=True,
             ),
         )
 
@@ -154,13 +155,10 @@ class DataHandler:
 
             raise ValueError(f"Unknown request '{r}' in {request}. Available requests are {list(ACTIONS.keys())}.")
 
-        if isinstance(request, (list, tuple)):
-            dic = {}
-            for r in request:
-                dic[r] = do_action(r, item)
-            return dic
+        assert isinstance(request, (list, tuple)), request
+        from anemoi.training.data.refactor.structure import Box
 
-        return do_action(request, item)
+        return Box({r: do_action(r, item) for r in request})
 
     @property
     def name_to_index(self):

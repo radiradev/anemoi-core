@@ -21,33 +21,30 @@ from anemoi.models.preprocessing import BasePreprocessor
 LOGGER = logging.getLogger(__name__)
 
 
-@st.function_on_box
-def build_normaliser(static):
-    if "normaliser" not in static:
-        raise ValueError(f"No 'normaliser' found in box. {static=}")
+@st.make_output_callable
+@st.apply_to_box
+def build_normaliser(normaliser, name_to_index, statistics, **kwargs):
 
-    config = static["normaliser"]
-
-    if "_target_" not in config:
+    if "_target_" not in kwargs:
         # If the normaliser is not a Hydra instantiation, use the config directly
-        config = config
-    elif config.get("_target_") == "anemoi.models.preprocessing.normaliser.InputNormaliser":
+        pass
+    elif kwargs.get("_target_") == "anemoi.models.preprocessing.normaliser.InputNormaliser":
         # if the normaliser uses the default class, use the config directly
-        config = config["config"]
-    elif config.get("_target_") == "anemoi.models.preprocessing.normalizer.InputNormalizer":
-        # if the normaliser uses the old class with 'z', use the config directly
-        config = config["config"]
+        pass
+    elif kwargs.get("_target_") == "anemoi.models.preprocessing.normalizer.InputNormalizer":
+        # backward compatilibily
+        # if the normaliser uses the old class with a typo 'z', use the config directly
+        pass
     else:
         raise NotImplementedError("TODO: use hydra instanciate for this custom normaliser")
 
-    obj = InputNormaliser(
-        config=static["normaliser"],
-        name_to_index=static["name_to_index"],
-        statistics=static["statistics"],
-    )
+    f = InputNormaliser(config=normaliser, name_to_index=name_to_index, statistics=statistics).transform
 
-    def func(box):
-        return dict(data=obj.transform(box["data"]))
+    def func(data, **kwargs_):
+        res = {"data": f(data)}
+        # if we wanted to keep the rest of the original box
+        # res.update(kwargs_)
+        return res
 
     return func
 
@@ -185,12 +182,12 @@ class InputNormaliser(BasePreprocessor):
         if not self.in_place:
             x = x.clone()
 
-        print("TODO rearrange somewhere else")
         from einops import rearrange
 
-        x = rearrange(x, "b v latlon -> b latlon v")
+        assert x.ndim == 3, f"x should be (batch, time, n_vars, ens, latlons), got {x.ndim}"
 
-        assert x.ndim == 5, f"x should be (batch, time, n_vars, ens, latlons), got {x.ndim}"
+        warnings.warn("TODO rearrange somewhere else")
+        x = rearrange(x, "b v latlon -> b latlon v")
 
         x.mul_(self._norm_mul).add_(self._norm_add)
         return x
