@@ -11,6 +11,7 @@ import datetime
 import warnings
 from functools import cached_property
 
+import einops
 import numpy as np
 from hydra.utils import instantiate
 from omegaconf import DictConfig
@@ -460,6 +461,13 @@ class OffsetSampleProvider(_FilterSampleProvider):
     keyword = "offset"
 
 
+class Dimensions(list):
+    def get_from_name(self, name):
+        for dim in self:
+            if dim.name == name:
+                return dim
+
+
 class Dimension:
     def __init__(self, **raw):
         self.raw = raw
@@ -659,7 +667,7 @@ class TensorSampleProvider(SampleProvider):
         dims = tensor
         super().__init__(_context, _parent)
 
-        self.dimensions = [dimension_factory(dim) for dim in dims]
+        self.dimensions = Dimensions(dimension_factory(dim) for dim in dims)
         if len(dims) != len(list(set([dim.name for dim in self.dimensions]))):
             raise ValueError(f"Duplicate dimension names in tuple {dims}")
 
@@ -690,39 +698,66 @@ class TensorSampleProvider(SampleProvider):
         return len(self._tuple_sample_provider)
 
     def _get_item(self, request, item: int):
-        data = self._tuple_sample_provider._get_item(request, item)
+        nested = self._tuple_sample_provider._get_item(request, item)
+
         # we assume here that all data depending on the item are (numpy) arrays to be stacked
+        def stack_data(nested):
+            if isinstance(nested, (list, tuple)):
+                # stacking to do
+                first, *other = nested
 
-        @st.apply_to_box
-        def stack_tensors(**box):
-            for leaf in box:
-                assert all(
-                    isinstance(a, (list, tuple, np.ndarray)) for a in leaf
-                ), f"Expected all elements to be list, tuple, or ndarray, got {[type(a) for a in leaf]}"
-            return {k: np.stack(v) for k, v in box.items()}
+                if isinstance(first, dict):
+                    # list of dicts, this is the deepest stacking
+                    res = {k: v for k, v in first.items() if k != "data"}
+                    res["data"] = np.stack([box["data"] for box in nested])
+                    return res
 
-        while isinstance(data, (list, tuple)):
-            # print(st.to_str(data, "1 Tensor get_item"))
-            # data = st.apply(stack_tensors, data)
-            data = stack_tensors(data)
+                # list of list: recurse
+                for i, x in enumerate(nested):
+                    if not isinstance(x, (list, tuple)):
+                        raise ValueError(
+                            f"Expected a list or tuple, got {type(x)}: #{i} {x} in {st.to_str(nested, 'nested')}",
+                        )
 
-        @st.apply_to_box
-        def transpose_if_needed(data, **kwargs):
-            # print('applying transposeif needed to' , data)
-            data = self.transpose(data)
-            return dict(data=data, **kwargs)
+                nested = [stack_data(i) for i in nested]
+                return stack_data(nested)
 
-        # print(st.to_str(transpose_if_needed,"transpose_if_needed"))
-        # print(st.to_str(data, "2 Tensor get_item"))
-        # data = st.apply(transpose_if_needed, data)
-        data = transpose_if_needed(data)
+            if isinstance(nested, dict):
+                # final tensor, nothing to do
+                return nested
 
-        # print(st.to_str(data, "3 Tensor get_item"))
+            assert False, f"Unexpected nested structure {type(nested)}: {st.to_str(nested)}"
 
-        return data
+        res = stack_data(nested)
+
+        requested_order = ""
+        for dim in self.dimensions:
+            if dim.values is False:
+                continue
+            requested_order += f"{dim.name} "
+
+        current_order = ""
+
+        dims = [d for d in self.dimensions if d.name not in ["variables", "ensembles", "values"]]
+        dims += [self.dimensions.get_from_name(name) for name in ["variables", "ensembles", "values"]]
+        for dim in dims:
+            if dim.values is False:
+                current_order += "1 "
+                continue
+            current_order += f"{dim.name} "
+
+        res["data"] = einops.rearrange(res["data"], f"{current_order} -> {requested_order}")
+
+        return res
 
     def _get_static(self, request):
-        return self._tuple_sample_provider._get_static(request)
+        static = self._tuple_sample_provider._get_static(request)  # .copy()
+        while isinstance(static, (list, tuple)):
+            static = static[0]
+        static = static.copy()
+
+        static["dimensions"] = [dim.name for dim in self.dimensions]
+        return static
 
     @property
     def dataschema(self):
@@ -751,41 +786,6 @@ class TensorSampleProvider(SampleProvider):
         raise NotImplementedError(
             f"name_to_index not implemented for tensor with more than two dimensions: {self.dimensions}",
         )
-
-    def transpose(self, array):
-        # Transpose the array to match the order of requested dimensions
-        # TODO : clean up this logic, maybe use ... from einops
-        array = np.array(array)
-
-        if not isinstance(array, np.ndarray):
-            return array
-
-        dimensions = self.dimensions
-        order = self.order.copy()
-
-        if len(dimensions) < array.ndim:
-            # if there are less dimensions than the array has, we need to add empty dimensions
-            missing_dims = array.ndim - len(dimensions)
-            dimensions = dimensions + [DataDimension(name=f"dim_{i}") for i in range(missing_dims)]
-            order += [f"dim_{i}" for i in range(missing_dims)]
-
-        assert (
-            len(dimensions) == array.ndim
-        ), f"Expected {len(self.dimensions)} dimensions, got {array.ndim} for {array}"
-        assert len(order) == len(dimensions), f"Expected {len(self.dimensions)} order, got {len(order)} for {array}"
-
-        current_order = [
-            dim.name for dim in dimensions if isinstance(dim, IterableDimension) and not dim == self.template
-        ] + [self.template.name]
-        if len(current_order) != len(order):
-            missing_dims = len(order) - len(current_order)
-            current_order += [f"dim_{i}" for i in range(missing_dims)]
-
-        assert len(current_order) == len(order), f"Current order {current_order} does not match requested order {order}"
-
-        import einops
-
-        return einops.rearrange(array, " ".join(current_order) + " -> " + " ".join(order))
 
     def tree(self, prefix=""):
         tree = Tree(f"{prefix}{self.emoji} {self.label}")

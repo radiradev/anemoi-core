@@ -11,14 +11,16 @@ from functools import wraps
 
 import numpy as np
 import yaml
+from boltons.iterutils import default_enter as _default_enter
+from boltons.iterutils import default_exit as _default_exit
+from boltons.iterutils import get_path as _get_path
+from boltons.iterutils import remap as _remap
 from rich import print
 
 from anemoi.training.data.refactor.formatting import to_str
 
+# from boltons.iterutils import research as _research,
 
-class Box(dict):
-    # Flag a dict as a box
-    pass
 
 
 def make_schema(structure):
@@ -38,16 +40,9 @@ def make_schema(structure):
     assert False, f"Unknown structure type: {type(structure)}"
 
 
-from boltons.iterutils import default_enter as _default_enter
-from boltons.iterutils import default_exit as _default_exit
-from boltons.iterutils import get_path as _get_path
-from boltons.iterutils import remap as _remap
-
-# research as _research,
-
-ICON_BOX = "📦"
-ICON_LEAF = "🌱"
-ICON_LEAF_BOX_NOT_FOUND = "🍀"
+class Box(dict):
+    # Flag a dict as a box
+    pass
 
 
 def _check_key_in_dict(dic, key):
@@ -55,6 +50,12 @@ def _check_key_in_dict(dic, key):
         raise ValueError(f"Expected dict, got {type(dic)}")
     if key not in dic:
         raise ValueError(f"Key {key} not found in dict. Available keys are: {list(dic.keys())}")
+
+
+def is_schema(x):
+    if not isinstance(x, dict):
+        return False
+    return "_anemoi_schema" in x
 
 
 def is_final(structure):
@@ -68,12 +69,6 @@ def is_box(structure):
         return False
     # Not so reliable, see inside the dict if there is a final element
     return any(is_final(v) for v in structure.values())
-
-
-def is_schema(x):
-    if not isinstance(x, dict):
-        return False
-    return "_anemoi_schema" in x
 
 
 def merge_boxes(*structs, overwrite=True):
@@ -170,6 +165,9 @@ def apply_to_box(constructor, **options):
 
 # decorator
 def make_output_callable(func):
+    """Func is a function which takes a nested structure and returns a nested structure where the leaves are functions
+    This decorator adds one step where the output of this function is made callable
+    """
     if not callable(func):
         raise Exception("make_output_callable decorator takes a callable argument, the function to wrap.")
 
@@ -182,6 +180,13 @@ def make_output_callable(func):
 
 
 def nested_to_callable(f_tree):
+    """The input is a nested structure where the leaves are functions
+    The output is a callable as follow:
+
+    The input of this callable must be a similar structure
+    The output of this callable is a similar stucture where each function is applied to each box.
+    """
+
     def function_on_tree(x_tree, *args, **kwargs):
 
         def apply(path, key, func):
@@ -399,8 +404,14 @@ sample:
                 input:
                   dictionary:
                     fields:
-                    #  tensor:
-                         variables: ["era5.2t", "era5.10u", "era5.10v"]
+                      tensor:
+                        - ensembles: False
+                        - offset: ["0h", "-6h"]
+                        - values: True
+                        - variables: ["era5.2t", "era5.10u", "era5.10v"]
+
+                        # do not use : - repeat: ['a', 'b', 'c']
+
                     #    - offset: ["-6h"]
                     #other_fields:
                     #  tuple:

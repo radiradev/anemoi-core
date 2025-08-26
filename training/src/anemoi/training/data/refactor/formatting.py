@@ -37,14 +37,14 @@ def format_timedeltas(k, v):
         if isinstance(v, np.ndarray):
             minimum = _to_str(np.min(v))
             maximum = _to_str(np.max(v))
-            return f"{k}: [{minimum},{maximum}]"
+            return f"{k}: np.array of shape {v.shape} [{minimum},{maximum}]"
 
         import torch
 
         if isinstance(v, torch.Tensor):
             minimum = _to_str(torch.min(v).item())
             maximum = _to_str(torch.max(v).item())
-            return f"{k}: [{minimum},{maximum}]"
+            return f"{k}: tensor of shape {v.shape} [{minimum},{maximum}]"
 
         return f"{k}: no-min, no-max"
 
