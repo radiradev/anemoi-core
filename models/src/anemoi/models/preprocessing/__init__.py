@@ -8,6 +8,7 @@
 # nor does it submit to any jurisdiction.
 
 import logging
+from abc import abstractmethod
 from typing import Optional
 
 import torch
@@ -121,21 +122,20 @@ class BasePreprocessor(nn.Module):
         torch.Tensor
             Processed tensor
         """
-        if inverse:
-            return self.inverse_transform(x, in_place=in_place)
-        return self.transform(x, in_place=in_place)
-
-    def transform(self, x, in_place: bool = True) -> Tensor:
-        """Process the input tensor."""
         if not in_place:
             x = x.clone()
-        return x
+        if inverse:
+            return self.inverse_transform(x)
+        return self.transform(x)
+
+    @abstractmethod
+    def transform(self, x, in_place: bool = True) -> Tensor:
+        """Process the input tensor."""
+        pass
 
     def inverse_transform(self, x, in_place: bool = True) -> Tensor:
         """Inverse process the input tensor."""
-        if not in_place:
-            x = x.clone()
-        return x
+        raise NotImplementedError(f"{self.__class__.__name__} does not implement inverse_transform.")
 
 
 class _Processors(nn.Module):

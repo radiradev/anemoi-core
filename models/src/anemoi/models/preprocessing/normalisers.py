@@ -55,7 +55,6 @@ class InputNormaliser(BasePreprocessor):
         config=None,
         name_to_index=None,
         statistics=None,
-        in_place: bool = True,
         dataset: Optional = None,
     ) -> None:
         """Initialize the normalizer.
@@ -68,12 +67,9 @@ class InputNormaliser(BasePreprocessor):
             Data indices for input and output variables
         statistics : dict
             Data statistics dictionary
-        in_place: bool
-            Do it in place.
         """
         super().__init__(config, dataset)
 
-        self.in_place = in_place
         minimum = statistics["minimum"]
         maximum = statistics["maximum"]
         mean = statistics["mean"]
@@ -132,8 +128,6 @@ class InputNormaliser(BasePreprocessor):
         # register buffer - this will ensure they get copied to the correct device(s)
         self.register_buffer("_norm_mul", torch.from_numpy(_norm_mul), persistent=True)
         self.register_buffer("_norm_add", torch.from_numpy(_norm_add), persistent=True)
-        # self.register_buffer("_input_idx", data_indices.data.full, persistent=True)
-        # self.register_buffer("_output_idx", self.data_indices.data.output.full, persistent=True)
 
     def _validate_normalization_inputs(self, name_to_index_training_input: dict, minimum, maximum, mean, stdev):
         assert len(self.methods) == sum(len(v) for v in self.method_config.values()), (
@@ -146,20 +140,7 @@ class InputNormaliser(BasePreprocessor):
         assert mean.size == n, (mean.size, n)
         assert stdev.size == n, (stdev.size, n)
 
-        # Check for typos in method config
-        assert isinstance(self.methods, dict)
-        for name, method in self.methods.items():
-            # assert name in name_to_index_training_input, f"{name} is not a valid variable name"
-            assert method in [
-                "mean-std",
-                "std",
-                # "robust",
-                "min-max",
-                "max",
-                "none",
-            ], f"{method} is not a valid normalisation method"
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def transform(self, x: torch.Tensor) -> torch.Tensor:
         """Normalizes an input tensor x of shape [..., nvars].
 
         Normalization done in-place unless specified otherwise.
@@ -177,8 +158,6 @@ class InputNormaliser(BasePreprocessor):
         torch.Tensor
             _description_
         """
-        if not self.in_place:
-            x = x.clone()
 
         x.mul_(self._norm_mul).add_(self._norm_add)
         return x
@@ -201,12 +180,5 @@ class InputNormaliser(BasePreprocessor):
         torch.Tensor
             Denormalized data
         """
-        if not self.in_place:
-            x = x.clone()
-        print("TODO rearrange somewhere else")
-        from einops import rearrange
-
-        x = rearrange(x, "b v latlon -> b latlon v")
-
         x.subtract_(self._norm_add).div_(self._norm_mul)
         return x
