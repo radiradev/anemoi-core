@@ -38,12 +38,10 @@ def build_normaliser(normaliser, name_to_index, statistics, **kwargs):
     else:
         raise NotImplementedError("TODO: use hydra instanciate for this custom normaliser")
 
-    f = InputNormaliser(config=normaliser, name_to_index=name_to_index, statistics=statistics).transform
+    f = InputNormaliser(config=normaliser, name_to_index=name_to_index, statistics=statistics)
 
     def func(data, **kwargs_):
-        res = {"data": f(data)}
-        # if we wanted to keep the rest of the original box
-        # res.update(kwargs_)
+        res = {"data": f(data), **kwargs_}
         return res
 
     return func
@@ -161,7 +159,7 @@ class InputNormaliser(BasePreprocessor):
                 "none",
             ], f"{method} is not a valid normalisation method"
 
-    def transform(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Normalizes an input tensor x of shape [..., nvars].
 
         Normalization done in-place unless specified otherwise.
