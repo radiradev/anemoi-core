@@ -23,8 +23,8 @@ from torch_geometric.data import HeteroData
 from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.layers.projection import NodeEmbedder
 from anemoi.models.layers.projection import NodeProjector
-from anemoi.models.preprocessing import Processors
-from anemoi.models.preprocessing.normalizer import normaliser_function
+from anemoi.models.preprocessing.normalisers import build_normaliser
+from anemoi.training.data.refactor import structure as st
 from anemoi.utils.config import DotDict
 
 from .base import AnemoiModel
@@ -92,9 +92,12 @@ def merge_graph_sources(graph: HeteroData, sources: dict[str, str]) -> HeteroDat
     return graph, slices
 
 
-@func_to_leaf(no_recursive=["**kwargs"])
+@st.apply_to_box
 def num_channels(name_to_index, **kwargs):
-    num_channels = len(name_to_index["variables"]) * len(name_to_index["offset"])
+    import warnings
+
+    warnings.warn("assuming only one offset per tensor")
+    num_channels = len(name_to_index)
     if "add_channels" in kwargs:
         num_channels += kwargs["add_channels"]
     return num_channels
@@ -103,12 +106,7 @@ def num_channels(name_to_index, **kwargs):
 class AnemoiMultiModel(AnemoiModel):
     """Message passing graph neural network."""
 
-    def __init__(
-        self,
-        *,
-        sample_static_info: "Structure",
-        model_config: DotDict,
-    ) -> None:
+    def __init__(self, *, sample_static_info: "Structure", model_config: DotDict) -> None:
         """Initializes the graph neural network.
 
         Parameters
@@ -125,26 +123,47 @@ class AnemoiMultiModel(AnemoiModel):
         self.sample_static_info = sample_static_info
 
         # Instantiate processors
-        self.normalisers = normaliser_function(self.sample_static_info)
+        self.normalisers = build_normaliser(self.sample_static_info)
 
-        preprocessors = self.sample_static_info.apply(processor_factory)
-        # Assign the processor list pre- and post-processors
-        self.input_pre_processors = Processors(preprocessors["input"].processor_factory)
-        self.target_pre_processors = Processors(preprocessors["target"].processor_factory)
-        self.target_post_processors = Processors(preprocessors["target"].processor_factory, inverse=True)
-        # TODO: Implemente structure.processor_factory (not only at LeafStructure)
+        # # apply is not supported anymore
+        # preprocessors = self.sample_static_info.apply(processor_factory)
+        # # Assign the processor list pre- and post-processors
+        # self.input_pre_processors = Processors(preprocessors["input"].processor_factory)
+        # self.target_pre_processors = Processors(preprocessors["target"].processor_factory)
+        # self.target_post_processors = Processors(preprocessors["target"].processor_factory, inverse=True)
+        # # TODO: Implemente structure.processor_factory (not only at LeafStructure)
 
         self.num_channels = model_config.model.num_channels
 
         self.latent_residual_connection = True
         self.merge_latents_method = model_config.model.model.merge_latents
-        self._define_residual_connection_indices(
-            sample_static_info.name_to_index["input"],
-            sample_static_info.name_to_index["target"],
-            residual_connections=model_config.model.get("residual_connections", []),
-        )
 
-        self.num_input_channels = num_channels(sample_static_info["input"], add_channels=NODE_COORDS_NDIMS)
+        if model_config.model.get("residual_connections"):
+            warnings.warn("Residual connections not supported")
+        # def _define_residual_connection_indices(
+        #     input,
+        #     target,
+        #     residual_connections: list[str],
+        # ):
+        #     residual_connection_indices = {}
+        #     for source in residual_connections:
+        #         input_vars = input_name_to_index[source]
+        #         target_vars = target_name_to_index[source]
+        #         common_vars = set(target_vars).intersection(input_vars)
+        #         target_idx = [input_vars[v] for v in common_vars]
+        #         input_idx = [target_vars[v] for v in common_vars]
+        #         residual_connection_indices[source] = target_idx, input_idx
+        #     return residual_connection_indices
+
+        # self.residual_connection_indices = _define_residual_connection_indices(
+        #     sample_static_info["input"],
+        #     sample_static_info["target"],
+        #     residual_connections=model_config.model.get("residual_connections", []),
+        # )
+
+        # NODE_COORDS_NDIMS = 4  # cos_lat, sin_lat, cos_lon, sin_lon
+        # should be in the input ?
+        self.num_input_channels = num_channels(sample_static_info["input"])  # , add_channels=NODE_COORDS_NDIMS)
         self.num_target_channels = num_channels(sample_static_info["target"])
 
         self.hidden_name: str = model_config.model.model.hidden_name
@@ -214,21 +233,6 @@ class AnemoiMultiModel(AnemoiModel):
         #        for cfg in getattr(model_config.model, "bounding", [])
         #    ]
         # )
-
-    def _define_residual_connection_indices(
-        self,
-        input_name_to_index,
-        target_name_to_index,
-        residual_connections: list[str],
-    ):
-        self.residual_connection_indices = {}
-        for source in residual_connections:
-            input_vars = input_name_to_index[source]["variables"]
-            target_vars = target_name_to_index[source]["variables"]
-            common_vars = set(target_vars).intersection(input_vars)
-            target_idx = [input_vars[v] for v in common_vars]
-            input_idx = [target_vars[v] for v in common_vars]
-            self.residual_connection_indices[source] = target_idx, input_idx
 
     def _assemble_dict(
         self, x: dict[str, torch.Tensor], graph: HeteroData, batch_size: int
@@ -411,17 +415,12 @@ class AnemoiMultiModel(AnemoiModel):
     def forward(
         self, x: dict[str, Tensor], graph: HeteroData, *, model_comm_group: Optional[ProcessGroup] = None, **kwargs
     ) -> dict[str, Tensor]:
+        # at this point, the input (x) has already been normalised
+        # if this is not wanted, don't normalise it in the task
+        x = st.merge_boxes(x, self.sample_static_info["input"])
 
-        if self.sample_static_info["input"].keys() != x.keys():
-            print(self.sample_static_info["input"])
-            print(x)
-            raise ValueError(
-                f"Input keys x={x.keys()} do not match static info keys {self.sample_static_info['input'].keys()}."
-            )
-        batch = self.sample_static_info["input"].format_native(data=x)
-        print(f"Input batch: {batch}")
+        print(f"Input batch: {st.to_str(x)}")
 
-        print(f"Normalisers : {self.normalisers['input']}")
         # normalised_batch = self.normalisers["input"](batch)
         # print("Normalised batch: ", normalised_batch)
 

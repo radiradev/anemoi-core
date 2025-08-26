@@ -369,7 +369,7 @@ class DictSampleProvider(SampleProvider):
             if not isinstance(v, dict):
                 raise ValueError(f"Expected dictionary for sample provider, got {type(v)}: {v}. ")
 
-        self._samples = {k: sample_provider_factory(_context, **v) for k, v in dictionary.items()}
+        self._samples = {k: _sample_provider_factory(_context, **v, _parent=self) for k, v in dictionary.items()}
 
     def __getattr__(self, key):
         if key in self._samples:
@@ -424,7 +424,7 @@ class _FilterSampleProvider(SampleProvider):
         self.values = kwargs.pop(self.keyword)
 
         new_context = Context(**{"_parent": _context, self.keyword: self.values})
-        self._forward = sample_provider_factory(new_context, **kwargs)
+        self._forward = _sample_provider_factory(new_context, **kwargs, _parent=_parent)
 
         # shift = self._offset_as_timedelta // self._forward.frequency
 
@@ -607,14 +607,16 @@ class TupleSampleProvider(SampleProvider):
 
     def mutate(self):
         if not self.iterables:
-            return sample_provider_factory(self._context, **self.template)
+            return _sample_provider_factory(self._context, **self.template, _parent=self._parent)
 
         if len(self.iterables) == 1:
+            template = self.template.copy()
+            template["_parent"] = self
             iterable = self.iterables[0]
             self._samples = []
             for v in iterable.values:
-                config = {iterable.name: v, "structure": self.template}
-                sample = sample_provider_factory(self._context, _parent=self._parent, **config)
+                config = {iterable.name: v, "structure": template}
+                sample = _sample_provider_factory(self._context, _parent=self, **config)
                 self._samples.append(sample)
             self._samples = tuple(self._samples)
             return self
@@ -632,7 +634,7 @@ class TupleSampleProvider(SampleProvider):
                 },
             },
         }
-        return sample_provider_factory(self._context, _parent=self._parent, **new_config)
+        return _sample_provider_factory(self._context, _parent=self._parent, **new_config)
 
     def _get_item(self, request, item: int):
         return tuple(v._get_item(request, item) for v in self._samples)
@@ -684,7 +686,7 @@ class TensorSampleProvider(SampleProvider):
             raise ValueError(f"Expected a data or variables dimension, got {self.dimensions}, nothing to point to data")
         self.template = template[0]
 
-        self._template_sample_provider = sample_provider_factory(_context, _parent=self, **self.template.raw)
+        self._template_sample_provider = _sample_provider_factory(_context, _parent=self, **self.template.raw)
 
         self.loops = [d for d in self.dimensions if isinstance(d, IterableDimension) and d != self.template]
 
@@ -694,7 +696,7 @@ class TensorSampleProvider(SampleProvider):
                 "template": self.template.raw,
             },
         }
-        self._tuple_sample_provider = sample_provider_factory(_context, _parent=self, **config)
+        self._tuple_sample_provider = _sample_provider_factory(_context, _parent=self, **config)
 
     def __len__(self):
         return len(self._tuple_sample_provider)
@@ -923,25 +925,60 @@ class VariablesSampleProvider(SampleProvider):
         return tree
 
 
-def sample_provider_factory(_context=None, **kwargs):
+global SAVE_COUNTER
+SAVE_COUNTER = 0
+
+
+def SAVE(kwargs):
+    global SAVE_COUNTER
+    SAVE_COUNTER += 1
+    import yaml
+
+    with open(f"sample_provider_{SAVE_COUNTER}.yaml", "w") as f:
+        f.write(yaml.dump(kwargs))
+
+
+def _remove_omega_conf(x):
+    assert not isinstance(x, SampleProvider), type(x)
+
+    try:
+        from omegaconf import DictConfig
+        from omegaconf import ListConfig
+        from omegaconf import OmegaConf
+
+        if isinstance(x, DictConfig) or isinstance(x, ListConfig):
+            warnings.warn("Received Omegaconf input for sample_provider_factory, converting to standard python types")
+            x = OmegaConf.to_container(x, resolve=True)
+        if isinstance(x, dict):
+            x = {k: _remove_omega_conf(v) for k, v in x.items()}
+        if isinstance(x, list):
+            x = [_remove_omega_conf(v) for v in x]
+        if isinstance(x, tuple):
+            x = tuple(_remove_omega_conf(v) for v in x)
+    except ImportError:
+        pass
+
+    return x
+
+
+def sample_provider_factory(**kwargs):
+    kwargs = _remove_omega_conf(kwargs)
+
+    _context = Context(
+        sources=kwargs.pop("sources", None),
+        start=kwargs.pop("start", None),
+        end=kwargs.pop("end", None),
+        frequency=kwargs.pop("frequency"),
+    )
+    return _sample_provider_factory(**kwargs, _parent=None, _context=_context)
+
+
+def _sample_provider_factory(_context=None, **kwargs):
+    initial_kwargs = kwargs
     kwargs = kwargs.copy()
 
-    if "context" in kwargs:
-        raise NotImplementedError(
-            "The 'context' argument is deprecated, use directly start, end, frequency, sources instead",
-        )
-
-    if _context is None:
-        _context = Context(
-            sources=kwargs.pop("sources", None),
-            start=kwargs.pop("start", None),
-            end=kwargs.pop("end", None),
-            frequency=kwargs.pop("frequency"),
-        )
-
-    if "_parent" not in kwargs:
-        kwargs["_parent"] = None
-        # print(f"Building sample provider : {kwargs}")
+    assert _context is not None
+    assert "_parent" in kwargs, kwargs
 
     if "offset" in kwargs:
         obj = OffsetSampleProvider(_context, **kwargs)
@@ -958,14 +995,14 @@ def sample_provider_factory(_context=None, **kwargs):
         obj = VariablesSampleProvider(_context, **kwargs)
     elif "repeat" in kwargs:
         repeat = kwargs.pop("repeat")
-        obj = sample_provider_factory(_context, **kwargs)
+        obj = _sample_provider_factory(_context, **kwargs)
     elif "structure" in kwargs:
         if isinstance(kwargs["structure"], SampleProvider):
             return kwargs["structure"]  # not mutate here?: todo: think about it
         if isinstance(kwargs["structure"], DictConfig):
             kwargs["structure"] = dict(kwargs["structure"])
         if isinstance(kwargs["structure"], dict):
-            obj = sample_provider_factory(_context, **kwargs["structure"])
+            obj = _sample_provider_factory(_context, **kwargs["structure"])
         else:
             raise ValueError(
                 f"Expected dictionary for 'structure', got {type(kwargs['structure'])}: {kwargs['structure']}",
@@ -975,6 +1012,7 @@ def sample_provider_factory(_context=None, **kwargs):
     obj = obj.mutate()
 
     if obj.is_root:
+        SAVE(initial_kwargs)
         # set the min/max offsets for the root sample provider
         nodes = obj._context._all_nodes
         all_offsets = [node.offset for node in nodes]

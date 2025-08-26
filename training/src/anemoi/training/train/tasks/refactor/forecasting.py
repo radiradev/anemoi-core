@@ -1,23 +1,13 @@
-import torch
+import warnings
 from collections.abc import Generator
-import einops
+
+import torch
 from torch.utils.checkpoint import checkpoint
 
 from anemoi.training.train.tasks.refactor.base import BaseGraphModule
 
 
 class ForecastingModule(BaseGraphModule):
-    def process_batch(self, batch):
-        batch = {
-            k: {n: einops.rearrange(t, "bs v t ens xy -> bs t ens xy v") for n, t in v.items()}
-            for k, v in batch["data"].items()
-        }
-
-        # for validation not normalized in-place because remappers cannot be applied in-place
-        # We need shape: (bath_size, time, ens, latlons, n_vars)
-        batch["input"] = self.model.model.input_pre_processors(batch["input"], in_place=not validation_mode)
-        batch["target"] = self.model.model.target_pre_processors(batch["target"], in_place=not validation_mode)
-        return batch
 
     def _step(
         self,
@@ -52,8 +42,12 @@ class ForecastingModule(BaseGraphModule):
         del batch_idx
         # batch = self.allgather_batch(batch)
 
+        if not apply_processors:
+            warnings.warn("Skipping processors")
         if apply_processors:
-            batch = self.process_batch(batch)
+            batch = self.model.normaliser(batch)
+            # removed process_batch, only normliser is supported for now
+            # batch = self.process_batch(batch)
 
         # Delayed scalers need to be initialized after the pre-processors once
         if False:  # self.is_first_step:
