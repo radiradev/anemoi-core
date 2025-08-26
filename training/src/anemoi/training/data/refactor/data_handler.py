@@ -158,7 +158,15 @@ class DataHandler:
         assert isinstance(request, (list, tuple)), request
         from anemoi.training.data.refactor.structure import Box
 
-        return Box({r: do_action(r, item) for r in request})
+        box = Box({r: do_action(r, item) for r in request})
+        if "data" in box:
+            if box["data"].ndim == 2:
+                box["_dimensions_in_dataset"] = ["variables", "values"]
+            elif box["data"].ndim == 3:
+                box["_dimensions_in_dataset"] = ["variables", "ensembles", "values"]
+            else:
+                raise ValueError(f"Unexpected number of dimensions {box['data'].ndim} for data {self.config}")
+        return box
 
     @property
     def name_to_index(self):

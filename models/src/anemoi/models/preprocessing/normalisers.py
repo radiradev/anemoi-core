@@ -180,13 +180,6 @@ class InputNormaliser(BasePreprocessor):
         if not self.in_place:
             x = x.clone()
 
-        from einops import rearrange
-
-        assert x.ndim == 3, f"x should be (batch, time, n_vars, ens, latlons), got {x.ndim}"
-
-        warnings.warn("TODO rearrange somewhere else")
-        x = rearrange(x, "b v latlon -> b latlon v")
-
         x.mul_(self._norm_mul).add_(self._norm_add)
         return x
 

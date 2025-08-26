@@ -461,11 +461,17 @@ class OffsetSampleProvider(_FilterSampleProvider):
     keyword = "offset"
 
 
+Sentinel = object()
+
+
 class Dimensions(list):
-    def get_from_name(self, name):
+    def get_from_name(self, name, default=Sentinel):
         for dim in self:
             if dim.name == name:
                 return dim
+        if default is not Sentinel:
+            return default
+        raise ValueError(f"No dimension with name '{name}' in {self}")
 
 
 class Dimension:
@@ -633,10 +639,6 @@ class TupleSampleProvider(SampleProvider):
 
     def _get_static(self, request):
         return tuple(v._get_static(request) for v in self._samples)
-        static = tuple(v._get_static(request) for v in self._samples)
-        while isinstance(static, tuple):
-            static = static[0]
-        return static
 
     @property
     def dataschema(self):
@@ -738,16 +740,24 @@ class TensorSampleProvider(SampleProvider):
 
         current_order = ""
 
-        dims = [d for d in self.dimensions if d.name not in ["variables", "ensembles", "values"]]
-        dims += [self.dimensions.get_from_name(name) for name in ["variables", "ensembles", "values"]]
+        dimensions_in_dataset = res["_dimensions_in_dataset"]
+        dims = [d for d in self.dimensions if d.name not in dimensions_in_dataset]
+        dims += [self.dimensions.get_from_name(name, None) for name in dimensions_in_dataset]
         for dim in dims:
-            if dim.values is False:
+            if dim is None or dim.values is False:
                 current_order += "1 "
                 continue
             current_order += f"{dim.name} "
 
-        res["data"] = einops.rearrange(res["data"], f"{current_order} -> {requested_order}")
+        try:
+            res["data"] = einops.rearrange(res["data"], f"{current_order} -> {requested_order}")
+        except Exception as e:
+            e.add_note(f"{e} while rearranging {(res['data'].shape)} from '{current_order}' to '{requested_order}'")
+            e.add_note(f"{res['_dimensions_in_dataset']}")
+            e.add_note(f"{self}")
+            raise e
 
+        res.pop("_dimensions_in_dataset")
         return res
 
     def _get_static(self, request):
@@ -756,7 +766,8 @@ class TensorSampleProvider(SampleProvider):
             static = static[0]
         static = static.copy()
 
-        static["dimensions"] = [dim.name for dim in self.dimensions]
+        static["_debug"] = static.get("_debug", {})
+        static["_debug"]["dimensions_order"] = [dim.name for dim in self.dimensions]
         return static
 
     @property

@@ -22,7 +22,6 @@ from anemoi.training.data.refactor.formatting import to_str
 # from boltons.iterutils import research as _research,
 
 
-
 def make_schema(structure):
     """Return a fully nested schema from any structure."""
 
@@ -406,12 +405,11 @@ sample:
                     fields:
                       tensor:
                         - ensembles: False
-                        - offset: ["0h", "-6h"]
+                        # do not use. Use tuple - offset: ["0h", "-6h"]
                         - values: True
                         - variables: ["era5.2t", "era5.10u", "era5.10v"]
 
-                        # do not use : - repeat: ['a', 'b', 'c']
-
+                        # for debug only : - repeat: ['a', 'b', 'c']
                     #    - offset: ["-6h"]
                     #other_fields:
                     #  tuple:

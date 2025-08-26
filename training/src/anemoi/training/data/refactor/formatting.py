@@ -99,6 +99,10 @@ def format_key_value(k, v):
 
 def format_tree(key, value, boxed=True):
     """Recursively build a Tree from any nested structure."""
+    from anemoi.training.data.refactor.structure import is_box
+    from anemoi.training.data.refactor.structure import is_final
+    from anemoi.training.data.refactor.structure import is_schema
+
     if is_schema(value):
         return format_schema(key, value)
 
@@ -179,9 +183,3 @@ def _tree_to_string(tree):
     with console.capture() as capture:
         console.print(tree)
     return capture.get()
-
-
-# at the end to avoid circular import
-from anemoi.training.data.refactor.structure import is_box
-from anemoi.training.data.refactor.structure import is_final
-from anemoi.training.data.refactor.structure import is_schema
