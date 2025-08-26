@@ -225,10 +225,12 @@ class BaseModelSchema(PydanticBaseModel):
         ...,
         discriminator="target_",
     )
+    "GNN decoder schema.",
     residual: Union[SkipConnectionSchema, TruncatedConnectionSchema, NoConnectionSchema] = Field(
         default_factory=SkipConnectionSchema,
         discriminator="target_",
     )
+    "Residual connection schema."
 
 
 class NoiseInjectorSchema(BaseModel):
