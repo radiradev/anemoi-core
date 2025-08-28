@@ -43,7 +43,6 @@ input:
     - "z_300"
     - "z_700"
     - "z_1000"
-    offset: ["0h"]
   hires:
     variables:
     - "cos_latitude"
@@ -57,7 +56,6 @@ input:
     - "orog"
     - "lsm"
     - "skt"
-    offset: ["0h"]
 
 
 target:
@@ -88,5 +86,4 @@ target:
     - "z_700"
     - "z_1000"
     - "tp"
-    offset: ["0h"]
 

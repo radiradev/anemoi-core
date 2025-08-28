@@ -22,6 +22,22 @@ ICON_LEAF = "🌱"
 ICON_LEAF_BOX_NOT_FOUND = "🍀"
 
 
+def _choose_icon(k, v):
+    if k.startswith("_"):
+        return "  "
+    return dict(
+        latitudes="🌍",
+        longitudes="🌍",
+        timedeltas="🕐",
+        data="🔢",
+        statistics="  ",
+        name_to_index="  ",
+        normaliser="  ",
+        inputer="  ",
+        extra="  ",
+    ).get(k, ICON_LEAF)
+
+
 def format_shorten(k, v):
     if len(str(v)) < 50:
         return f"{k}: {v}"
@@ -78,9 +94,9 @@ def format_key_value(k, v):
     if k == "timedeltas":
         return format_timedeltas(k, v)
     if isinstance(v, (int, float, bool)):
-        return f"{k} : {v}"
+        return f"{k}: {v}"
     if isinstance(v, str):
-        return f"{k} : '{v}'"
+        return f"{k}: '{v}'"
     if isinstance(v, (list, tuple)):
         return format_shorten(k, str(v))
     if isinstance(v, dict):
@@ -95,7 +111,7 @@ def format_key_value(k, v):
             return format_array(k, v)
     except ImportError:
         pass
-    return f"{k} : {v.__class__.__name__}"
+    return f"{k}: {v.__class__.__name__}"
 
 
 def format_tree(key, value, boxed=True):
@@ -114,12 +130,22 @@ def format_tree(key, value, boxed=True):
         if boxed:
             key = f"📦 {key}"
         t = Tree(f"{key} :")
-        for k, v in value.items():
-            if isinstance(k, str) and k.startswith("_") and not os.environ.get("DEBUG"):
+
+        def priority(k):
+            if k.startswith("_"):
+                return 10
+            return dict(latitudes=1, longitudes=2, timedeltas=3).get(k, 0)
+
+        order = sorted(value.keys(), key=priority)
+        assert len(order) == len(value), (order, value.keys())
+
+        for k in order:
+            v = value[k]
+            if not os.environ.get("DEBUG") and v.startswith("_"):
                 continue
             txt = format_key_value(k, v)
             if txt is not None:
-                t.add(f"{ICON_LEAF} {txt}")
+                t.add(f"{_choose_icon(k, v)} {txt}")
         return t
 
     if isinstance(value, dict):  # must be after is_box because box is a dict

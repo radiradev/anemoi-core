@@ -335,6 +335,13 @@ def test_one(training_context):
                             - ensembles: False
                             - values: True
                             - variables: ["era5.2t", "era5.10u", "era5.10v"]
+                        other_fields:
+                          for_each:
+                            - offset: ["-6h", "0h"]
+                            - tensor:
+                              - ensembles: False
+                              - values: True
+                              - variables: ["era5.2t", "era5.10u", "era5.10v"]
             """
 
     print("✅✅✅✅✅✅✅✅✅✅✅✅✅✅")
@@ -415,21 +422,21 @@ def test_two(training_context):
     print("✅✅✅✅✅✅✅✅✅✅✅✅✅✅")
     cfg_2 = """dictionary:
                   prognostics:
-                    loop:
+                    for_each:
                       - offset: ["-6h", "0h", "+6h", "+12h", "+18h"]
                       - tensor:
                           - ensembles: False
                           - values: True
                           - variables: ["era5.2t", "era5.10u", "era5.10v"]
                   #forcings:
-                  #  loop:
+                  #  for_each:
                   #    - offset: ["-6h", "0h", "+6h", "+12h", "+18h"]
                   #    - tensor:
                   #        - ensembles: False
                   #        - values: True
                   #        - variables: ["era5.2t", "era5.10u", "era5.10v"]
                   #diagnostics:
-                  #  loop:
+                  #  for_each:
                   #    - offset: ["-6h", "0h", "+6h", "+12h", "+18h"]
                   #    - tensor:
                   #        - ensembles: False
@@ -437,7 +444,7 @@ def test_two(training_context):
                   #        - variables: ["era5.2t", "era5.10u", "era5.10v"]
                   #prognostics_tuple:
                   #  tuple:
-                  #    loop:
+                  #    for_each:
                   #      - offset: ["-6h", "0h", "+6h", "+12h", "+18h"]
                   #    template:
                   #      tensor:
@@ -447,7 +454,7 @@ def test_two(training_context):
 
                   #observations:
                   #  tuple:
-                  #    loop:
+                  #    for_each:
                   #      - offset: ["-6h", "0h", "+6h"]
                   #    template:
                   #      tensor:

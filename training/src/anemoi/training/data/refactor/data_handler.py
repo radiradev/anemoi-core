@@ -39,6 +39,8 @@ class DataHandler:
         self.variables = variables
 
         self.ds = open_dataset(dataset=self.config["dataset"], select=self.variables)
+        # todo: read from ds
+        self._dimensions_in_dataset = ["variables", "ensembles", "values"]
 
         self.frequency = frequency_to_timedelta(self.ds.frequency)
         self._statistics = self.ds.statistics[group]
@@ -110,7 +112,7 @@ class DataHandler:
 
     def get_static(self, request):
         static = self._get(request, None)
-        static["version"] = "0.0"
+        static["_version"] = "0.0"
         return static
 
     def get_dynamic(self, item, request):
@@ -161,11 +163,12 @@ class DataHandler:
         box = Box({r: do_action(r, item) for r in request})
         if "data" in box:
             if box["data"].ndim == 2:
-                box["_dimensions_in_dataset"] = ["variables", "values"]
+                assert self._dimensions_in_dataset == ["variables", "values"]
             elif box["data"].ndim == 3:
-                box["_dimensions_in_dataset"] = ["variables", "ensembles", "values"]
+                assert self._dimensions_in_dataset == ["variables", "ensembles", "values"]
             else:
                 raise ValueError(f"Unexpected number of dimensions {box['data'].ndim} for data {self.config}")
+        box["_dimensions_in_dataset"] = self._dimensions_in_dataset
         return box
 
     @property

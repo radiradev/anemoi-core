@@ -30,9 +30,29 @@ def get_sample_config_dict(sample: DictConfig, which: str) -> Dict:
 
 
 def convert_source(config, name: str) -> Dict:
-    return {
-        "tensor": [dict(variables=[f"{name}.{v}" for v in config["variables"]]), dict(offset=config["offset"])],
-    }
+    variables = [f"{name}.{v}" for v in config["variables"]]
+    tensor = [
+        dict(ensembles=False),
+        dict(variables=variables),
+        dict(values=True),
+    ]
+    offset = config.get("offset")
+
+    if offset == "0h" or offset is None:  # i.e. no offset
+        return dict(tensor=tensor)
+
+    if isinstance(offset, str):
+        return dict(offset=offset, tensor=tensor)
+
+    if isinstance(offset, list):  # TODO remove this 'if' and use classes
+        return dict(
+            for_each=[
+                dict(offset=offset),
+                dict(tensor=tensor),
+            ],
+        )
+
+    raise ValueError(f"Invalid offset type {type(offset)}")
 
 
 def convert_sample_config(config) -> Dict:

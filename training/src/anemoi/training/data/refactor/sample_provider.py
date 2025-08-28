@@ -16,7 +16,7 @@ import numpy as np
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from omegaconf import ListConfig
-from rich import print
+from rich import print as rprint
 from rich.console import Console
 from rich.tree import Tree
 
@@ -244,9 +244,6 @@ class SampleProvider:
     def dataschema(self):
         raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
 
-    def _path(self, prefix):
-        raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
-
     @property
     def imputer(self):
         raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
@@ -294,9 +291,6 @@ class ForwardSampleProvider(SampleProvider):
     def __len__(self):
         return len(self._forward)
 
-    def _path(self, prefix):
-        return self._forward._path(prefix)
-
     @property
     def dataschema(self):
         return self._forward.dataschema
@@ -343,36 +337,27 @@ class ShuffledSampleProvider(ForwardSampleProvider):
 
 
 class DictionaryLoopSampleProvider(SampleProvider):
-    def __init__(self, _context: Context, _parent, loop: dict):
+    def __init__(self, _context: Context, _parent, for_each: dict):
         super().__init__(_context, _parent)
 
-        cfg = loop
-
         assert isinstance(
-            cfg,
-            (list, tuple),
-        ), f"Expected list or tuple for dictionary-from-loop, got {type(cfg)}: {cfg}"
-        if not len(cfg) == 2:
-            raise ValueError(f"Expected list of length 2 : loop, template. Got {len(cfg)}: {cfg}")
+            for_each, (list, tuple)
+        ), f"Expected list for dictionary-from-for_each, got {type(for_each)}: {for_each}"
+        if not len(for_each) == 2:
+            raise ValueError(f"Expected list of length 2 : loop, template. Got {len(for_each)}: {for_each}")
 
-        loop_on, template = cfg
+        loop_on, template = for_each
         if not isinstance(loop_on, dict):
-            raise ValueError(f"Expected dict for loop_on, got {type(loop_on)}: {loop_on}. In {cfg}")
+            raise ValueError(f"Expected dict for loop_on, got {type(loop_on)}: {loop_on}. In {for_each}")
         if not len(loop_on) == 1:
-            raise ValueError(f"Expected dict of length 1 for loop_on, got {len(loop_on)}: {loop_on}. In {cfg}")
+            raise ValueError(f"Expected dict of length 1 for loop_on, got {len(loop_on)}: {loop_on}. In {for_each}")
 
         key, values = list(loop_on.items())[0]
         if not isinstance(values, (list, tuple)):
-            raise ValueError(f"Expected list or tuple for loop_on values, got {type(values)}: {values}. In {cfg}")
+            raise ValueError(f"Expected list or tuple for loop_on values, got {type(values)}: {values}. In {for_each}")
 
         new_config = dict(
-            dictionary={
-                str(value): {
-                    key: value,
-                    **template,
-                }
-                for value in values
-            },
+            dictionary={str(value): {key: value, **template} for value in values},
         )
         self._to_mutate = _sample_provider_factory(_context, _parent=_parent, **new_config)
 
@@ -395,7 +380,7 @@ class DictSampleProvider(SampleProvider):
             if not isinstance(k, str):
                 raise ValueError(f"Keys in dictionary must be strings, got {type(k)}, {k}")
 
-        def normalise_key(k):
+        def check_key(k):
             if not isinstance(k, str):
                 raise TypeError(f"Expected string for dictionary key, got {type(k)}: {k}")
             if k.startswith("_"):
@@ -404,23 +389,13 @@ class DictSampleProvider(SampleProvider):
             if not all(c.isalnum() or c in ALLOWED_CHARACTERS for c in k):
                 raise ValueError(f"Keys in dictionary must only contain alphanumeric characters and +/-/=/~, got: {k}")
             return k.lower()
-            new_k = "".join([x.lower() if x.isalnum() else "_" for x in k])
-            if k != new_k:
-                warnings.warn(f"Normalising key '{k}' to '{new_k}'")
-            return new_k
-
-        dictionary = {normalise_key(k): v for k, v in dictionary.items()}
 
         for k, v in dictionary.items():
+            check_key(k)
             if not isinstance(v, dict):
                 raise ValueError(f"Expected dictionary for sample provider, got {type(v)}: {v}. ")
 
         self._samples = {k: _sample_provider_factory(_context, **v, _parent=self) for k, v in dictionary.items()}
-
-    def __getattr__(self, key):
-        if key in self._samples:
-            return self._samples[key]
-        raise AttributeError(f"{type(self).__name__} has no attribute '{key}'")
 
     def _get_item(self, request, item):
         return {k: v._get_item(request, item) for k, v in self._samples.items()}
@@ -431,10 +406,6 @@ class DictSampleProvider(SampleProvider):
     @property
     def dataschema(self):
         return dict(type="dict", content={k: v.dataschema for k, v in self._samples.items()}, _anemoi_schema=True)
-
-    def _path(self, prefix):
-        first_dot = "" if prefix == "" else "."
-        return {k: v._path(f"{prefix}{first_dot}{k}") for k, v in self._samples.items()}
 
     @property
     def shape(self):
@@ -473,9 +444,6 @@ class _FilterSampleProvider(SampleProvider):
         self._forward = _sample_provider_factory(new_context, **kwargs, _parent=_parent)
 
         # shift = self._offset_as_timedelta // self._forward.frequency
-
-    def _path(self, prefix):
-        return self._forward._path(prefix)
 
     @property
     def shape(self):
@@ -613,8 +581,8 @@ def dimension_factory(raw_dim):
     assert isinstance(raw_dim, dict), f"Expected dict, got {type(raw_dim)}: {raw_dim}"
     if "variables" in raw_dim:
         return VariablesDimension(**raw_dim)
-    if "offset" in raw_dim:
-        return OffsetDimension(**raw_dim)
+    # if "offset" in raw_dim:
+    #     return OffsetDimension(**raw_dim)
     if "ensembles" in raw_dim:
         warnings.warn("Ensemble dimensions are not implemented yet, ignoring the config")
         return EnsembleDimension(**raw_dim)
@@ -697,9 +665,6 @@ class TupleSampleProvider(SampleProvider):
     def dataschema(self):
         return dict(type="tuple", content=[s.dataschema for s in self._samples], _anemoi_schema=True)
 
-    def _path(self, prefix):
-        return [s._path(f"{prefix}.{i}") for i, s in enumerate(self._samples)]
-
     @property
     def shape(self):
         return [s.shape for s in self._samples]
@@ -709,6 +674,150 @@ class TupleSampleProvider(SampleProvider):
         tree = Tree(txt)
         for s in self._samples:
             tree.add(s.tree())
+        return tree
+
+
+class SimpleTensorSampleProvider(SampleProvider):
+    emoji = "🔢"
+    label = "tensor"
+
+    _tuple_sample_provider = None
+
+    def __init__(self, _context: Context, _parent, tensor: dict):
+        dims = tensor
+        super().__init__(_context, _parent)
+
+        dimensions_in_dataset = res["_dimensions_in_dataset"]
+
+        self.dimensions = Dimensions(dimension_factory(dim) for dim in dims)
+        if len(dims) != len(list(set([dim.name for dim in self.dimensions]))):
+            raise ValueError(f"Duplicate dimension names in tuple {dims}")
+
+        self.order = [dim.name for dim in self.dimensions]  # keep the dim order to reshape
+
+        template = [d for d in self.dimensions if isinstance(d, DataDimension)]
+        if len(template) > 1:
+            raise ValueError(f"Expected a single data dimension, got {template}")
+        if len(template) == 0:
+            template = [d for d in self.dimensions if isinstance(d, VariablesDimension)]
+        if len(template) == 0:
+            raise ValueError(f"Expected a data or variables dimension, got {self.dimensions}, nothing to point to data")
+        self.template = template[0]
+
+        self._template_sample_provider = _sample_provider_factory(_context, _parent=self, **self.template.raw)
+
+        self.loops = [d for d in self.dimensions if isinstance(d, IterableDimension) and d != self.template]
+
+        config = {
+            "tuple": {
+                "loop": self.loops,
+                "template": self.template.raw,
+            },
+        }
+        self._tuple_sample_provider = _sample_provider_factory(_context, _parent=self, **config)
+
+    def __len__(self):
+        return len(self._tuple_sample_provider)
+
+    def _get_item(self, request, item: int):
+        nested = self._tuple_sample_provider._get_item(request, item)
+
+        # we assume here that all data depending on the item are (numpy) arrays to be stacked
+        def stack_data(nested):
+            if isinstance(nested, (list, tuple)):
+                # stacking to do
+                first, *other = nested
+
+                if isinstance(first, dict):
+                    # list of dicts, this is the deepest stacking
+                    res = {k: v for k, v in first.items() if k != "data"}
+                    res["data"] = np.stack([box["data"] for box in nested])
+                    return res
+
+                # list of list: recurse
+                for i, x in enumerate(nested):
+                    if not isinstance(x, (list, tuple)):
+                        raise ValueError(
+                            f"Expected a list or tuple, got {type(x)}: #{i} {x} in {st.to_str(nested, 'nested')}",
+                        )
+
+                nested = [stack_data(i) for i in nested]
+                return stack_data(nested)
+
+            if isinstance(nested, dict):
+                # final tensor, nothing to do
+                return nested
+
+            assert False, f"Unexpected nested structure {type(nested)}: {st.to_str(nested)}"
+
+        res = stack_data(nested)
+
+        requested_order = [dim.name for dim in self.dimensions if dim.values is not False]
+        requested_order = " ".join(requested_order)
+
+        current_order = []
+        dimensions_in_dataset = res["_dimensions_in_dataset"]
+        print(f"✅{dimensions_in_dataset=}")
+        print("self.dimensions=")
+        for i in self.dimensions:
+            print(i)
+        dims = [d for d in self.dimensions if d.name not in dimensions_in_dataset]
+        print(f"dims -> {dims=}")
+        dims += [self.dimensions.get_from_name(name, None) for name in dimensions_in_dataset]
+        print(f"dims -> {dims=}")
+        for dim in dims:
+            print(f"Dim name : {dim}")
+            if dim is None or dim.values is False:
+                print("   -> 1")
+                current_order.append("1")
+            else:
+                current_order.append(dim.name)
+                print(f"   -> {dim.name}")
+        current_order = " ".join(current_order)
+
+        try:
+            res["data"] = einops.rearrange(res["data"], f"{current_order} -> {requested_order}")
+        except Exception as e:
+            e.add_note(f"{e} while rearranging {(res['data'].shape)} from '{current_order}' to '{requested_order}'")
+            e.add_note(f"{res['_dimensions_in_dataset']}")
+            e.add_note(f"{self}")
+            raise e
+
+        res.pop("_dimensions_in_dataset")
+        return res
+
+    def _get_static(self, request):
+        static = self._tuple_sample_provider._get_static(request)  # .copy()
+        while isinstance(static, (list, tuple)):
+            static = static[0]
+        static = static.copy()
+
+        static["_debug"] = static.get("_debug", {})
+        static["_debug"]["dimensions_order"] = [dim.name for dim in self.dimensions]
+        return static
+
+    @property
+    def dataschema(self):
+        return self._template_sample_provider.dataschema
+
+    @property
+    def shape(self):
+        # TODO read from data handler and have 'dynamic' shape
+        return self[0].shape
+
+    def tree(self, prefix=""):
+        tree = Tree(f"{prefix}{self.emoji} {self.label}")
+        for i, d in enumerate(self.dimensions):
+            if isinstance(d, IterableDimension):
+                tree.add(f" dim {i} : {d}")
+            elif isinstance(d, DataDimension):
+                tree.add(self._tuple_sample_provider.tree(prefix=f"dim {i} : {d}"))
+            else:
+                tree.add(f'? dim {i} "{d.name}" = {d.raw}')
+
+        if self._tuple_sample_provider is not None:
+            subtree = self._tuple_sample_provider.tree(prefix="(debug) ")
+            tree.add(subtree)
         return tree
 
 
@@ -790,13 +899,22 @@ class TensorSampleProvider(SampleProvider):
 
         current_order = []
         dimensions_in_dataset = res["_dimensions_in_dataset"]
+        # print(f"{dimensions_in_dataset=}")
+        # print("self.dimensions=")
+        # for i in self.dimensions:
+        #     print(i)
         dims = [d for d in self.dimensions if d.name not in dimensions_in_dataset]
+        # print(f"dims -> {dims=}")
         dims += [self.dimensions.get_from_name(name, None) for name in dimensions_in_dataset]
+        # print(f"dims -> {dims=}")
         for dim in dims:
+            # print(f"Dim name : {dim}")
             if dim is None or dim.values is False:
+                #  print("   -> 1")
                 current_order.append("1")
-                continue
-            current_order.append(dim.name)
+            else:
+                current_order.append(dim.name)
+                # print(f"   -> {dim.name}")
         current_order = " ".join(current_order)
 
         try:
@@ -824,29 +942,10 @@ class TensorSampleProvider(SampleProvider):
     def dataschema(self):
         return self._template_sample_provider.dataschema
 
-    def _path(self, prefix):
-        return {
-            "data": dict(_type="tensor"),
-            "latitudes": dict(_type="tensor"),
-            "longitudes": dict(_type="tensor"),
-            "timedeltas": dict(_type="tensor"),
-        }
-
     @property
     def shape(self):
         # TODO read from data handler and have 'dynamic' shape
         return self[0].shape
-
-    def _flatten(self, x):
-        if isinstance(x, dict):
-            return x
-        assert len(set([str(_) for _ in x])) == 1, f"Expected a single name_to_index, got {x} for {self}"
-        x = x[0]
-        if isinstance(x, dict):
-            return x
-        raise NotImplementedError(
-            f"name_to_index not implemented for tensor with more than two dimensions: {self.dimensions}",
-        )
 
     def tree(self, prefix=""):
         tree = Tree(f"{prefix}{self.emoji} {self.label}")
@@ -882,9 +981,6 @@ class VariablesSampleProvider(SampleProvider):
 
         dic = self.variables.as_dict
         self.group = list(dic.keys())[0]
-
-    def _path(self, prefix):
-        assert False, "Should not be called, Tensor should be a parent and handle the request"
 
     @property
     def shape(self):
@@ -1011,6 +1107,7 @@ def _remove_omega_conf(x):
 
 def sample_provider_factory(**kwargs):
     kwargs = _remove_omega_conf(kwargs)
+    SAVE(kwargs)
 
     _context = Context(
         sources=kwargs.pop("sources", None),
@@ -1032,7 +1129,7 @@ def _sample_provider_factory(_context=None, **kwargs):
         obj = OffsetSampleProvider(_context, **kwargs)
     elif "dictionary" in kwargs:
         obj = DictSampleProvider(_context, **kwargs)
-    elif "loop" in kwargs:
+    elif "for_each" in kwargs:
         obj = DictionaryLoopSampleProvider(_context, **kwargs)
     elif "tensor" in kwargs:
         obj = TensorSampleProvider(_context, **kwargs)
@@ -1066,7 +1163,6 @@ def _sample_provider_factory(_context=None, **kwargs):
     del obj_
 
     if obj.is_root:
-        SAVE(initial_kwargs)
         # set the min/max offsets for the root sample provider
         nodes = obj._context._all_nodes
         all_offsets = [node.offset for node in nodes]
