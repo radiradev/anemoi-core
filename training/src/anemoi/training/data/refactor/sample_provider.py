@@ -349,7 +349,8 @@ class DictionaryLoopSampleProvider(SampleProvider):
         cfg = loop
 
         assert isinstance(
-            cfg, (list, tuple),
+            cfg,
+            (list, tuple),
         ), f"Expected list or tuple for dictionary-from-loop, got {type(cfg)}: {cfg}"
         if not len(cfg) == 2:
             raise ValueError(f"Expected list of length 2 : loop, template. Got {len(cfg)}: {cfg}")
@@ -784,22 +785,19 @@ class TensorSampleProvider(SampleProvider):
 
         res = stack_data(nested)
 
-        requested_order = ""
-        for dim in self.dimensions:
-            if dim.values is False:
-                continue
-            requested_order += f"{dim.name} "
+        requested_order = [dim.name for dim in self.dimensions if dim.values is not False]
+        requested_order = " ".join(requested_order)
 
-        current_order = ""
-
+        current_order = []
         dimensions_in_dataset = res["_dimensions_in_dataset"]
         dims = [d for d in self.dimensions if d.name not in dimensions_in_dataset]
         dims += [self.dimensions.get_from_name(name, None) for name in dimensions_in_dataset]
         for dim in dims:
             if dim is None or dim.values is False:
-                current_order += "1 "
+                current_order.append("1")
                 continue
-            current_order += f"{dim.name} "
+            current_order.append(dim.name)
+        current_order = " ".join(current_order)
 
         try:
             res["data"] = einops.rearrange(res["data"], f"{current_order} -> {requested_order}")

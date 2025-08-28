@@ -400,11 +400,13 @@ def test_two(training_context):
     from rich.console import Console
     from rich.table import Table
 
+    console = Console()
+
     from anemoi.training.data.refactor.sample_provider import sample_provider_factory
 
-    def print_columns(*args, header=False):
+    def print_columns(*args):
         console = Console()
-        table = Table(show_header=header, box=None)
+        table = Table(show_header=False, box=None)
         for a in args:
             table.add_column()
         table.add_row(*args)
@@ -458,8 +460,8 @@ def test_two(training_context):
     print(to_str(data, "Full Data"))
     data = merge_boxes(data, sp.static_info)
 
-    def i_to_delta(i):
-        frequency = frequency_to_timedelta("6h")
+    def i_to_delta(i, frequency):
+        frequency = frequency_to_timedelta(frequency)
         delta = frequency * i
         sign = "+" if i > 0 else ""
         if delta:
@@ -468,31 +470,31 @@ def test_two(training_context):
 
     data = select_content(data, "_offset")
     # data = select_content(data, "data", "_offset")
+    # def change_source(dic, key, source):
+    #    path = dic[key].split('.')
+    #    path[0] = source
+    #    dic[key] = '.'.join(path)
+    # if i == 0:
+    #    change_source(rollout_config[0]["input"], "prognostics.0", source='from_dataset')
 
+    console.print("[red] ✅ Rollout for prognostic data[/red]")
+    # TODO: same logic for Forcings data, and for Diagnostic data
     rollout_config = []
-    for i in [0, 1, 2]:
+    n_rollout = 3
+    n_step_input = 2  # TODO: use this below to create the config
+    frequency = "6h"
+    for i in range(n_rollout):
         rollout_config.append(
-            dict(
-                input={
-                    "prognostics.0": "previous_input.prognostics.1",
-                    # f"prognostics.0": f"previous_input.prognostics.{i_to_delta(i - 1)}",
-                    "prognostics.1": "output.prognostics",
-                    # f"prognostics.1": f"previous_input.prognostics.{i_to_delta(i)}",
-                },
-                target={"prognostics": f"from_dataset.prognostics.{i_to_delta(i + 1)}"},
-            ),
+            {
+                "input.prognostics.0": "previous_input.prognostics.1",
+                "input.prognostics.1": "output.prognostics",
+                "target.prognostics": f"from_dataset.prognostics.{i_to_delta(i + 1, frequency)}",
+            },
         )
-        # def change_source(dic, key, source):
-        #    path = dic[key].split('.')
-        #    path[0] = source
-        #    dic[key] = '.'.join(path)
-        # if i == 0:
-        #    change_source(rollout_config[0]["input"], "prognostics.0", source='from_dataset')
+    rollout_config[0]["input.prognostics.0"] = f"from_dataset.prognostics.{i_to_delta(-1, frequency)}"
+    rollout_config[0]["input.prognostics.1"] = f"from_dataset.prognostics.{i_to_delta(0, frequency)}"
 
-        rollout_config[0]["input"]["prognostics.0"] = f"from_dataset.prognostics.{i_to_delta(-1)}"
-        rollout_config[0]["input"]["prognostics.1"] = f"from_dataset.prognostics.{i_to_delta(0)}"
-
-        rollout_config[0]["input"]["prognostics.0"] = f"from_dataset.prognostics.{i_to_delta(0)}"
+    rollout_config[1]["input.prognostics.0"] = f"from_dataset.prognostics.{i_to_delta(0, frequency)}"
 
     print(yaml.dump(dict(rollout=rollout_config), sort_keys=False))
     from_dataset = data
@@ -509,18 +511,19 @@ def test_two(training_context):
             to_str(sources["previous_input"], "previous_input"),
             to_str(sources["output"], "output"),
         )
-        input = rearrange(cfg["input"], sources)
-        target = rearrange(cfg["target"], sources)
-        print_columns(to_str(input, "input"), to_str(target, "target"))
-        output = target
+        input_target = rearrange(cfg, sources)
+        print()
+        input = input_target["input"]
+        target = input_target["target"]
+        print_columns(to_str(input, f"input({i})"), to_str(target, f"target({i})"))
 
-        previous_input = input
+        output = input_target["target"]
+        previous_input = input_target["input"]
 
 
 def test():
 
     import sys
-
 
     if len(sys.argv) > 1 and not sys.argv[1].isdigit():
         return test_custom(sys.argv[1])
