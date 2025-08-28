@@ -342,6 +342,43 @@ class ShuffledSampleProvider(ForwardSampleProvider):
         return tree
 
 
+class DictionaryLoopSampleProvider(SampleProvider):
+    def __init__(self, _context: Context, _parent, loop: dict):
+        super().__init__(_context, _parent)
+
+        cfg = loop
+
+        assert isinstance(
+            cfg, (list, tuple),
+        ), f"Expected list or tuple for dictionary-from-loop, got {type(cfg)}: {cfg}"
+        if not len(cfg) == 2:
+            raise ValueError(f"Expected list of length 2 : loop, template. Got {len(cfg)}: {cfg}")
+
+        loop_on, template = cfg
+        if not isinstance(loop_on, dict):
+            raise ValueError(f"Expected dict for loop_on, got {type(loop_on)}: {loop_on}. In {cfg}")
+        if not len(loop_on) == 1:
+            raise ValueError(f"Expected dict of length 1 for loop_on, got {len(loop_on)}: {loop_on}. In {cfg}")
+
+        key, values = list(loop_on.items())[0]
+        if not isinstance(values, (list, tuple)):
+            raise ValueError(f"Expected list or tuple for loop_on values, got {type(values)}: {values}. In {cfg}")
+
+        new_config = dict(
+            dictionary={
+                str(value): {
+                    key: value,
+                    **template,
+                }
+                for value in values
+            },
+        )
+        self._to_mutate = _sample_provider_factory(_context, _parent=_parent, **new_config)
+
+    def mutate(self):
+        return self._to_mutate
+
+
 class DictSampleProvider(SampleProvider):
     label = "dict"
     emoji = "📖"
@@ -358,6 +395,14 @@ class DictSampleProvider(SampleProvider):
                 raise ValueError(f"Keys in dictionary must be strings, got {type(k)}, {k}")
 
         def normalise_key(k):
+            if not isinstance(k, str):
+                raise TypeError(f"Expected string for dictionary key, got {type(k)}: {k}")
+            if k.startswith("_"):
+                raise ValueError(f"Keys in dictionary must not start with '_', got: {k}")
+            ALLOWED_CHARACTERS = set("_+-<=>|~")
+            if not all(c.isalnum() or c in ALLOWED_CHARACTERS for c in k):
+                raise ValueError(f"Keys in dictionary must only contain alphanumeric characters and +/-/=/~, got: {k}")
+            return k.lower()
             new_k = "".join([x.lower() if x.isalnum() else "_" for x in k])
             if k != new_k:
                 warnings.warn(f"Normalising key '{k}' to '{new_k}'")
@@ -459,6 +504,11 @@ class OffsetSampleProvider(_FilterSampleProvider):
     emoji = "⏱️"
     label = "Offset"
     keyword = "offset"
+
+    def _get_static(self, request):
+        static = super()._get_static(request)
+        static["_offset"] = self.values
+        return static
 
 
 Sentinel = object()
@@ -918,7 +968,7 @@ class VariablesSampleProvider(SampleProvider):
             tree.add(f"global_min_offset={_(self.min_offset)}")
         if self.max_offset is not None:
             tree.add(f"global_max_offset={_(self.max_offset)}")
-        tree.add(f"lenght={len(self)}")
+        tree.add(f"length={self.__len__()}")
         if self.i_offset is not None:
             explain = f"({_(self.offset)} - {_(self.min_offset)})/{_(self.frequency)} = {_(self.actual_offset)}/{_(self.frequency)} = {self.i_offset}"
             tree.add(f"i -> i + {self.i_offset} because {explain}")
@@ -984,6 +1034,8 @@ def _sample_provider_factory(_context=None, **kwargs):
         obj = OffsetSampleProvider(_context, **kwargs)
     elif "dictionary" in kwargs:
         obj = DictSampleProvider(_context, **kwargs)
+    elif "loop" in kwargs:
+        obj = DictionaryLoopSampleProvider(_context, **kwargs)
     elif "tensor" in kwargs:
         obj = TensorSampleProvider(_context, **kwargs)
     elif "tuple" in kwargs:
@@ -1008,8 +1060,12 @@ def _sample_provider_factory(_context=None, **kwargs):
                 f"Expected dictionary for 'structure', got {type(kwargs['structure'])}: {kwargs['structure']}",
             )
     else:
-        assert False, f"Unknown sample type for kwargs {kwargs}"
-    obj = obj.mutate()
+        assert False, f"Unknown sample type for kwargs {kwargs.keys()}"
+    obj_ = None
+    while obj != obj_:
+        obj_ = obj
+        obj = obj.mutate()
+    del obj_
 
     if obj.is_root:
         SAVE(initial_kwargs)

@@ -6,9 +6,9 @@
 # In applying this licence, ECMWF does not waive the privileges and immunities
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
-import json
 from functools import wraps
 
+import boltons
 import numpy as np
 import yaml
 from boltons.iterutils import default_enter as _default_enter
@@ -18,6 +18,8 @@ from boltons.iterutils import remap as _remap
 from rich import print
 
 from anemoi.training.data.refactor.formatting import to_str
+from anemoi.utils.dates import frequency_to_string
+from anemoi.utils.dates import frequency_to_timedelta
 
 # from boltons.iterutils import research as _research,
 
@@ -231,204 +233,112 @@ def select_content(nested, *keys):
     return _remap(nested, visit=select, enter=_stop_if_box_enter)
 
 
-def test(ONE=True, TWO=True, THREE=True):
-    yaml_str = """
-sources:
-  training:
-    era5:
-      dataset:
-        dataset: aifs-ea-an-oper-0001-mars-o96-1979-2023-6h-v8
-        set_group: era5
-    snow:
-      dataset: observations-testing-2018-2018-6h-v0
-    metop_a:
-      dataset: observations-testing-2018-2018-6h-v0
-      normaliser:
-            "scatss_1": "mean-std"
-            "scatss_2": "min-max"
-            "scatss_3": {"name": "custom-normaliser", "theta": 0.5, "rho": 0.1}
-      imputer:
-            "scatss_1": special
-            "scatss_2": other
-            "scatss_3": {"name": "custom-imputer", "theta": 0.5, "rho": 0.1}
-      extra:
-        user_key_1: a
-        user_key_2:
-            1: foo
-            2: bar
+def rearrange(mappings, sources, _add_origin=True):
+    """Rearrange the boxes from sources according to the mapping.
+
+    sources is a nested structure where the leaf are boxes
+
+    mapping is a dict {target_path: source_path}
+    where target_path and source_path are path to boxes
+    source_path must be consitent with the sources provided
+
+    """
+
+    def _path_to_tuple(p):
+        if isinstance(p, (list, tuple)):
+            return p
+        return tuple(int(x) if x.isdigit() else x for x in p.split("."))
+
+    def resolve(path):
+        _path = _path_to_tuple(path)
+        try:
+            box = _get_path(sources, _path)
+        except boltons.iterutils.PathAccessError as e:
+            if len(_path) > 1:
+                container = _get_path(sources, _path[:-1], None)
+                if isinstance(container, dict):
+                    e.add_note(f"Available keys in container: {list(container.keys())}")
+                if isinstance(container, list):
+                    e.add_note(f"Container is a list of length {len(container)}")
+            raise
+
+        if _add_origin:
+            box["_origin"] = path
+        return box
+
+    def insert_path_in_list(cur, path, value):
+        p, *rest = path
+        assert isinstance(p, int)
+
+        while len(cur) <= p:
+            cur.append(None)
+
+        if not rest:  # last step
+            cur[p] = value
+            return
+
+        if not isinstance(cur[p], (dict, list)):
+            cur[p] = {} if isinstance(rest[0], str) else []
+
+        insert_path(cur[p], rest, value)
+
+    def insert_path_in_dict(cur, path, value):
+        p, *rest = path
+        assert isinstance(p, str)
+
+        if not rest:  # last step
+            cur[p] = value
+            return
+
+        if p not in cur:
+            cur[p] = {} if isinstance(rest[0], str) else []
+
+        insert_path(cur[p], rest, value)
+
+    def insert_path(cur, path, value):
+        p = path[0]
+        if isinstance(p, int):
+            if not isinstance(cur, list):
+                raise TypeError(f"Expected list at {path}, got {type(cur).__name__}")
+            insert_path_in_list(cur, path, value)
+        else:
+            if not isinstance(cur, dict):
+                raise TypeError(f"Expected dict at {path}, got {type(cur).__name__}")
+            insert_path_in_dict(cur, path, value)
+
+    root = {}
+    for k, v in mappings.items():
+        v = resolve(v)
+        insert_path(root, _path_to_tuple(k), v)
+    return root
 
 
+def test_custom(path):
+    path = yaml.safe_load(path)
+    with open(path) as f:
+        yaml_str = f.read()
+    CONFIG = yaml.safe_load(yaml_str)
+    sample_config = CONFIG["sample"]
+    sources_config = CONFIG["data"]
 
-training_selection:
-  # start=...
-  end: "2018-11-01"
-
-validation_selection:
-  start: "2018-11-02"
-  # end=...
+    do_something_with_this
 
 
-sample:
-   use_case: "downscaling"
-   high_res: ......
+def test_one(training_context):
+    from anemoi.training.data.refactor.sample_provider import sample_provider_factory
 
-sample:
-      dictionary:
-        ex_simple_tensor:
-          tensor:
-            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-
-        # not supported
-        ex_simple_tensor_shortcut:
-          variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-
-        ex_simple_dict:
-          dictionary:
-            key1:
-                tensor:
-                  - variables: ["snow.stalt", "snow.sdepth_0"]
-            key2:
-                tensor:
-                  - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-
-        ex_simple_offset:
-          tensor:
-            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-              offset: "-12h"
-
-        ex_simple_offset_also:
-          offset: "-12h"
-          tensor:
-            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-
-        ex_adding_offsets:
-          offset: "-12h"
-          tensor:
-            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-              offset: "-6h"
-
-        ex_dict:
-          dictionary:
-            key1:
-                offset: "-6h"
-                tensor:
-                    - variables: ["snow.stalt", "snow.sdepth_0"]
-            key2:
-                offset: "0h"
-                tensor:
-                   - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-
-        ex_tensor_2:
-          tensor:
-            - offset: ["-6h", "0h", "+6h"]
-            - variables: ["era5.2t", "era5.10u"]
-
-        # choose the order of dimensions in the tensor
-        ex_tensor_3:
-          tensor:
-            - variables: ["era5.2t", "era5.10u"]
-            - offset: ["-6h", "0h", "+6h"]
-
-        # this would fail, as obs are not regular:
-        # ex_tensor_failing:
-        #   tensor:
-        #     - variables: ["metop_a.scatss_1", "metop_a.scatss_2", "snow.sdepth_0"]
-
-        # do this instead when the tensors are not regular and get a tuple of tensors:
-        ex_tuple:
-          tuple:
-            loop:
-              - offset: ["-6h", "0h", "+6h"]
-            template:
-              tensor:
-                - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-
-        #test_offset4:
-        #  offset: "-6h"
-        #  structure:
-        #    offset: "-6h"
-        #    structure:
-        #      variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-        #
-"""
-
-    import sys
-
-    if len(sys.argv) > 1:
-
-        path = yaml.safe_load(sys.argv[1])
-        with open(path) as f:
-            yaml_str = f.read()
-        CONFIG = yaml.safe_load(yaml_str)
-        sample_config = CONFIG["sample"]
-        sources_config = CONFIG["data"]
-
-    else:
-        CONFIG = yaml.safe_load(yaml_str)
-        sample_config = CONFIG["sample"]
-        sources_config = CONFIG["sources"]["training"]
-    print(sources_config)
-
-    def show_yaml(structure):
-        return yaml.dump(structure, indent=2, sort_keys=False)
-
-    def show_json(structure):
-        return json.dumps(shorten_numpy(structure), indent=2)
-
-    def shorten_numpy(structure):
-        from anemoi.training.data.refactor.data_handler import DataHandler
-
-        if isinstance(structure, np.ndarray):
-            if np.issubdtype(structure.dtype, np.floating):
-                return f"np.array{structure.shape} with mean {np.nanmean(structure):.2f}"
-            return f"np.array{structure.shape} with mean {np.nanmean(structure)}"
-        if isinstance(structure, (list, tuple)):
-            if structure and all(isinstance(item, int) for item in structure):
-                return "[" + ", ".join(map(str, structure)) + "]"
-            return [shorten_numpy(item) for item in structure]
-        if isinstance(structure, dict):
-            return {k: shorten_numpy(v) for k, v in structure.items()}
-        if isinstance(structure, DataHandler):
-            return str(structure)
-        return structure
-
-    training_context = dict(
-        sources=sources_config,
-        start=None,
-        end=None,
-        frequency="6h",
-    )
-
-    cfg = """dictionary:
-                input:
-                  dictionary:
-                    fields:
-                      tensor:
-                        - ensembles: False
-                        # do not use. Use tuple - offset: ["0h", "-6h"]
-                        - values: True
-                        - variables: ["era5.2t", "era5.10u", "era5.10v"]
-
-                        # for debug only : - repeat: ['a', 'b', 'c']
-                    #    - offset: ["-6h"]
-                    #other_fields:
-                    #  tuple:
-                    #    loop:
-                    #      - offset: ["-6h", "+6h"]
-                    #    template:
-                    #      variables: ["era5.2t", "era5.10u"]
-                    #observations:
-                    #  tuple:
-                    #    loop:
-                    #      - offset: ["-6h", "0h", "+6h"]
-                    #    template:
-                    #      tensor:
-                    #        - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-        """
-    config = yaml.safe_load(cfg)
+    cfg_1 = """dictionary:
+                    input:
+                      dictionary:
+                        fields:
+                          tensor:
+                            - ensembles: False
+                            - values: True
+                            - variables: ["era5.2t", "era5.10u", "era5.10v"]
+            """
 
     print("✅✅✅✅✅✅✅✅✅✅✅✅✅✅")
-    from anemoi.training.data.refactor.sample_provider import sample_provider_factory
+    config = yaml.safe_load(cfg_1)
 
     sp = sample_provider_factory(**training_context, **config)
     schema = sp.dataschema
@@ -484,8 +394,181 @@ sample:
     print(to_str(normaliser, name="Normaliser function"))
     print(to_str(data, name="data before normalisation"))
     print(to_str(n_data, name="normaliser(data)"))
-    print(n_data)
+
+
+def test_two(training_context):
+    from rich.console import Console
+    from rich.table import Table
+
+    from anemoi.training.data.refactor.sample_provider import sample_provider_factory
+
+    def print_columns(*args, header=False):
+        console = Console()
+        table = Table(show_header=header, box=None)
+        for a in args:
+            table.add_column()
+        table.add_row(*args)
+        console.print(table)
+
+    print("✅✅✅✅✅✅✅✅✅✅✅✅✅✅")
+    cfg_2 = """dictionary:
+                  prognostics:
+                    loop:
+                      - offset: ["-6h", "0h", "+6h", "+12h", "+18h"]
+                      - tensor:
+                          - ensembles: False
+                          - values: True
+                          - variables: ["era5.2t", "era5.10u", "era5.10v"]
+                  #forcings:
+                  #  loop:
+                  #    - offset: ["-6h", "0h", "+6h", "+12h", "+18h"]
+                  #    - tensor:
+                  #        - ensembles: False
+                  #        - values: True
+                  #        - variables: ["era5.2t", "era5.10u", "era5.10v"]
+                  #diagnostics:
+                  #  loop:
+                  #    - offset: ["-6h", "0h", "+6h", "+12h", "+18h"]
+                  #    - tensor:
+                  #        - ensembles: False
+                  #        - values: True
+                  #        - variables: ["era5.2t", "era5.10u", "era5.10v"]
+                  #prognostics_tuple:
+                  #  tuple:
+                  #    loop:
+                  #      - offset: ["-6h", "0h", "+6h", "+12h", "+18h"]
+                  #    template:
+                  #      tensor:
+                  #        - ensembles: False
+                  #        - values: True
+                  #        - variables: ["era5.2t", "era5.10u", "era5.10v"]
+
+                  #observations:
+                  #  tuple:
+                  #    loop:
+                  #      - offset: ["-6h", "0h", "+6h"]
+                  #    template:
+                  #      tensor:
+                  #        - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+            """
+    config = yaml.safe_load(cfg_2)
+    sp = sample_provider_factory(**training_context, **config)
+    print(to_str(sp.static_info, "Static Info"))
+    data = sp[1]
+    print(to_str(data, "Full Data"))
+    data = merge_boxes(data, sp.static_info)
+
+    def i_to_delta(i):
+        frequency = frequency_to_timedelta("6h")
+        delta = frequency * i
+        sign = "+" if i > 0 else ""
+        if delta:
+            return sign + frequency_to_string(delta)
+        return "0h"
+
+    data = select_content(data, "_offset")
+    # data = select_content(data, "data", "_offset")
+
+    rollout_config = []
+    for i in [0, 1, 2]:
+        rollout_config.append(
+            dict(
+                input={
+                    "prognostics.0": "previous_input.prognostics.1",
+                    # f"prognostics.0": f"previous_input.prognostics.{i_to_delta(i - 1)}",
+                    "prognostics.1": "output.prognostics",
+                    # f"prognostics.1": f"previous_input.prognostics.{i_to_delta(i)}",
+                },
+                target={"prognostics": f"from_dataset.prognostics.{i_to_delta(i + 1)}"},
+            ),
+        )
+        # def change_source(dic, key, source):
+        #    path = dic[key].split('.')
+        #    path[0] = source
+        #    dic[key] = '.'.join(path)
+        # if i == 0:
+        #    change_source(rollout_config[0]["input"], "prognostics.0", source='from_dataset')
+
+        rollout_config[0]["input"]["prognostics.0"] = f"from_dataset.prognostics.{i_to_delta(-1)}"
+        rollout_config[0]["input"]["prognostics.1"] = f"from_dataset.prognostics.{i_to_delta(0)}"
+
+        rollout_config[0]["input"]["prognostics.0"] = f"from_dataset.prognostics.{i_to_delta(0)}"
+
+    print(yaml.dump(dict(rollout=rollout_config), sort_keys=False))
+    from_dataset = data
+    previous_input = {}
+    output = {}
+    for i in [0, 1, 2]:
+        print(".............")
+        cfg = rollout_config[i]
+        print(cfg)
+        sources = dict(from_dataset=from_dataset, previous_input=previous_input, output=output)
+        print(f"Building data for rollout = {i}")
+        print_columns(
+            to_str(sources["from_dataset"], "from_dataset"),
+            to_str(sources["previous_input"], "previous_input"),
+            to_str(sources["output"], "output"),
+        )
+        input = rearrange(cfg["input"], sources)
+        target = rearrange(cfg["target"], sources)
+        print_columns(to_str(input, "input"), to_str(target, "target"))
+        output = target
+
+        previous_input = input
+
+
+def test():
+
+    import sys
+
+
+    if len(sys.argv) > 1 and not sys.argv[1].isdigit():
+        return test_custom(sys.argv[1])
+
+    source_yaml = """sources:
+                         training:
+                           era5:
+                             dataset:
+                               dataset: aifs-ea-an-oper-0001-mars-o96-1979-2023-6h-v8
+                               set_group: era5
+                           snow:
+                             dataset: observations-testing-2018-2018-6h-v0
+                           metop_a:
+                             dataset: observations-testing-2018-2018-6h-v0
+                             normaliser:
+                                   "scatss_1": "mean-std"
+                                   "scatss_2": "min-max"
+                                   "scatss_3": {"name": "custom-normaliser", "theta": 0.5, "rho": 0.1}
+                             imputer:
+                                   "scatss_1": special
+                                   "scatss_2": other
+                                   "scatss_3": {"name": "custom-imputer", "theta": 0.5, "rho": 0.1}
+                             extra:
+                               user_key_1: a
+                               user_key_2:
+                                   1: foo
+                                   2: bar
+    """
+    sources_config = yaml.safe_load(source_yaml)["sources"]["training"]
+    print(sources_config)
+
+    training_context = dict(
+        sources=sources_config,
+        start=None,
+        end=None,
+        frequency="6h",
+    )
+
+    ONE = "1" in sys.argv
+    TWO = "2" in sys.argv
+    THREE = "3" in sys.argv
+    if ONE:
+        test_one(training_context)
+
+    if TWO:
+        test_two(training_context)
 
 
 if __name__ == "__main__":
-    test(False, False, True)
+
+    test()

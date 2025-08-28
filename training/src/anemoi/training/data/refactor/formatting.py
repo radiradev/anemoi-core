@@ -7,6 +7,7 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 import datetime
+import os
 
 import numpy as np
 from rich.console import Console
@@ -114,6 +115,8 @@ def format_tree(key, value, boxed=True):
             key = f"📦 {key}"
         t = Tree(f"{key} :")
         for k, v in value.items():
+            if isinstance(k, str) and k.startswith("_") and not os.environ.get("DEBUG"):
+                continue
             txt = format_key_value(k, v)
             if txt is not None:
                 t.add(f"{ICON_LEAF} {txt}")
@@ -175,7 +178,7 @@ def to_str(nested, name, _boxed=True):
     if callable(nested) and hasattr(nested, "_anemoi_function_str"):
         return name + nested._anemoi_function_str
     tree = format_tree(name, nested, boxed=_boxed)
-    return _tree_to_string(tree)
+    return _tree_to_string(tree).strip()
 
 
 def _tree_to_string(tree):
