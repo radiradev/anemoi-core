@@ -12,9 +12,12 @@ from __future__ import annotations
 import logging
 from abc import abstractmethod
 from typing import TYPE_CHECKING
+from typing import Any
 
 import numpy as np
+from hydra.utils import instantiate
 
+from anemoi.training.losses.scalers.base_scaler import BaseScaler
 from anemoi.training.losses.scalers.variable import BaseVariableLossScaler
 
 if TYPE_CHECKING:
@@ -150,3 +153,41 @@ class NoVariableLevelScaler(BaseVariableLevelScaler):
         del variable_level  # unused
         # no scaling, always return 1.0
         return 1.0
+
+
+class StepVariableLevelScaler(BaseVariableLevelScaler):
+    """Step scaling"""
+
+    def __init__(
+        self,
+        group_config: DictConfig,
+        data_indices: IndexCollection,
+        group: str,
+        steps: dict[int, Any],
+        metadata_variables: dict | None = None,
+        norm: str | None = None,
+        **kwargs,
+    ):
+        super().__init__(
+            group_config, data_indices, group, y_intercept=0, slope=0, metadata_variables=metadata_variables, norm=norm
+        )
+        self.steps = steps
+        del kwargs
+
+    def _get_step(self, level: int) -> int:
+        level_step: int | None = None
+        for step in self.steps:
+            if level >= step and (level_step is None or step > level_step):
+                level_step = step
+        if level_step is None:
+            raise ValueError(f"No valid step for level {level}.")
+        return level_step
+
+    def get_level_scaling(self, variable_level: int) -> float:
+        step_config = self.steps[self._get_step(variable_level)]
+        scaler: BaseScaler = instantiate(step_config)
+        if not isinstance(scaler, BaseVariableLevelScaler):
+            raise ValueError(f"{step_config._target_} scaler should be a variable loss scaler")
+        scaling_values = scaler.get_level_scaling(variable_level)
+        print("Step scaler", variable_level, step_config, scaling_values)
+        return scaling_values

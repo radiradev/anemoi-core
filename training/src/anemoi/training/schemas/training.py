@@ -163,6 +163,14 @@ class VariableLevelScalerSchema(BaseModel):
     "Y-axis shift of scaling function."
 
 
+class StepVariableLevelScalerSchema(BaseModel):
+    target_: Literal["anemoi.training.losses.scalers.StepVariableLevelScaler"] = Field(..., alias="_target_")
+    group: str = Field(example="pl")
+    "Group of variables to scale."
+    steps: dict[int, VariableLevelScalerSchema] = {}
+    "Steps indexed by levelS"
+
+
 class GraphNodeAttributeScalerSchema(BaseModel):
     target_: Literal["anemoi.training.losses.scalers.GraphNodeAttributeScaler"] = Field(..., alias="_target_")
     nodes_name: str = Field(example="data")
@@ -194,6 +202,7 @@ class ReweightedGraphNodeAttributeScalerSchema(BaseModel):
 ScalerSchema = Union[
     GeneralVariableLossScalerSchema,
     VariableLevelScalerSchema,
+    StepVariableLevelScalerSchema,
     TendencyScalerSchema,
     NaNMaskScalerSchema,
     GraphNodeAttributeScalerSchema,
