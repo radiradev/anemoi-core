@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 import torch
+from _pytest.config.argparsing import Parser
 from hydra import compose
 from hydra import initialize
 from omegaconf import DictConfig
@@ -21,6 +22,16 @@ from omegaconf import OmegaConf
 from anemoi.models.migrations import Migrator
 from anemoi.utils.testing import GetTestData
 from anemoi.utils.testing import TemporaryDirectoryForTestData
+
+
+def pytest_add_option(parser: Parser) -> None:
+    group = parser.getgroup("anemoi")
+    group.addoption("--cache", action="store_true", default=False, help="Enable caching of test datasets")
+
+
+@pytest.fixture(scope="session")
+def cache_enabled(request: pytest.FixtureRequest) -> bool:
+    return bool(request.config.getoption("--cache"))
 
 
 @pytest.fixture(autouse=True)
