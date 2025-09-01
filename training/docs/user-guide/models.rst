@@ -180,8 +180,8 @@ members per device times the number of GPUs per ensemble.
  Compilation
 *************
 
-PyTorch supports JIT-compiliation of code. This can speed up execution and
-reduce peak memory usage. For more information, consult `the
+PyTorch supports JIT-compiliation of code. This can speed up execution
+and reduce peak memory usage. For more information, consult `the
 introduction to torch.compile
 <https://docs.pytorch.org/tutorials/intermediate/torch_compile_tutorial.html>`__
 and `the official documentation
