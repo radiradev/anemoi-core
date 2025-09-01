@@ -38,6 +38,7 @@ from anemoi.training.schemas.base_schema import UnvalidatedBaseSchema
 from anemoi.training.schemas.base_schema import convert_to_omegaconf
 from anemoi.training.utils.checkpoint import freeze_submodule_by_name
 from anemoi.training.utils.checkpoint import transfer_learning_loading
+from anemoi.training.utils.compile import mark_for_compilation
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.seeding import get_base_seed
 from anemoi.utils.provenance import gather_provenance_info
@@ -179,41 +180,6 @@ class AnemoiTrainer:
             )
 
         return truncation_data
-
-    # Function which compiles parts of the model, based on the config
-    # The config is located under config.model.compile
-    def set_compile_flags(self, compile_config: DictConfig) -> None:
-        # Convert class paths to actual classes
-        compile_classes = [get_class(entry.module) for entry in compile_config]
-        LOGGER.info("The following modules will be compiled: %s", str(compile_config))
-        default_compile_options = {}
-
-        # Loop through all modules
-        for name, module in self.model.named_modules():
-            # If it is listed in the compile config
-            if type(module) in compile_classes:
-                # retrieve its entry
-                entry = next((entry for entry in compile_config if get_class(entry["module"]) is type(module)), None)
-                if entry is None:
-                    # Somehow we dont have a match
-                    # Shouldn't be possible since we had to match on modules to get here
-                    continue
-                options = entry.get("options", default_compile_options)
-
-                LOGGER.debug("%s will be compiled with the following options: %s", str(module), str(options))
-                compiled_module = torch.compile(module, **options)
-
-                # Update the model with the new compiled module
-                if name == "":
-                    self.model = compiled_module
-                else:
-                    # Walk the model to the parent of the module and set it
-                    parent = self.model
-                    parts = name.split(".")
-                    for part in parts[:-1]:
-                        parent = getattr(parent, part)
-                    LOGGER.debug("Replacing %s in parent with a compiled version", str(parts[-1]))
-                    setattr(parent, parts[-1], compiled_module)
 
     @cached_property
     def model(self) -> pl.LightningModule:
@@ -536,9 +502,8 @@ class AnemoiTrainer:
             enable_progress_bar=self.config.diagnostics.enable_progress_bar,
         )
 
-        # cant have this inside model() or we get an infinite loop
         if hasattr(self.config.model, "compile"):
-            self.set_compile_flags(self.config.model.compile)
+            self.model = mark_for_compilation(self.model, self.config.model.compile)
 
         LOGGER.debug("Starting training..")
 
