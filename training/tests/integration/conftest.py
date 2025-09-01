@@ -27,7 +27,7 @@ from anemoi.utils.testing import TemporaryDirectoryForTestData
 LOGGER = logging.getLogger(__name__)
 
 
-def pytest_add_option(parser: Parser) -> None:
+def pytest_addoption(parser: Parser) -> None:
     group = parser.getgroup("anemoi")
     group.addoption("--cache", action="store_true", default=False, help="Enable caching of test datasets")
 
