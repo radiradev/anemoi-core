@@ -8,15 +8,17 @@
 # nor does it submit to any jurisdiction.
 
 import logging
-import torch
 from functools import reduce
+
+import torch
 from hydra.utils import get_class
 from omegaconf import DictConfig
 
 LOGGER = logging.getLogger(__name__)
 
-def _get_compile_entry(module:str, compile_config: DictConfig) -> dict | None :
-    """ search the compile config for an entry c module name.
+
+def _get_compile_entry(module: str, compile_config: DictConfig) -> dict | None:
+    """Search the compile config for an entry c module name.
 
     module: str -> full module name e.g. 'anemoi.models.layers.conv.GraphTransformerConv'
     compile_config : DictConfig -> The 'compile' entry within the models config
@@ -24,7 +26,6 @@ def _get_compile_entry(module:str, compile_config: DictConfig) -> dict | None :
     returns: None, if 'module' is not listed within 'compile_config'. Otherwise returns the modules entry.
 
     """
-
     for entry in compile_config:
         if get_class(entry["module"]) is type(module):
             return entry
@@ -37,11 +38,11 @@ def _get_compile_entry(module:str, compile_config: DictConfig) -> dict | None :
 
 
 def mark_for_compilation(model, compile_config: DictConfig):
-    """ Compiles parts of 'model' according to 'config.model.compile'."""
+    """Compiles parts of 'model' according to 'config.model.compile'."""
     try:
         import triton
     except ImportError:
-        msg=f"Triton not installed! Could not compile {str(compile_config)}. Consider installing Triton to enable compilation and improve speed and memory usage."
+        msg = f"Triton not installed! Could not compile {compile_config!s}. Consider installing Triton to enable compilation and improve speed and memory usage."
         return model
 
     LOGGER.info("The following modules will be compiled: %s", str(compile_config))
@@ -55,7 +56,7 @@ def mark_for_compilation(model, compile_config: DictConfig):
             options = match.get("options", default_compile_options)
 
             LOGGER.debug("%s will be compiled with the following options: %s", str(module), str(options))
-            compiled_module = torch.compile(module, **options) #Note: the module is not compiled yet
+            compiled_module = torch.compile(module, **options)  # Note: the module is not compiled yet
             # It is just marked for JIT-compilation later
             # It will be compiled before its first forward pass
 
