@@ -9,10 +9,13 @@
 
 import logging
 from functools import reduce
+from importlib.util import find_spec
 
 import torch
 from hydra.utils import get_class
 from omegaconf import DictConfig
+
+from anemoi.training.train.tasks.base import BaseGraphModule
 
 LOGGER = logging.getLogger(__name__)
 
@@ -32,17 +35,13 @@ def _get_compile_entry(module: str, compile_config: DictConfig) -> dict | None:
 
     return None
 
-    compile_classes = [get_class(entry.module) for entry in compile_config]
-    if type(module) in compile_classes:
-        entry = next((entry for entry in compile_config if get_class(entry["module"]) is type(module)), None)
 
-
-def mark_for_compilation(model, compile_config: DictConfig):
+def mark_for_compilation(model: BaseGraphModule, compile_config: DictConfig) -> BaseGraphModule:
     """Compiles parts of 'model' according to 'config.model.compile'."""
-    try:
-        import triton
-    except ImportError:
-        msg = f"Triton not installed! Could not compile {compile_config!s}. Consider installing Triton to enable compilation and improve speed and memory usage."
+    if find_spec("triton") is None:
+        msg = f"Triton not installed! Could not compile {compile_config!s}. Consider installing Triton to \
+                enable compilation and improve speed and memory usage."
+        LOGGER.warning(msg)
         return model
 
     LOGGER.info("The following modules will be compiled: %s", str(compile_config))
@@ -62,9 +61,8 @@ def mark_for_compilation(model, compile_config: DictConfig):
 
             # Update the model with the new 'compiled' module
             # go from "anemoi.models.layers.conv.GraphTransformerConv"
-            # to  ["anemoi", "models", "layers", "conv", "GraphTransformerConv"]
-            parts = name.split(".")
             # to obj(anemoi.models.layers.conv)
+            parts = name.split(".")
             parent = reduce(getattr, parts[:-1], model)
             # then set obj(anemoi.models.layers.conv).GrapTransformerConv = compiled_module
             LOGGER.debug("Replacing %s with a compiled version", str(parts[-1]))

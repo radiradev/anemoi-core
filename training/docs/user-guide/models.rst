@@ -214,6 +214,6 @@ their first forward pass, these modules will be compiled. No code
 modifications are required.
 
 You can optionally pass options to torch compile via the 'options'
-keyword.A full list of the possible options and their meanings can be
-found on the `torch.compile documentation
+keyword. A full list of the possible options and their meanings can be
+found in the `torch.compile documentation
 <https://docs.pytorch.org/docs/stable/generated/torch.compile.html>`__.
