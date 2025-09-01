@@ -67,6 +67,7 @@ class GraphInterpolator(BaseGraphModule):
             metadata=metadata,
             supporting_arrays=supporting_arrays,
         )
+
         if len(config.training.target_forcing.data) >= 1:
             self.target_forcing_indices = itemgetter(*config.training.target_forcing.data)(
                 data_indices.data.input.name_to_index,
@@ -76,6 +77,7 @@ class GraphInterpolator(BaseGraphModule):
         else:
             self.target_forcing_indices = []
 
+        self.rollout = 1
         self.use_time_fraction = config.training.target_forcing.time_fraction
 
         self.boundary_times = config.training.explicit_times.input

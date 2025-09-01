@@ -1,6 +1,6 @@
 ---
 defaults:
-  - plot: detailed
+  - plot: simple
   - callbacks: placeholder
   - benchmark_profiler: detailed
 
@@ -36,7 +36,7 @@ log:
     offline: False
     log_model: False
     project: 'Anemoi'
-    entity: ???
+    entity: null
     # logger options (these probably come with some overhead)
     gradients: False
     parameters: False
@@ -46,7 +46,7 @@ log:
     enabled: False
     offline: False
     authentication: False
-    tracking_uri: ???
+    tracking_uri: null
     experiment_name: 'anemoi-debug'
     project_name: 'Anemoi'
     system: False
