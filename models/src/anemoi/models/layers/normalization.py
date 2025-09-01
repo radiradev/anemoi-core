@@ -9,14 +9,11 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Union
 
 from torch import Size
 from torch import Tensor
 from torch import nn
-
-LOG = logging.getLogger(__name__)
 
 
 class AutocastLayerNorm(nn.LayerNorm):
