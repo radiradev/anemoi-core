@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 import torch
-from _pytest.config.argparsing import Parser
+from pytest import Parser
 from hydra import compose
 from hydra import initialize
 from omegaconf import DictConfig
