@@ -103,5 +103,8 @@ attributes:
   - edge_dirs
   nodes: []
 
+compile:
+  - module: anemoi.models.layers.conv.GraphTransformerConv
+
 # Bounding configuration
 bounding: []
