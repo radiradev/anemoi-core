@@ -172,6 +172,8 @@ class StepVariableLevelScaler(BaseVariableLevelScaler):
             group_config, data_indices, group, y_intercept=0, slope=0, metadata_variables=metadata_variables, norm=norm
         )
         self.steps = steps
+        self._group_config = group_config
+        self._data_indices = data_indices
         del kwargs
 
     def _get_step(self, level: int) -> int:
@@ -185,7 +187,9 @@ class StepVariableLevelScaler(BaseVariableLevelScaler):
 
     def get_level_scaling(self, variable_level: int) -> float:
         step_config = self.steps[self._get_step(variable_level)]
-        scaler: BaseScaler = instantiate(step_config)
+        print(self._group_config)
+        print(self._data_indices)
+        scaler: BaseScaler = instantiate(step_config, group_config=self._group_config, data_indices=self._data_indices)
         if not isinstance(scaler, BaseVariableLevelScaler):
             raise ValueError(f"{step_config._target_} scaler should be a variable loss scaler")
         scaling_values = scaler.get_level_scaling(variable_level)
