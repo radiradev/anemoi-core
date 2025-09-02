@@ -13,7 +13,7 @@ config_validation: True
 
 hardware:
   files:
-    dataset: stable/aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v4.zarr
+    dataset: aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v4.zarr
 
 data:
   frequency: 1h

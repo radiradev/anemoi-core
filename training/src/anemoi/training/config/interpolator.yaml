@@ -12,8 +12,8 @@ defaults:
 config_validation: True
 
 data:
-  frequency: 6h
-  timestep: 6h
+  frequency: 1h
+  timestep: 1h
   resolution: o96
 
   diagnostics: [] # Default behaviour is to interpolate between observed fields, not predict unseen fields
@@ -30,7 +30,7 @@ model:
   grid_skip: 0 # Which of the input indices to use as residual connection, null if none.
 
 training:
-  # Instead of inferred using multistep and timeincrement, specify time indices explicitly
+
   explicit_times:
     input: [0,6]
     target: [1,2,3,4,5]

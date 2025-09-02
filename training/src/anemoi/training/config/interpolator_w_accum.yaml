@@ -13,14 +13,14 @@ config_validation: True
 
 hardware:
   files:
-    dataset: stable/aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v4.zarr
+    dataset: aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v4.zarr
 
 data:
   frequency: 1h
   timestep: 1h
   resolution: o96
 
-  diagnostics: [] # Default behaviour is to interpolate between observed fields, not predict unseen fields
+  diagnostics: ['tp','cp'] # Default behaviour is to interpolate between observed fields, not predict unseen fields
 
 #dataloader:
   # model_run_info: #Add for non-analysis training
@@ -34,24 +34,30 @@ model:
   grid_skip: 0 # Which of the input indices to use as residual connection, null if none.
 
   # Bounding configuration
-  bounding: #These are applied in order
+  bounding: [] #These are applied in order
 
-    # Bound tp (total precipitation) with a Relu bounding layer
-    # ensuring a range of [0, infinity) to avoid negative precipitation values.
-    - _target_: anemoi.models.layers.bounding.ReluBounding #[0, infinity)
-      variables:
-      - tp
+    # # Bound tp (total precipitation) with a Relu bounding layer
+    # # ensuring a range of [0, infinity) to avoid negative precipitation values.
+    # - _target_: anemoi.models.layers.bounding.ReluBounding #[0, infinity)
+    #   variables:
+    #   - tp
 
-    - _target_: anemoi.models.layers.bounding.FractionBounding # fraction of tp
-      variables:
-      - cp
-      min_val: 0
-      max_val: 1
-      total_var: tp
+    # - _target_: anemoi.models.layers.bounding.FractionBounding # fraction of tp
+    #   variables:
+    #   - cp
+    #   min_val: 0
+    #   max_val: 1
+    #   total_var: tp
 
 
 
 training:
+
+  mass_conserving_accumulations: # k:v listed here will be accumulated using a mass conservation technique such that k predicted at the intervals will sum to v. They keys should also be made to be diagnostic during training. The Values should be forcings
+  # Do not apply bounding to the accumulated variables
+    tp : tp_6hr
+    cp : cp_6hr
+  
   # Instead of inferred using multistep and timeincrement, specify time indices explicitly
   explicit_times:
     input: [0,6]
@@ -61,3 +67,12 @@ training:
     data: #of which come from the dataset
       - "insolation"
     time_fraction: True
+
+diagnostics:
+  log:
+    mlflow:
+      max_params_length: 3000
+  
+  plot:
+    callbacks: []
+    colormaps: {}

@@ -393,6 +393,8 @@ class InterpolationSchema(BaseTrainingSchema):
     "Time indices for input and output."
     target_forcing: TargetForcing
     "Forcing parameters for target output times."
+    mass_conserving_accumulations: dict[str, str] = Field(default_factory=dict)
+    "Mass conserving accumulations to apply to the model."
 
 
 TrainingSchema = Annotated[

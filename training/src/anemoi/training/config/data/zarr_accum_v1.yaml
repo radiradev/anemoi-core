@@ -33,7 +33,9 @@ normalizer:
   # that cp, as a fraction of tp, remains consistent with tp's scale and statistics.
   # NOTE: This remap should only be applied if FractionBounding is enabled for cp.
   remap:
-    cp: tp
+    # cp: tp
+    tp: tp_6hr
+    cp: cp_6hr
 
   # Standardization applied to tp and cp variables. Ensure that if cp is bounded
   # as a fraction of tp, both variables are normalized using these shared statistics.
@@ -74,6 +76,14 @@ processors:
   # const_imputer:
   #   _target_: anemoi.models.preprocessing.imputer.ConstantImputer
   #   config: ${data.const_imputer}
+
+  left_boundary_zero:
+    _target_: anemoi.models.preprocessing.imputer.LeftBoundaryZero
+    config:
+      default: "none"
+      zero:
+        - "tp_6hr"
+        - "cp_6hr"
 
 # Values set in the code
 num_features: null # number of features in the forecast state

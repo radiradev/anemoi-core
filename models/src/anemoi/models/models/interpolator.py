@@ -13,9 +13,11 @@ from typing import Optional
 import einops
 import torch
 from torch import Tensor
+from torch import nn
 from torch.distributed.distributed_c10d import ProcessGroup
 from torch_geometric.data import HeteroData
-
+from torch.nn import functional as F
+from operator import itemgetter
 from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.models import AnemoiModelEncProcDec
@@ -180,3 +182,92 @@ class AnemoiModelEncProcDecInterpolator(AnemoiModelEncProcDec):
         x_out = self._assemble_output(x_out, x_skip, batch_size, ensemble_size, x.dtype)
 
         return x_out
+
+    def predict_step(
+        self,
+        batch: torch.Tensor,
+        pre_processors: nn.Module,
+        post_processors: nn.Module,
+        multi_step: int,
+        model_comm_group: Optional[ProcessGroup] = None,
+        gather_out: bool = True,
+        **kwargs,
+    ) -> Tensor:
+        """Prediction step for the model.
+
+        Base implementation applies pre-processing, performs a forward pass, and applies post-processing.
+        Subclasses can override this for different behavior (e.g., sampling for diffusion models).
+
+        Parameters
+        ----------
+        batch : torch.Tensor
+            Input batched data (before pre-processing)
+        pre_processors : nn.Module,
+            Pre-processing module
+        post_processors : nn.Module,
+            Post-processing module
+        multi_step : int,
+            Number of input timesteps
+        model_comm_group : Optional[ProcessGroup]
+            Process group for distributed training
+        gather_out : bool
+            Whether to gather output tensors across distributed processes
+        **kwargs
+            Additional arguments
+
+        Returns
+        -------
+        Tensor
+            Model output (after post-processing)
+        """
+        with torch.no_grad():
+
+            assert (
+                len(batch.shape) == 4
+            ), f"The input tensor has an incorrect shape: expected a 4-dimensional tensor, got {batch.shape}!"
+            # Dimensions are
+            # batch, timesteps, grid, variables
+            x = batch[:, 0:multi_step, None, ...]  # add dummy ensemble dimension as 3rd index
+
+            # Handle distributed processing
+            grid_shard_shapes = None
+            if model_comm_group is not None:
+                shard_shapes = get_shard_shapes(x, -2, model_comm_group)
+                grid_shard_shapes = [shape[-2] for shape in shard_shapes]
+                x = shard_tensor(x, -2, shard_shapes, model_comm_group)
+
+            x = pre_processors(x, in_place=False)
+
+            # Perform forward pass
+            y_hat = self.forward(x, model_comm_group=model_comm_group, grid_shard_shapes=grid_shard_shapes, **kwargs)
+
+            if self.map_accum_indices is not None:
+                y_hat = self.resolve_mass_conservations(y_hat, x)
+
+            # Apply post-processing
+            y_hat = post_processors(y_hat, in_place=False)
+
+            # Gather output if needed
+            if gather_out and model_comm_group is not None:
+                y_hat = gather_tensor(y_hat, -2, apply_shard_shapes(y_hat, -2, grid_shard_shapes), model_comm_group)
+
+        return y_hat
+
+    def resolve_mass_conservations(self, y_preds, x_input):
+        #NOTE: make sure to enforce the values are normalized using their targets normalizer
+        #NOTE: When interpolating between 0 and 6, this makes outputs for 1, 2,3 ,4, 5, 6
+        input_constraint_indxs = self.map_accum_indices["constraint_idxs"]
+        target_indices = self.map_accum_indices["target_idxs"]
+
+        # (B, T, …, V_acc)
+        logits = y_preds[..., target_indices]  # (B,T,E,G,V_acc)
+        zeros = torch.zeros_like(logits[:, 0:1])
+        weights = F.softmax(torch.cat([logits, zeros], dim=1), dim=1)[:, :-1]
+
+        # constraints = x_input[:, itemgetter(*self.boundary_times)(self.imap),..., input_constraint_indxs]
+
+        constraints = x_input[:, -1:, ..., input_constraint_indxs]
+
+        y_preds[..., target_indices] = weights * constraints
+
+        return y_preds
