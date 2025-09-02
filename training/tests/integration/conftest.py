@@ -14,11 +14,11 @@ from pathlib import Path
 
 import pytest
 import torch
-from pytest import Parser
 from hydra import compose
 from hydra import initialize
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
+from pytest import Parser
 
 from anemoi.models.migrations import Migrator
 from anemoi.utils.testing import GetTestData
