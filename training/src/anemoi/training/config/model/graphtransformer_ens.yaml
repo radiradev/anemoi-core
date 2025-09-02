@@ -122,12 +122,7 @@ attributes:
 # options (dict): a dict of further options which can be passed to torch.compile
 compile:
   - module: anemoi.models.layers.conv.GraphTransformerConv
-    options:
-      dynamic: false
-      #mode: max-autotune # an example of setting the compilation mode
   - module: anemoi.models.layers.normalization.ConditionalLayerNorm
-    options:
-      dynamic: false
 
 # Bounding configuration
 bounding: #These are applied in order
