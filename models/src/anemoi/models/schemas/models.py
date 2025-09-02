@@ -225,7 +225,7 @@ class BaseModelSchema(PydanticBaseModel):
         discriminator="target_",
     )
     "GNN decoder schema."
-    compile: Optional[list[dict[str, Any]]]
+    compile: Optional[list[dict[str, Any]]] = Field(None)
     "Modules to be compiled"
 
 
