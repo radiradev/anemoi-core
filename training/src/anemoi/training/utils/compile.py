@@ -36,12 +36,16 @@ def _get_compile_entry(module: str, compile_config: DictConfig) -> dict | None:
     return None
 
 
-def mark_for_compilation(model: BaseGraphModule, compile_config: DictConfig) -> BaseGraphModule:
+def mark_for_compilation(model: BaseGraphModule, compile_config: DictConfig | None) -> BaseGraphModule:
     """Compiles parts of 'model' according to 'config.model.compile'."""
     if find_spec("triton") is None:
         msg = f"Triton not installed! Could not compile {compile_config!s}. Consider installing Triton to \
                 enable compilation and improve speed and memory usage."
         LOGGER.warning(msg)
+        return model
+
+    if compile_config is None:
+        LOGGER.debug("compile_config is None. Returning model unchanged.")
         return model
 
     LOGGER.info("The following modules will be compiled: %s", str(compile_config))
