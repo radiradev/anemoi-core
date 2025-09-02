@@ -12,7 +12,9 @@ from __future__ import annotations
 import logging
 from enum import Enum
 from typing import Annotated
+from typing import Any
 from typing import Literal
+from typing import Optional
 from typing import Union
 
 from pydantic import BaseModel as PydanticBaseModel
@@ -191,6 +193,21 @@ class DiffusionSchema(BaseModel):
     "Default parameters for inference sampling"
 
 
+class CompileEntry(BaseModel):
+    module: str
+    "Full module to be compiled e.g. 'anemoi.models.layers.conv.GraphTransformerConv'"
+    options: Optional[dict[str, object]]
+    "Optional list of torch.compile options"
+
+    # so that both entry["module"] (unvalidated) and entry.module (validated) works
+    def __getitem__(self, item: str) -> Any:
+        return getattr(self, item)
+
+    # so that entry.get() works on validated object
+    def get(self, item: str, default=None) -> Any:
+        return getattr(self, item, default)
+
+
 class BaseModelSchema(PydanticBaseModel):
     num_channels: NonNegativeInt = Field(example=512)
     "Feature tensor size in the hidden space."
@@ -223,6 +240,8 @@ class BaseModelSchema(PydanticBaseModel):
         discriminator="target_",
     )
     "GNN decoder schema."
+    compile: list[CompileEntry]
+    "Modules to be compiled"
 
 
 class NoiseInjectorSchema(BaseModel):
