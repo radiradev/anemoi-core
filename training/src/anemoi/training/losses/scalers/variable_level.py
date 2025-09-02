@@ -187,11 +187,10 @@ class StepVariableLevelScaler(BaseVariableLevelScaler):
 
     def get_level_scaling(self, variable_level: int) -> float:
         step_config = self.steps[self._get_step(variable_level)]
-        print(self._group_config)
-        print(self._data_indices)
-        scaler: BaseScaler = instantiate(step_config, group_config=self._group_config, data_indices=self._data_indices)
+        scaler: BaseScaler = instantiate(
+            step_config, group_config=self._group_config, data_indices=self._data_indices, _recursive_=False
+        )
         if not isinstance(scaler, BaseVariableLevelScaler):
             raise ValueError(f"{step_config._target_} scaler should be a variable loss scaler")
         scaling_values = scaler.get_level_scaling(variable_level)
-        print("Step scaler", variable_level, step_config, scaling_values)
         return scaling_values

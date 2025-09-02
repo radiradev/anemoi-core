@@ -17,7 +17,6 @@ from hydra.utils import instantiate
 from anemoi.training.losses.scalers.base_scaler import BaseDelayedScaler
 
 if TYPE_CHECKING:
-
     from anemoi.training.losses.scalers.base_scaler import SCALER_DTYPE
     from anemoi.utils.config import DotDict
 
@@ -27,7 +26,7 @@ LOGGER = logging.getLogger(__name__)
 def create_scalers(scalers_config: DotDict, **kwargs) -> tuple[dict[str, SCALER_DTYPE], dict[str, SCALER_DTYPE]]:
     scalers, delayed_scaler_builders = {}, {}
     for name, config in scalers_config.items():
-        scaler_builder = instantiate(config, **kwargs)
+        scaler_builder = instantiate(config, **kwargs, _recursive_=False)
 
         if isinstance(scaler_builder, BaseDelayedScaler):
             delayed_scaler_builders[name] = scaler_builder
