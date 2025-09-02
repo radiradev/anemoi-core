@@ -18,18 +18,12 @@ from hydra import compose
 from hydra import initialize
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
-from pytest import Parser
 
 from anemoi.models.migrations import Migrator
 from anemoi.utils.testing import GetTestData
 from anemoi.utils.testing import TemporaryDirectoryForTestData
 
 LOGGER = logging.getLogger(__name__)
-
-
-def pytest_addoption(parser: Parser) -> None:
-    group = parser.getgroup("anemoi")
-    group.addoption("--cache", action="store_true", default=False, help="Enable caching of test datasets")
 
 
 @pytest.fixture(scope="session")
