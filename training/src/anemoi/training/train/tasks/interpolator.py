@@ -77,24 +77,31 @@ class GraphInterpolator(BaseGraphModule):
         else:
             self.target_forcing_indices = []
 
-        
         self.use_time_fraction = config.training.target_forcing.time_fraction
 
         # TODO: Improve how this map_accum_indices is assigned to the Interface or Model or extend the postprocessors to be able to work with functions which also condition on the input state
-        self.model.model.map_mass_conserving_accums =  config.training.mass_conserving_accumulations
+        self.model.model.map_mass_conserving_accums = config.training.mass_conserving_accumulations
         target_idx_list: list[int] = []
         constraint_idx_list: list[int] = []
         for output_varname, input_constraint_varname in self.model.model.map_mass_conserving_accums.items():
-            assert input_constraint_varname in data_indices.data._forcing, f"Input constraint variable {input_constraint_varname} not found in data indices forcing variables."
-            assert output_varname in data_indices.model.output.name_to_index, f"Output variable {output_varname} not found in data indices output variables."
+            assert (
+                input_constraint_varname in data_indices.data._forcing
+            ), f"Input constraint variable {input_constraint_varname} not found in data indices forcing variables."
+            assert (
+                output_varname in data_indices.model.output.name_to_index
+            ), f"Output variable {output_varname} not found in data indices output variables."
 
             target_idx_list.append(data_indices.model.output.name_to_index[output_varname])
             constraint_idx_list.append(data_indices.model.input.name_to_index[input_constraint_varname])
 
-        self.model.model.map_accum_indices = torch.nn.ParameterDict({
-            "target_idxs": torch.nn.Parameter(torch.tensor(target_idx_list, dtype=torch.long), requires_grad=False),
-            "constraint_idxs": torch.nn.Parameter(torch.tensor(constraint_idx_list, dtype=torch.long), requires_grad=False),
-        })
+        self.model.model.map_accum_indices = torch.nn.ParameterDict(
+            {
+                "target_idxs": torch.nn.Parameter(torch.tensor(target_idx_list, dtype=torch.long), requires_grad=False),
+                "constraint_idxs": torch.nn.Parameter(
+                    torch.tensor(constraint_idx_list, dtype=torch.long), requires_grad=False,
+                ),
+            },
+        )
 
         self.boundary_times = config.training.explicit_times.input
         self.interp_times = config.training.explicit_times.target
@@ -138,10 +145,16 @@ class GraphInterpolator(BaseGraphModule):
             device=self.device,
             dtype=batch.dtype,
         )
-        
-        target_shape = (batch.shape[0], len(self.interp_times), batch.shape[2], batch.shape[3], len(self.data_indices.model.output.name_to_index))
+
+        target_shape = (
+            batch.shape[0],
+            len(self.interp_times),
+            batch.shape[2],
+            batch.shape[3],
+            len(self.data_indices.model.output.name_to_index),
+        )
         y_preds = batch.new_zeros(target_shape)
-        
+
         for idx, interp_step in enumerate(self.interp_times):
             # get the forcing information for the target interpolation time:
             if num_tfi >= 1:
@@ -152,8 +165,8 @@ class GraphInterpolator(BaseGraphModule):
                 )
 
             y_pred = self(x_bound, target_forcing)
-            y_preds[:, idx] = y_pred 
-        
+            y_preds[:, idx] = y_pred
+
         if self.model.model.map_accum_indices is not None:
             # y_preds = self.resolve_mass_conservations(y_preds, batch)
             y_preds = self.model.model.resolve_mass_conservations(y_preds, x_bound)
@@ -161,7 +174,7 @@ class GraphInterpolator(BaseGraphModule):
         for idx, interp_step in enumerate(self.interp_times):
             y = batch[:, self.imap[interp_step], :, :, self.data_indices.data.output.full].clone()
             y_pred = y_preds[:, idx]
-     
+
             loss_step, metrics_next = checkpoint(
                 self.compute_loss_metrics,
                 y_pred,
@@ -195,8 +208,6 @@ class GraphInterpolator(BaseGraphModule):
     #     y_preds[..., target_indices] = weights * constraints
 
     #     return y_preds
-
-
 
     def forward(self, x: torch.Tensor, target_forcing: torch.Tensor) -> torch.Tensor:
         return self.model(

@@ -16,7 +16,6 @@ from typing import Optional
 import torch
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
-
 from torch import Tensor
 
 from anemoi.models.data_indices.collection import IndexCollection
@@ -522,6 +521,7 @@ class DynamicCopyImputer(DynamicMixin, CopyImputer):
     def inverse_transform(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
         """Impute missing values in the input tensor."""
         return DynamicMixin.inverse_transform(self, x, in_place)
+
 
 class LeftBoundaryZero(BasePreprocessor):
     def __init__(self, config=None, data_indices: Optional[IndexCollection] = None, statistics: Optional[dict] = None):

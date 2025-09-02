@@ -15,9 +15,9 @@ import torch
 from torch import Tensor
 from torch import nn
 from torch.distributed.distributed_c10d import ProcessGroup
-from torch_geometric.data import HeteroData
 from torch.nn import functional as F
-from operator import itemgetter
+from torch_geometric.data import HeteroData
+
 from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.models import AnemoiModelEncProcDec
@@ -254,8 +254,8 @@ class AnemoiModelEncProcDecInterpolator(AnemoiModelEncProcDec):
         return y_hat
 
     def resolve_mass_conservations(self, y_preds, x_input):
-        #NOTE: make sure to enforce the values are normalized using their targets normalizer
-        #NOTE: When interpolating between 0 and 6, this makes outputs for 1, 2,3 ,4, 5, 6
+        # NOTE: make sure to enforce the values are normalized using their targets normalizer
+        # NOTE: When interpolating between 0 and 6, this makes outputs for 1, 2,3 ,4, 5, 6
         input_constraint_indxs = self.map_accum_indices["constraint_idxs"]
         target_indices = self.map_accum_indices["target_idxs"]
 
