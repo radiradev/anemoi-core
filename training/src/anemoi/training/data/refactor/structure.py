@@ -328,26 +328,27 @@ def test_one(training_context):
     from anemoi.training.data.refactor.sample_provider import sample_provider_factory
 
     cfg_1 = """dictionary:
-                    input:
-                      dictionary:
+                input:
+                    dictionary:
                         fields:
-                          tensor:
-                            - ensembles: False
-                            - values: True
-                            - variables: ["era5.2t", "era5.10u", "era5.10v"]
+                            container:
+                              data_group: "era5"
+                              variables: ["2t", "10u", "10v"]
+                              dimensions: ["values", "variables", "ensembles"]
                         other_fields:
                           for_each:
                             - offset: ["-6h", "0h"]
-                            - tensor:
-                              - ensembles: False
-                              - values: True
-                              - variables: ["era5.2t", "era5.10u", "era5.10v"]
+                            - container:
+                                data_group: "era5"
+                                variables: ["2t", "10u", "10v"]
+                                dimensions: ["variables", "values"]
             """
 
     print("✅✅✅✅✅✅✅✅✅✅✅✅✅✅")
     config = yaml.safe_load(cfg_1)
 
     sp = sample_provider_factory(**training_context, **config)
+    print(sp)
     schema = sp.dataschema
 
     # print(schema)
@@ -424,10 +425,10 @@ def test_two(training_context):
                   prognostics:
                     for_each:
                       - offset: ["-6h", "0h", "+6h", "+12h", "+18h"]
-                      - tensor:
-                          - ensembles: False
-                          - values: True
-                          - variables: ["era5.2t", "era5.10u", "era5.10v"]
+                      - container:
+                          dimensions: ["values", "variables"]
+                          variables: ["2t", "10u", "10v"]
+                          data_group: "era5"
                   #forcings:
                   #  for_each:
                   #    - offset: ["-6h", "0h", "+6h", "+12h", "+18h"]
@@ -475,8 +476,8 @@ def test_two(training_context):
             return sign + frequency_to_string(delta)
         return "0h"
 
-    data = select_content(data, "_offset")
-    # data = select_content(data, "data", "_offset")
+    data = select_content(data, "data", "_offset")
+    # data = select_content(data, "_offset")
     # def change_source(dic, key, source):
     #    path = dic[key].split('.')
     #    path[0] = source

@@ -141,7 +141,7 @@ def format_tree(key, value, boxed=True):
 
         for k in order:
             v = value[k]
-            if not os.environ.get("DEBUG") and v.startswith("_"):
+            if not os.environ.get("DEBUG") and k.startswith("_"):
                 continue
             txt = format_key_value(k, v)
             if txt is not None:

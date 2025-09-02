@@ -16,7 +16,6 @@ import numpy as np
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from omegaconf import ListConfig
-from rich import print as rprint
 from rich.console import Console
 from rich.tree import Tree
 
@@ -128,20 +127,9 @@ class Context:
 
 
 class VariablesList:
-    def __init__(self, variables: list[str] | dict, data=None):
-        if data is not None:
-            warnings.warn(
-                "Using 'data' argument is deprecated, use variables with '.' instead",
-                DeprecationWarning,
-            )
-            if not isinstance(variables, (list, tuple)):
-                raise ValueError(
-                    f"Expected list or tuple for variables, got {type(variables)}: {variables}, data={data}",
-                )
-            self.lst = [f"{data}.{v}" for v in variables]
-            return
-
-        assert data is None, data
+    def __init__(self, variables: list[str] | dict, group):
+        self.lst = [f"{group}.{v}" for v in variables]
+        return
 
         if isinstance(variables, dict):
             self.lst = []
@@ -341,7 +329,8 @@ class DictionaryLoopSampleProvider(SampleProvider):
         super().__init__(_context, _parent)
 
         assert isinstance(
-            for_each, (list, tuple)
+            for_each,
+            (list, tuple),
         ), f"Expected list for dictionary-from-for_each, got {type(for_each)}: {for_each}"
         if not len(for_each) == 2:
             raise ValueError(f"Expected list of length 2 : loop, template. Got {len(for_each)}: {for_each}")
@@ -412,6 +401,8 @@ class DictSampleProvider(SampleProvider):
         return {k: v.shape for k, v in self._samples.items()}
 
     def tree(self, prefix=""):
+        if not hasattr(self, "_samples"):
+            return Tree(prefix + self.label + "<partially-initialised>")
         tree = Tree(prefix + self.label)
         for k, v in self._samples.items():
             subtree = v.tree(prefix=f'"{k}" : ')
@@ -687,7 +678,7 @@ class SimpleTensorSampleProvider(SampleProvider):
         dims = tensor
         super().__init__(_context, _parent)
 
-        dimensions_in_dataset = res["_dimensions_in_dataset"]
+        dimensions_in_dataset = res["_dimensions_order"]
 
         self.dimensions = Dimensions(dimension_factory(dim) for dim in dims)
         if len(dims) != len(list(set([dim.name for dim in self.dimensions]))):
@@ -756,7 +747,7 @@ class SimpleTensorSampleProvider(SampleProvider):
         requested_order = " ".join(requested_order)
 
         current_order = []
-        dimensions_in_dataset = res["_dimensions_in_dataset"]
+        dimensions_in_dataset = res["_dimensions_order"]
         print(f"✅{dimensions_in_dataset=}")
         print("self.dimensions=")
         for i in self.dimensions:
@@ -805,30 +796,191 @@ class SimpleTensorSampleProvider(SampleProvider):
         # TODO read from data handler and have 'dynamic' shape
         return self[0].shape
 
-    def tree(self, prefix=""):
-        tree = Tree(f"{prefix}{self.emoji} {self.label}")
-        for i, d in enumerate(self.dimensions):
-            if isinstance(d, IterableDimension):
-                tree.add(f" dim {i} : {d}")
-            elif isinstance(d, DataDimension):
-                tree.add(self._tuple_sample_provider.tree(prefix=f"dim {i} : {d}"))
-            else:
-                tree.add(f'? dim {i} "{d.name}" = {d.raw}')
 
-        if self._tuple_sample_provider is not None:
-            subtree = self._tuple_sample_provider.tree(prefix="(debug) ")
-            tree.add(subtree)
+class TensorReshapeSampleProvider(ForwardSampleProvider):
+    emoji = "🔄"
+    label = "Reshape"
+
+    def __init__(self, _context: Context, _parent, reshape):
+        reshape = reshape.copy()
+        dimensions = reshape.pop("dimensions")
+        sample = _sample_provider_factory(_context, _parent=self, **reshape)
+
+        self._static_cache = sample.static_info
+        self.to_dimensions_order = dimensions
+        self.from_dimensions_order = self._static_cache["_dimensions_order"]
+
+        for d in self.to_dimensions_order:
+            if d not in self.from_dimensions_order:
+                raise ValueError(f"Dimension '{d}' not found in dataset for {sample}")
+
+        super().__init__(_context, _parent, sample)
+
+    def _get_static(self, request):
+        box = self._forward._get_static(request)
+        box = box.copy()
+        if "shape" in box:
+            from_dims = " ".join([d if d in self.from_dimensions_order else "1" for d in self.from_dimensions_order])
+            to_dims = " ".join(self.to_dimensions_order)
+            box["shape"] = TODO
+        box["_dimensions_order"] = self.to_dimensions_order
+        return box
+
+    def _get_item(self, request, item):
+        box = self._forward._get_item(request, item)
+        box = box.copy()
+        from_dims = " ".join([d if d in self.to_dimensions_order else "1" for d in self.from_dimensions_order])
+        to_dims = " ".join(self.to_dimensions_order)
+        if "data" in box:
+            try:
+                box["data"] = einops.rearrange(box["data"], f"{from_dims} -> {to_dims}")
+            except Exception as e:
+                e.add_note(f"{e} while rearranging {(box['data'].shape)} from '{from_dims}' to '{to_dims}'")
+                e.add_note(f"{self}")
+                raise e
+        return box
+
+    @property
+    def dataschema(self):
+        schema = self._forward.dataschema
+        schema["_dimensions_order"] = self.to_dimensions_order
+        return schema
+
+    def shape(self):
+        raise NotImplementedError("Dead code here, remove all 'shape' methods")
+
+    def tree(self, prefix=""):
+        if not hasattr(self, "to_dimensions_order"):
+            return Tree(f"{prefix}{self.emoji} {self.label}")
+
+        tree = Tree(f"{prefix}{self.emoji} {self.label} ({self.to_dimensions_order})")
+        tree.add(self._forward.tree(prefix=" "))
+
         return tree
 
 
-class TensorSampleProvider(SampleProvider):
+class BoxSampleProvider(SampleProvider):
+    emoji = "📦"
+    label = "Data"
+
+    i_offset = None
+    dropped_samples = None
+
+    _mutate = None
+
+    def __init__(self, _context: Context, _parent, container):
+        box = container
+        box = box.copy()
+        super().__init__(_context, _parent)
+        if "dimensions" in box:
+            # box.pop('dimensions')
+            dimensions = box.pop("dimensions")
+            self._mutate = dict(reshape=dict(dimensions=dimensions, container=box))
+            return
+
+        if "data_group" not in box:
+            raise ValueError(f"Expected 'data_group' in box, got {box}")
+        self.data_group = box.pop("data_group")
+        self.variables = box.pop("variables", None)
+
+    def mutate(self):
+        if self._mutate:
+            return _sample_provider_factory(self._context, _parent=self._parent, **self._mutate)
+        return self
+
+    def _get_static(self, request):
+        if request is None:
+            request = ["name_to_index", "statistics", "normaliser", "extra"]
+        return self.datahandler.get_static(request)
+
+    def _get_item(self, request, item):
+        actual_item = item + self.i_offset
+
+        if actual_item < 0 or actual_item >= len(self.datahandler):
+            print("❌", self)
+            msg = f"Item {item} ({actual_item}) is out of bounds with i_offset {self.i_offset}, lenght of the dataset is {len(self.datahandler)} and dropped_samples is {self.dropped_samples}."
+            raise IndexError(msg)
+
+        if request is None:
+            request = ["data", "latitudes", "longitudes", "timedeltas"]
+        return self.datahandler.get_dynamic(item, request)
+
+    @property
+    def dataschema(self):
+        return self.datahandler._dataschema
+
+    @cached_property
+    def datahandler(self):
+        return DataHandler(
+            self.data_group,
+            variables=self.variables,
+            sources=self._context.sources,
+        )
+
+    def tree(self, prefix: str = ""):
+        def _(x):
+            return frequency_to_string(x) if x else "0h"
+
+        string_offset = _(self.offset)
+        if not self.offset:
+            string_offset = "0h"
+
+        txt = f"{prefix}{self.emoji} {self.label} ("
+        txt += f"{self.data_group}:{'/'.join(self.variables)}, offset={string_offset}"
+        txt += ")"
+        tree = Tree(txt)
+        if self.min_offset is not None:
+            tree.add(f"global_min_offset={_(self.min_offset)}")
+        if self.max_offset is not None:
+            tree.add(f"global_max_offset={_(self.max_offset)}")
+        tree.add(f"length={self.__len__()}")
+        if self.i_offset is not None:
+            explain = f"({_(self.offset)} - {_(self.min_offset)})/{_(self.frequency)} = {_(self.actual_offset)}/{_(self.frequency)} = {self.i_offset}"
+            tree.add(f"i -> i + {self.i_offset} because {explain}")
+        return tree
+
+    def set_min_max_offsets(self, minimum=None, maximum=None, dropped_samples=None):
+        self.min_offset = minimum
+        self.max_offset = maximum
+        self.dropped_samples = dropped_samples
+        self.actual_offset = self.offset - self.min_offset
+
+        def _(x):
+            return frequency_to_string(x) if x else "0h"
+
+        if self.frequency != self._context.frequency:
+            print(f"Warning: Frequency mismatch: {_(self.frequency)} != {_(self._context.frequency)}. ")
+            print(self)
+            raise NotImplementedError(
+                f"Frequency mismatch: {_(self.frequency)} != {_(self._context.frequency)}. "
+                "For now, the frequency must match the context frequency."
+                "This will be implemented in the future if needed.",
+            )
+
+        i_offset = seconds(self.actual_offset) / seconds(self.frequency)
+        if i_offset != int(i_offset):
+            print("❌", self)
+            msg = (
+                f"Offset {_(self.offset)} or {_(self.min_offset)} is not a multiple of frequency {_(self.frequency)}, for {self}. "
+                f"i_offset = {i_offset} is not an integer."
+            )
+            raise ValueError(msg)
+        self.i_offset = int(i_offset)
+
+    def __len__(self):
+        if self.dropped_samples is None:
+            return None
+        return len(self.datahandler) - self.dropped_samples
+
+
+class Tensor2SampleProvider(SampleProvider):
     emoji = "🔢"
     label = "tensor"
 
     _tuple_sample_provider = None
 
-    def __init__(self, _context: Context, _parent, tensor: dict):
-        dims = tensor
+    def __init__(self, _context: Context, _parent, tensor2: dict):
+        dims = tensor2
         super().__init__(_context, _parent)
 
         self.dimensions = Dimensions(dimension_factory(dim) for dim in dims)
@@ -898,7 +1050,7 @@ class TensorSampleProvider(SampleProvider):
         requested_order = " ".join(requested_order)
 
         current_order = []
-        dimensions_in_dataset = res["_dimensions_in_dataset"]
+        dimensions_in_dataset = res["_dimensions_order"]
         # print(f"{dimensions_in_dataset=}")
         # print("self.dimensions=")
         # for i in self.dimensions:
@@ -921,11 +1073,11 @@ class TensorSampleProvider(SampleProvider):
             res["data"] = einops.rearrange(res["data"], f"{current_order} -> {requested_order}")
         except Exception as e:
             e.add_note(f"{e} while rearranging {(res['data'].shape)} from '{current_order}' to '{requested_order}'")
-            e.add_note(f"{res['_dimensions_in_dataset']}")
+            e.add_note(f"{res['_dimensions_order']}")
             e.add_note(f"{self}")
             raise e
 
-        res.pop("_dimensions_in_dataset")
+        res.pop("_dimensions_order")
         return res
 
     def _get_static(self, request):
@@ -971,16 +1123,12 @@ class VariablesSampleProvider(SampleProvider):
     i_offset = None
     dropped_samples = None
 
-    def __init__(self, _context: Context, _parent, variables: dict | list[str], data: str = None):
+    def __init__(self, _context: Context, _parent, group: str, variables: dict | list[str]):
         super().__init__(_context, _parent)
-        self.variables = VariablesList(variables, data=data)
-        if len(self.variables.as_dict) > 1:
-            raise ValueError(
-                f"Expected a single group of variables, got {list(self.variables.as_dict.keys())} in {variables}",
-            )
-
-        dic = self.variables.as_dict
-        self.group = list(dic.keys())[0]
+        if any("." in v for v in variables):
+            raise ValueError(f"Variables must be simple names without '.', got {variables}.")
+        self.group = group
+        self.variables = variables
 
     @property
     def shape(self):
@@ -1021,8 +1169,7 @@ class VariablesSampleProvider(SampleProvider):
 
     @cached_property
     def data_handler(self):
-        simple_names = self.variables.as_dict[self.group]
-        return DataHandler(self.group, variables=simple_names, sources=self._context.sources)
+        return DataHandler(self.group, variables=self.variables, sources=self._context.sources)
 
     def _get_item(self, request, item):
         if not request:
@@ -1055,7 +1202,7 @@ class VariablesSampleProvider(SampleProvider):
             string_offset = "0h"
 
         txt = f"{prefix}{self.emoji} {self.label} ("
-        txt += f"{self.group}:{'/'.join(self.variables.as_list)}, offset={string_offset}"
+        txt += f"{self.group}:{'/'.join(self.variables)}, offset={string_offset}"
         txt += ")"
         tree = Tree(txt)
         if self.min_offset is not None:
@@ -1119,6 +1266,7 @@ def sample_provider_factory(**kwargs):
 
 
 def _sample_provider_factory(_context=None, **kwargs):
+    # print('💬', kwargs)
     initial_kwargs = kwargs
     kwargs = kwargs.copy()
 
@@ -1127,12 +1275,16 @@ def _sample_provider_factory(_context=None, **kwargs):
 
     if "offset" in kwargs:
         obj = OffsetSampleProvider(_context, **kwargs)
+    elif "reshape" in kwargs:
+        obj = TensorReshapeSampleProvider(_context, **kwargs)
     elif "dictionary" in kwargs:
         obj = DictSampleProvider(_context, **kwargs)
     elif "for_each" in kwargs:
         obj = DictionaryLoopSampleProvider(_context, **kwargs)
-    elif "tensor" in kwargs:
-        obj = TensorSampleProvider(_context, **kwargs)
+    elif "container" in kwargs:
+        obj = BoxSampleProvider(_context, **kwargs)
+    elif "tensor2" in kwargs:
+        obj = Tensor2SampleProvider(_context, **kwargs)
     elif "tuple" in kwargs:
         kwargs["tuple_"] = kwargs.pop("tuple")
         obj = TupleSampleProvider(_context, **kwargs)
@@ -1202,4 +1354,5 @@ def _sample_provider_factory(_context=None, **kwargs):
         for node in nodes:
             node.set_min_max_offsets(minimum=minimum, maximum=maximum, dropped_samples=dropped_samples)
 
+    # print('✅ created obj : ' , obj)
     return obj
