@@ -20,7 +20,7 @@ from anemoi.training.train.tasks.base import BaseGraphModule
 LOGGER = logging.getLogger(__name__)
 
 
-def _get_compile_entry(module: str, compile_config: DictConfig) -> dict | None:
+def _get_compile_entry(module: str, compile_config: DictConfig) -> DictConfig | None:
     """Search the compile config for an entry c module name.
 
     module: str -> full module name e.g. 'anemoi.models.layers.conv.GraphTransformerConv'
