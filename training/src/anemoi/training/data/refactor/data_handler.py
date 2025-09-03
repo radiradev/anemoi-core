@@ -1,5 +1,6 @@
 import warnings
 
+import einops
 import numpy as np
 
 from anemoi.datasets import open_dataset
@@ -163,12 +164,15 @@ class DataHandler:
         box = Box({r: do_action(r, item) for r in request})
         if "data" in box:
             if box["data"].ndim == 2:
-                assert self._dimensions_order == ["variables", "values"]
-            elif box["data"].ndim == 3:
-                assert self._dimensions_order == ["variables", "ensembles", "values"]
-            else:
-                raise ValueError(f"Unexpected number of dimensions {box['data'].ndim} for data {self.config}")
-        box["_dimensions_order"] = self._dimensions_order
+                box["data"] = einops.rearrange(box["data"], "variables values -> variables 1 values")
+            assert box["data"].ndim == 3
+            assert self._dimensions_order == [
+                "variables",
+                "ensembles",
+                "values",
+            ], f"Unexpected dimensions order {self._dimensions_order} for data {self.config}"
+        else:
+            box["_dimensions_order"] = self._dimensions_order
         return box
 
     @property

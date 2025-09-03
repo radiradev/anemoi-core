@@ -88,12 +88,12 @@ def merge_boxes(*structs, overwrite=True):
             return _default_exit(path, key, old_parent, new_parent, new_items)
         # If we reach here, it means old_parent is a box
         # We need to merge new_items into the corresponding box in old_parent
-        res = {}
-        for other_structure in structs:
-            other_box = _get_path(other_structure, path + (key,), default={})
-            if not overwrite and set(other_box.keys()) & set(res.keys()):
-                raise ValueError(f"Conflicting keys found in structures: {set(other_box.keys()) & set(res.keys())}")
-            res.update(other_box)
+        res = Box()
+        for struct in structs:
+            box = _get_path(struct, path + (key,), default={})
+            if not overwrite and set(box.keys()) & set(res.keys()):
+                raise ValueError(f"Conflicting keys found in structures: {set(box.keys()) & set(res.keys())}")
+            res.update(box)
         return res
 
     return _remap(structs[0], exit=exit)
@@ -154,12 +154,11 @@ def box_to_function(constructor, **options):
 # decorator
 def apply_to_box(constructor, **options):
     if options or not callable(constructor):
-        raise Exception("apply_to_box decorator takes at most one non-keyword argument, the function to wrap.")
+        raise Exception("apply_to_box decorator takes at most one non-keyword argument : the function to wrap.")
 
     @wraps(constructor)
     def wrapper(fconfig_n, *fargs, **fkwargs):
-        res_n = _for_each_expanded_box(fconfig_n, constructor, *fargs, **fkwargs)
-        return res_n
+        return _for_each_expanded_box(fconfig_n, constructor, *fargs, **fkwargs)
 
     return wrapper
 
