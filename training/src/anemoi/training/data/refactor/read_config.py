@@ -1,6 +1,8 @@
 import os
+from abc import abstractmethod
 from typing import Dict
 
+from anmemoi.utils.config import Config
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
 
@@ -9,6 +11,45 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_OBS = os.path.join(BASE_DIR, "configs", "config_obs.yaml")
 CONFIG_DOWNSCALING = os.path.join(BASE_DIR, "configs", "config_downscaling.yaml")
 CONFIG_MULTIPLE = os.path.join(BASE_DIR, "configs", "config_multiple.yaml")
+
+DATA_KEY = "data"
+SAMPLE_KEY = "sample"
+
+
+class BaseAnemoiConfig(Config):
+
+    @classmethod
+    def get_example(cls):
+        return cls.from_yaml_file(cls.EXAMPLE_FILE)
+
+    @abstractmethod
+    @classmethod
+    def from_simple_config(cls, simple):
+        pass
+
+
+class ObsAnemoiConfig(BaseAnemoiConfig):
+    EXAMPLE_FILE = os.path.join(BASE_DIR, "configs", "config_obs.yaml")
+
+
+class DownscalingAnemoiConfig(BaseAnemoiConfig):
+    EXAMPLE_FILE = os.path.join(BASE_DIR, "configs", "config_downscaling.yaml")
+
+    @classmethod
+    def from_simple_config(cls, simple):
+        cls._simple_config = simple
+
+        data = convert_data_config(simple["data"]["sources"])
+        sample = convert_sample_config(simple["model"]["sample"])
+
+        full = {DATA_KEY: data, SAMPLE_KEY: sample}
+        return cls(full)
+
+
+class GeneralAnemoiConfig(Config):
+    @classmethod
+    def get_example(cls):
+        raise ValueError("No example for GeneralAnemoiConfig")
 
 
 def get_example(which: str) -> Dict:
@@ -21,10 +62,12 @@ def get_example(which: str) -> Dict:
     raise ValueError("Only supportings examples: obs, downscaling, multiple.")
 
 
+# use config.data instead
 def get_data_config_dict(data, which: str) -> Dict:
     return get_example(which)["data"]
 
 
+# use config.sample
 def get_sample_config_dict(sample: DictConfig, which: str) -> Dict:
     return get_example(which)["sample"]
 
