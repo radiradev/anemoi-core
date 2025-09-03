@@ -61,7 +61,6 @@ dependencies = [
   "torchinfo>=1.8",
   "torchvision>=0.18",
   "tqdm>=4.65",
-  "triton",
   "zarr>=2.14.2",
 ]
 
