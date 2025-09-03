@@ -22,16 +22,6 @@ from anemoi.training.data.datamodule import AnemoiDatasetsDataModule
 pytest_plugins = "anemoi.utils.testing"
 
 
-def pytest_addoption(parser: pytest.Parser) -> None:
-    group = parser.getgroup("anemoi")
-    group.addoption("--cache", action="store_true", default=False, help="Enable caching of test datasets")
-
-
-@pytest.fixture(scope="session")
-def cache_enabled(request: pytest.FixtureRequest) -> bool:
-    return bool(request.config.getoption("--cache"))
-
-
 @pytest.fixture
 def config(request: SubRequest) -> DictConfig:
     overrides = request.param
