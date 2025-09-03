@@ -191,7 +191,9 @@ Compilation requires Triton. Normally Triton is pulled in as a
 dependancy when PyTorch is installed. Otherwise, Triton can be `built
 from source
 <https://github.com/triton-lang/triton?tab=readme-ov-file#install-from-source>`__
-.
+. Compilation requires torch >= 2.6 and torch_geometric >= 2.6. If these
+versions are not met, or if Triton is not installed, then anemoi will
+run without compilation.
 
 Anemoi exposes 'torch.compile' at the module level through the model
 config. Below is an example:

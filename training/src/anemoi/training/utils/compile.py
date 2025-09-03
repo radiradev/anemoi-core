@@ -12,6 +12,7 @@ from functools import reduce
 from importlib.util import find_spec
 
 import torch
+import torch_geometric
 from hydra.utils import get_class
 from omegaconf import DictConfig
 
@@ -36,16 +37,32 @@ def _get_compile_entry(module: str, compile_config: DictConfig) -> DictConfig | 
     return None
 
 
+def _meets_library_versions_for_compile() -> bool:
+    """Returns True if minimum library versions for compilation in Anemoi is met."""
+    has_triton = True
+    if find_spec("triton") is None:
+        msg = "Triton not installed! Consider installing Triton to "
+        msg += "enable compilation and improve speed and memory usage."
+        LOGGER.warning(msg)
+        has_triton = False
+
+    version_req = torch.__version__ >= "2.6" and torch_geometric.__version__ >= "2.6"
+
+    if not version_req:
+        msg = "Minimum library versions for compilation not met. "
+        msg += " torch v{torch.__version__} < 2.6 or torch geometric v{torch_geometric.__version__} < 2.6. "
+        msg += " Please upgrade these libraries to enable compilation."
+        LOGGER.warning(msg)
+
+    return version_req and has_triton
+
+
 def mark_for_compilation(model: BaseGraphModule, compile_config: DictConfig | None) -> BaseGraphModule:
     """Compiles parts of 'model' according to 'config.model.compile'."""
-    if find_spec("triton") is None:
-        msg = f"Triton not installed! Could not compile {compile_config!s}. Consider installing Triton to \
-                enable compilation and improve speed and memory usage."
-        LOGGER.warning(msg)
+    if compile_config is None:
         return model
 
-    if compile_config is None:
-        LOGGER.debug("compile_config is None. Returning model unchanged.")
+    if not _meets_library_versions_for_compile():
         return model
 
     LOGGER.info("The following modules will be compiled: %s", str(compile_config))
