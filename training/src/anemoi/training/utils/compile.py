@@ -50,8 +50,8 @@ def _meets_library_versions_for_compile() -> bool:
 
     if not version_req:
         msg = "Minimum library versions for compilation not met. "
-        msg += " torch v{torch.__version__} < 2.6 or torch geometric v{torch_geometric.__version__} < 2.6. "
-        msg += " Please upgrade these libraries to enable compilation."
+        msg += f"torch: v{torch.__version__}<2.6 or torch_geometric: v{torch_geometric.__version__}<2.6. "
+        msg += "Please upgrade these libraries to enable compilation."
         LOGGER.warning(msg)
 
     return version_req and has_triton

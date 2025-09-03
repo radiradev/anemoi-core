@@ -8,7 +8,6 @@
 # nor does it submit to any jurisdiction.
 
 import logging
-from importlib.util import find_spec
 from pathlib import Path
 
 import torch
@@ -17,6 +16,7 @@ from omegaconf import OmegaConf
 
 from anemoi.models.layers.normalization import ConditionalLayerNorm
 from anemoi.training.utils.compile import _get_compile_entry
+from anemoi.training.utils.compile import _meets_library_versions_for_compile
 from anemoi.training.utils.compile import mark_for_compilation
 
 LOGGER = logging.getLogger(__name__)
@@ -48,9 +48,9 @@ def test_compile_config_match() -> None:
 
 def test_compile() -> None:
 
-    # Skip this test if triton is not installed
-    if find_spec("triton") is None:
-        LOGGER.warning("triton not installed. skipping 'test_compile()'")
+    # Skip this test if library versions aren't met
+    if not _meets_library_versions_for_compile():
+        LOGGER.warning("triton not installed. skipping 'test_compile.py::test_compile'")
         return
 
     num_channels = 64
