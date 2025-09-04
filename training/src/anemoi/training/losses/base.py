@@ -8,23 +8,19 @@
 # nor does it submit to any jurisdiction.
 
 
-from __future__ import annotations
-
 import functools
 import logging
 from abc import ABC
 from abc import abstractmethod
-from typing import TYPE_CHECKING
 
 import torch
 from torch import nn
+from torch.distributed.distributed_c10d import ProcessGroup
 
+from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.models.distributed.graph import reduce_tensor
 from anemoi.training.losses.scaler_tensor import ScaleTensor
 from anemoi.training.utils.enums import TensorDim
-
-if TYPE_CHECKING:
-    from torch.distributed.distributed_c10d import ProcessGroup
 
 LOGGER = logging.getLogger(__name__)
 
@@ -59,7 +55,7 @@ class BaseLoss(nn.Module, ABC):
         """
         super().__init__()
 
-        self.scaler = ScaleTensor()
+        self.add_module("scaler", ScaleTensor())
 
         self.avg_function = torch.nanmean if ignore_nans else torch.mean
         self.sum_function = torch.nansum if ignore_nans else torch.sum
@@ -73,6 +69,9 @@ class BaseLoss(nn.Module, ABC):
     @functools.wraps(ScaleTensor.update_scaler)
     def update_scaler(self, name: str, scaler: torch.Tensor, *, override: bool = False) -> None:
         self.scaler.update_scaler(name=name, scaler=scaler, override=override)
+
+    def set_data_indices(self, data_indices: IndexCollection) -> None:
+        """Hook to set the data indices for the loss."""
 
     def scale(
         self,
@@ -107,8 +106,6 @@ class BaseLoss(nn.Module, ABC):
         if len(self.scaler) == 0:
             return x[subset_indices]
 
-        self.scaler.to(x.device)
-
         if TensorDim.GRID not in self.scaler:
             error_msg = (
                 "Scaler tensor must be at least applied to the GRID dimension. "
@@ -123,14 +120,11 @@ class BaseLoss(nn.Module, ABC):
             else:
                 scale_tensor = self.scaler.without_by_dim(without_scalers)
 
-        scaler = scale_tensor.get_scaler(x.ndim)
-
-        if grid_shard_slice is not None:
-            scaler = scaler[:, :, grid_shard_slice, :]
-
-        scaler = scaler.expand_as(x)
-
-        return x[subset_indices] * scaler[subset_indices]
+        return scale_tensor.scale_iteratively(
+            x,
+            subset_indices=subset_indices,
+            grid_shard_slice=grid_shard_slice,
+        )
 
     def reduce(
         self,

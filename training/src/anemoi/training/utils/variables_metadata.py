@@ -7,11 +7,9 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
-from __future__ import annotations
 
 import logging
 from functools import lru_cache
-from typing import Union
 
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
@@ -19,7 +17,7 @@ from omegaconf import OmegaConf
 from anemoi.transform.variables import Variable
 
 LOG = logging.getLogger(__name__)
-GROUP_SPEC = Union[str, list[str], bool]
+GROUP_SPEC = str | list[str] | bool
 
 
 @lru_cache
@@ -101,14 +99,8 @@ class ExtractVariableGroupAndLevel:
         group : str
             Group of the variable
         """
-        if variable_name not in self.metadata_variables and any(
-            isinstance(x, dict) for x in self.variable_groups.values()
-        ):
-            error_msg = (f"Variable {variable_name} not found in metadata and variable_groups are not simple lists.",)
-            raise ValueError(error_msg)
-
         for group_name, group_spec in self.variable_groups.items():
-            if isinstance(group_spec, (list, str)):
+            if isinstance(group_spec, list | str):
                 # simple group
                 if self.get_param(variable_name) in (group_spec if isinstance(group_spec, list) else [group_spec]):
                     LOG.debug(
@@ -120,20 +112,66 @@ class ExtractVariableGroupAndLevel:
 
             elif isinstance(group_spec, dict):
                 # complex group
-                var_metadata = self.metadata_variables.get(variable_name)
-                if all(
-                    getattr(var_metadata, key) in (val if isinstance(val, list) else [val])
-                    for key, val in group_spec.items()
-                ):
-                    LOG.debug(
-                        "Variable %r is in group %r through specification : %r.",
-                        variable_name,
-                        group_name,
-                        group_spec,
-                    )
-                    return group_name
+                if variable_name not in self.metadata_variables:
+                    if group_spec.keys() != {"param"}:
+                        error_msg = (
+                            f"Variable {variable_name} not found in metadata and `variable_groups` "
+                            " must be a simple list or a dictionary with only the `param` key."
+                            "\nPlease either provide metadata for the variable or simplify the `variable_groups`."
+                        )
+                        raise ValueError(error_msg)
+
+                    if self.get_param(variable_name) in (
+                        group_spec["param"] if isinstance(group_spec["param"], list) else [group_spec["param"]]
+                    ):
+                        LOG.debug(
+                            "Variable %r is in group %r through specification : %r.",
+                            variable_name,
+                            group_name,
+                            group_spec,
+                        )
+                        return group_name
+                else:
+                    var_metadata = self.metadata_variables.get(variable_name)
+                    if all(
+                        getattr(var_metadata, key) in (val if isinstance(val, list) else [val])
+                        for key, val in group_spec.items()
+                    ):
+                        LOG.debug(
+                            "Variable %r is in group %r through specification : %r.",
+                            variable_name,
+                            group_name,
+                            group_spec,
+                        )
+                        return group_name
 
         return self.default_group
+
+    def _is_metadata_trusted(self, variable_name: str) -> bool:
+        """Check if the metadata for a variable is trusted.
+
+        This checks if the variable has metadata and checks
+        for valid relations.
+
+        Parameters
+        ----------
+        variable_name : str
+            Name of the variable.
+
+        Returns
+        -------
+        bool
+            True if the metadata is trusted, False otherwise.
+        """
+        if variable_name not in self.metadata_variables:
+            return False
+
+        level = self.metadata_variables[variable_name].level
+        is_vertical_level = not self.metadata_variables[variable_name].is_surface_level
+
+        # If level is not None and is not a surface level, True
+        # If level is None and is a surface level, True
+        return is_vertical_level ^ (level is None)
 
     def get_param(self, variable_name: str) -> str:
         """Get the parameter from a variable_name.
@@ -154,13 +192,13 @@ class ExtractVariableGroupAndLevel:
             Either from the metadata or cracked
             name.
         """
-        if variable_name in self.metadata_variables:
-            # if metadata is available: get variable name and level from metadata
+        if self._is_metadata_trusted(variable_name):
+            # if metadata is available: get param from metadata
             return self.metadata_variables[variable_name].param
 
         return _crack_variable_name(variable_name)[0]
 
-    def get_level(self, variable_name: str) -> str | None:
+    def get_level(self, variable_name: str) -> int | None:
         """Get the level of a variable.
 
         Parameters
@@ -170,12 +208,12 @@ class ExtractVariableGroupAndLevel:
 
         Returns
         -------
-        variable_level : str | None
+        variable_level : int | None
             Variable level, checks the variable metadata, or attempts
             to crack the name, if not found None.
         """
-        if variable_name in self.metadata_variables:
-            # if metadata is available: get variable name and level from metadata
+        if self._is_metadata_trusted(variable_name):
+            # if metadata is available: get level from metadata
             return self.metadata_variables[variable_name].level
 
         return _crack_variable_name(variable_name)[1]

@@ -10,6 +10,7 @@ anemoi-training:
 #. Deterministic Forecasting (GraphForecaster)
 #. Ensemble Forecasting (GraphEnsForecaster)
 #. Time Interpolation (GraphInterpolator)
+#. Diffusion-based Forecasting (GraphDiffusionForecaster)
 
 The model tasks specify the training objective and are specified in the
 configuration through ``training.model_task``. They are our
@@ -35,7 +36,7 @@ For detailed instructions on creating models, see the
 .. note::
 
    Currently, the GNN model type is not supported with the Ensemble
-   Forecasting model task.
+   Forecasting model task and the Diffusion Forecasting model task.
 
 ************
  Processors
@@ -125,6 +126,8 @@ under the ``layer_kernels`` section.
 For detailed information and examples, see
 :ref:`anemoi-models:layer-kernels`.
 
+.. _usage-field_truncation:
+
 ******************
  Field Truncation
 ******************
@@ -147,6 +150,15 @@ which can be specified in the configuration:
 Once set, the truncation matrices are used automatically during the
 rollout.
 
+.. note::
+
+   The truncation matrices required for field truncation can be
+   generated using the ``anemoi-graphs`` package.
+
+   For detailed instructions on how to create these matrices, see the
+   documentation at :ref:`Create sparse matrices with anemoi-graphs
+   <anemoi-graphs:usage-create_sparse_matrices>` tutorial.
+
 ***************
  Ensemble Size
 ***************
@@ -161,4 +173,5 @@ configuration:
       ensemble_size_per_device: 4
 
 This determines how many ensemble members are generated per device
-during training.
+during training. Effective ensemble size is then the number of ensemble
+members per device times the number of GPUs per ensemble.

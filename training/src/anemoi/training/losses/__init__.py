@@ -16,6 +16,7 @@ from .loss import get_loss_function
 from .mae import MAELoss
 from .mse import MSELoss
 from .rmse import RMSELoss
+from .weighted_mse import WeightedMSELoss
 from .torch import TorchLoss
 
 __all__ = [
@@ -27,6 +28,7 @@ __all__ = [
     "MAELoss",
     "MSELoss",
     "RMSELoss",
+    "WeightedMSELoss",
     "TorchLoss",
     "get_loss_function",
 ]

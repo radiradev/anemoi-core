@@ -7,7 +7,6 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
-from __future__ import annotations
 
 import logging
 from abc import ABC
@@ -23,6 +22,7 @@ from torch_geometric.typing import Size
 from anemoi.graphs.edges.directional import compute_directions
 from anemoi.graphs.normalise import NormaliserMixin
 from anemoi.graphs.utils import NodesAxis
+from anemoi.graphs.utils import get_distributed_device
 from anemoi.graphs.utils import haversine_distance
 
 LOGGER = logging.getLogger(__name__)
@@ -32,12 +32,13 @@ class BaseEdgeAttributeBuilder(MessagePassing, NormaliserMixin, ABC):
     """Base class for edge attribute builders."""
 
     node_attr_name: str = None
+    norm_by_group: bool = False
 
     def __init__(self, norm: str | None = None, dtype: str = "float32") -> None:
         super().__init__()
         self.norm = norm
         self.dtype = dtype
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = get_distributed_device()
         if self.node_attr_name is None:
             error_msg = f"Class {self.__class__.__name__} must define 'node_attr_name' either as a class attribute or in __init__"
             raise TypeError(error_msg)
@@ -72,8 +73,8 @@ class BaseEdgeAttributeBuilder(MessagePassing, NormaliserMixin, ABC):
 
         return edge_features
 
-    def aggregate(self, edge_features: torch.Tensor) -> torch.Tensor:
-        return self.normalise(edge_features)
+    def aggregate(self, edge_features: torch.Tensor, index: torch.Tensor, ptr=None, dim_size=None) -> torch.Tensor:
+        return self.normalise(edge_features, index, dim_size)
 
 
 class BasePositionalBuilder(BaseEdgeAttributeBuilder, ABC):
@@ -103,7 +104,7 @@ class Azimuth(BasePositionalBuilder):
 
     Attributes
     ----------
-    norm : Optional[str]
+    norm : str | None
         Normalisation method. Options: None, "l1", "l2", "unit-max", "unit-range", "unit-std".
     invert : bool
         Whether to invert the edge lengths, i.e. 1 - edge_length. Defaults to False.
@@ -169,3 +170,18 @@ class AttributeFromTargetNode(BaseEdgeAttributeFromNodeBuilder):
     """Copy an attribute of the target node to the edge."""
 
     nodes_axis = NodesAxis.TARGET
+
+
+class GaussianDistanceWeights(EdgeLength):
+    """Gaussian distance weights."""
+
+    norm_by_group: bool = True  # normalise the gaussian weights by target node
+
+    def __init__(self, sigma: float = 1.0, norm: str = "l1", **kwargs) -> None:
+        self.sigma = sigma
+        super().__init__(norm=norm)
+
+    def compute(self, x_i: torch.Tensor, x_j: torch.Tensor) -> torch.Tensor:
+        dists = super().compute(x_i, x_j)
+        gaussian_weights = torch.exp(-(dists**2) / (2 * self.sigma**2))
+        return gaussian_weights

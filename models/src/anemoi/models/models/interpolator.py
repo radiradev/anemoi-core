@@ -63,9 +63,8 @@ class AnemoiModelEncProcDecInterpolator(AnemoiModelEncProcDec):
         self.latent_skip = model_config.model.latent_skip
         self.grid_skip = model_config.model.grid_skip
 
-    def _calculate_shapes_and_indices(self, data_indices: dict) -> None:
-        super()._calculate_shapes_and_indices(data_indices)
-        self.input_dim = (
+    def _calculate_input_dim(self, model_config):
+        return (
             self.input_times * self.num_input_channels
             + self.node_attributes.attr_ndims[self._graph_name_data]
             + self.num_target_forcings
@@ -134,10 +133,7 @@ class AnemoiModelEncProcDecInterpolator(AnemoiModelEncProcDec):
         batch_size = x.shape[0]
         ensemble_size = x.shape[2]
         in_out_sharded = grid_shard_shapes is not None
-
-        assert not (
-            in_out_sharded and (grid_shard_shapes is None or model_comm_group is None)
-        ), "If input is sharded, grid_shard_shapes and model_comm_group must be provided."
+        self._assert_valid_sharding(batch_size, ensemble_size, in_out_sharded, model_comm_group)
 
         x_data_latent, x_skip, shard_shapes_data = self._assemble_input(
             x, target_forcing, batch_size, grid_shard_shapes, model_comm_group
