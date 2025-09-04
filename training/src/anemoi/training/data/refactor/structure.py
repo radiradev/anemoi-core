@@ -105,8 +105,9 @@ def _stop_if_box_enter(path, key, value):
     return _default_enter(path, key, value)
 
 
-def _for_each_expanded_box(fconfig_tree, constructor, *args, **kwargs):
-    # apply the constructor to each box in the fconfig_tree tree
+def _for_each_expanded_box(fconfig_tree, func, *args, **kwargs):
+    # apply the func to each box in the fconfig_tree tree
+    is_callable = dict(callable=None)
 
     def transform(path, key, fconfig_box):
         if not is_box(fconfig_box):
@@ -115,15 +116,28 @@ def _for_each_expanded_box(fconfig_tree, constructor, *args, **kwargs):
         if any(callable(v) for k, v in fconfig_box.items()):
             return key, fconfig_box
 
-        # print(f"DEBUG: {path} {key}, applying function {constructor.__name__} to {value} {args=} {kwargs=}")
-        value = constructor(**fconfig_box, **kwargs)
+        # print(f"DEBUG: {path} {key}, applying function {func.__name__} to {value} {args=} {kwargs=}")
+        value = func(**fconfig_box, **kwargs)
         # print(f"  -> {value=}")
+        if isinstance(value, dict):
+            value = Box(value)
 
-        # if we wanted to output boxes : return key, dict(function=value)
+        if is_callable["callable"] is None:
+            is_callable["callable"] = callable(value)
+        is_callable["callable"] = is_callable["callable"] and callable(value)
         return key, value
 
-    # return a structure where each box is replaced by a function
-    return _remap(fconfig_tree, visit=transform, enter=_stop_if_box_enter)
+    def ensure_output_is_box_exit(path, key, old_parent, new_parent, new_items):
+
+        res = _default_exit(path, key, old_parent, new_parent, new_items)
+        if is_box(old_parent):
+            res = Box(res)
+        return res
+
+    structure = _remap(fconfig_tree, visit=transform, enter=_stop_if_box_enter, exit=ensure_output_is_box_exit)
+    if is_callable["callable"]:
+        return nested_to_callable(structure)
+    return structure
 
 
 def apply(func, structure, *args, **kwargs):
@@ -139,26 +153,26 @@ def apply(func, structure, *args, **kwargs):
 
 
 # decorator
-def box_to_function(constructor, **options):
-    if options or not callable(constructor):
+def box_to_function(func, **options):
+    if options or not callable(func):
         raise Exception("box_to_function decorator takes at most one non-keyword argument, the function to wrap.")
 
-    @wraps(constructor)
+    @wraps(func)
     def wrapper(fconfig_n, *fargs, **fkwargs):
-        res_n = _for_each_expanded_box(fconfig_n, constructor, *fargs, **fkwargs)
+        res_n = _for_each_expanded_box(fconfig_n, func, *fargs, **fkwargs)
         return nested_to_callable(res_n)
 
     return wrapper
 
 
 # decorator
-def apply_to_box(constructor, **options):
-    if options or not callable(constructor):
+def apply_to_box(func, **options):
+    if options or not callable(func):
         raise Exception("apply_to_box decorator takes at most one non-keyword argument : the function to wrap.")
 
-    @wraps(constructor)
+    @wraps(func)
     def wrapper(fconfig_n, *fargs, **fkwargs):
-        return _for_each_expanded_box(fconfig_n, constructor, *fargs, **fkwargs)
+        return _for_each_expanded_box(fconfig_n, func, *fargs, **fkwargs)
 
     return wrapper
 
@@ -186,6 +200,9 @@ def nested_to_callable(f_tree):
     The input of this callable must be a similar structure
     The output of this callable is a similar stucture where each function is applied to each box.
     """
+    if callable(f_tree):
+        print("DEBUG: already callable")
+        return f_tree
 
     def function_on_tree(x_tree, *args, **kwargs):
 
@@ -357,8 +374,36 @@ def test_one(training_context):
     print(sp.static_info)
 
     data = sp[1]
-    print(to_str(data, name="✅ Data"))
     print(data)
+    print(to_str(data, name="✅ Data"))
+
+    @apply_to_box
+    def to_tensor(**kwargs):
+        import torch
+
+        def f(arr):
+            return torch.Tensor(arr)
+
+        res = {k: f(v) if k == "data" else v for k, v in kwargs.items()}
+        res = Box(res)
+        return res
+
+    data = to_tensor(data)
+
+    @apply_to_box
+    def to_gpu(**kwargs):
+        def f(arr):
+            return arr.to("cuda")
+
+        res = {k: f(v) if k == "data" else v for k, v in kwargs.items()}
+        # res = Box(res)
+        return res
+
+    new_data = to_gpu(data)
+    print(to_str(new_data, name="✅ Data on GPU"))
+    # print(new_data['input']['fields'])
+    print(type(new_data["input"]["fields"]))
+    # exit()
 
     guessed = make_schema(data)
     to_str(schema, "Actual Schema")
@@ -368,6 +413,8 @@ def test_one(training_context):
     # print(to_str(guessed, "Guessed Schema"))
     # print(schema)
     # assert_compatible_schema(schema, guessed)
+
+    batch = to_gpu(data)
 
     data = merge_boxes(data, sp.static_info)
     print(to_str(data, name="✅ Data merged with sp.static_info"))
@@ -403,23 +450,22 @@ def test_one(training_context):
     print(to_str(n_data, name="normaliser(data)"))
 
 
-def test_two(training_context):
+def print_columns(*args):
     from rich.console import Console
     from rich.table import Table
 
     console = Console()
+    table = Table(show_header=False, box=None)
+    for a in args:
+        table.add_column()
+    table.add_row(*args)
+    console.print(table)
+
+
+def test_two(training_context):
 
     from anemoi.training.data.refactor.sample_provider import sample_provider_factory
 
-    def print_columns(*args):
-        console = Console()
-        table = Table(show_header=False, box=None)
-        for a in args:
-            table.add_column()
-        table.add_row(*args)
-        console.print(table)
-
-    print("✅✅✅✅✅✅✅✅✅✅✅✅✅✅")
     cfg_2 = """dictionary:
                   prognostics:
                     for_each:
@@ -484,7 +530,7 @@ def test_two(training_context):
     # if i == 0:
     #    change_source(rollout_config[0]["input"], "prognostics.0", source='from_dataset')
 
-    console.print("[red] ✅ Rollout for prognostic data[/red]")
+    print("[red] ✅ Rollout for prognostic data[/red]")
     # TODO: same logic for Forcings data, and for Diagnostic data
     rollout_config = []
     n_rollout = 3
@@ -528,6 +574,22 @@ def test_two(training_context):
         previous_input = input_target["input"]
 
 
+def test_three(training_context):
+    from anemoi.training.data.refactor.sample_provider import sample_provider_factory
+
+    cfg_3 = """dictionary:
+                  ams:
+                    for_each:
+                      - offset: ["-6h", "0h", "+6h"]
+                      - container:
+                          variables: ["scatss_1", "scatss_2"]
+                          data_group: "metop_a"
+            """
+    config = yaml.safe_load(cfg_3)
+    sp = sample_provider_factory(**training_context, **config)
+    print(sp)
+
+
 def test():
 
     import sys
@@ -562,21 +624,22 @@ def test():
     sources_config = yaml.safe_load(source_yaml)["sources"]["training"]
     print(sources_config)
 
-    training_context = dict(
-        sources=sources_config,
-        start=None,
-        end=None,
-        frequency="6h",
-    )
+    training_context = dict(sources=sources_config, start=None, end=None, frequency="6h")
 
     ONE = "1" in sys.argv
     TWO = "2" in sys.argv
     THREE = "3" in sys.argv
     if ONE:
+        print("✅-✅")
         test_one(training_context)
 
     if TWO:
+        print("✅--✅")
         test_two(training_context)
+
+    if THREE:
+        print("✅---✅")
+        test_three(training_context)
 
 
 if __name__ == "__main__":
