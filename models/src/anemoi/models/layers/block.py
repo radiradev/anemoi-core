@@ -862,33 +862,3 @@ class GraphTransformerProcessorBlock(GraphTransformerBaseBlock):
         nodes_new = self.run_node_dst_mlp(out, **cond_kwargs) + out
 
         return nodes_new, edge_attr
-
-
-class GraphInterpolationMapperBlock(BaseBlock):
-    """Graph interpolation block."""
-
-    def __init__(self, sparse_matrix, **kwargs):
-        """Initialize GraphTransformerBlock.
-
-        Parameters
-        ----------
-        sparse_matrix : torch.sparse.FloatTensor
-            Sparse matrix representing the interpolation.
-        kwargs : dict
-            Additional arguments for the base class.
-        """
-        super().__init__(**kwargs)
-        self.A = sparse_matrix
-
-    def forward(
-        self,
-        x: OptPairTensor,
-        edge_attr: Tensor,
-        edge_index: Adj,
-        shapes: tuple,
-        model_comm_group: Optional[ProcessGroup] = None,
-        **layer_kwargs,
-    ):
-        x_src, _ = x
-        x_dst = torch.sparse.mm(self.A, x_src)
-        return (x_src, x_dst), edge_attr
