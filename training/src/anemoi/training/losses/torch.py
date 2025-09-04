@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import torch
-    from typing import Callable
+    from collections.abc import Callable
 
 from anemoi.training.losses.base import FunctionalLoss
 
@@ -36,9 +36,9 @@ class TorchLoss(FunctionalLoss):
         Parameters
         ----------
         pred : torch.Tensor
-            Prediction tensor, shape (bs, ensemble, lat*lon, n_outputs)
+            Prediction tensor, shape (bs, ensemble, gridpoints, n_outputs)
         target : torch.Tensor
-            Target tensor, shape (bs, ensemble, lat*lon, n_outputs)
+            Target tensor, shape (bs, ensemble, gridpoints, n_outputs)
 
         Returns
         -------
