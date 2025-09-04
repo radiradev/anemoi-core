@@ -308,7 +308,7 @@ def plot_histogram(
     y_true: np.ndarray,
     y_pred: np.ndarray,
     precip_and_related_fields: list | None = None,
-    log_scale: bool | False = False,
+    log_scale: bool = False,
 ) -> Figure:
     """Plots histogram.
 
