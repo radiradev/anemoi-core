@@ -1,10 +1,10 @@
 import os
-from abc import abstractmethod
 from typing import Dict
 
-from anmemoi.utils.config import Config
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
+
+from anemoi.utils.config import DotDict
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -16,23 +16,23 @@ DATA_KEY = "data"
 SAMPLE_KEY = "sample"
 
 
-class BaseAnemoiConfig(Config):
+class TrainingAnemoiConfig(DotDict):
+    EXAMPLE_FILE = None
 
     @classmethod
     def get_example(cls):
         return cls.from_yaml_file(cls.EXAMPLE_FILE)
 
-    @abstractmethod
     @classmethod
     def from_simple_config(cls, simple):
-        pass
+        raise ValueError(f"Not implemented yet for {cls.__name__}")
 
 
-class ObsAnemoiConfig(BaseAnemoiConfig):
+class ObsAnemoiConfig(TrainingAnemoiConfig):
     EXAMPLE_FILE = os.path.join(BASE_DIR, "configs", "config_obs.yaml")
 
 
-class DownscalingAnemoiConfig(BaseAnemoiConfig):
+class DownscalingAnemoiConfig(TrainingAnemoiConfig):
     EXAMPLE_FILE = os.path.join(BASE_DIR, "configs", "config_downscaling.yaml")
 
     @classmethod
@@ -46,7 +46,7 @@ class DownscalingAnemoiConfig(BaseAnemoiConfig):
         return cls(full)
 
 
-class GeneralAnemoiConfig(Config):
+class GeneralAnemoiConfig(TrainingAnemoiConfig):
     @classmethod
     def get_example(cls):
         raise ValueError("No example for GeneralAnemoiConfig")
@@ -73,25 +73,21 @@ def get_sample_config_dict(sample: DictConfig, which: str) -> Dict:
 
 
 def convert_source(config, name: str) -> Dict:
-    variables = [f"{name}.{v}" for v in config["variables"]]
-    tensor = [
-        dict(ensembles=False),
-        dict(variables=variables),
-        dict(values=True),
-    ]
+    variables = config["variables"]
+    container = dict(data_group=name, variables=variables, dimensions=["variables", "values"])
     offset = config.get("offset")
 
     if offset == "0h" or offset is None:  # i.e. no offset
-        return dict(tensor=tensor)
+        return dict(container=container)
 
     if isinstance(offset, str):
-        return dict(offset=offset, tensor=tensor)
+        return dict(offset=offset, container=container)
 
     if isinstance(offset, list):  # TODO remove this 'if' and use classes
         return dict(
             for_each=[
                 dict(offset=offset),
-                dict(tensor=tensor),
+                dict(container=container),
             ],
         )
 
