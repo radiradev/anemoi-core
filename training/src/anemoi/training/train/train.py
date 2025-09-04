@@ -67,21 +67,25 @@ class AnemoiTrainer:
 
         if config.config_validation:
             OmegaConf.resolve(config)
-            self.config = BaseSchema(**config)
-
+            config = BaseSchema(**config)
             LOGGER.info("Config validated.")
         else:
             config = OmegaConf.to_object(config)
-            self.config = UnvalidatedBaseSchema(**DictConfig(config))
-
+            config = UnvalidatedBaseSchema(**DictConfig(config))
             LOGGER.info("Skipping config validation.")
 
-        self.start_from_checkpoint = bool(self.config.training.run_id) or bool(self.config.training.fork_run_id)
-        self.load_weights_only = self.config.training.load_weights_only
+        self.config = config
+
+        # self.my_config should be renamed to self.config
+        # and config should not be used directly?
+        self.my_config = config.training
+
+        self.start_from_checkpoint = bool(self.my_config.run_id) or bool(self.my_config.fork_run_id)
+        self.load_weights_only = self.my_config.load_weights_only
         self.parent_uuid = None
 
-        self.config.training.run_id = self.run_id
-        LOGGER.info("Run id: %s", self.config.training.run_id)
+        self.my_config.run_id = self.run_id  #
+        LOGGER.info("Run id: %s", self.my_config.run_id)
 
         # Get the server2server lineage
         self._get_server2server_lineage()
@@ -200,14 +204,14 @@ class AnemoiTrainer:
             "metadata": self.metadata,
         }
 
-        model_task = get_class(self.config.training.model_task)
+        model_task = get_class(self.my_config.model_task)
         print(f"✅ {model_task=}")
         model = model_task(**kwargs)  # GraphForecaster -> pl.LightningModule
 
         # Load the model weights
         if self.load_weights_only:
             # Sanify the checkpoint for transfer learning
-            if self.config.training.transfer_learning:
+            if self.my_config.transfer_learning:
                 LOGGER.info("Loading weights with Transfer Learning from %s", self.last_checkpoint)
                 model = transfer_learning_loading(model, self.last_checkpoint)
             else:
@@ -221,10 +225,10 @@ class AnemoiTrainer:
             # check data indices in original checkpoint and current data indices are the same
             self.data_indices.compare_variables(model._ckpt_model_name_to_index, self.data_indices.name_to_index)
 
-        if hasattr(self.config.training, "submodules_to_freeze"):
+        if hasattr(self.my_config, "submodules_to_freeze"):
             # Freeze the chosen model weights
-            LOGGER.info("The following submodules will NOT be trained: %s", self.config.training.submodules_to_freeze)
-            for submodule_name in self.config.training.submodules_to_freeze:
+            LOGGER.info("The following submodules will NOT be trained: %s", self.my_config.submodules_to_freeze)
+            for submodule_name in self.my_config.submodules_to_freeze:
                 freeze_submodule_by_name(model, submodule_name)
                 LOGGER.info("%s frozen successfully.", submodule_name.upper())
 
@@ -241,13 +245,13 @@ class AnemoiTrainer:
     def run_id(self) -> str:
         """Unique identifier for the current run."""
         # When a run ID is provided
-        if self.config.training.run_id and not self.config.training.fork_run_id:
+        if self.my_config.run_id and not self.my_config.fork_run_id:
             # Return the provided run ID - reuse run_id if resuming run
-            return self.config.training.run_id
+            return self.my_config.run_id
 
         # When a run ID has been created externally and we want to fork a run
-        if self.config.training.run_id and self.config.training.fork_run_id:
-            return self.config.training.run_id
+        if self.my_config.run_id and self.my_config.fork_run_id:
+            return self.my_config.run_id
 
         # When we rely on mlflow to create a new run ID
         if self.config.diagnostics.log.mlflow.enabled:
@@ -280,7 +284,7 @@ class AnemoiTrainer:
         if not self.start_from_checkpoint:
             return None
 
-        fork_id = self.fork_run_server2server or self.config.training.fork_run_id
+        fork_id = self.fork_run_server2server or self.my_config.fork_run_id
         checkpoint = Path(
             self.config.hardware.paths.checkpoints.parent,
             fork_id or self.lineage_run,
@@ -395,17 +399,17 @@ class AnemoiTrainer:
         )
         LOGGER.debug(
             "Effective learning rate: %.3e",
-            int(total_number_of_model_instances) * self.config.training.lr.rate,
+            int(total_number_of_model_instances) * self.my_config.lr.rate,
         )
 
-        if self.config.training.max_epochs is not None and self.config.training.max_steps not in (None, -1):
+        if self.my_config.max_epochs is not None and self.my_config.max_steps not in (None, -1):
             LOGGER.info(
                 "Training limits: max_epochs=%d, max_steps=%d. "
                 "Training will stop when either limit is reached first. "
                 "Learning rate scheduler will run for %d steps.",
-                self.config.training.max_epochs,
-                self.config.training.max_steps,
-                self.config.training.lr.iterations,
+                self.my_config.max_epochs,
+                self.my_config.max_steps,
+                self.my_config.lr.iterations,
             )
 
     def _get_server2server_lineage(self) -> None:
@@ -427,9 +431,9 @@ class AnemoiTrainer:
             self.lineage_run = self.parent_run_server2server or self.run_id
             self.config.hardware.paths.checkpoints = Path(self.config.hardware.paths.checkpoints, self.lineage_run)
             self.config.hardware.paths.plots = Path(self.config.hardware.paths.plots, self.lineage_run)
-        elif self.config.training.fork_run_id:
+        elif self.my_config.fork_run_id:
             # WHEN USING MANY NODES/GPUS
-            self.lineage_run = self.parent_run_server2server or self.config.training.fork_run_id
+            self.lineage_run = self.parent_run_server2server or self.my_config.fork_run_id
             # Only rank non zero in the forked run will go here
             self.config.hardware.paths.checkpoints = Path(self.config.hardware.paths.checkpoints, self.lineage_run)
 
@@ -450,7 +454,7 @@ class AnemoiTrainer:
                 self.mlflow_logger._parent_dry_run and not Path(self.config.hardware.paths.checkpoints).is_dir()
             )
             self.start_from_checkpoint = (
-                False if (self.dry_run and not bool(self.config.training.fork_run_id)) else self.start_from_checkpoint
+                False if (self.dry_run and not bool(self.my_config.fork_run_id)) else self.start_from_checkpoint
             )
             LOGGER.info("Dry run: %s", self.dry_run)
 
@@ -458,7 +462,7 @@ class AnemoiTrainer:
     def strategy(self) -> Any:
         return instantiate(
             convert_to_omegaconf(self.config).training.strategy,
-            static_graph=not self.config.training.accum_grad_batches > 1,
+            static_graph=not self.my_config.accum_grad_batches > 1,
         )
 
     def train(self) -> None:
@@ -468,23 +472,23 @@ class AnemoiTrainer:
         trainer = pl.Trainer(
             accelerator=self.accelerator,
             callbacks=self.callbacks,
-            deterministic=self.config.training.deterministic,
+            deterministic=self.my_config.deterministic,
             detect_anomaly=self.config.diagnostics.debug.anomaly_detection,
             strategy=self.strategy,
             devices=self.config.hardware.num_gpus_per_node,
             num_nodes=self.config.hardware.num_nodes,
-            precision=self.config.training.precision,
-            max_epochs=self.config.training.max_epochs,
-            max_steps=self.config.training.max_steps or -1,
+            precision=self.my_config.precision,
+            max_epochs=self.my_config.max_epochs,
+            max_steps=self.my_config.max_steps or -1,
             logger=self.loggers,
             log_every_n_steps=self.config.diagnostics.log.interval,
             # run a fixed no of batches per epoch (helpful when debugging)
             limit_train_batches=self.config.dataloader.limit_batches.training,
             limit_val_batches=self.config.dataloader.limit_batches.validation,
-            num_sanity_val_steps=self.config.training.num_sanity_val_steps,
-            accumulate_grad_batches=self.config.training.accum_grad_batches,
-            gradient_clip_val=self.config.training.gradient_clip.val,
-            gradient_clip_algorithm=self.config.training.gradient_clip.algorithm,
+            num_sanity_val_steps=self.my_config.num_sanity_val_steps,
+            accumulate_grad_batches=self.my_config.accum_grad_batches,
+            gradient_clip_val=self.my_config.gradient_clip.val,
+            gradient_clip_algorithm=self.my_config.gradient_clip.algorithm,
             # we have our own DDP-compliant sampler logic baked into the dataset
             use_distributed_sampler=False,
             profiler=self.profiler,

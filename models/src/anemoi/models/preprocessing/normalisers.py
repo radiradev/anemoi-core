@@ -41,8 +41,11 @@ def build_normaliser(normaliser, name_to_index, statistics, **kwargs):
     f = InputNormaliser(config=normaliser, name_to_index=name_to_index, statistics=statistics)
 
     def func(data, **kwargs_):
-        res = {"data": f(data), **kwargs_}
-        return res
+
+        if not isinstance(data, torch.Tensor):
+            raise ValueError(f"Input to InputNormaliser must be a torch.Tensor, got {type(data)}: {data}")
+
+        return {"data": f(data), **kwargs_}
 
     return func
 
@@ -159,7 +162,16 @@ class InputNormaliser(BasePreprocessor):
             _description_
         """
 
-        x.mul_(self._norm_mul).add_(self._norm_add)
+        if self._norm_add.device != x.device or self._norm_mul.device != x.device:
+            print(f"Moving normaliser to {x.device}")
+            self._norm_add = self._norm_add.to(x.device)
+            self._norm_mul = self._norm_mul.to(x.device)
+
+        oi
+        print(f"Normalising x {x.device}, shape=", x.shape)
+        print(self._norm_mul.shape, self._norm_add.shape)
+
+        x.mul_(self._norm_mul.view(1, -1, 1)).add_(self._norm_add.view(1, -1, 1))
         return x
 
     def inverse_transform(self, x: torch.Tensor) -> torch.Tensor:
@@ -180,5 +192,10 @@ class InputNormaliser(BasePreprocessor):
         torch.Tensor
             Denormalized data
         """
-        x.subtract_(self._norm_add).div_(self._norm_mul)
+        if self._norm_add.device != x.device or self._norm_mul.device != x.device:
+            print(f"Moving normaliser to {x.device}")
+            self._norm_add = self._norm_add.to(x.device)
+            self._norm_mul = self._norm_mul.to(x.device)
+
+        x.subtract_(self._norm_add.view(1, -1, 1)).div_(self._norm_mul.view(1, -1, 1))
         return x

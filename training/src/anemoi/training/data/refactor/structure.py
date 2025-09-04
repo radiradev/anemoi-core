@@ -6,22 +6,35 @@
 # In applying this licence, ECMWF does not waive the privileges and immunities
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
+from __future__ import annotations
+
+from collections.abc import Mapping
+from collections.abc import Sequence
 from functools import wraps
+from typing import Union
 
 import boltons
 import numpy as np
+import torch
 import yaml
 from boltons.iterutils import default_enter as _default_enter
 from boltons.iterutils import default_exit as _default_exit
 from boltons.iterutils import get_path as _get_path
 from boltons.iterutils import remap as _remap
+from boltons.iterutils import research as _research  # noqa: F401
 from rich import print
 
 from anemoi.training.data.refactor.formatting import to_str
 from anemoi.utils.dates import frequency_to_string
 from anemoi.utils.dates import frequency_to_timedelta
 
-# from boltons.iterutils import research as _research,
+# from typing import TYPE_CHECKING
+# if TYPE_CHECKING:
+NestedTensor = Union[
+    torch.Tensor,
+    Sequence["NestedTensor"],  # list/tuple of NestedTensor
+    Mapping[str | int, "NestedTensor"],  # dict with str/int keys
+]
 
 
 def make_schema(structure):

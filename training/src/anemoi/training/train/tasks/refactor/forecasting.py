@@ -1,18 +1,21 @@
 import warnings
 from collections.abc import Generator
+from typing import TYPE_CHECKING
 
 import torch
 from torch.utils.checkpoint import checkpoint
 
 from anemoi.training.train.tasks.refactor.base import BaseGraphModule
 
+if TYPE_CHECKING:
+    from anemoi.training.data.refactor.structure import NestedTensor
+
 
 class ForecastingModule(BaseGraphModule):
 
     def _step(
         self,
-        batch: dict[str, dict[str, torch.Tensor]],
-        batch_idx: int,
+        batch: "NestedTensor",
         validation_mode: bool = False,
         apply_processors: bool = True,
     ) -> Generator[tuple[torch.Tensor | None, dict, list], None, None]:
@@ -39,7 +42,6 @@ class ForecastingModule(BaseGraphModule):
         Generator[tuple[Union[torch.Tensor, None], dict, list], None, None]
             Loss value, metrics, and predictions (per step)
         """
-        del batch_idx
         # batch = self.allgather_batch(batch)
 
         if not apply_processors:

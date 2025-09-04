@@ -11,8 +11,8 @@
 from __future__ import annotations
 
 import logging
-from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from abc import ABC
+from abc import abstractmethod
 
 import pytorch_lightning as pl
 import torch
@@ -21,8 +21,9 @@ from torch.distributed.distributed_c10d import ProcessGroup
 from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch_geometric.data import HeteroData
 
-from anemoi.models.interface import AnemoiModelInterface
+from anemoi.models.models.mult_encoder_processor_decoder import AnemoiMultiModel
 from anemoi.training.data.refactor.sample_provider import SampleProvider
+from anemoi.training.data.refactor.structure import NestedTensor
 from anemoi.training.losses import get_loss_function
 from anemoi.training.losses.base import BaseLoss
 from anemoi.training.losses.dict import DictLoss
@@ -53,10 +54,14 @@ class BaseGraphModule(pl.LightningModule, ABC):
         # (It is handled in the loss function, but not the version here that is sent to model for supporting_arrays)
         # self.output_mask = instantiate(config.model_dump(by_alias=True).model.output_mask, graph_data=graph_data)
 
-        self.model = AnemoiModelInterface(
-            config=convert_to_omegaconf(config),
+        self.model = AnemoiMultiModel(
+            # self.config.model.model,
+            model_config=convert_to_omegaconf(config),
             sample_static_info=sample_static_info,
             metadata=metadata,
+            # graph_data=self.graph_data,
+            # truncation_data=self.truncation_data,
+            # _recursive_=False,  # Disables recursive instantiation by Hydra
         )
 
         self.config = config
@@ -134,6 +139,10 @@ class BaseGraphModule(pl.LightningModule, ABC):
         self.reader_group_id = 0
         self.reader_group_rank = 0
 
+    def log(self, *args, **kwargs):
+        kwargs["logger"] = kwargs.get("logger", self.logger_enabled)
+        return super().log(*args, **kwargs)
+
     def forward(self, x: dict[str, torch.Tensor], graph: HeteroData) -> dict[str, torch.Tensor]:
         return self.model(x, graph, model_comm_group=self.model_comm_group)
 
@@ -206,26 +215,11 @@ class BaseGraphModule(pl.LightningModule, ABC):
         batch: tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]],
         batch_idx: int,
     ) -> torch.Tensor:
-        train_loss, _, _ = self._step(batch, batch_idx)
-        self.log(
-            "train_" + self.loss.name + "_loss",
-            train_loss,
-            on_epoch=True,
-            on_step=True,
-            prog_bar=True,
-            logger=self.logger_enabled,
-            # batch_size=batch.shape[0],
-            sync_dist=True,
-        )
-        self.log(
-            "rollout",
-            float(self.rollout),
-            on_step=True,
-            logger=self.logger_enabled,
-            rank_zero_only=True,
-            sync_dist=False,
-        )
-        return train_loss
+        del batch_idx  # unused
+        loss, _, _ = self._step(batch)
+        self.log(f"train_{self.loss.name}_loss", loss, on_epoch=True, on_step=True, prog_bar=True, sync_dist=True)
+        self.log("rollout", float(self.rollout), on_step=True, rank_zero_only=True, sync_dist=False)
+        return loss
 
     def lr_scheduler_step(self, scheduler: CosineLRScheduler, metric: None = None) -> None:
         """Step the learning rate scheduler by Pytorch Lightning.
@@ -252,19 +246,11 @@ class BaseGraphModule(pl.LightningModule, ABC):
         batch: tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]],
         batch_idx: int,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        del batch_idx  # unused
         with torch.no_grad():
-            val_loss, metrics, y_preds = self._step(batch, batch_idx, validation_mode=True)
+            loss, metrics, y_preds = self._step(batch, validation_mode=True)
 
-        self.log(
-            "val_" + self.loss.name + "_loss",
-            val_loss,
-            on_epoch=True,
-            on_step=True,
-            prog_bar=True,
-            logger=self.logger_enabled,
-            # batch_size=batch.shape[0],
-            sync_dist=True,
-        )
+        self.log(f"val_{self.loss.name}_loss", loss, on_epoch=True, on_step=True, prog_bar=True, sync_dist=True)
 
         for mname, mvalue in metrics.items():
             self.log(
@@ -273,12 +259,11 @@ class BaseGraphModule(pl.LightningModule, ABC):
                 on_epoch=True,
                 on_step=False,
                 prog_bar=False,
-                logger=self.logger_enabled,
                 batch_size=batch.shape[0],
                 sync_dist=True,
             )
 
-        return val_loss, y_preds
+        return loss, y_preds
 
     def configure_optimizers(self) -> tuple[list[torch.optim.Optimizer], list[dict]]:
         """Configure the optimizers and learning rate scheduler.
@@ -368,8 +353,7 @@ class BaseGraphModule(pl.LightningModule, ABC):
     def _step(
         self,
         batch: torch.Tensor,
-        batch_idx: int,
         validation_mode: bool = False,
         apply_processors: bool = True,
-    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
+    ) -> NestedTensor:
         pass

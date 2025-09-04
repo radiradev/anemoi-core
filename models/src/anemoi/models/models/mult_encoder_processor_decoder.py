@@ -9,6 +9,7 @@
 
 
 import logging
+import uuid
 from typing import Optional
 
 import einops
@@ -106,7 +107,7 @@ def num_channels(name_to_index, **kwargs):
 class AnemoiMultiModel(AnemoiModel):
     """Message passing graph neural network."""
 
-    def __init__(self, *, sample_static_info: "Structure", model_config: DotDict) -> None:
+    def __init__(self, *, sample_static_info: "Structure", model_config: DotDict, metadata) -> None:
         """Initializes the graph neural network.
 
         Parameters
@@ -118,12 +119,16 @@ class AnemoiMultiModel(AnemoiModel):
         """
         print(f"✅ model : {self.__class__.__name__}")
         super().__init__()
+        self.id = str(uuid.uuid4())
+        self.metadata = metadata
+
+        self.supporting_arrays = {}
         model_config = DotDict(model_config)
 
         self.sample_static_info = sample_static_info
 
         # Instantiate processors
-        self.normalisers = build_normaliser(self.sample_static_info)
+        self.normaliser = build_normaliser(self.sample_static_info)
 
         # # apply is not supported anymore
         # preprocessors = self.sample_static_info.apply(processor_factory)
@@ -419,9 +424,9 @@ class AnemoiMultiModel(AnemoiModel):
         # if this is not wanted, don't normalise it in the task
         x = st.merge_boxes(x, self.sample_static_info["input"])
 
-        print(f"Input batch: {st.to_str(x)}")
+        print(f"Input batch: {st.to_str(x, "Batch")}")
 
-        # normalised_batch = self.normalisers["input"](batch)
+        # normalised_batch = self.normaliser["input"](batch)
         # print("Normalised batch: ", normalised_batch)
 
         batch_size = x[list(x.keys())[0]].shape[0]
