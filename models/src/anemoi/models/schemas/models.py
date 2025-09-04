@@ -216,16 +216,12 @@ class BaseModelSchema(PydanticBaseModel):
         discriminator="target_",
     )
     "GNN processor schema."
-    encoder: Union[
-        GNNEncoderSchema, GraphTransformerEncoderSchema, TransformerEncoderSchema
-    ] = Field(
+    encoder: Union[GNNEncoderSchema, GraphTransformerEncoderSchema, TransformerEncoderSchema] = Field(
         ...,
         discriminator="target_",
     )
     "GNN encoder schema."
-    decoder: Union[
-        GNNDecoderSchema, GraphTransformerDecoderSchema, TransformerDecoderSchema
-    ] = Field(
+    decoder: Union[GNNDecoderSchema, GraphTransformerDecoderSchema, TransformerDecoderSchema] = Field(
         ...,
         discriminator="target_",
     )
