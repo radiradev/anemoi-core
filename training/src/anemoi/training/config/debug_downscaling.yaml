@@ -32,6 +32,8 @@ hardware:
     dataset: null
     low_res_dataset: aifs-od-an-oper-0001-mars-o96-2016-2023-6h-v6
     high_res_dataset: cerra-rr-an-oper-0001-mars-5p5km-1984-2020-6h-v2-hmsi
+    # low_res_dataset: aifs-od-an-oper-0001-mars-o32-2020-2020-6h-v6-for-software-testing
+    # high_res_dataset: cerra-rr-an-oper-0001-mars-5p5km-2020-2020-6h-v2-hmsi-thinned-for-software-testing
     graph: "debug.pt"
   paths:
     data: None
