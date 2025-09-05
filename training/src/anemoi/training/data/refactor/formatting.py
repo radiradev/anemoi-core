@@ -74,15 +74,20 @@ def format_array(k, v):
         if isinstance(v, np.ndarray):
             minimum = np.min(v)
             maximum = np.max(v)
-            return f"{k}: np.array of shape {v.shape}, min/max={minimum:.2f}/{maximum:.3f}"
+            mean = np.nanmean(v)
+            stdev = np.nanstd(v)
+            return f"{k}: np.array of shape {v.shape} {mean:.2f}±{stdev:.2f}[{minimum:.2f},{maximum:.2f}]"
 
         import torch
 
         if isinstance(v, torch.Tensor):
+            v = v[~torch.isnan(v)].flatten()
             minimum = torch.min(v).item()
             maximum = torch.max(v).item()
+            mean = torch.mean(v.float()).item()
+            stdev = torch.std(v.float()).item()
             shape = ", ".join(str(dim) for dim in v.size())
-            return f"{k} : tensor of shape ({shape}) on {v.device}, min/max={minimum:.3f}/{maximum:.3f}"
+            return f"{k} : tensor of shape ({shape}) on {v.device}, {mean:.3f}±{stdev:.3f}[{minimum:.3f}/{maximum:.3f}]"
 
         return f"{k}: no-min, no-max"
 
