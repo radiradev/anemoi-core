@@ -176,7 +176,7 @@ class AnemoiTrainer:
         return truncation_data
 
     @cached_property
-    def model(self) -> pl.LightningModule:
+    def model_task(self) -> pl.LightningModule:
         """Provide the model instance."""
         # TODO: Move check to ??? mapper instantiation? schema validation?
         # assert (
@@ -206,33 +206,33 @@ class AnemoiTrainer:
 
         model_task = get_class(self.my_config.model_task)
         print(f"✅ {model_task=}")
-        model = model_task(**kwargs)  # GraphForecaster -> pl.LightningModule
+        model_task = model_task(**kwargs)  # GraphForecaster -> pl.LightningModule
 
-        # Load the model weights
+        # Load the model_task weights
         if self.load_weights_only:
             # Sanify the checkpoint for transfer learning
             if self.my_config.transfer_learning:
                 LOGGER.info("Loading weights with Transfer Learning from %s", self.last_checkpoint)
-                model = transfer_learning_loading(model, self.last_checkpoint)
+                model_task = transfer_learning_loading(model_task, self.last_checkpoint)
             else:
                 LOGGER.info("Restoring only model weights from %s", self.last_checkpoint)
                 # pop data_indices so that the data indices on the checkpoint do not get overwritten
                 # by the data indices from the new config
                 kwargs.pop("data_indices")
-                model = model_task.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
+                model_task = model_task.load_from_checkpoint(self.last_checkpoint, **kwargs, strict=False)
 
-            model.data_indices = self.data_indices
+            model_task.data_indices = self.data_indices
             # check data indices in original checkpoint and current data indices are the same
-            self.data_indices.compare_variables(model._ckpt_model_name_to_index, self.data_indices.name_to_index)
+            self.data_indices.compare_variables(model_task._ckpt_model_name_to_index, self.data_indices.name_to_index)
 
         if hasattr(self.my_config, "submodules_to_freeze"):
             # Freeze the chosen model weights
             LOGGER.info("The following submodules will NOT be trained: %s", self.my_config.submodules_to_freeze)
             for submodule_name in self.my_config.submodules_to_freeze:
-                freeze_submodule_by_name(model, submodule_name)
+                freeze_submodule_by_name(model_task, submodule_name)
                 LOGGER.info("%s frozen successfully.", submodule_name.upper())
 
-        return model
+        return model_task
 
     @rank_zero_only
     def _get_mlflow_run_id(self) -> str:
@@ -470,35 +470,39 @@ class AnemoiTrainer:
         LOGGER.debug("Setting up trainer..")
 
         trainer = pl.Trainer(
-            accelerator=self.accelerator,
-            callbacks=self.callbacks,
             deterministic=self.my_config.deterministic,
-            detect_anomaly=self.config.diagnostics.debug.anomaly_detection,
-            strategy=self.strategy,
-            devices=self.config.hardware.num_gpus_per_node,
-            num_nodes=self.config.hardware.num_nodes,
             precision=self.my_config.precision,
             max_epochs=self.my_config.max_epochs,
             max_steps=self.my_config.max_steps or -1,
-            logger=self.loggers,
-            log_every_n_steps=self.config.diagnostics.log.interval,
-            # run a fixed no of batches per epoch (helpful when debugging)
-            limit_train_batches=self.config.dataloader.limit_batches.training,
-            limit_val_batches=self.config.dataloader.limit_batches.validation,
             num_sanity_val_steps=self.my_config.num_sanity_val_steps,
             accumulate_grad_batches=self.my_config.accum_grad_batches,
             gradient_clip_val=self.my_config.gradient_clip.val,
             gradient_clip_algorithm=self.my_config.gradient_clip.algorithm,
+            #
+            strategy=self.strategy,
+            logger=self.loggers,
+            accelerator=self.accelerator,
+            callbacks=self.callbacks,
+            # hardware specifics
+            devices=self.config.hardware.num_gpus_per_node,
+            num_nodes=self.config.hardware.num_nodes,
+            # diagnostics specifics
+            detect_anomaly=self.config.diagnostics.debug.anomaly_detection,
+            log_every_n_steps=self.config.diagnostics.log.interval,
+            enable_progress_bar=self.config.diagnostics.enable_progress_bar,
+            # dataloader specifics
+            # run a fixed no of batches per epoch (helpful when debugging)
+            limit_train_batches=self.config.dataloader.limit_batches.training,
+            limit_val_batches=self.config.dataloader.limit_batches.validation,
             # we have our own DDP-compliant sampler logic baked into the dataset
             use_distributed_sampler=False,
             profiler=self.profiler,
-            enable_progress_bar=self.config.diagnostics.enable_progress_bar,
         )
 
         LOGGER.debug("Starting training..")
 
         trainer.fit(
-            self.model,
+            self.model_task,
             datamodule=self.datamodule,
             ckpt_path=None if (self.load_weights_only) else self.last_checkpoint,
         )
