@@ -50,7 +50,7 @@ class BaseGraphModule(pl.LightningModule, ABC):
 
         self.graph_data = graph_data.to(self.device)
 
-        # TODO: Handle supporting arrays for multiple output masks (multiple outputs)
+        # TODO: oandle supporting arrays for multiple output masks (multiple outputs)
         # (It is handled in the loss function, but not the version here that is sent to model for supporting_arrays)
         # self.output_mask = instantiate(config.model_dump(by_alias=True).model.output_mask, graph_data=graph_data)
 

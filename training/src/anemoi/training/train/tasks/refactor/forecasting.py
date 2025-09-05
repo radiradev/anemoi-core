@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 import torch
 from torch.utils.checkpoint import checkpoint
 
+from anemoi.training.data.refactor import structure as st
 from anemoi.training.train.tasks.refactor.base import BaseGraphModule
 
 if TYPE_CHECKING:
@@ -46,10 +47,10 @@ class ForecastingModule(BaseGraphModule):
 
         if not apply_processors:
             warnings.warn("Skipping processors")
-        if apply_processors:
-            batch = self.model.normaliser(batch)
-            # removed process_batch, only normliser is supported for now
-            # batch = self.process_batch(batch)
+        batch = self.model.normaliser(batch)
+        print(f"Normalising batch: {st.to_str(batch, "Batch")}")
+        # removed process_batch, only normaliser is supported for now
+        # batch = self.process_batch(batch)
 
         # Delayed scalers need to be initialized after the pre-processors once
         if False:  # self.is_first_step:
