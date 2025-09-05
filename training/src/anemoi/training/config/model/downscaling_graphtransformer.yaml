@@ -22,7 +22,7 @@ model:
   encoders:
   - name: enc
     mapper: ${model.mappers.encoder}
-    sources: [ "lowres" ]
+    sources: [ "low_res" ]
     num_channels: ${model.num_channels}
   merge_latents: average # options: average, sum, concatenation
   hidden_name: "hidden"
@@ -30,7 +30,7 @@ model:
   decoders:
   - name: dec
     mapper: ${model.mappers.decoder}
-    sources: [ "hires" ]
+    sources: [ "high_res" ]
     num_channels: ${model.num_channels}
 
 

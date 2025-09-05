@@ -1,5 +1,5 @@
-import warnings
 
+import einops
 import numpy as np
 
 from anemoi.datasets import open_dataset
@@ -24,15 +24,28 @@ class DataHandler:
         self._imputer_config = self.config.get("imputer", {})
         self._normaliser_config = self.config.get("normaliser", {})
         self._extra_config = self.config.get("extra", {})
+        self._dataschema = dict(
+            type="box",
+            content=dict(
+                latitudes=dict(type="tensor", content=None),
+                longitudes=dict(type="tensor", content=None),
+                timedeltas=dict(type="tensor", content=None),
+                data=dict(type="tensor", content=None),
+                _anemoi_schema=True,
+            ),
+        )
 
         variables = [f"{group}.{v}" for v in variables]
         self.variables = variables
 
         self.ds = open_dataset(dataset=self.config["dataset"], select=self.variables)
+        # TODO: read from ds
+        self._dimensions_order = ["variables", "ensembles", "values"]
 
         self.frequency = frequency_to_timedelta(self.ds.frequency)
-        self._statistics = self.ds.statistics[group]
-        self._name_to_index = self.ds.name_to_index[group]
+        self.statistics = self.ds.statistics[group]
+        self.name_to_index = self.ds.name_to_index[group]
+        self.metadata = self.ds.metadata.get(group, {})
 
         if hasattr(self.ds, "shapes"):
             self._shape = self.ds.shapes[group]
@@ -76,79 +89,63 @@ class DataHandler:
             timedeltas = self.ds[item].timedeltas[self.group]
         return timedeltas.astype("timedelta64[s]").astype(int)
 
-    def get_statistics(self, item=None):
-        warnings.warn(
-            "using statistics is here deprecated, use sample_provider.statistics instead",
-            DeprecationWarning,
-        )
-        return self._statistics
-
-    def get_shape(self, item=None):
-        return self._shape
-
     def latitudes_longitudes(self, item=None):
         lats = self.latitudes(item)
         longs = self.longitudes(item)
         return np.array([lats, longs]).T
 
-    def get_name_to_index(self, item=None):
-        warnings.warn(
-            "using name_to_index here is deprecated, use sample_provider.name_to_index instead",
-            DeprecationWarning,
-        )
-        return self._name_to_index
+    def _get_static(self, request):
+        if request is None:
+            request = ["name_to_index", "statistics", "normaliser", "extra", "metadata"]
+        static = self._get(request, None)
+        static["_version"] = "0.0"
+        return static
 
-    def _get(self, item: int, request):
+    def _get_item(self, request, item):
+        if request is None:
+            request = ["data", "latitudes", "longitudes", "timedeltas"]
+        return self._get(request, item)
+
+    def _get(self, request, item: int):
         assert isinstance(item, (type(None), int, np.integer)), f"Expected integer for item, got {type(item)}: {item}"
         assert isinstance(
             request,
-            (type(None), str, list, tuple),
-        ), f"Expected string or list for request, got {type(request)}: {request}"
+            (type(None), list, tuple),
+        ), f"Expected list for request, got {type(request)}: {request}"
 
         ACTIONS = {
-            None: self.__getitem__,
             "data": self.__getitem__,
             "latitudes": self.latitudes,
             "longitudes": self.longitudes,
             "latitudes_longitudes": self.latitudes_longitudes,
             "timedeltas": self.timedeltas,
-            "shape": self.get_shape,
-            "name_to_index": self.get_name_to_index,  # moved to sample_provider.name_to_index
-            "statistics": self.get_statistics,  # moved to sample_provider.statistics
+            "shape": lambda x: self._shape,
+            "name_to_index": lambda x: self.name_to_index,
+            "statistics": lambda x: self.statistics,
+            "normaliser": lambda x: self._normaliser_config,
+            "imputer": lambda x: self._imputer_config,
+            "extra": lambda x: self._extra_config,
+            "metadata": lambda x: self.metadata,
         }
 
-        def do_action(r, item):
-            action = ACTIONS.get(r)
+        assert isinstance(request, (list, tuple)), request
 
-            if action is not None:
-                return action(item)
+        from anemoi.training.data.refactor.structure import Box
 
-            if "." in r:
-                rr, key = r.split(".")
-                action = ACTIONS.get(rr)
-                if action is None:
-                    raise ValueError(
-                        f"Unknown request '{r}' in {request}. Available requests are {list(ACTIONS.keys())}.",
-                    )
-                return action(item)[key]
+        box = Box({r: ACTIONS[r](item) for r in request})
 
-            raise ValueError(f"Unknown request '{r}' in {request}. Available requests are {list(ACTIONS.keys())}.")
-
-        if isinstance(request, (list, tuple)):
-            dic = {}
-            for r in request:
-                dic[r] = do_action(r, item)
-            return dic
-
-        return do_action(request, item)
-
-    @property
-    def name_to_index(self):
-        return self._name_to_index
-
-    @property
-    def statistics(self):
-        return self._statistics
+        if "data" in box:
+            if box["data"].ndim == 2:
+                box["data"] = einops.rearrange(box["data"], "variables values -> variables 1 values")
+            assert box["data"].ndim == 3
+            assert self._dimensions_order == [
+                "variables",
+                "ensembles",
+                "values",
+            ], f"Unexpected dimensions order {self._dimensions_order} for data {self.config}"
+        else:
+            box["_dimensions_order"] = self._dimensions_order
+        return box
 
     @property
     def imputer(self):
@@ -172,5 +169,9 @@ class DataHandler:
     def extra(self):
         return self._extra_config
 
+    @property
+    def dataset_name(self):
+        return self.config["dataset"]
+
     def __repr__(self):
-        return f"DataHandler {self.config['dataset']} @ {self.group} [{', '.join(self.variables)}]"
+        return f"DataHandler {self.dataset_name} @ {self.group} [{', '.join(self.variables)}]"

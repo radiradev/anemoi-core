@@ -4,11 +4,52 @@ from typing import Dict
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
 
+from anemoi.utils.config import DotDict
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 CONFIG_OBS = os.path.join(BASE_DIR, "configs", "config_obs.yaml")
 CONFIG_DOWNSCALING = os.path.join(BASE_DIR, "configs", "config_downscaling.yaml")
 CONFIG_MULTIPLE = os.path.join(BASE_DIR, "configs", "config_multiple.yaml")
+
+DATA_KEY = "data"
+SAMPLE_KEY = "sample"
+
+
+class TrainingAnemoiConfig(DotDict):
+    EXAMPLE_FILE = None
+
+    @classmethod
+    def get_example(cls):
+        return cls.from_yaml_file(cls.EXAMPLE_FILE)
+
+    @classmethod
+    def from_simple_config(cls, simple):
+        raise ValueError(f"Not implemented yet for {cls.__name__}")
+
+
+class ObsAnemoiConfig(TrainingAnemoiConfig):
+    EXAMPLE_FILE = os.path.join(BASE_DIR, "configs", "config_obs.yaml")
+
+
+class DownscalingAnemoiConfig(TrainingAnemoiConfig):
+    EXAMPLE_FILE = os.path.join(BASE_DIR, "configs", "config_downscaling.yaml")
+
+    @classmethod
+    def from_simple_config(cls, simple):
+        cls._simple_config = simple
+
+        data = convert_data_config(simple["data"]["sources"])
+        sample = convert_sample_config(simple["model"]["sample"])
+
+        full = {DATA_KEY: data, SAMPLE_KEY: sample}
+        return cls(full)
+
+
+class GeneralAnemoiConfig(TrainingAnemoiConfig):
+    @classmethod
+    def get_example(cls):
+        raise ValueError("No example for GeneralAnemoiConfig")
 
 
 def get_example(which: str) -> Dict:
@@ -21,18 +62,36 @@ def get_example(which: str) -> Dict:
     raise ValueError("Only supportings examples: obs, downscaling, multiple.")
 
 
+# use config.data instead
 def get_data_config_dict(data, which: str) -> Dict:
     return get_example(which)["data"]
 
 
+# use config.sample
 def get_sample_config_dict(sample: DictConfig, which: str) -> Dict:
     return get_example(which)["sample"]
 
 
 def convert_source(config, name: str) -> Dict:
-    return {
-        "tensor": [dict(variables=[f"{name}.{v}" for v in config["variables"]]), dict(offset=config["offset"])],
-    }
+    variables = config["variables"]
+    container = dict(data_group=name, variables=variables, dimensions=["variables", "values"])
+    offset = config.get("offset")
+
+    if offset == "0h" or offset is None:  # i.e. no offset
+        return dict(container=container)
+
+    if isinstance(offset, str):
+        return dict(offset=offset, container=container)
+
+    if isinstance(offset, list):  # TODO remove this 'if' and use classes
+        return dict(
+            for_each=[
+                dict(offset=offset),
+                dict(container=container),
+            ],
+        )
+
+    raise ValueError(f"Invalid offset type {type(offset)}")
 
 
 def convert_sample_config(config) -> Dict:

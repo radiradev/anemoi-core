@@ -383,7 +383,7 @@ class CosineLatWeightedAttribute(BaseLatWeightedAttribute):
 
 
 class IsolatitudeAreaWeights(BaseLatWeightedAttribute):
-    """Latitude-weighted area weights for rectilinear grids.
+    """Latitude-weighting area weights for rectilinear grids.
 
     Attributes
     ----------

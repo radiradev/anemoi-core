@@ -1,8 +1,8 @@
 from .autoencoding import AutoencodingModule
 from .downscaling import DownscalingModule
 from .forecasting import ForecastingModule
-from .forecasting import RolloutForecastingModule
 from .interpolation import TimeInterpolationModule
+from .rollout_forecasting import RolloutForecastingModule
 
 __all__ = [
     "AutoencodingModule",

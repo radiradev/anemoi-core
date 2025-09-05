@@ -6,767 +6,655 @@
 # In applying this licence, ECMWF does not waive the privileges and immunities
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
-import datetime
-import inspect
-import json
-import os
-from functools import wraps
+from __future__ import annotations
 
+from collections.abc import Mapping
+from collections.abc import Sequence
+from functools import wraps
+from typing import Union
+
+import boltons
 import numpy as np
 import torch
 import yaml
+from boltons.iterutils import default_enter as _default_enter
+from boltons.iterutils import default_exit as _default_exit
+from boltons.iterutils import get_path as _get_path
+from boltons.iterutils import remap as _remap
+from boltons.iterutils import research as _research  # noqa: F401
 from rich import print
-from rich.console import Console
-from rich.tree import Tree
-from torch import Tensor
 
-from anemoi.training.data.refactor.sample_provider import sample_provider_factory
+from anemoi.training.data.refactor.formatting import to_str
 from anemoi.utils.dates import frequency_to_string
+from anemoi.utils.dates import frequency_to_timedelta
+
+# from typing import TYPE_CHECKING
+# if TYPE_CHECKING:
+NestedTensor = Union[
+    torch.Tensor,
+    Sequence["NestedTensor"],  # list/tuple of NestedTensor
+    Mapping[str | int, "NestedTensor"],  # dict with str/int keys
+]
 
 
-def format_shape(k, v):
-    return f"shape: {v}"
+def make_schema(structure):
+    """Return a fully nested schema from any structure."""
+
+    def element_description(element):
+        return dict(type=type(element).__name__, content=None)
+
+    if is_box(structure):
+        content = {k: element_description(v) for k, v in structure.items()}
+        content["_anemoi_schema"] = True
+        return {"type": "box", "content": content, "_anemoi_schema": True}
+    if isinstance(structure, dict):
+        return {"type": "dict", "content": {k: make_schema(v) for k, v in structure.items()}, "_anemoi_schema": True}
+    if isinstance(structure, (list, tuple)):
+        return {"type": "tuple", "content": [make_schema(v) for v in structure], "_anemoi_schema": True}
+    assert False, f"Unknown structure type: {type(structure)}"
 
 
-def format_shorten(k, v):
-    if len(str(v)) < 50:
-        return f"{k}: {v}"
-    return f"{k}: {str(v)[:50]}..."
+class Box(dict):
+    # Flag a dict as a box
+    pass
 
 
-def format_latlon(k, v):
-    try:
-        txt = f"[{np.min(v):.2f}, {np.max(v):.2f}]"
-    except ValueError:
-        txt = "[no np.min/np.max]"
-    return f"{k}: [{txt}]"
+def _check_key_in_dict(dic, key):
+    if not isinstance(dic, dict):
+        raise ValueError(f"Expected dict, got {type(dic)}")
+    if key not in dic:
+        raise ValueError(f"Key {key} not found in dict. Available keys are: {list(dic.keys())}")
 
 
-def format_timedeltas(k, v):
-    try:
-        minimum = np.min(v)
-        maximum = np.max(v)
-        minimum = int(minimum)
-        maximum = int(maximum)
-        minimum = datetime.timedelta(seconds=minimum)
-        maximum = datetime.timedelta(seconds=maximum)
-        minimum = frequency_to_string(minimum)
-        maximum = frequency_to_string(maximum)
-    except ValueError:
-        minimum = "no np.min"
-        maximum = "no np.max"
-    return f"timedeltas: [{minimum},{maximum}]"
+def is_schema(x):
+    if not isinstance(x, dict):
+        return False
+    return "_anemoi_schema" in x
 
 
-def format_array(k, v):
-    if isinstance(v, np.ndarray):
-        return f"{k} : np.array of shape {v.shape} with mean {np.nanmean(v):.2f}"
-    if isinstance(v, Tensor):
-        device = v.device if hasattr(v, "device") else "cpu"
-        return f"{k} : tensor of shape {v.shape} with mean {torch.nanmean(v):.2f} on {device}"
-    return f"{k} : ❌ {type(v)}"
+def is_final(structure):
+    return not isinstance(structure, (dict, list, tuple))
 
 
-def format_data(k, v):
-    return format_array(k, v)
-
-
-def format_default(k, v):
-    if isinstance(v, (str, int, float, bool)):
-        return f"{k} : {v}"
-    if isinstance(v, (list, tuple)):
-        return format_shorten(k, str(v))
-    if isinstance(v, np.ndarray):
-        return format_array(k, v)
-    return f"{k} : {v.__class__.__name__}"
-
-
-def format_none(k, v):
-    return None
-
-
-FORMATTERS = {}
-FORMATTERS.update(
-    dict(
-        shape=format_shape,
-        statistics=format_shorten,
-        latitudes=format_latlon,
-        longitudes=format_latlon,
-        timedeltas=format_timedeltas,
-        data=format_data,
-        dataspecs=format_none,
-    ),
-)
-FORMATTERS.update({Tensor: format_array, np.ndarray: format_array})
-
-
-def format_key_value(key, v):
-    # TODO: should read from utils.configs
-    if os.environ.get("ANEMOI_CONFIG_VERBOSE_STRUCTURE", "0") == "1":
-        if key in FORMATTERS:
-            return FORMATTERS[key](key, v)
-        if type(v) in FORMATTERS:
-            return FORMATTERS[type(v)](key, v)
-        print(type(v), type(v) is Tensor)
-        return format_default(key, v)
-    return None
-
-
-class StructureMixin:
-    def __repr__(self, **kwargs):
-        console = Console(record=True, width=120)
-        tree = self.tree(**kwargs)
-        with console.capture() as capture:
-            console.print(tree)
-        return capture.get()
-
-    def add_from_native(self, **kwargs):
-        other = _structure_factory(dataspecs=self.dataspecs, **kwargs)
-        self.update(other)
-
-    def format_native(self, **kwargs):
-        return _structure_factory(dataspecs=self.dataspecs, **kwargs)
-
-    def merge(self, other):
-        merged = {}
-        return _structure_factory(dataspecs=self.dataspecs, **merged)
-
-
-Structure = StructureMixin
-
-
-class TupleStructure(StructureMixin, tuple):
-    # beware, inheriting from tuple, do not use __init__ method
-    def tree(self, prefix="", **kwargs):
-        tree = Tree(prefix + "🔗")
-        for v in self:
-            tree.add(v.tree(**kwargs))
-        return tree
-
-    def apply(self, func):
-        return TupleStructure([x.apply(func) for x in self])
-
-    def apply_to_self(self, func, **kwargs):
-        return TupleStructure([x.apply_to_self(func, **kwargs) for x in self])
-
-    def __call__(self, structure, **kwargs):
-        assert isinstance(structure, TupleStructure), f"Expected TupleStructure, got {type(structure)}: {structure}"
-        return TupleStructure(func(elt, **kwargs) for func, elt in zip(self, structure))
-
-    def content(self, args):
-        return [x.content(args) for x in self]
-
-    def to_device(self, *args, **kwargs):
-        for i in self:
-            i.to_device(*args, **kwargs)
-
-    def __getattr__(self, name):
-        if name.startswith("__") and name.endswith("__"):
-            return super().__getattr__(name)
-        return [getattr(x, name) for x in self]
-
-    def _as_native(self):
-        return tuple(x._as_native() for x in self)
-
-    def is_compatible(self, other):
-        if not isinstance(other, TupleStructure):
-            return False
-        if len(self) != len(other):
-            return False
-        for a, b in zip(self, other):
-            if not a.is_compatible(b):
-                return False
+def is_box(structure):
+    if isinstance(structure, Box):
         return True
-
-    def update(self, other_tuple_structure):
-        if not isinstance(other_tuple_structure, TupleStructure):
-            raise ValueError(f"Expected TupleStructure, got {type(other_tuple_structure)}: {other_tuple_structure}")
-        if len(self) != len(other_tuple_structure):
-            raise ValueError(f"Length mismatch: {len(self)} vs {len(other_tuple_structure)}")
-        for a, b in zip(self, other_tuple_structure):
-            a.update(b)
-
-    def remove(self, *keys):
-        for x in self:
-            x.remove(*keys)
+    if not isinstance(structure, dict):
+        return False
+    # Not so reliable, see inside the dict if there is a final element
+    return any(is_final(v) for v in structure.values())
 
 
-class DictStructure(StructureMixin, dict):
-
-    def tree(self, prefix="", **kwargs):
-        tree = Tree(prefix + "📖")
-        for k, v in self.items():
-            tree.add(v.tree(prefix=f"{k} : ", **kwargs))
-        return tree
-
-    def apply(self, func):
-        return DictStructure({k: v.apply(func) for k, v in self.items()})
-
-    def apply_to_self(self, func, **kwargs):
-        return DictStructure({k: v.apply_to_self(func, **kwargs) for k, v in self.items()})
-
-    def content(self, args):
-        return {k: v.content(args) for k, v in self.items()}
-
-    def to_device(self, *args, **kwargs):
-        for k, v in self.items():
-            v.to_device(*args, **kwargs)
-
-    def __getattr__(self, name: str):
-        if name.startswith("__") and name.endswith("__"):
-            return super().__getattr__(name)
-        return {k: getattr(v, name) for k, v in self.items()}
-
-    def __call__(self, structure, **kwargs):
-        assert isinstance(structure, DictStructure), f"Expected DictStructure, got {type(structure)}: {structure}"
-        assert set(self.keys()) == set(structure.keys()), f"Keys do not match: {self.keys()} vs {structure.keys()}"
-        return DictStructure({k: self[k](structure[k], **kwargs) for k in self.keys()})
-
-    def _as_native(self):
-        return {k: v._as_native() for k, v in self.items()}
-
-    def is_compatible(self, other):
-        if not isinstance(other, DictStructure):
-            return False
-        if set(self.keys()) != set(other.keys()):
-            return False
-        for k in self.keys():
-            if not self[k].is_compatible(other[k]):
-                return False
-        return True
-
-    def update(self, other_dict_structure):
-        if not isinstance(other_dict_structure, DictStructure):
-            raise ValueError(f"Expected DictStructure, got {type(other_dict_structure)}: {other_dict_structure}")
-        if not set(other_dict_structure.keys()) == set(self.keys()):
-            raise ValueError(f"Keys do not match: {self.keys()} vs {other_dict_structure.keys()}")
-        for k, v in self.items():
-            v.update(other_dict_structure[k])
-
-    def remove(self, *keys):
-        for k, v in self.items():
-            v.remove(*keys)
-
-
-class LeafStructure(StructureMixin):
-    """A final leave in the structure, contains always dataspecs
-    and hopefully some useful content.
+def merge_boxes(*structs, overwrite=True):
+    """Merge multiple structures
+    >>> a = {"foo": [{"x": 1, "y": 2}, {"a": 3}]}
+    >>> b = {"foo": [{"z": 10}, {"b": 4}]}
+    >>> merge_boxes(a, b)
+    {'foo': [{'x': 1, 'y': 2, 'z': 10}, {'a': 3, 'b': 4}]}
+    >>> c = {"foo": [{"z": 10}, {"a": 999}]}
+    >>> merge_boxes(a, c)
+    {'foo': [{'x': 1, 'y': 2, 'z': 10}, {'a': 3, 'b': 4}]}
     """
 
-    def __init__(self, **content):
-        self._content = content
-        self._names = list(self._content.keys())
+    def exit(path, key, old_parent, new_parent, new_items):
+        if not is_box(old_parent):
+            return _default_exit(path, key, old_parent, new_parent, new_items)
+        # If we reach here, it means old_parent is a box
+        # We need to merge new_items into the corresponding box in old_parent
+        res = Box()
+        for struct in structs:
+            box = _get_path(struct, path + (key,), default={})
+            if not overwrite and set(box.keys()) & set(res.keys()):
+                raise ValueError(f"Conflicting keys found in structures: {set(box.keys()) & set(res.keys())}")
+            res.update(box)
+        return res
 
-    def content(self, args):
-        if isinstance(args, str):
+    return _remap(structs[0], exit=exit)
 
-            return self._content[args]
-        return self.__class__({k: self._content[k] for k in args})
 
-    def to_device(self, *args, **kwargs):
-        """Move the content of the structure to the specified device."""
-        for k, v in self._content.items():
-            if hasattr(v, "to_device"):
-                v = v.to_device(*args, **kwargs)
-            self._content[k] = v
-        return self
+def _stop_if_box_enter(path, key, value):
+    if is_box(value):
+        return value, []
+    return _default_enter(path, key, value)
 
-    def __getattr__(self, name: str):
-        if name.startswith("__") and name.endswith("__"):
-            return super().__getattr__(name)
-        return self._content[name]
 
-    def is_compatible(self, other_leaf_structure):
-        if not isinstance(other_leaf_structure, self.__class__):
-            return False
-        if self._content["dataspecs"] != other_leaf_structure._content["dataspecs"]:
-            return False
+def _for_each_expanded_box(fconfig_tree, func, *args, **kwargs):
+    # apply the func to each box in the fconfig_tree tree
+    is_callable = dict(callable=None)
 
-    def update(self, other_leaf_structure):
-        if not isinstance(other_leaf_structure, self.__class__):
-            raise ValueError(
-                f"Expected {self.__class__.__name__}, got {type(other_leaf_structure)}: {other_leaf_structure}",
-            )
-        if self._content["dataspecs"] != other_leaf_structure._content["dataspecs"]:
-            raise ValueError(
-                f"Dataspecs do not match: {self._content['dataspecs']} vs {other_leaf_structure._content['dataspecs']}",
-            )
+    def transform(path, key, fconfig_box):
+        if not is_box(fconfig_box):
+            # apply only on boxes
+            return key, fconfig_box
+        if any(callable(v) for k, v in fconfig_box.items()):
+            return key, fconfig_box
 
-        for k, v in other_leaf_structure._content.items():
-            if k == "dataspecs":
-                continue
-            if k in self._content:
-                raise ValueError(
-                    f"Key {k} already exists, overwriting is not allowed yet. {self._names} vs {other_leaf_structure._names}",
-                )
-            self._content[k] = v
+        # print(f"DEBUG: {path} {key}, applying function {func.__name__} to {value} {args=} {kwargs=}")
+        value = func(**fconfig_box, **kwargs)
+        # print(f"  -> {value=}")
+        if isinstance(value, dict):
+            value = Box(value)
 
-    def remove(self, *keys):
-        for key in keys:
-            if key not in self._content:
-                raise KeyError(f"Key {key} not found in {self._content['dataspecs']}. Available: {self._names}")
-            del self._content[key]
-            self._names = [k for k in self._names if k != key]
+        if is_callable["callable"] is None:
+            is_callable["callable"] = callable(value)
+        is_callable["callable"] = is_callable["callable"] and callable(value)
+        return key, value
 
-    def tree(self, prefix="", verbose=False, **kwargs):
+    def ensure_output_is_box_exit(path, key, old_parent, new_parent, new_items):
 
-        if len(self._names) == 2:
-            key = (set(self._names) - {"dataspecs"}).pop()
-            v = self._content[key]
-            txt = format_key_value(key, v)
-            if txt is None:
-                txt = f"{key}: {type(v)}"
-            return Tree(f"{prefix} 📦 {txt}")
+        res = _default_exit(path, key, old_parent, new_parent, new_items)
+        if is_box(old_parent):
+            res = Box(res)
+        return res
 
-        content_txt = " ".join(f"{k}" for k in self._content if k != "dataspecs")
-        tree = Tree(f"{prefix} 📦 {content_txt}")
-        for k, v in self._content.items():
-            txt = format_key_value(k, v)
-            if txt is not None:
-                tree.add(txt)
-        return tree
+    structure = _remap(fconfig_tree, visit=transform, enter=_stop_if_box_enter, exit=ensure_output_is_box_exit)
+    if is_callable["callable"]:
+        return nested_to_callable(structure)
+    return structure
 
-    def apply(self, func):
-        if isinstance(func, str):
-            if func not in self._content:
-                raise ValueError(f"Function {func} not found in {self._content['dataspecs']}. Available: {self._names}")
-            func = self._content[func]
-        if not callable(func):
-            raise ValueError(f"Expected a callable function, got {type(func)}: {func}")
-        name = func.__name__
-        print(func, name)
-        new = func(**{k: self._content[k] for k in self._names})
-        return self.__class__(**{"dataspecs": self._content["dataspecs"], name: new})
 
-    def apply_to_self(self, func, output, merge=False, **kwargs):
-        """Apply a function to the content of the structure."""
-        if not callable(func):
-            raise ValueError(f"Expected a callable function, got {type(func)}: {func}")
+def apply(func, structure, *args, **kwargs):
+    _made_callable = False
+    if not callable(func):
+        func = nested_to_callable(func)
+        _made_callable = True
+    try:
+        return func(structure, *args, **kwargs)
+    except Exception as e:
+        e.add_note(f"While applying function to structure: {to_str(func, 'Function Tree')}. {_made_callable=}")
+        raise ValueError(f"Error applying function to structure: {e}")
 
-        # Use introspection to call func with only the arguments it accepts
-        sig = inspect.signature(func)
-        params = sig.parameters
-        # Exclude 'self' if present
-        arg_names = [
-            name for name, param in params.items() if param.kind in (param.POSITIONAL_OR_KEYWORD, param.KEYWORD_ONLY)
-        ]
-        selected_content = {}
-        for a in arg_names:
-            if a not in self._content:
-                raise ValueError(
-                    f"Function requests argument {a}, but it's not found in {self._content['dataspecs']}. Available: {self._names}",
-                )
-            selected_content[a] = self._content[a]
-        result = func(**selected_content)
 
-        if output is dict or output is None:
-            new = result
-        elif isinstance(output, str):
-            new = {output: result}
-        elif isinstance(output, (list, tuple)):
-            if len(output) != len(result):
-                raise ValueError(
-                    f"Output length {len(output)} does not match result length {len(result)} for {self._content['dataspecs']}.",
-                )
-            new = {name: result for name, result in zip(output, result)}
+# decorator
+def box_to_function(func, **options):
+    if options or not callable(func):
+        raise Exception("box_to_function decorator takes at most one non-keyword argument, the function to wrap.")
+
+    @wraps(func)
+    def wrapper(fconfig_n, *fargs, **fkwargs):
+        res_n = _for_each_expanded_box(fconfig_n, func, *fargs, **fkwargs)
+        return nested_to_callable(res_n)
+
+    return wrapper
+
+
+# decorator
+def apply_to_box(func, **options):
+    if options or not callable(func):
+        raise Exception("apply_to_box decorator takes at most one non-keyword argument : the function to wrap.")
+
+    @wraps(func)
+    def wrapper(fconfig_n, *fargs, **fkwargs):
+        return _for_each_expanded_box(fconfig_n, func, *fargs, **fkwargs)
+
+    return wrapper
+
+
+# decorator
+def make_output_callable(func):
+    """Func is a function which takes a nested structure and returns a nested structure where the leaves are functions
+    This decorator adds one step where the output of this function is made callable
+    """
+    if not callable(func):
+        raise Exception("make_output_callable decorator takes a callable argument, the function to wrap.")
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        res_tree = func(*args, **kwargs)
+        return nested_to_callable(res_tree)
+
+    return wrapper
+
+
+def nested_to_callable(f_tree):
+    """The input is a nested structure where the leaves are functions
+    The output is a callable as follow:
+
+    The input of this callable must be a similar structure
+    The output of this callable is a similar stucture where each function is applied to each box.
+    """
+    if callable(f_tree):
+        print("DEBUG: already callable")
+        return f_tree
+
+    def function_on_tree(x_tree, *args, **kwargs):
+
+        def apply(path, key, func):
+            if not callable(func):
+                # apply only on functions
+                return key, func
+
+            x = _get_path(x_tree, path + (key,), default=None)
+            if not x:
+                raise ValueError(f"Box not found in {x_tree} at {path}, {key=}")
+            new_box = func(*args, **kwargs, **x)
+            if not isinstance(new_box, dict):
+                raise ValueError(f"Expected dict, but function returned {type(new_box)} in {path}, {key=}")
+            return key, new_box
+
+        return _remap(f_tree, visit=apply)
+
+    function_on_tree._anemoi_function_str = to_str(f_tree, "(function)", _boxed=False)
+
+    return function_on_tree
+
+
+def remove_content(nested, key):
+    def pop(path, k, box):
+        if not is_box(box):
+            return k, box
+        _check_key_in_dict(box, key)
+        v = box.pop(key)
+        return k, Box({key: v})
+
+    return _remap(nested, visit=pop, enter=_stop_if_box_enter)
+
+
+def select_content(nested, *keys):
+
+    def select(path, key, box):
+        if not is_box(box):
+            return key, box
+        for k in keys:
+            _check_key_in_dict(box, k)
+        return key, Box({k: box[k] for k in keys if k in box})
+
+    return _remap(nested, visit=select, enter=_stop_if_box_enter)
+
+
+def rearrange(mappings, sources, _add_origin=True):
+    """Rearrange the boxes from sources according to the mapping.
+
+    sources is a nested structure where the leaf are boxes
+
+    mapping is a dict {target_path: source_path}
+    where target_path and source_path are path to boxes
+    source_path must be consitent with the sources provided
+
+    """
+
+    def _path_to_tuple(p):
+        if isinstance(p, (list, tuple)):
+            return p
+        return tuple(int(x) if x.isdigit() else x for x in p.split("."))
+
+    def resolve(path):
+        _path = _path_to_tuple(path)
+        try:
+            box = _get_path(sources, _path)
+        except boltons.iterutils.PathAccessError as e:
+            if len(_path) > 1:
+                container = _get_path(sources, _path[:-1], None)
+                if isinstance(container, dict):
+                    e.add_note(f"Available keys in container: {list(container.keys())}")
+                if isinstance(container, list):
+                    e.add_note(f"Container is a list of length {len(container)}")
+            raise
+
+        if _add_origin:
+            box["_origin"] = path
+        return box
+
+    def insert_path_in_list(cur, path, value):
+        p, *rest = path
+        assert isinstance(p, int)
+
+        while len(cur) <= p:
+            cur.append(None)
+
+        if not rest:  # last step
+            cur[p] = value
+            return
+
+        if not isinstance(cur[p], (dict, list)):
+            cur[p] = {} if isinstance(rest[0], str) else []
+
+        insert_path(cur[p], rest, value)
+
+    def insert_path_in_dict(cur, path, value):
+        p, *rest = path
+        assert isinstance(p, str)
+
+        if not rest:  # last step
+            cur[p] = value
+            return
+
+        if p not in cur:
+            cur[p] = {} if isinstance(rest[0], str) else []
+
+        insert_path(cur[p], rest, value)
+
+    def insert_path(cur, path, value):
+        p = path[0]
+        if isinstance(p, int):
+            if not isinstance(cur, list):
+                raise TypeError(f"Expected list at {path}, got {type(cur).__name__}")
+            insert_path_in_list(cur, path, value)
         else:
-            raise ValueError(f"Unknown output type {type(output)}: {output}")
+            if not isinstance(cur, dict):
+                raise TypeError(f"Expected dict at {path}, got {type(cur).__name__}")
+            insert_path_in_dict(cur, path, value)
 
-        if merge:
-            return _structure_factory(**self._content, **new)
-        return _structure_factory(dataspecs=self._content["dataspecs"], **new)
-
-    def __call__(self, structure, function=None, input=None, result=None, **kwargs):
-        assert isinstance(structure, LeafStructure), f"Expected LeafStructure, got {type(structure)}: {structure}"
-
-        input_name = input or "data"
-        result_name = result or input_name
-
-        if function is None:
-            if len(self._names) > 2:
-                raise ValueError(f"Too many candidates for function: {self._names}")
-            for k in self._names:
-                if k == "dataspecs":
-                    continue
-                function = k
-
-        func = self._content[function]
-
-        if not callable(func):
-            raise ValueError(f"Expected a callable function in {self._content['dataspecs']}, got {type(func)}: {func}")
-
-        x = structure.content(input_name)
-        y = func(x)
-
-        return structure.__class__(**{"dataspecs": structure.dataspecs, result_name: y})
-
-    def _as_native(self, key=None):
-        if key is not None:
-            return self._content.get(key, None)
-        return self._content
+    root = {}
+    for k, v in mappings.items():
+        v = resolve(v)
+        insert_path(root, _path_to_tuple(k), v)
+    return root
 
 
-def on_structure(*args, output=None, **kwargs):
-    def _decorator(func):
-        @wraps(func)
-        def wrapper(structure):
-            return structure.apply_to_self(func, output=output, **kwargs)
+def test_custom(path):
+    path = yaml.safe_load(path)
+    with open(path) as f:
+        yaml_str = f.read()
+    CONFIG = yaml.safe_load(yaml_str)
+    sample_config = CONFIG["sample"]
+    sources_config = CONFIG["data"]
 
-        return wrapper
-
-    if len(args) == 1 and callable(args[0]) and output is None:
-        func = args[0]
-        return _decorator(func)
-
-    return _decorator
+    do_something_with_this
 
 
-def structure_factory(content=None, dataspecs=None, native=None):
-    if content is not None:
-        if dataspecs is not None or native is not None:
-            raise ValueError("Cannot provide both content and dataspecs/native.")
-        return _structure_factory(**content)
-    return _structure_factory(dataspecs=dataspecs, native=native)
+def test_one(training_context):
+    from anemoi.training.data.refactor.sample_provider import sample_provider_factory
+
+    cfg_1 = """dictionary:
+                input:
+                    dictionary:
+                        fields:
+                            container:
+                              data_group: "era5"
+                              variables: ["2t", "10u", "10v"]
+                              dimensions: ["values", "variables", "ensembles"]
+                        other_fields:
+                          for_each:
+                            - offset: ["-6h", "0h"]
+                            - container:
+                                data_group: "era5"
+                                variables: ["2t", "10u", "10v"]
+                                dimensions: ["variables", "values"]
+            """
+
+    print("✅✅✅✅✅✅✅✅✅✅✅✅✅✅")
+    config = yaml.safe_load(cfg_1)
+
+    sp = sample_provider_factory(**training_context, **config)
+    print(sp)
+    schema = sp.dataschema
+
+    # print(schema)
+    # print(repr_schema(schema, "schema"))
+
+    print(to_str(sp.static_info, name="✅ sp.static_info"))
+    print(sp.static_info)
+
+    data = sp[1]
+    print(data)
+    print(to_str(data, name="✅ Data"))
+
+    @apply_to_box
+    def to_tensor(**kwargs):
+        import torch
+
+        def f(arr):
+            return torch.Tensor(arr)
+
+        res = {k: f(v) if k == "data" else v for k, v in kwargs.items()}
+        res = Box(res)
+        return res
+
+    data = to_tensor(data)
+
+    @apply_to_box
+    def to_gpu(**kwargs):
+        def f(arr):
+            return arr.to("cuda")
+
+        res = {k: f(v) if k == "data" else v for k, v in kwargs.items()}
+        # res = Box(res)
+        return res
+
+    new_data = to_gpu(data)
+    print(to_str(new_data, name="✅ Data on GPU"))
+    # print(new_data['input']['fields'])
+    print(type(new_data["input"]["fields"]))
+    # exit()
+
+    guessed = make_schema(data)
+    to_str(schema, "Actual Schema")
+    to_str(guessed, "Actual Schema")
+    # print(to_str(guessed, "Guessed Schema"))
+    # print(to_str(schema, "Actual Schema"))
+    # print(to_str(guessed, "Guessed Schema"))
+    # print(schema)
+    # assert_compatible_schema(schema, guessed)
+
+    batch = to_gpu(data)
+
+    data = merge_boxes(data, sp.static_info)
+    print(to_str(data, name="✅ Data merged with sp.static_info"))
+
+    extra = remove_content(data, "extra")
+    print(to_str(data, name="Data after removing extra"))
+    print(to_str(extra, name="Extra content removed from data"))
+
+    lat_lon = select_content(data, "latitudes", "longitudes")
+    print(to_str(lat_lon, name="Selected latitudes and longitudes"))
+
+    @box_to_function
+    def build_normaliser(statistics, **kwargs):
+        mean = np.mean(statistics["mean"])
+
+        def func(data, **kwargs):
+            new = data - mean
+            return dict(normalized_data=new, **kwargs)
+
+        # norm = Normaliser(mean,...)
+        # def f(x):
+        #    return norm.transform(x["data"])
+
+        return func
+
+    print(to_str(sp.static_info, name="sp.static_info"))
+    normaliser = build_normaliser(sp.static_info)
+    # normaliser = nested_to_callable(normaliser)
+    # n_data = apply(normaliser,data)
+    n_data = normaliser(data)
+    print(to_str(normaliser, name="Normaliser function"))
+    print(to_str(data, name="data before normalisation"))
+    print(to_str(n_data, name="normaliser(data)"))
 
 
-def _structure_factory(**content):
-    check_structure(**content)
-    dataspecs = content["dataspecs"]
+def print_columns(*args):
+    from rich.console import Console
+    from rich.table import Table
 
-    if isinstance(dataspecs, str) and dataspecs.endswith(".tensor"):
-        return LeafStructure(**content)
-
-    if isinstance(dataspecs, (list, tuple)):
-        lst = []
-        for i in range(len(dataspecs)):
-            lst.append(_structure_factory(**{key: content[key][i] for key in content}))
-        return TupleStructure(lst)
-
-    assert isinstance(dataspecs, dict), "Expected dicts"
-    dic = {}
-    for k in dataspecs.keys():
-        dic[k] = _structure_factory(**{key: content[key][k] for key in content})
-    return DictStructure(dic)
+    console = Console()
+    table = Table(show_header=False, box=None)
+    for a in args:
+        table.add_column()
+    table.add_row(*args)
+    console.print(table)
 
 
-def check_structure(**content):
-    assert "dataspecs" in content, f"Missing 'dataspecs' in content. Found only {list(content.keys())}"
+def test_two(training_context):
 
-    dataspecs = content["dataspecs"]
-    for v in content.values():
-        if isinstance(dataspecs, str) and dataspecs.endswith(".tensor"):
-            continue
+    from anemoi.training.data.refactor.sample_provider import sample_provider_factory
 
-        if isinstance(dataspecs, dict):
-            assert isinstance(
-                v,
-                dict,
-            ), f"Expected all values to be dict, got {type(v)} != {type(dataspecs)} whith {v} and {dataspecs}"
-            assert set(v.keys()) == set(
-                dataspecs.keys(),
-            ), f"Expected the same keys, got {list(v.keys())} vs. {list(dataspecs.keys())}"
+    cfg_2 = """dictionary:
+                  prognostics:
+                    for_each:
+                      - offset: ["-6h", "0h", "+6h", "+12h", "+18h"]
+                      - container:
+                          dimensions: ["values", "variables"]
+                          variables: ["2t", "10u", "10v"]
+                          data_group: "era5"
+                  #forcings:
+                  #  for_each:
+                  #    - offset: ["-6h", "0h", "+6h", "+12h", "+18h"]
+                  #    - tensor:
+                  #        - ensembles: False
+                  #        - values: True
+                  #        - variables: ["era5.2t", "era5.10u", "era5.10v"]
+                  #diagnostics:
+                  #  for_each:
+                  #    - offset: ["-6h", "0h", "+6h", "+12h", "+18h"]
+                  #    - tensor:
+                  #        - ensembles: False
+                  #        - values: True
+                  #        - variables: ["era5.2t", "era5.10u", "era5.10v"]
+                  #prognostics_tuple:
+                  #  tuple:
+                  #    for_each:
+                  #      - offset: ["-6h", "0h", "+6h", "+12h", "+18h"]
+                  #    template:
+                  #      tensor:
+                  #        - ensembles: False
+                  #        - values: True
+                  #        - variables: ["era5.2t", "era5.10u", "era5.10v"]
 
-        if isinstance(dataspecs, (list, tuple)):
-            assert isinstance(
-                v,
-                (list, tuple),
-            ), f"Expected all values to be lists or tuples, got {type(v)} != {type(dataspecs)} whith {v} and {dataspecs}"
-            assert len(v) == len(dataspecs), f"Expected the same length as first, got ✅{v}✅ vs ❌{dataspecs}❌"
+                  #observations:
+                  #  tuple:
+                  #    for_each:
+                  #      - offset: ["-6h", "0h", "+6h"]
+                  #    template:
+                  #      tensor:
+                  #        - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+            """
+    config = yaml.safe_load(cfg_2)
+    sp = sample_provider_factory(**training_context, **config)
+    print(to_str(sp.static_info, "Static Info"))
+    data = sp[1]
+    print(to_str(data, "Full Data"))
+    data = merge_boxes(data, sp.static_info)
+
+    def i_to_delta(i, frequency):
+        frequency = frequency_to_timedelta(frequency)
+        delta = frequency * i
+        sign = "+" if i > 0 else ""
+        if delta:
+            return sign + frequency_to_string(delta)
+        return "0h"
+
+    data = select_content(data, "data", "_offset")
+    # data = select_content(data, "_offset")
+    # def change_source(dic, key, source):
+    #    path = dic[key].split('.')
+    #    path[0] = source
+    #    dic[key] = '.'.join(path)
+    # if i == 0:
+    #    change_source(rollout_config[0]["input"], "prognostics.0", source='from_dataset')
+
+    print("[red] ✅ Rollout for prognostic data[/red]")
+    # TODO: same logic for Forcings data, and for Diagnostic data
+    rollout_config = []
+    n_rollout = 3
+    n_step_input = 2  # TODO: use this below to create the config
+    frequency = "6h"
+    for i in range(n_rollout):
+        rollout_config.append(
+            {
+                "input.prognostics.0": "previous_input.prognostics.1",
+                "input.prognostics.1": "output.prognostics",
+                "target.prognostics": f"from_dataset.prognostics.{i_to_delta(i + 1, frequency)}",
+            },
+        )
+    rollout_config[0]["input.prognostics.0"] = f"from_dataset.prognostics.{i_to_delta(-1, frequency)}"
+    rollout_config[0]["input.prognostics.1"] = f"from_dataset.prognostics.{i_to_delta(0, frequency)}"
+
+    rollout_config[1]["input.prognostics.0"] = f"from_dataset.prognostics.{i_to_delta(0, frequency)}"
+
+    print(yaml.dump(dict(rollout=rollout_config), sort_keys=False))
+    from_dataset = data
+    previous_input = {}
+    output = {}
+    for i in [0, 1, 2]:
+        print(".............")
+        cfg = rollout_config[i]
+        print(cfg)
+        sources = dict(from_dataset=from_dataset, previous_input=previous_input, output=output)
+        print(f"Building data for rollout = {i}")
+        print_columns(
+            to_str(sources["from_dataset"], "from_dataset"),
+            to_str(sources["previous_input"], "previous_input"),
+            to_str(sources["output"], "output"),
+        )
+        input_target = rearrange(cfg, sources)
+        print()
+        input = input_target["input"]
+        target = input_target["target"]
+        print_columns(to_str(input, f"input({i})"), to_str(target, f"target({i})"))
+
+        output = input_target["target"]
+        previous_input = input_target["input"]
+
+
+def test_three(training_context):
+    from anemoi.training.data.refactor.sample_provider import sample_provider_factory
+
+    cfg_3 = """dictionary:
+                  ams:
+                    for_each:
+                      - offset: ["-6h", "0h", "+6h"]
+                      - container:
+                          variables: ["scatss_1", "scatss_2"]
+                          data_group: "metop_a"
+            """
+    config = yaml.safe_load(cfg_3)
+    sp = sample_provider_factory(**training_context, **config)
+    print(sp)
 
 
 def test():
-    yaml_str = """
-sources:
-  training:
-    era5:
-      dataset:
-        dataset: aifs-ea-an-oper-0001-mars-o96-1979-2023-6h-v8
-        set_group: era5
-    snow:
-      dataset: observations-testing-2018-2018-6h-v0
-    metop_a:
-      dataset: observations-testing-2018-2018-6h-v0
-      normaliser:
-            "scatss_1": "mean-std"
-            "scatss_2": "min-max"
-            "scatss_3": {"name": "custom-normaliser", "theta": 0.5, "rho": 0.1}
-      imputer:
-            "scatss_1": special
-            "scatss_2": other
-            "scatss_3": {"name": "custom-imputer", "theta": 0.5, "rho": 0.1}
-      extra:
-        user_key_1: a
-        user_key_2:
-            1: foo
-            2: bar
-
-
-
-training_selection:
-  # start=...
-  end: "2018-11-01"
-
-validation_selection:
-  start: "2018-11-02"
-  # end=...
-
-
-sample:
-   use_case: "downscaling"
-   high_res: ......
-
-sample:
-      dictionary:
-        ex_simple_tensor:
-          tensor:
-            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-
-        # not supported
-        ex_simple_tensor_shortcut:
-          variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-
-        ex_simple_dict:
-          dictionary:
-            key1:
-                tensor:
-                  - variables: ["snow.stalt", "snow.sdepth_0"]
-            key2:
-                tensor:
-                  - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-
-        ex_simple_offset:
-          tensor:
-            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-              offset: "-12h"
-
-        ex_simple_offset_also:
-          offset: "-12h"
-          tensor:
-            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-
-        ex_adding_offsets:
-          offset: "-12h"
-          tensor:
-            - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-              offset: "-6h"
-
-        ex_dict:
-          dictionary:
-            key1:
-                offset: "-6h"
-                tensor:
-                    - variables: ["snow.stalt", "snow.sdepth_0"]
-            key2:
-                offset: "0h"
-                tensor:
-                   - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-
-        ex_tensor_2:
-          tensor:
-            - offset: ["-6h", "0h", "+6h"]
-            - variables: ["era5.2t", "era5.10u"]
-
-        # choose the order of dimensions in the tensor
-        ex_tensor_3:
-          tensor:
-            - variables: ["era5.2t", "era5.10u"]
-            - offset: ["-6h", "0h", "+6h"]
-
-        # this would fail, as obs are not regular:
-        # ex_tensor_failing:
-        #   tensor:
-        #     - variables: ["metop_a.scatss_1", "metop_a.scatss_2", "snow.sdepth_0"]
-
-        # do this instead when the tensors are not regular and get a tuple of tensors:
-        ex_tuple:
-          tuple:
-            loop:
-              - offset: ["-6h", "0h", "+6h"]
-            template:
-              tensor:
-                - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-
-        #test_offset4:
-        #  offset: "-6h"
-        #  structure:
-        #    offset: "-6h"
-        #    structure:
-        #      variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-        #
-"""
 
     import sys
 
-    if len(sys.argv) > 1:
+    if len(sys.argv) > 1 and not sys.argv[1].isdigit():
+        return test_custom(sys.argv[1])
 
-        path = yaml.safe_load(sys.argv[1])
-        with open(path) as f:
-            yaml_str = f.read()
-        CONFIG = yaml.safe_load(yaml_str)
-        sample_config = CONFIG["sample"]
-        sources_config = CONFIG["data"]
-
-    else:
-        CONFIG = yaml.safe_load(yaml_str)
-        sample_config = CONFIG["sample"]
-        sources_config = CONFIG["sources"]["training"]
+    source_yaml = """sources:
+                         training:
+                           era5:
+                             dataset:
+                               dataset: aifs-ea-an-oper-0001-mars-o96-1979-2023-6h-v8
+                               set_group: era5
+                           snow:
+                             dataset: observations-testing-2018-2018-6h-v0
+                           metop_a:
+                             dataset: observations-testing-2018-2018-6h-v0
+                             normaliser:
+                                   "scatss_1": "mean-std"
+                                   "scatss_2": "min-max"
+                                   "scatss_3": {"name": "custom-normaliser", "theta": 0.5, "rho": 0.1}
+                             imputer:
+                                   "scatss_1": special
+                                   "scatss_2": other
+                                   "scatss_3": {"name": "custom-imputer", "theta": 0.5, "rho": 0.1}
+                             extra:
+                               user_key_1: a
+                               user_key_2:
+                                   1: foo
+                                   2: bar
+    """
+    sources_config = yaml.safe_load(source_yaml)["sources"]["training"]
     print(sources_config)
 
-    def show_yaml(structure):
-        return yaml.dump(structure, indent=2, sort_keys=False)
+    training_context = dict(sources=sources_config, start=None, end=None, frequency="6h")
 
-    def show_json(structure):
-        return json.dumps(shorten_numpy(structure), indent=2)
+    ONE = "1" in sys.argv
+    TWO = "2" in sys.argv
+    THREE = "3" in sys.argv
+    if ONE:
+        print("✅-✅")
+        test_one(training_context)
 
-    def shorten_numpy(structure):
-        from anemoi.training.data.refactor.data_handler import DataHandler
+    if TWO:
+        print("✅--✅")
+        test_two(training_context)
 
-        if isinstance(structure, np.ndarray):
-            if np.issubdtype(structure.dtype, np.floating):
-                return f"np.array{structure.shape} with mean {np.nanmean(structure):.2f}"
-            return f"np.array{structure.shape} with mean {np.nanmean(structure)}"
-        if isinstance(structure, (list, tuple)):
-            if structure and all(isinstance(item, int) for item in structure):
-                return "[" + ", ".join(map(str, structure)) + "]"
-            return [shorten_numpy(item) for item in structure]
-        if isinstance(structure, dict):
-            return {k: shorten_numpy(v) for k, v in structure.items()}
-        if isinstance(structure, DataHandler):
-            return str(structure)
-        return structure
-
-    training_context = dict(
-        sources=sources_config,
-        start=None,
-        end=None,
-        frequency="6h",
-    )
-    if True:
-        # if False:
-
-        print("✅✅  --------")
-        for key, config in sample_config["dictionary"].items():
-            print(f"[yellow]- {key} : getting data [/yellow]")
-            print(yaml.dump(config, indent=2, sort_keys=False))
-            s = sample_provider_factory(**training_context, **config)
-            print(s)
-            print("length : ", len(s))
-            name_to_index = s.name_to_index
-            print(f"name_to_index = {name_to_index}")
-            statistitics = s.statistics
-            print(f"statistics = {statistitics}")
-            print("sp[1] = ", show_json(s[1]))
-
-    print("............................")
-
-    i = 1
-
-    config = """dictionary:
-        fields:
-          tensor:
-            - variables: ["era5.2t", "era5.10u", "era5.10v"]
-            - offset: ["-6h"]
-        other_fields:
-          tensor:
-            - offset: ["-6h", "+6h"]
-            - variables: ["era5.2t", "era5.10u"]
-        observations:
-          tuple:
-            loop:
-              - offset: ["-6h", "0h", "+6h"]
-            template:
-              tensor:
-                - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
-    """
-    config = yaml.safe_load(config)
-    sp = sample_provider_factory(**training_context, **config)
-
-    content = {
-        "name_to_index": sp.name_to_index,
-        "statistics": sp.statistics,
-        "extra": sp.extra,
-        "dataspecs": sp.dataspecs,
-        "normaliser": sp.normaliser,
-        # "shape": sp.shape,
-        # "data_spec": sp.data_spec,
-        **sp[1],
-    }
-    print("info_from_sample_provider", content)
-
-    data = sp[i]
-    print("Native types data : ")
-    for k, v in data.items():
-        print(f"data['{k}'] = {show_json(v)}")
-
-    obj = _structure_factory(**content)
-    print("Data as object :")
-    print(obj)
-    print(f"{obj['fields'].name_to_index=}")
-    print(f"{obj['fields'].normaliser=}")
-    print(f"{obj['fields'].extra=}")
-    print(f"{obj['fields'].statistics=}")
-    print(f"{obj['fields'].dataspecs=}")
-    print(f"{obj['observations'][0].statistics=}")
-    print(f"{obj['observations'][0].data=}")
-    print(f"{obj['observations'][0].dataspecs=}")
-
-    def my_function(name_to_index, statistics, normaliser, **kwargs):
-        return f"Normalisers build from: {name_to_index=}, {statistics=}, {normaliser=}"
-
-    result = obj.apply(my_function)
-    print(result)
-    print()
-    print(f"{result['observations'][0].my_function=}")
-    print(f"{result['fields'].my_function=}")
-    print()
-    print(f"{result['fields']=}")
-    print(f"{result['fields']._as_native()}")
-    print(f"{result['fields']._as_native('my_function')=}")
-
-    print(f"{str(sp.get_native(2))[:1000]=}")
-    print(f"{sp.get_obj(2)=}")
-    # print(sp.get_obj(2).__repr__(verbose=True))
-
-    print("[blue]Result of applying the function to the structure:[/blue]")
-
-    @on_structure(output="new_content")
-    def times100(data, name_to_index, **kwargs):
-        # name_to_index is not used here, but could be useful in a real function
-        return data * 100
-
-    print(times100(obj))
-
-    # @on_structure(output=["new1", "new2"])
-    # def times100_(data, name_to_index, **kwargs):
-    #     # name_to_index is not used here, but could be useful in a real function
-    #     return data * 100, data * 10
-    # print(times100_(obj))
-    # obj.update(function_structure)
-    # print("Updated object with function structure:")
-    # print(obj)
-    # obj.apply("doubler")
-
-    print("------------------------")
-    obj.remove("extra", "normaliser", "latitudes", "longitudes", "timedeltas")
-
-    native = times100(obj).new_content
-    try:
-        print(native.new_content)
-        assert False, "Expected new_content not an object with attributes."
-    except AttributeError:
-        pass
-
-    print(f"{obj.format_native(new=native)=}")
-
-    print("------------------------")
-
-    @on_structure
-    def times_100(data, name_to_index, **kwargs):
-        # name_to_index is not used here, but could be useful in a real function
-        return dict(new_content=data - 100)
-
-    print(times_100(obj))
+    if THREE:
+        print("✅---✅")
+        test_three(training_context)
 
 
 if __name__ == "__main__":
+
     test()

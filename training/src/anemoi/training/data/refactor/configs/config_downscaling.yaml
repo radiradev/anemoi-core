@@ -5,17 +5,17 @@ sample:
         era5:
           tensor:
             - variables:
-              - cos_latitude
-              - sin_latitude
-              - cos_longitude
-              - sin_longitude
-              - 10u
-              - 2t
-              - 2d
-              - q_100
-              - q_1000
+              era5:
+                - cos_latitude
+                - sin_latitude
+                - cos_longitude
+                - sin_longitude
+                - 10u
+                - 2t
+                - 2d
+                - q_100
+                - q_1000
               data: era5
-            - offset: ["0h"]
         cerra:
           tensor:
             - variables:
@@ -24,7 +24,6 @@ sample:
               - cos_longitude
               - sin_longitude
               data: cerra
-            - offset: ["0h"]
     target:
       dictionary:
         cerra:
@@ -33,7 +32,6 @@ sample:
               - tp
               - t_100
               data: cerra
-            - offset: ["0h"]
 
 data:
   era5:

@@ -1,24 +1,26 @@
+from typing import TYPE_CHECKING
+
 import torch
-from collections.abc import Mapping
 
 from anemoi.training.train.tasks.refactor.forecasting import ForecastingModule
 
+if TYPE_CHECKING:
+    from anemoi.training.data.refactor.structure import NestedTensor
+
 
 class RolloutForecastingModule(ForecastingModule):
-    def select_rollout_target(
-        self, batch: dict, rollout_step: int
-    ) -> dict:
+    def select_rollout_target(self, batch: dict, rollout_step: int) -> dict:
         return batch["target"][rollout_step]
 
     def advance_input(
         self,
-        x: dict[str, torch.Tensor],
-        y_pred: dict[str, torch.Tensor],
-        batch: dict[str, dict[str, torch.Tensor]],
+        x: "NestedTensor",
+        y_pred: "NestedTensor",
+        batch: "NestedTensor",
         rollout_step: int,
     ) -> dict[str, torch.Tensor]:
-        num_target_time = 1 # If f(x_t-1, x_t) = [x_t+1, x_t+2], we should rollout 2 steps instead of 1.
-        x = x.roll(-num_target_time, dims=1) # Roll accross TIME dim
+        num_target_time = 1  # If f(x_t-1, x_t) = [x_t+1, x_t+2], we should rollout 2 steps instead of 1.
+        x = x.roll(-num_target_time, dims=1)  # Roll accross TIME dim
 
         # Get prognostic variables
         x[-num_target_time:, :, :, self.data_indices.internal_model.input.prognostic] = y_pred[
@@ -36,12 +38,7 @@ class RolloutForecastingModule(ForecastingModule):
         ]
         return x
 
-    def _step(
-        self,
-        batch: torch.Tensor,
-        batch_idx: int,
-        validation_mode: bool = False,
-    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
+    def _step(self, batch: "NestedTensor", validation_mode: bool = False) -> "NestedTensor":
         batch = self.process_batch(batch)
         x = {"input": batch["input"]}
 
@@ -52,7 +49,9 @@ class RolloutForecastingModule(ForecastingModule):
             x["target"] = self.select_rollout_target(batch, rollout_step)
 
             loss_next, metrics_next, y_preds_next = super()._step(
-                x, batch_idx, validation_mode=validation_mode, apply_processors=False,
+                x,
+                validation_mode=validation_mode,
+                apply_processors=False,
             )
 
             loss += loss_next

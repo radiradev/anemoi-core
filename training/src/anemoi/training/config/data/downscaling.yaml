@@ -6,15 +6,15 @@ timestep: 6h
 
 
 sources:
-  lowres:
-    dataset: ${hardware.files.lowres_dataset}
+  low_res:
+    dataset: ${hardware.files.low_res_dataset}
     # processors including imputers and normalizers are applied in order of definition
     normaliser:
       _target_: anemoi.models.preprocessing.normalizer.InputNormalizer
       config: ${data.normalizer}
 
-  hires:
-    dataset: ${hardware.files.hires_dataset}
+  high_res:
+    dataset: ${hardware.files.high_res_dataset}
     # processors including imputers and normalizers are applied in order of definition
     normaliser:
       _target_: anemoi.models.preprocessing.normalizer.InputNormalizer
