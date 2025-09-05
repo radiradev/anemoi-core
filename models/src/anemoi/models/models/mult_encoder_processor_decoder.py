@@ -426,7 +426,7 @@ class AnemoiMultiModel(AnemoiModel):
 
         print(st.to_str(x, "Input Batch"))
 
-        batch_size = x[list(x.keys())[0]].shape[0]
+        batch_size =x[list(x.keys())[0]]["data"].shape[0]
         ensemble_size = 1
 
         x_hidden = self.get_node_coords(graph, self.hidden_name)
