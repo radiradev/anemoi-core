@@ -167,8 +167,6 @@ class InputNormaliser(BasePreprocessor):
             self._norm_add = self._norm_add.to(x.device)
             self._norm_mul = self._norm_mul.to(x.device)
 
-        oi
-        print(f"Normalising x {x.device}, shape=", x.shape)
         print(self._norm_mul.shape, self._norm_add.shape)
 
         x.mul_(self._norm_mul.view(1, -1, 1)).add_(self._norm_add.view(1, -1, 1))

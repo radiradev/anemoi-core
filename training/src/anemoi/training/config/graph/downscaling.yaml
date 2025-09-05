@@ -3,14 +3,14 @@ overwrite: True
 
 nodes:
   # Data nodes
-  lowres:
+  low_res:
     node_builder:
       _target_: anemoi.graphs.nodes.AnemoiDatasetNodes # options: AnemoiDatasetNodes, NPZFileNodes
-      dataset: ${data.sources.lowres.dataset}
-  hires:
+      dataset: ${data.sources.low_res.dataset}
+  high_res:
     node_builder:
       _target_: anemoi.graphs.nodes.AnemoiDatasetNodes # options: AnemoiDatasetNodes, NPZFileNodes
-      dataset: ${data.sources.hires.dataset}
+      dataset: ${data.sources.high_res.dataset}
     attributes: ${graph.attributes.nodes}
   # Hidden nodes
   hidden:
@@ -21,7 +21,7 @@ nodes:
 
 edges:
 # Encoder configuration
-- source_name: "lowres"
+- source_name: "low_res"
   target_name: "hidden"
   edge_builders:
   - _target_: anemoi.graphs.edges.CutOffEdges # options: KNNEdges, CutOffEdges
@@ -41,7 +41,7 @@ edges:
   attributes: ${graph.attributes.edges}
   # Decoder configuration
 - source_name: "hidden"
-  target_name: "hires"
+  target_name: "high_res"
   edge_builders:
   - _target_: anemoi.graphs.edges.KNNEdges # options: KNNEdges, CutOffEdges
     num_nearest_neighbours: 3 # only for knn method
