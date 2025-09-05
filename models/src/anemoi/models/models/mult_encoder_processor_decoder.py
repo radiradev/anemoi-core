@@ -424,7 +424,7 @@ class AnemoiMultiModel(AnemoiModel):
         # if this is not wanted, don't normalise it in the task
         x = st.merge_boxes(x, self.sample_static_info["input"])
 
-        print(f"Input batch: {st.to_str(x, "Batch")}")
+        print(f"Input batch: {st.to_str(x, 'Batch')}")
 
         # normalised_batch = self.normaliser["input"](batch)
         # print("Normalised batch: ", normalised_batch)
