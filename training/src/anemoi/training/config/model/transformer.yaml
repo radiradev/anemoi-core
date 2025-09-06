@@ -102,7 +102,7 @@ compile:
   - module: anemoi.models.layers.conv.GraphTransformerConv
     #options: # An example of setting torch.compile options
       #dynamic: false
-      #mode: max-autotune 
+      #mode: max-autotune
 
 # Bounding configuration
 bounding: #These are applied in order
