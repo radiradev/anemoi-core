@@ -79,7 +79,8 @@ class GraphInterpolator(BaseGraphModule):
 
         self.use_time_fraction = config.training.target_forcing.time_fraction
 
-        # TODO: Improve how this map_accum_indices is assigned to the Interface or Model or extend the postprocessors to be able to work with functions which also condition on the input state
+        # TODO (rilwan-adewoyin): Improve how this map_accum_indices is assigned to the Interface or Model or extend
+        # the postprocessors to  be able to work with functions which also condition on the input state
         self.model.model.map_mass_conserving_accums = config.training.mass_conserving_accumulations
         target_idx_list: list[int] = []
         constraint_idx_list: list[int] = []
@@ -98,7 +99,8 @@ class GraphInterpolator(BaseGraphModule):
             {
                 "target_idxs": torch.nn.Parameter(torch.tensor(target_idx_list, dtype=torch.long), requires_grad=False),
                 "constraint_idxs": torch.nn.Parameter(
-                    torch.tensor(constraint_idx_list, dtype=torch.long), requires_grad=False,
+                    torch.tensor(constraint_idx_list, dtype=torch.long),
+                    requires_grad=False,
                 ),
             },
         )
@@ -115,7 +117,7 @@ class GraphInterpolator(BaseGraphModule):
         batch: torch.Tensor,
         batch_idx: int,
         validation_mode: bool = False,
-    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
+    ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor], list[torch.Tensor]]:
 
         del batch_idx
 
@@ -168,7 +170,6 @@ class GraphInterpolator(BaseGraphModule):
             y_preds[:, idx] = y_pred
 
         if self.model.model.map_accum_indices is not None:
-            # y_preds = self.resolve_mass_conservations(y_preds, batch)
             y_preds = self.model.model.resolve_mass_conservations(y_preds, x_bound)
 
         for idx, interp_step in enumerate(self.interp_times):
@@ -190,24 +191,7 @@ class GraphInterpolator(BaseGraphModule):
 
         loss *= 1.0 / len(self.interp_times)
         y_preds_list = list(y_preds.unbind(dim=1))
-        return loss, metrics, y_preds
-
-    # def resolve_mass_conservations(y_preds, batch_processed):
-    #     #NOTE: make sure to enforce the values are normalized using their targets normalizer
-    #     #NOTE: When interpolating between 0 and 6, this makes outputs for 1, 2,3 ,4, 5, 6
-    #     input_constraint_indxs = self.map_accum_indices["constraint_idxs"]
-    #     target_indices = self.map_accum_indices["target_idxs"]
-
-    #     # (B, T, …, V_acc)
-    #     logits = y_preds[..., target_indices]  # (B,T,E,G,V_acc)
-    #     zeros = torch.zeros_like(logits[:, 0:1])
-    #     weights = F.softmax(torch.cat([logits, zeros], dim=1), dim=1)
-
-    #     constraints = batch_processed[:, itemgetter(*self.boundary_times)(self.imap),..., input_constraint_indxs]
-
-    #     y_preds[..., target_indices] = weights * constraints
-
-    #     return y_preds
+        return loss, metrics, y_preds_list
 
     def forward(self, x: torch.Tensor, target_forcing: torch.Tensor) -> torch.Tensor:
         return self.model(

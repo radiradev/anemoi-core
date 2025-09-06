@@ -523,6 +523,10 @@ class DynamicCopyImputer(DynamicMixin, CopyImputer):
         return DynamicMixin.inverse_transform(self, x, in_place)
 
 
+# NOTES: Convo w/ Sara on Friday 5th Sept 2025
+# TODO: Make the value configurable so more generalised
+# TODO: move to overwriter instead of preprocessor
+# TODO: Add comment saying that reverse doesn't do anything
 class LeftBoundaryZero(BasePreprocessor):
     def __init__(self, config=None, data_indices: Optional[IndexCollection] = None, statistics: Optional[dict] = None):
         super().__init__(config, data_indices, statistics)

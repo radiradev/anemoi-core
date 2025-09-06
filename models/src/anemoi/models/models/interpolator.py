@@ -18,7 +18,9 @@ from torch.distributed.distributed_c10d import ProcessGroup
 from torch.nn import functional as F
 from torch_geometric.data import HeteroData
 
+from anemoi.models.distributed.graph import gather_tensor
 from anemoi.models.distributed.graph import shard_tensor
+from anemoi.models.distributed.shapes import apply_shard_shapes
 from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.models import AnemoiModelEncProcDec
 from anemoi.utils.config import DotDict
@@ -223,37 +225,73 @@ class AnemoiModelEncProcDecInterpolator(AnemoiModelEncProcDec):
         with torch.no_grad():
 
             assert (
-                len(batch.shape) == 4
+                len(batch.shape) == 5
             ), f"The input tensor has an incorrect shape: expected a 4-dimensional tensor, got {batch.shape}!"
-            # Dimensions are
-            # batch, timesteps, grid, variables
-            x = batch[:, 0:multi_step, None, ...]  # add dummy ensemble dimension as 3rd index
+
+            x_boundaries = pre_processors(batch, in_place=False)  # batch should be the input variables only already
 
             # Handle distributed processing
             grid_shard_shapes = None
             if model_comm_group is not None:
-                shard_shapes = get_shard_shapes(x, -2, model_comm_group)
+                shard_shapes = get_shard_shapes(x_boundaries, -2, model_comm_group)
                 grid_shard_shapes = [shape[-2] for shape in shard_shapes]
-                x = shard_tensor(x, -2, shard_shapes, model_comm_group)
+                x_boundaries = shard_tensor(x_boundaries, -2, shard_shapes, model_comm_group)
 
-            x = pre_processors(x, in_place=False)
+            target_forcing = kwargs.get(
+                "target_forcing", None
+            )  # shape(bs, interpolation_steps, ens, grid, forcing_dim)
+            interpolation_steps = target_forcing.shape[1]
 
+            output_shape = (
+                batch.shape[0],
+                target_forcing.shape[1],
+                batch.shape[2],
+                batch.shape[3],
+            )
             # Perform forward pass
-            y_hat = self.forward(x, model_comm_group=model_comm_group, grid_shard_shapes=grid_shard_shapes, **kwargs)
+            # TODO: add the same logic as in _step here e.g. iterative forwards to get the multiple y_hats
 
+            for i in range(interpolation_steps):
+                y_pred = self.forward(
+                    x_boundaries,
+                    model_comm_group=model_comm_group,
+                    grid_shard_shapes=grid_shard_shapes,
+                    target_forcing=target_forcing[:, i],
+                )
+
+                if i == 0:
+                    output_shape = output_shape = (
+                        batch.shape[0],
+                        target_forcing.shape[1],
+                        batch.shape[2],
+                        batch.shape[3],
+                        y_pred.shape[-1],
+                    )
+                    y_preds = batch.new_zeros(output_shape)
+
+                y_preds[:, i] = y_pred
+
+            include_right_boundary = kwargs.get("include_right_boundary", False)
             if self.map_accum_indices is not None:
-                y_hat = self.resolve_mass_conservations(y_hat, x)
+
+                y_preds = self.resolve_mass_conservations(
+                    y_preds, x_boundaries, include_right_boundary=include_right_boundary
+                )
+            elif include_right_boundary:
+                y_preds = torch.cat([y_preds, x_boundaries[:, -1:, ...]], dim=1)
 
             # Apply post-processing
-            y_hat = post_processors(y_hat, in_place=False)
+            y_preds = post_processors(y_preds, in_place=False)
 
             # Gather output if needed
             if gather_out and model_comm_group is not None:
-                y_hat = gather_tensor(y_hat, -2, apply_shard_shapes(y_hat, -2, grid_shard_shapes), model_comm_group)
+                y_preds = gather_tensor(
+                    y_preds, -2, apply_shard_shapes(y_preds, -2, grid_shard_shapes), model_comm_group
+                )
 
-        return y_hat
+        return y_preds
 
-    def resolve_mass_conservations(self, y_preds, x_input):
+    def resolve_mass_conservations(self, y_preds, x_input, include_right_boundary=False) -> torch.Tensor:
         # NOTE: make sure to enforce the values are normalized using their targets normalizer
         # NOTE: When interpolating between 0 and 6, this makes outputs for 1, 2,3 ,4, 5, 6
         input_constraint_indxs = self.map_accum_indices["constraint_idxs"]
@@ -262,12 +300,43 @@ class AnemoiModelEncProcDecInterpolator(AnemoiModelEncProcDec):
         # (B, T, …, V_acc)
         logits = y_preds[..., target_indices]  # (B,T,E,G,V_acc)
         zeros = torch.zeros_like(logits[:, 0:1])
-        weights = F.softmax(torch.cat([logits, zeros], dim=1), dim=1)[:, :-1]
+        weights = F.softmax(torch.cat([logits, zeros], dim=1), dim=1)  # shape (B, T=interp_steps+1, E, G, V_acc)
 
-        # constraints = x_input[:, itemgetter(*self.boundary_times)(self.imap),..., input_constraint_indxs]
+        if not include_right_boundary:
 
-        constraints = x_input[:, -1:, ..., input_constraint_indxs]
+            weights = weights[:, :-1]  # shape (B, T=interp_steps, E, G, V_acc)
+            constraints = x_input[:, -1:, ..., input_constraint_indxs]
 
-        y_preds[..., target_indices] = weights * constraints
+            y_preds[..., target_indices] = weights * constraints
+
+        else:
+
+            # include the left boundary value
+            y_index_ex_target_indices = [
+                outp_idx
+                for vname, outp_idx in self.data_indices.model.output.name_to_index.items()
+                if outp_idx not in target_indices
+            ]
+
+            data_indices_model_input_model_output = [
+                self.data_indices.model.input.name_to_index[vname]
+                for vname, outp_idx in self.data_indices.model.output.name_to_index.items()
+                if outp_idx not in target_indices
+            ]
+
+            y_preds = torch.cat([y_preds, torch.zeros_like(y_preds[:, 0:1])], dim=1)
+
+            # Add the energy conserved variables to the right boundary
+
+            constraints = x_input[:, -1:, ..., input_constraint_indxs]  # shape (B, 1, E, G, V_acc)
+
+            y_preds_accum = weights * constraints  # shape (B, T=interp_steps+1, E, G, V_acc)
+
+            y_preds[:, -1:, ..., y_index_ex_target_indices] = x_input[
+                :, -1:, ..., data_indices_model_input_model_output
+            ]
+
+            # Ensure accumulation is correct and override the copied over values which represent the left boundary value
+            y_preds[..., target_indices] = y_preds_accum
 
         return y_preds
