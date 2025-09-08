@@ -246,17 +246,6 @@ class AnemoiMultiModel(AnemoiModel):
         x_data, x_data_skip = {}, {}
         for name, x_source_raw in x.items():
             x_data[name] = self._assemble_tensor(name, x_source_raw, graph, batch_size=batch_size)
-            x_data[name] = torch.cat(
-                (
-                    einops.rearrange(
-                        x_source_raw, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"
-                    ),
-                    self.get_node_coords(graph, name),
-                    # TODO: add node trainable parameters
-                ),
-                dim=-1,  # feature dimension
-            )
-
             x_data_skip[name] = x_source_raw[:, -1, :, :, :]
 
         return x_data, x_data_skip
@@ -420,17 +409,56 @@ class AnemoiMultiModel(AnemoiModel):
     ) -> dict[str, Tensor]:
         # at this point, the input (x) has already been normalised
         # if this is not wanted, don't normalise it in the task
-        x = self.sample_static_info.merge_content(x)
+        print(self.sample_static_info.to_str("Sample Info"))
+        print(x.to_str("x before merge"))
+        x = self.sample_static_info.input.merge_content(x)
+        print(x.to_str("x after"))
 
         print(x.to_str("Input Batch"))
 
         batch_size = x[list(x.keys())[0]]["data"].shape[0]
         ensemble_size = 1
 
+        def shape_function(data, **kwargs):
+            return data.shape
+
+        shapes = x.box_to_any(shape_function)
+
         x_hidden = self.get_node_coords(graph, self.hidden_name)
         shard_shapes_hidden = get_shard_shapes(x_hidden, 0, model_comm_group)
 
         x_data_latents, x_data_skip = self._assemble_dict(x, graph, batch_size=batch_size)
+
+        if os.environ("DOWNSCALING"):
+
+            def reshape_for_graph_with_get_node(data, **kwargs):
+                return dict(
+                    data=einops.rearrange(x, "batch grid vars -> (batch grid) vars"),
+                    nodes_coords=self.get_node_coords(graph, name),
+                    # TODO: add node trainable parameters
+                )
+
+        elif os.environ("ENSEMBLE"):
+
+            def reshape_for_graph_with_get_node(data, **kwargs):
+                return dict(
+                    data=einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
+                    nodes_coords=self.get_node_coords(graph, name),
+                    # TODO: add node trainable parameters
+                )
+
+        else:
+            assert False
+
+        x = x.box_to_box(reshape_for_graph_with_get_node)
+
+        # cat all data
+        # cat on nodes_coords
+
+        assert isinstance(x, torch.Tensor), type(x)
+        assert x.shape == math.product(shapes)
+
+        x = Batch()
 
         x_data_latents, x_hidden_latent = self.encode(
             (x_data_latents, x_hidden),
