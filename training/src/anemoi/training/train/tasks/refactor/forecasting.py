@@ -1,4 +1,3 @@
-import warnings
 from collections.abc import Generator
 from typing import TYPE_CHECKING
 
@@ -42,14 +41,18 @@ class ForecastingModule(BaseGraphModule):
         Generator[tuple[Union[torch.Tensor, None], dict, list], None, None]
             Loss value, metrics, and predictions (per step)
         """
-        # batch = self.allgather_batch(batch)
-        batch = self.sample_provider_info.merge_content(batch)
-        batch = Batch(batch)
+        # ✅ here, batch = input + target
+        # validation vs training, do we have validation batch or training batch?
+        #
+        # we should create a sample_provider in AnemoiTrainer?
+        # or in this module then give it to the dataloader and dataset?
 
-        if not apply_processors:
-            warnings.warn("Skipping processors")
-        batch = self.model.normaliser(batch)
-        batch = Batch(batch)
+        static_info = self.model.sample_static_info
+
+        batch = static_info.merge_content(batch)
+
+        batch = self.model.normaliser(batch)  # TODO use self.normaliser with a property
+
         print(f"Normalising batch: {batch}")
         # removed process_batch, only normaliser is supported for now
         # batch = self.process_batch(batch)

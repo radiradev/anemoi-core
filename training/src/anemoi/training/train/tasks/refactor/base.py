@@ -47,6 +47,7 @@ class BaseGraphModule(pl.LightningModule, ABC):
         metadata: dict,
     ) -> None:
         super().__init__()
+        self.sample_static_info = sample_static_info
 
         self.graph_data = graph_data.to(self.device)
 

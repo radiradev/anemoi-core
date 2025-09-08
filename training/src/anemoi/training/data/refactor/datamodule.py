@@ -51,6 +51,7 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         # Create Sampler provider
         self.training_sample_provider = sample_provider_factory(**training_context, **sample_dict)
         self.validation_sample_provider = sample_provider_factory(**validation_context, **sample_dict)
+        print("❌❌ TODO: ensure that validation name_to_index matches the training name_to_index ❌❌")
 
         dl_keys_to_ignore = ["sampler", "read_group_size", "grid_indices", "limit_batches"]
         self.train_dataloader_config = get_dataloader_config(
