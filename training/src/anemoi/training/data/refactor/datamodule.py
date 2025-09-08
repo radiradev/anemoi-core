@@ -49,8 +49,8 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         validation_context = dict(sources=data_dict, **config.dataloader.sampler.validation)
 
         # Create Sampler provider
-        self.training_samples = sample_provider_factory(**training_context, **sample_dict)
-        self.validation_samples = sample_provider_factory(**validation_context, **sample_dict)
+        self.training_sample_provider = sample_provider_factory(**training_context, **sample_dict)
+        self.validation_sample_provider = sample_provider_factory(**validation_context, **sample_dict)
 
         dl_keys_to_ignore = ["sampler", "read_group_size", "grid_indices", "limit_batches"]
         self.train_dataloader_config = get_dataloader_config(
@@ -69,9 +69,9 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         # sources[stage.VALIDATION].check_no_overlap(sources[stage.TEST])
 
     def train_dataloader(self) -> dict[str, DataLoader]:
-        dataset = NativeGridMultDataset(self.training_samples)
+        dataset = NativeGridMultDataset(self.training_sample_provider)
         return DataLoader(dataset, worker_init_fn=worker_init_func, **self.train_dataloader_config)
 
     def val_dataloader(self) -> dict[str, DataLoader]:
-        dataset = NativeGridMultDataset(self.validation_samples)
+        dataset = NativeGridMultDataset(self.validation_sample_provider)
         return DataLoader(dataset, worker_init_fn=worker_init_func, **self.val_dataloader_config)

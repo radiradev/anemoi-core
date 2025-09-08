@@ -195,7 +195,7 @@ class AnemoiTrainer:
         # ), "GLU activation function is not supported in Transformer models, due to fixed dimensions. "
         # "Please use a different activation function."
 
-        sample_static_info = self.datamodule.training_samples.static_info
+        sample_static_info = self.datamodule.training_sample_provider.static_info
 
         kwargs = {
             "config": self.config,

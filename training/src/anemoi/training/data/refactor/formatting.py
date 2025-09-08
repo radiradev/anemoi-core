@@ -54,14 +54,14 @@ def format_timedeltas(k, v):
         if isinstance(v, np.ndarray):
             minimum = _to_str(np.min(v))
             maximum = _to_str(np.max(v))
-            return f"{k}: np.array of shape {v.shape} [{minimum},{maximum}]"
+            return f"{k}: np.array{v.shape} [{minimum},{maximum}]"
 
         import torch
 
         if isinstance(v, torch.Tensor):
             minimum = _to_str(torch.min(v).item())
             maximum = _to_str(torch.max(v).item())
-            return f"{k}: tensor of shape {v.shape} [{minimum},{maximum}]"
+            return f"{k}: tensor({v.shape}) [{minimum},{maximum}]"
 
         return f"{k}: no-min, no-max"
 
@@ -76,7 +76,7 @@ def format_array(k, v):
             maximum = np.max(v)
             mean = np.nanmean(v)
             stdev = np.nanstd(v)
-            return f"{k}: np.array of shape {v.shape} {mean:.2f}±{stdev:.2f}[{minimum:.2f},{maximum:.2f}]"
+            return f"{k}: np.array{v.shape} {mean:.1f}±{stdev:.1f}"  # [{minimum:.1f},{maximum:.1f}]"
 
         import torch
 
@@ -87,7 +87,7 @@ def format_array(k, v):
             mean = torch.mean(v.float()).item()
             stdev = torch.std(v.float()).item()
             shape = ", ".join(str(dim) for dim in v.size())
-            return f"{k} : tensor of shape ({shape}) on {v.device}, {mean:.3f}±{stdev:.3f}[{minimum:.3f}/{maximum:.3f}]"
+            return f"{k} : tensor({shape}) on {v.device}, {mean:.1f}±{stdev:.1f}[{minimum:.1f}/{maximum:.1f}]"
 
         return f"{k}: no-min, no-max"
 
@@ -119,9 +119,9 @@ def format_key_value(k, v):
     return f"{k}: {v.__class__.__name__}"
 
 
-def format_tree(key, value, boxed=True):
+def format_tree(key, value, boxed=True, **kwargs):
     """Recursively build a Tree from any nested structure."""
-    from anemoi.training.data.refactor.structure import is_box
+    from anemoi.training.data.refactor.structure import Box
     from anemoi.training.data.refactor.structure import is_final
     from anemoi.training.data.refactor.structure import is_schema
 
@@ -131,10 +131,10 @@ def format_tree(key, value, boxed=True):
     if is_final(value):
         return Tree(f"{ICON_LEAF_BOX_NOT_FOUND} {key} : {value}" if key is not None else str(value))
 
-    if is_box(value):
+    if isinstance(value, Box):
         if boxed:
             key = f"📦 {key}"
-        t = Tree(f"{key} :")
+        t = Tree(f"{key} :", **kwargs)
 
         def priority(k):
             if k.startswith("_"):
@@ -150,20 +150,21 @@ def format_tree(key, value, boxed=True):
                 continue
             txt = format_key_value(k, v)
             if txt is not None:
-                t.add(f"{_choose_icon(k, v)} {txt}")
+                txt = f"{_choose_icon(k, v)} {txt}"
+                t.add(txt)
         return t
 
     if isinstance(value, dict):  # must be after is_box because box is a dict
-        t = Tree(str(key) if key is not None else "")
+        t = Tree(str(key) if key is not None else "", **kwargs)
         for k, v in value.items():
             # k = "🔑 " + k
-            t.add(format_tree(k, v, boxed=boxed))
+            t.add(format_tree(k, v, boxed=boxed, **kwargs))
         return t
 
     if isinstance(value, (list, tuple)):
-        t = Tree(str(key) if key is not None else "")
+        t = Tree(str(key) if key is not None else "", **kwargs)
         for i, v in enumerate(value):
-            t.add(format_tree("#" + str(i), v, boxed=boxed))
+            t.add(format_tree("#" + str(i), v, boxed=boxed, **kwargs))
         return t
 
     raise ValueError(f"Unknown type for value: {type(value)}. Key: {key}, Value: {value}")
@@ -183,7 +184,8 @@ def format_schema(key, value):
         for k, v in value["content"].items():
             if k == "_anemoi_schema":
                 continue
-            t.add(format_schema(k, v))
+            __type = v.get("type")
+            t.add(Tree(f"{k} : {__type}"))
         return t
 
     if type_ == "dict":
@@ -205,10 +207,8 @@ def format_schema(key, value):
     return Tree(f"{ICON_LEAF} {key} : {type_}")
 
 
-def to_str(nested, name, _boxed=True):
-    if callable(nested) and hasattr(nested, "_anemoi_function_str"):
-        return name + nested._anemoi_function_str
-    tree = format_tree(name, nested, boxed=_boxed)
+def to_str(nested, name, _boxed=True, **kwargs):
+    tree = format_tree(name, nested, boxed=_boxed, **kwargs)
     return _tree_to_string(tree).strip()
 
 

@@ -1,4 +1,3 @@
-
 import einops
 import numpy as np
 
@@ -95,11 +94,13 @@ class DataHandler:
         return np.array([lats, longs]).T
 
     def _get_static(self, request):
+        from anemoi.training.data.refactor.structure import Box
+
         if request is None:
             request = ["name_to_index", "statistics", "normaliser", "extra", "metadata"]
         static = self._get(request, None)
         static["_version"] = "0.0"
-        return static
+        return Box(static)
 
     def _get_item(self, request, item):
         if request is None:

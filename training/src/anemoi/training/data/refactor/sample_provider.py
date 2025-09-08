@@ -190,7 +190,9 @@ class SampleProvider:
     # public
     @property
     def static_info(self):
-        return self._get_static(None)
+        from anemoi.training.data.refactor.structure import Batch
+
+        return Batch(self._get_static(None))
 
     # public
     def __getitem__(self, item):
@@ -474,6 +476,9 @@ class OffsetSampleProvider(_FilterSampleProvider):
     def _get_static(self, request):
         static = super()._get_static(request)
         static["_offset"] = self.values
+        from anemoi.training.data.refactor.structure import Box
+
+        assert isinstance(static, Box), f"Expected Box, got {type(static)}: {static}"
         return static
 
 
@@ -498,7 +503,11 @@ class TensorReshapeSampleProvider(ForwardSampleProvider):
 
     def _get_static(self, request):
         box = self._forward._get_static(request)
+        from anemoi.training.data.refactor.structure import Box
+
+        assert isinstance(box, Box), f"Expected Box, got {type(box)}: {box}"
         box = box.copy()
+        assert isinstance(box, Box), f"Expected Box, got {type(box)}: {box}"
         if "shape" in box:
             from_dims = " ".join([d if d in self.from_dimensions_order else "1" for d in self.from_dimensions_order])
             to_dims = " ".join(self.to_dimensions_order)
@@ -569,7 +578,9 @@ class BoxSampleProvider(SampleProvider):
         return self
 
     def _get_static(self, request):
-        return self.datahandler._get_static(request)
+        from anemoi.training.data.refactor.structure import Box
+
+        return Box(self.datahandler._get_static(request))
 
     def _get_item(self, request, item):
         actual_item = item + self.i_offset

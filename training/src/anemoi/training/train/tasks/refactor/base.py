@@ -107,7 +107,6 @@ class BaseGraphModule(pl.LightningModule, ABC):
             self.loss.register_full_backward_hook(grad_scaler, prepend=False)
 
         self.is_first_step = True
-        self.multi_step = config.training.multistep_input
         self.lr = (
             config.hardware.num_nodes
             * config.hardware.num_gpus_per_node
@@ -129,7 +128,6 @@ class BaseGraphModule(pl.LightningModule, ABC):
         LOGGER.debug("Rollout window length: %d", self.rollout)
         LOGGER.debug("Rollout increase every : %d epochs", self.rollout_epoch_increment)
         LOGGER.debug("Rollout max : %d", self.rollout_max)
-        LOGGER.debug("Multistep: %d", self.multi_step)
 
         # lazy init model and reader group info, will be set by the DDPGroupStrategy:
         self.model_comm_group_id = 0

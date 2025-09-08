@@ -65,7 +65,7 @@ class AnemoiModelEncProcDec(nn.Module):
         model_config = DotDict(model_config)
         self._graph_name_data = model_config.graph.data
         self._graph_name_hidden = model_config.graph.hidden
-        self.multi_step = model_config.training.multistep_input
+        self.multi_step = 1 #model_config.training.multistep_input
         self.num_channels = model_config.model.num_channels
 
         self.node_attributes = NamedNodesAttributes(model_config.model.trainable_parameters.hidden, self._graph_data)

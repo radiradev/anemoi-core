@@ -54,9 +54,141 @@ def make_schema(structure):
     assert False, f"Unknown structure type: {type(structure)}"
 
 
-class Box(dict):
+class Dict(dict):
+    def copy(self):
+        return self.__class__(self)
+
+    def __copy__(self):
+        return self.__class__(self)
+
+    def __deepcopy__(self, memo):
+        import copy
+
+        return self.__class__(copy.deepcopy(dict(self), memo))
+
+
+class Box(Dict):
     # Flag a dict as a box
-    pass
+    def __repr__(self):
+        return to_str(self, name=" ")
+
+    def to_str(self, name):
+        return to_str(self, name=name)
+
+
+class Tree(Dict):
+    def __repr__(self):
+        return to_str(self, name=" ")
+
+    def to_str(self, name):
+        return to_str(self, name=name)
+
+
+def cast_output_to_box(func, check_dict_output=True):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        res = func(*args, **kwargs)
+        if not isinstance(res, dict) and check_dict_output:
+            raise ValueError(f"Function {func.__name__} did not return a dict, got {type(res)}")
+        if isinstance(res, dict):
+            res = Box(res)
+        return res
+
+    return wrapper
+
+
+class Batch(Tree):
+    def __getattr__(self, name):
+        if name not in self:
+            raise AttributeError(f"'Batch' object has no attribute '{name}'")
+        value = self[name]
+        if isinstance(value, dict) and not isinstance(value, Box):
+            value = Batch(value)
+        return value
+
+    def create_function(self, func, *args, check_dict_output=True, **kwargs):
+        tree_of_functions = self.box_to_any(func, *args, **kwargs)
+        res = FunctionTree(tree_of_functions)
+        return res
+
+    def box_to_box(self, func, *args, **kwargs):
+        def transform(path, key, value):
+            if not isinstance(value, Box):
+                return key, value
+            # kwargs overwride the value content
+            box = {k: v for k, v in value.items() if k not in kwargs}
+            res = func(*args, **box, **kwargs)
+            return key, Box(res)
+
+        return _remap(self, visit=transform, enter=_stop_if_box_enter, exit=ensure_output_is_box_exit)
+
+    def box_to_any(self, func, *args, **kwargs):
+        def transform(path, key, value):
+            if not isinstance(value, Box):
+                return key, value
+            # kwargs overwride the value content
+            box = Box({k: v for k, v in value.items() if k not in kwargs})
+            return key, func(*args, **box, **kwargs)
+
+        return _remap(self, visit=transform, enter=_stop_if_box_enter, exit=ensure_output_is_box_exit)
+
+    def pop_content(self, key):
+        return self.__class__(remove_content(self, key))
+
+    def select_content(self, *keys):
+        return self.__class__(select_content(self, *keys))
+
+    def merge_content(self, other):
+        return self.__class__(merge_boxes(self, other))
+
+
+class FunctionTree(Tree):
+    def __call__(self, other, *args, _output_box=True, **kwargs):
+        def apply(path, key, func):
+            if not callable(func):
+                return key, func
+
+            x = _get_path(other, path + (key,), default=None)
+            if not x:
+                raise ValueError(f"Box not found in {other} at {path}, {key=}")
+            res = func(*args, **kwargs, **x)
+
+            if _output_box:
+                if not isinstance(res, dict):
+                    raise ValueError(f"Function at {path}, {key} did not return a dict, got {type(res)}")
+                res = Box(res)
+
+            return key, res
+
+        res = _remap(self, visit=apply)
+        return Batch(res)
+
+    def apply_on_multiple_structure(self, *args, _output_box=True, **kwargs):
+        def apply(path, key, func):
+            if not callable(func):
+                return key, func
+
+            def search(x):
+                return _get_path(x, path + (key,), default=None)
+
+            args = [search(a) if isinstance(a, Batch) else a for a in args]
+            kwargs = {k: search(v) if isinstance(v, Batch) else v for k, v in kwargs.items()}
+
+            res = func(*args, **kwargs)
+            if _output_box:
+                if not isinstance(res, dict):
+                    raise ValueError(f"Function at {path}, {key} did not return a dict, got {type(res)}")
+                res = Box(res)
+            return res
+
+        res = _remap(self, visit=apply)
+        return Batch(res)
+
+    def to_str(self, name):
+        return to_str(self, name=name + "()", _boxed=False)
+
+    def __repr__(self):
+        return to_str(self, name="()", _boxed=False)
 
 
 def _check_key_in_dict(dic, key):
@@ -106,7 +238,7 @@ def merge_boxes(*structs, overwrite=True):
             box = _get_path(struct, path + (key,), default={})
             if not overwrite and set(box.keys()) & set(res.keys()):
                 raise ValueError(f"Conflicting keys found in structures: {set(box.keys()) & set(res.keys())}")
-            res.update(box)
+            res.update(**box)
         return res
 
     return _remap(structs[0], exit=exit)
@@ -116,6 +248,14 @@ def _stop_if_box_enter(path, key, value):
     if is_box(value):
         return value, []
     return _default_enter(path, key, value)
+
+
+def ensure_output_is_box_exit(path, key, old_parent, new_parent, new_items):
+
+    res = _default_exit(path, key, old_parent, new_parent, new_items)
+    if is_box(old_parent):
+        res = Box(res)
+    return res
 
 
 def _for_each_expanded_box(fconfig_tree, func, *args, **kwargs):
@@ -140,16 +280,9 @@ def _for_each_expanded_box(fconfig_tree, func, *args, **kwargs):
         is_callable["callable"] = is_callable["callable"] and callable(value)
         return key, value
 
-    def ensure_output_is_box_exit(path, key, old_parent, new_parent, new_items):
-
-        res = _default_exit(path, key, old_parent, new_parent, new_items)
-        if is_box(old_parent):
-            res = Box(res)
-        return res
-
     structure = _remap(fconfig_tree, visit=transform, enter=_stop_if_box_enter, exit=ensure_output_is_box_exit)
-    if is_callable["callable"]:
-        return nested_to_callable(structure)
+    # if is_callable["callable"]:
+    #    return nested_to_callable(structure)
     return structure
 
 
@@ -339,7 +472,7 @@ def rearrange(mappings, sources, _add_origin=True):
     for k, v in mappings.items():
         v = resolve(v)
         insert_path(root, _path_to_tuple(k), v)
-    return root
+    return Batch(root)
 
 
 def test_custom(path):
@@ -356,15 +489,16 @@ def test_custom(path):
 def test_one(training_context):
     from anemoi.training.data.refactor.sample_provider import sample_provider_factory
 
-    cfg_1 = """dictionary:
-                input:
+    cfg_1 = """#dictionary:
+               # input:
                     dictionary:
-                        fields:
+                        lowres:
                             container:
                               data_group: "era5"
                               variables: ["2t", "10u", "10v"]
                               dimensions: ["values", "variables", "ensembles"]
-                        other_fields:
+
+                        highres:
                           for_each:
                             - offset: ["-6h", "0h"]
                             - container:
@@ -383,14 +517,15 @@ def test_one(training_context):
     # print(schema)
     # print(repr_schema(schema, "schema"))
 
-    print(to_str(sp.static_info, name="✅ sp.static_info"))
-    print(sp.static_info)
+    print("✅ sp.static_info", sp.static_info)
 
     data = sp[1]
     print(data)
     print(to_str(data, name="✅ Data"))
 
-    @apply_to_box
+    data = sp.static_info.merge_content(data)
+    print("✅ Data", data)
+
     def to_tensor(**kwargs):
         import torch
 
@@ -401,9 +536,8 @@ def test_one(training_context):
         res = Box(res)
         return res
 
-    data = to_tensor(data)
+    data = data.box_to_box(to_tensor)
 
-    @apply_to_box
     def to_gpu(**kwargs):
         def f(arr):
             return arr.to("cuda")
@@ -412,40 +546,28 @@ def test_one(training_context):
         # res = Box(res)
         return res
 
-    new_data = to_gpu(data)
-    print(to_str(new_data, name="✅ Data on GPU"))
-    # print(new_data['input']['fields'])
-    print(type(new_data["input"]["fields"]))
-    # exit()
+    new_data = data.box_to_box(to_gpu)
+    print("✅ Data on GPU", new_data)
+    print(type(new_data["lowres"]))
 
     guessed = make_schema(data)
-    to_str(schema, "Actual Schema")
-    to_str(guessed, "Actual Schema")
-    # print(to_str(guessed, "Guessed Schema"))
-    # print(to_str(schema, "Actual Schema"))
-    # print(to_str(guessed, "Guessed Schema"))
-    # print(schema)
-    # assert_compatible_schema(schema, guessed)
+    print(to_str(schema, "Actual Schema"))
+    print(to_str(guessed, "Actual Schema"))
 
-    batch = to_gpu(data)
+    extra = data.pop_content("extra")
+    print("Data after pop_content extra", data)
+    print("Extra after pop_content extra", extra)
 
-    data = merge_boxes(data, sp.static_info)
-    print(to_str(data, name="✅ Data merged with sp.static_info"))
+    lat_lon = data.select_content("latitudes", "longitudes")
+    print("Selected lat_lon", lat_lon)
 
-    extra = remove_content(data, "extra")
-    print(to_str(data, name="Data after removing extra"))
-    print(to_str(extra, name="Extra content removed from data"))
-
-    lat_lon = select_content(data, "latitudes", "longitudes")
-    print(to_str(lat_lon, name="Selected latitudes and longitudes"))
-
-    @box_to_function
     def build_normaliser(statistics, **kwargs):
+        print("✅💬 Building from", statistics)
         mean = np.mean(statistics["mean"])
 
         def func(data, **kwargs):
             new = data - mean
-            return dict(normalized_data=new, **kwargs)
+            return dict(data=new, **kwargs)
 
         # norm = Normaliser(mean,...)
         # def f(x):
@@ -453,19 +575,21 @@ def test_one(training_context):
 
         return func
 
-    print(to_str(sp.static_info, name="sp.static_info"))
-    normaliser = build_normaliser(sp.static_info)
-    # normaliser = nested_to_callable(normaliser)
-    # n_data = apply(normaliser,data)
+    normaliser = sp.static_info.create_function(build_normaliser)
+
+    print("Normaliser function", normaliser)
     n_data = normaliser(data)
-    print(to_str(normaliser, name="Normaliser function"))
-    print(to_str(data, name="data before normalisation"))
-    print(to_str(n_data, name="normaliser(data)"))
+
+    d = data.select_content("data")
+    n = n_data.select_content("data")
+    print_columns(d.to_str("Unnormalised data"), n.to_str("Normalised data"))
+
+
+from rich.console import Console
+from rich.table import Table
 
 
 def print_columns(*args):
-    from rich.console import Console
-    from rich.table import Table
 
     console = Console()
     table = Table(show_header=False, box=None)
@@ -521,10 +645,10 @@ def test_two(training_context):
             """
     config = yaml.safe_load(cfg_2)
     sp = sample_provider_factory(**training_context, **config)
-    print(to_str(sp.static_info, "Static Info"))
+    print("static_info", sp.static_info)
     data = sp[1]
-    print(to_str(data, "Full Data"))
-    data = merge_boxes(data, sp.static_info)
+    data = sp.static_info.merge_content(data)
+    print("Full Data", data)
 
     def i_to_delta(i, frequency):
         frequency = frequency_to_timedelta(frequency)
@@ -534,14 +658,7 @@ def test_two(training_context):
             return sign + frequency_to_string(delta)
         return "0h"
 
-    data = select_content(data, "data", "_offset")
-    # data = select_content(data, "_offset")
-    # def change_source(dic, key, source):
-    #    path = dic[key].split('.')
-    #    path[0] = source
-    #    dic[key] = '.'.join(path)
-    # if i == 0:
-    #    change_source(rollout_config[0]["input"], "prognostics.0", source='from_dataset')
+    data = data.select_content("data", "_offset")
 
     print("[red] ✅ Rollout for prognostic data[/red]")
     # TODO: same logic for Forcings data, and for Diagnostic data
@@ -579,9 +696,9 @@ def test_two(training_context):
         )
         input_target = rearrange(cfg, sources)
         print()
-        input = input_target["input"]
-        target = input_target["target"]
-        print_columns(to_str(input, f"input({i})"), to_str(target, f"target({i})"))
+        input = input_target.input
+        target = input_target.target
+        print_columns(input.to_str(f"input({i})"), target.to_str(f"target({i})"))
 
         output = input_target["target"]
         previous_input = input_target["input"]

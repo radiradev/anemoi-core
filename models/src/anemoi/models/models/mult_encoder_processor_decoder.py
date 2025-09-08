@@ -25,7 +25,6 @@ from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.layers.projection import NodeEmbedder
 from anemoi.models.layers.projection import NodeProjector
 from anemoi.models.preprocessing.normalisers import build_normaliser
-from anemoi.training.data.refactor import structure as st
 from anemoi.utils.config import DotDict
 
 from .base import AnemoiModel
@@ -93,7 +92,6 @@ def merge_graph_sources(graph: HeteroData, sources: dict[str, str]) -> HeteroDat
     return graph, slices
 
 
-@st.apply_to_box
 def num_channels(name_to_index, **kwargs):
     import warnings
 
@@ -128,7 +126,7 @@ class AnemoiMultiModel(AnemoiModel):
         self.sample_static_info = sample_static_info
 
         # Instantiate processors
-        self.normaliser = build_normaliser(self.sample_static_info)
+        self.normaliser = self.sample_static_info.create_function(build_normaliser)
 
         # # apply is not supported anymore
         # preprocessors = self.sample_static_info.apply(processor_factory)
@@ -168,8 +166,8 @@ class AnemoiMultiModel(AnemoiModel):
 
         # NODE_COORDS_NDIMS = 4  # cos_lat, sin_lat, cos_lon, sin_lon
         # should be in the input ?
-        self.num_input_channels = num_channels(sample_static_info["input"])  # , add_channels=NODE_COORDS_NDIMS)
-        self.num_target_channels = num_channels(sample_static_info["target"])
+        self.num_input_channels = sample_static_info.input.box_to_any(num_channels)
+        self.num_target_channels = sample_static_info.target.box_to_any(num_channels)
 
         self.hidden_name: str = model_config.model.model.hidden_name
         encoders, self.encoder_sources, num_encoded_channels = extract_sources(model_config.model.model.encoders)
@@ -426,7 +424,7 @@ class AnemoiMultiModel(AnemoiModel):
 
         print(st.to_str(x, "Input Batch"))
 
-        batch_size =x[list(x.keys())[0]]["data"].shape[0]
+        batch_size = x[list(x.keys())[0]]["data"].shape[0]
         ensemble_size = 1
 
         x_hidden = self.get_node_coords(graph, self.hidden_name)

@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 import torch
 from torch.utils.checkpoint import checkpoint
 
-from anemoi.training.data.refactor import structure as st
 from anemoi.training.train.tasks.refactor.base import BaseGraphModule
 
 if TYPE_CHECKING:
@@ -44,11 +43,14 @@ class ForecastingModule(BaseGraphModule):
             Loss value, metrics, and predictions (per step)
         """
         # batch = self.allgather_batch(batch)
+        batch = self.sample_provider_info.merge_content(batch)
+        batch = Batch(batch)
 
         if not apply_processors:
             warnings.warn("Skipping processors")
         batch = self.model.normaliser(batch)
-        print(f"Normalising batch: {st.to_str(batch, "Batch")}")
+        batch = Batch(batch)
+        print(f"Normalising batch: {batch}")
         # removed process_batch, only normaliser is supported for now
         # batch = self.process_batch(batch)
 

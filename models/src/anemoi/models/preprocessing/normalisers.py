@@ -15,14 +15,11 @@ from typing import Optional
 import numpy as np
 import torch
 
-import anemoi.training.data.refactor.structure as st
 from anemoi.models.preprocessing import BasePreprocessor
 
 LOGGER = logging.getLogger(__name__)
 
 
-@st.make_output_callable
-@st.apply_to_box
 def build_normaliser(normaliser, name_to_index, statistics, **kwargs):
 
     if "_target_" not in kwargs:
