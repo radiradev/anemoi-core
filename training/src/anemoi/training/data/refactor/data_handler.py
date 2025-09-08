@@ -97,7 +97,7 @@ class DataHandler:
         from anemoi.training.data.refactor.structure import Box
 
         if request is None:
-            request = ["name_to_index", "statistics", "normaliser", "extra", "metadata"]
+            request = ["name_to_index", "statistics", "normaliser", "extra", "metadata", "number_of_features"]
         static = self._get(request, None)
         static["_version"] = "0.0"
         return Box(static)
@@ -127,6 +127,7 @@ class DataHandler:
             "imputer": lambda x: self._imputer_config,
             "extra": lambda x: self._extra_config,
             "metadata": lambda x: self.metadata,
+            "number_of_features": lambda x: len(self.name_to_index),
         }
 
         assert isinstance(request, (list, tuple)), request

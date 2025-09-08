@@ -174,7 +174,12 @@ class AnemoiMultiModel(AnemoiModel):
         decoders, self.decoder_sources, num_decoded_channels = extract_sources(
             model_config.model.model.decoders, reversed=True
         )
-
+        def build_embeder(number_of_features, **kwargs):
+            return NodeEmbedder(
+                num_input_channels=number_of_features,
+                # TODO
+            )
+        self.embeders = self.sample_static_info.create_function(build_embeder)
         # Embedding layers
         self.node_embedder = NodeEmbedder(
             model_config.model.model.emb_data,
