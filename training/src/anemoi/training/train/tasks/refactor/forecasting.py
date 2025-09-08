@@ -68,7 +68,7 @@ class ForecastingModule(BaseGraphModule):
         # graph = self.graph_editor.update_graph(self.graph_data, input_latlons, target_latlons)
 
         # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
-        y_pred = self(batch["input"], self.graph_data.clone().to("cuda"))
+        y_pred = self(batch.input, self.graph_data.clone().to("cuda"))
 
         # y includes the auxiliary variables, so we must leave those out when computing the loss
         loss = checkpoint(self.loss, y_pred, batch["target"], use_reentrant=False)

@@ -420,9 +420,9 @@ class AnemoiMultiModel(AnemoiModel):
     ) -> dict[str, Tensor]:
         # at this point, the input (x) has already been normalised
         # if this is not wanted, don't normalise it in the task
-        x = st.merge_boxes(x, self.sample_static_info["input"])
+        x = self.sample_static_info.merge_content(x)
 
-        print(st.to_str(x, "Input Batch"))
+        print(x.to_str("Input Batch"))
 
         batch_size = x[list(x.keys())[0]]["data"].shape[0]
         ensemble_size = 1
