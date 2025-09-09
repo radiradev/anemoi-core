@@ -9,11 +9,13 @@
 
 
 import logging
+import os
 import uuid
 from typing import Optional
 
 import einops
 import torch
+from boltons.iterutils import remap as _remap
 from hydra.utils import instantiate
 from torch import Tensor
 from torch import nn
@@ -24,7 +26,7 @@ from torch_geometric.data import HeteroData
 from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.layers.projection import NodeEmbedder
 from anemoi.models.layers.projection import NodeProjector
-from anemoi.models.preprocessing.normalisers import build_normaliser
+# from anemoi.models.preprocessing.normalisers import build_normaliser
 from anemoi.utils.config import DotDict
 
 from .base import AnemoiModel
@@ -125,8 +127,8 @@ class AnemoiMultiModel(AnemoiModel):
 
         self.sample_static_info = sample_static_info
 
-        # Instantiate processors
-        self.normaliser = self.sample_static_info.create_function(build_normaliser)
+        # Instantiate processors - build normalisers directly into ModuleDict
+        self.normaliser = self._build_normaliser_moduledict()
 
         # # apply is not supported anymore
         # preprocessors = self.sample_static_info.apply(processor_factory)
@@ -174,18 +176,28 @@ class AnemoiMultiModel(AnemoiModel):
         decoders, self.decoder_sources, num_decoded_channels = extract_sources(
             model_config.model.model.decoders, reversed=True
         )
-        def build_embeder(number_of_features, **kwargs):
-            return NodeEmbedder(
-                num_input_channels=number_of_features,
-                # TODO
-            )
-        self.embeders = self.sample_static_info.create_function(build_embeder)
+        # def build_embeder(number_of_features, **kwargs):
+        #     return NodeEmbedder(
+        #         num_input_channels=number_of_features,
+        #         # TODO
+        #     )
+        # self.embeders = self.sample_static_info.create_function(build_embeder)
         # Embedding layers
+
+        # def build_embeder(number_of_features, **kwargs):
+        #         return dict(
+        #             num_input_channels=number_of_features,
+        #             # TODO
+        #         )
+        # self.embeders = self.sample_static_info.create_function(build_embeder)
+
+
         self.node_embedder = NodeEmbedder(
             model_config.model.model.emb_data,
-            num_input_channels=self.num_input_channels,
+            num_input_channels=self.num_input_channels, # coords missing, we need to add them
             num_output_channels=num_encoded_channels,
             sources=self.encoder_sources,
+            coord_dimension=NODE_COORDS_NDIMS,
         )
         self.node_projector = NodeProjector(
             model_config.model.model.emb_data,
@@ -250,23 +262,39 @@ class AnemoiMultiModel(AnemoiModel):
 
         x_data, x_data_skip = {}, {}
         for name, x_source_raw in x.items():
-            x_data[name] = self._assemble_tensor(name, x_source_raw, graph, batch_size=batch_size)
-            x_data_skip[name] = x_source_raw[:, -1, :, :, :]
+            x_data[name] = self._assemble_tensor(name, x_source_raw["data"], graph, batch_size=batch_size)
+            # x_data_skip[name] = x_source_raw[:, -1, :, :, :]
 
         return x_data, x_data_skip
 
-    def _assemble_tensor(
-        self, name: str, x: torch.Tensor, graph: HeteroData, batch_size: int
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        x_dst_data_latent = torch.cat(
-            (
-                einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
-                self.get_node_coords(graph, name),
-                # TODO: add node trainable parameters
-            ),
-            dim=-1,  # feature dimension
-        )
-        return x_dst_data_latent
+    if os.environ.get("DOWNSCALING"):
+        def _assemble_tensor(
+            self, name: str, x: torch.Tensor, graph: HeteroData, batch_size: int
+        ) -> tuple[torch.Tensor, torch.Tensor]:
+            x_dst_data_latent = torch.cat(
+                (
+                    einops.rearrange(x, "batch vars grid -> (batch grid) vars"),
+                    self.get_node_coords(graph, name),
+                    # TODO: add node trainable parameters
+                ),
+                dim=-1,  # feature dimension
+            )
+            return x_dst_data_latent
+    elif os.environ.get("ENSEMBLE"):
+        def _assemble_tensor(
+            self, name: str, x: torch.Tensor, graph: HeteroData, batch_size: int
+        ) -> tuple[torch.Tensor, torch.Tensor]:
+            x_dst_data_latent = torch.cat(
+                (
+                    einops.rearrange(x, "batch time ensemble vars grid -> (batch ensemble grid) (time vars)"),
+                    self.get_node_coords(graph, name),
+                    # TODO: add node trainable parameters
+                ),
+                dim=-1,  # feature dimension
+            )
+            return x_dst_data_latent
+    else:
+        raise NotImplementedError
 
     def _run_mapper(
         self,
@@ -415,55 +443,55 @@ class AnemoiMultiModel(AnemoiModel):
         # at this point, the input (x) has already been normalised
         # if this is not wanted, don't normalise it in the task
         print(self.sample_static_info.to_str("Sample Info"))
-        print(x.to_str("x before merge"))
+        # print(x.to_str("x before merge"))
+
         x = self.sample_static_info.input.merge_content(x)
         print(x.to_str("x after"))
 
-        print(x.to_str("Input Batch"))
+        # print(x.to_str("Input Batch"))
+
 
         batch_size = x[list(x.keys())[0]]["data"].shape[0]
         ensemble_size = 1
 
-        def shape_function(data, **kwargs):
-            return data.shape
+        # def shape_function(data, **kwargs):
+        #     return data.shape
 
-        shapes = x.box_to_any(shape_function)
+        # shapes = x.box_to_any(shape_function)
 
         x_hidden = self.get_node_coords(graph, self.hidden_name)
         shard_shapes_hidden = get_shard_shapes(x_hidden, 0, model_comm_group)
 
         x_data_latents, x_data_skip = self._assemble_dict(x, graph, batch_size=batch_size)
 
-        if os.environ("DOWNSCALING"):
+        # if os.environ("DOWNSCALING"):
 
-            def reshape_for_graph_with_get_node(data, **kwargs):
-                return dict(
-                    data=einops.rearrange(x, "batch grid vars -> (batch grid) vars"),
-                    nodes_coords=self.get_node_coords(graph, name),
-                    # TODO: add node trainable parameters
-                )
+        #     def reshape_for_graph_with_get_node(data, **kwargs):
+        #         return dict(
+        #             data=einops.rearrange(x, "batch vars grid -> (batch grid) vars"),
+        #             nodes_coords=self.get_node_coords(graph, name),
+        #             # TODO: add node trainable parameters
+        #         )
 
-        elif os.environ("ENSEMBLE"):
+        # elif os.environ("ENSEMBLE"):
 
-            def reshape_for_graph_with_get_node(data, **kwargs):
-                return dict(
-                    data=einops.rearrange(x, "batch time ensemble grid vars -> (batch ensemble grid) (time vars)"),
-                    nodes_coords=self.get_node_coords(graph, name),
-                    # TODO: add node trainable parameters
-                )
+        #     def reshape_for_graph_with_get_node(data, **kwargs):
+        #         return dict(
+        #             data=einops.rearrange(x, "batch time ensemble vars grid -> (batch ensemble grid) (time vars)"),
+        #             nodes_coords=self.get_node_coords(graph, name),
+        #             # TODO: add node trainable parameters
+        #         )
 
-        else:
-            assert False
+        # else:
+        #     assert False
 
-        x = x.box_to_box(reshape_for_graph_with_get_node)
+        # x = x.box_to_box(reshape_for_graph_with_get_node)
 
         # cat all data
         # cat on nodes_coords
 
-        assert isinstance(x, torch.Tensor), type(x)
-        assert x.shape == math.product(shapes)
-
-        x = Batch()
+        # assert isinstance(x, torch.Tensor), type(x)
+        # assert x.shape == math.product(shapes)
 
         x_data_latents, x_hidden_latent = self.encode(
             (x_data_latents, x_hidden),
@@ -493,7 +521,88 @@ class AnemoiMultiModel(AnemoiModel):
             model_comm_group=model_comm_group,
         )
 
-        x_out = self.residual_connection(x_out, x_data_skip)
+        # x_out = self.residual_connection(x_out, x_data_skip)
         x_out = self.bound(x_out)
 
         return x_out
+
+    def _build_normaliser_moduledict(self):
+        """Build normalisers ModuleDict by extracting data from sample_static_info."""
+        from anemoi.models.preprocessing.normalisers import InputNormaliser
+        
+        normaliser = nn.ModuleDict()
+        
+        def extract_and_build(path, key, value):
+            if hasattr(value, 'items') and 'name_to_index' in value and 'statistics' in value and 'normaliser' in value:
+                name_to_index = value['name_to_index']
+                statistics = value['statistics']  
+                normaliser_config = value['normaliser']
+                
+                module_key = "__".join(path + (key,)) if path else key
+                LOGGER.info(f"Building normaliser for {module_key}")
+                LOGGER.info(f"  normaliser_config: {normaliser_config}")
+                LOGGER.info(f"  name_to_index keys: {list(name_to_index.keys()) if name_to_index else 'None'}")
+                LOGGER.info(f"  statistics keys: {list(statistics.keys()) if statistics else 'None'}")
+                
+                actual_config = normaliser_config.get('config', normaliser_config)
+                
+                normaliser_module = InputNormaliser(
+                    config=actual_config, 
+                    name_to_index=name_to_index, 
+                    statistics=statistics
+                )
+                
+                normaliser[module_key] = normaliser_module
+            
+            return key, value
+        
+        # Traverse the sample_static_info structure
+        _remap(self.sample_static_info, visit=extract_and_build)
+        
+        return normaliser
+
+    # def get_batch_input_names(self, batch, prefix=""):
+    #     """Get all input names from a batch structure."""
+    #     names = []
+        
+    #     for key, value in batch.items():
+    #         current_name = f"{prefix}__{key}" if prefix else key
+            
+    #         if isinstance(value, dict):
+    #             names.extend(self.get_batch_input_names(value, current_name))
+    #         else:
+    #             names.append(current_name)
+        
+    #     return names
+
+    def apply_normalisers(self, batch):
+        """Apply normalisers to batch in-place."""
+        LOGGER.debug(f"Available normaliser keys: {list(self.normaliser.keys())}")
+        
+        def apply_to_nested_dict_inplace(data_dict, path=""):
+            """Recursively apply normalisers to nested dictionary structure in-place."""
+            for key, value in data_dict.items():
+                current_path = f"{path}__{key}" if path else key
+                
+                if isinstance(value, dict):
+                    apply_to_nested_dict_inplace(value, current_path)
+                elif isinstance(value, torch.Tensor) and key == "data":
+                    # Check if there's a normaliser for the parent path (e.g., input__low_res for input__low_res__data)
+                    parent_path = path  # path is already the parent (e.g., "input__low_res")
+                    if parent_path in self.normaliser:
+                        LOGGER.debug(f"Normalizing {current_path} using normaliser {parent_path} - tensor shape: {value.shape}")
+                        LOGGER.debug(f"  Before: min: {value.min().item():.4f}, max: {value.max().item():.4f}, mean: {value.mean().item():.4f}")
+                        normaliser = self.normaliser[parent_path]
+                        LOGGER.debug(f"  Normaliser _norm_mul range: {normaliser._norm_mul.min().item():.6f} to {normaliser._norm_mul.max().item():.6f}")
+                        LOGGER.debug(f"  Normaliser _norm_add range: {normaliser._norm_add.min().item():.6f} to {normaliser._norm_add.max().item():.6f}")
+                        normalized_data = normaliser(value)
+                        LOGGER.debug(f"  After: min: {normalized_data.min().item():.4f}, max: {normalized_data.max().item():.4f}, mean: {normalized_data.mean().item():.4f}")
+                        # Replace the tensor in-place
+                        data_dict[key] = normalized_data
+                    else:
+                        LOGGER.debug(f"Skipped {current_path} - tensor shape: {value.shape} (no normaliser for parent {parent_path})")
+                elif isinstance(value, torch.Tensor):
+                    LOGGER.debug(f"Skipped {current_path} - tensor shape: {value.shape} (coordinates/metadata, not normalized)")
+        
+        apply_to_nested_dict_inplace(batch)
+        return batch

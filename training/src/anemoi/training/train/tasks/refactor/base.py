@@ -49,7 +49,7 @@ class BaseGraphModule(pl.LightningModule, ABC):
         super().__init__()
         self.sample_static_info = sample_static_info
 
-        self.graph_data = graph_data.to(self.device)
+        self.graph_data = graph_data #.to(self.device) # at init this will be on cpu 
 
         # TODO: oandle supporting arrays for multiple output masks (multiple outputs)
         # (It is handled in the loss function, but not the version here that is sent to model for supporting_arrays)

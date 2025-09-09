@@ -20,6 +20,7 @@ class NodeEmbedder(nn.Module):
         num_input_channels: dict[str, int],
         num_output_channels: dict[str, int],
         sources: dict[str, str],
+        coord_dimension: int = 4, # sin() cos() of lat and lon
         **kwargs
     ):
         super().__init__()
@@ -32,7 +33,7 @@ class NodeEmbedder(nn.Module):
                 in_source: instantiate(
                     config,
                     _recursive_=False,
-                    in_features=num_input_channels[in_source],
+                    in_features=num_input_channels[in_source] + coord_dimension,
                     out_features=num_output_channels[out_source],
                 )
                 for in_source, out_source in sources.items()

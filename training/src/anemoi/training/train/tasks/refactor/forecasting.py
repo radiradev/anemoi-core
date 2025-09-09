@@ -50,10 +50,11 @@ class ForecastingModule(BaseGraphModule):
         static_info = self.model.sample_static_info
 
         batch = static_info.merge_content(batch)
+        print(batch.to_str("batch before normalistation"))
+        batch = self.model.apply_normalisers(batch)
+        print(batch.to_str("batch after normalistation"))
 
-        batch = self.model.normaliser(batch)  # TODO use self.normaliser with a property
-
-        print(f"Normalising batch: {batch}")
+        # print(f"Normalising batch: {batch}")
         # removed process_batch, only normaliser is supported for now
         # batch = self.process_batch(batch)
 
