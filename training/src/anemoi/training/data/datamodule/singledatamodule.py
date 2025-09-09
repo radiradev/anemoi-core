@@ -169,8 +169,12 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
 
     @cached_property
     def ds_train(self) -> NativeGridDataset:
+        dataloader_config=self.config.dataloader.training
+        #remove start and end date to work with cloned dataset
+        dataloader_config['start']=None
+        dataloader_config['end']=None
         return self._get_dataset(
-            open_dataset(self.config.dataloader.training),
+            open_dataset(dataloader_config),
             label="train",
         )
 
