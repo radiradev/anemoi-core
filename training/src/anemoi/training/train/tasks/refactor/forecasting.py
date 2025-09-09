@@ -71,8 +71,17 @@ class ForecastingModule(BaseGraphModule):
         # prediction at rollout step rollout_step, shape = (bs, latlon, nvar)
         y_pred = self(batch.input, self.graph_data.clone().to("cuda"))
 
-        # y includes the auxiliary variables, so we must leave those out when computing the loss
-        loss = checkpoint(self.loss, y_pred, batch["target"], use_reentrant=False)
+        target_dtype = next(iter(batch["target"].values()))["data"].dtype
+        loss = torch.zeros(1, dtype=target_dtype, device=self.device, requires_grad=True)
+        
+        # Iterate over all entries in batch["target"] and accumulate loss
+        for target_key, target_data in batch["target"].items():
+            loss += checkpoint(
+                self.loss, y_pred[target_key].unsqueeze(0), # add batch dimension, why do we not get this from the model?
+                target_data["data"].permute(0, 2, 1),
+                use_reentrant=False
+            ) # weighting will probably not be correct here ...
+        loss *= 1 / len(batch["target"]) # Average loss over all targets        
 
         metrics_next = {}
         if validation_mode:
