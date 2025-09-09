@@ -7,7 +7,6 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
-from __future__ import annotations
 
 import logging
 import os
@@ -16,22 +15,20 @@ from datetime import datetime
 from datetime import timezone
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import hydra
 import pandas as pd
+import pytorch_lightning as pl
+from omegaconf import DictConfig
+from pytorch_lightning.loggers.logger import Logger
 from pytorch_lightning.utilities import rank_zero_only
 from rich.console import Console
 
-if TYPE_CHECKING:
-    from anemoi.training.data.datamodule import AnemoiDatasetsDataModule
-    from pytorch_lightning.loggers.logger import Logger
-    from omegaconf import DictConfig
-    import pytorch_lightning as pl
-
+from anemoi.training.data.datamodule import AnemoiDatasetsDataModule
 from anemoi.training.diagnostics.profilers import BenchmarkProfiler
 from anemoi.training.diagnostics.profilers import ProfilerProgressBar
 from anemoi.training.train.train import AnemoiTrainer
+from anemoi.training.diagnostics.trace_analyser import analyse_trace
 
 LOGGER = logging.getLogger(__name__)
 console = Console(record=True, width=200)
@@ -89,6 +86,7 @@ class AnemoiProfiler(AnemoiTrainer):
         if memory_metrics_df is not None:
             warnings.warn("INFO: Memory Report metrics represent metrics aggregated across all nodes")
             self.print_report("Memory Profiling", memory_metrics_df, color="purple", emoji="floppy_disk")
+            analyse_trace(self.profiler.dirpath)
 
         if system_metrics_df is not None:
             self.print_report("System Profiling", system_metrics_df, color="Red", emoji="desktop_computer")

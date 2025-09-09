@@ -8,13 +8,10 @@
 # nor does it submit to any jurisdiction.
 
 
-from __future__ import annotations
-
 import datetime
 import logging
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING
 from typing import Any
 
 import hydra
@@ -28,6 +25,7 @@ from omegaconf import OmegaConf
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
 from scipy.sparse import load_npz
+from torch_geometric.data import HeteroData
 
 from anemoi.training.diagnostics.callbacks import get_callbacks
 from anemoi.training.diagnostics.logger import get_mlflow_logger
@@ -41,9 +39,6 @@ from anemoi.training.utils.checkpoint import transfer_learning_loading
 from anemoi.training.utils.jsonify import map_config_to_primitives
 from anemoi.training.utils.seeding import get_base_seed
 from anemoi.utils.provenance import gather_provenance_info
-
-if TYPE_CHECKING:
-    from torch_geometric.data import HeteroData
 
 LOGGER = logging.getLogger(__name__)
 
@@ -76,7 +71,13 @@ class AnemoiTrainer:
 
             LOGGER.info("Skipping config validation.")
 
-        self.start_from_checkpoint = bool(self.config.training.run_id) or bool(self.config.training.fork_run_id)
+        self.start_from_checkpoint = (
+            bool(self.config.training.run_id)
+            or bool(self.config.training.fork_run_id)
+            or bool(self.config.hardware.files.warm_start)
+        )
+        LOGGER.info("Starting from checkpoint: %s", self.start_from_checkpoint)
+
         self.load_weights_only = self.config.training.load_weights_only
         self.parent_uuid = None
 
@@ -148,8 +149,10 @@ class AnemoiTrainer:
             )
 
             if graph_filename.exists() and not self.config.graph.overwrite:
+                from anemoi.graphs.utils import get_distributed_device
+
                 LOGGER.info("Loading graph data from %s", graph_filename)
-                return torch.load(graph_filename, weights_only=False)
+                return torch.load(graph_filename, map_location=get_distributed_device(), weights_only=False)
 
         else:
             graph_filename = None
@@ -179,6 +182,16 @@ class AnemoiTrainer:
             )
 
         return truncation_data
+
+    def set_compile_flags(self, model, compile_class_paths):
+        from hydra.utils import get_class
+
+        # Convert class paths to actual classes
+        compile_classes = [get_class(path) for path in compile_class_paths]
+
+        for module in model.modules():
+            if type(module) in compile_classes:
+                module.compile = True
 
     @cached_property
     def model(self) -> pl.LightningModule:
@@ -211,7 +224,7 @@ class AnemoiTrainer:
         }
 
         model_task = get_class(self.config.training.model_task)
-        model = model_task(**kwargs)
+        model = model_task(**kwargs)  # GraphForecaster -> pl.LightningModule
 
         # Load the model weights
         if self.load_weights_only:
@@ -236,6 +249,9 @@ class AnemoiTrainer:
             for submodule_name in self.config.training.submodules_to_freeze:
                 freeze_submodule_by_name(model, submodule_name)
                 LOGGER.info("%s frozen successfully.", submodule_name.upper())
+
+        if hasattr(self.config.model, "compile"):
+            self.set_compile_flags(model, self.config.model.compile)
 
         return model
 
@@ -283,6 +299,28 @@ class AnemoiTrainer:
         """TensorBoard logger."""
         return get_tensorboard_logger(self.config)
 
+    def _get_warm_start_checkpoint(self) -> Path | None:
+        """Returns the warm start checkpoint path if specified."""
+        warm_start_dir = getattr(self.config.hardware.paths, "warm_start", None)  # avoid breaking change
+        warm_start_file = self.config.hardware.files.warm_start
+        warm_start_path = None
+
+        if warm_start_dir or warm_start_file:
+            assert (
+                warm_start_dir is not None
+            ), f"Please configure config.hardware.paths.warm_start correctly, found: {warm_start_dir}"
+            assert (
+                warm_start_file is not None
+            ), f"Please configure config.hardware.files.warm_start correctly, found: {warm_start_file}"
+            warm_start_path = Path(warm_start_dir) / Path(warm_start_file)
+            msg = "Warm start checkpoint not found: %s", warm_start_path
+            assert Path.is_file(warm_start_path), msg
+        return warm_start_path
+
+    def _get_checkpoint_directory(self, fork_id: str) -> Path:
+        """Returns the directory where checkpoints are stored."""
+        return Path(self.config.hardware.paths.checkpoints.parent, fork_id or self.lineage_run) / "last.ckpt"
+
     @cached_property
     def last_checkpoint(self) -> Path | None:
         """Path to the last checkpoint."""
@@ -290,11 +328,7 @@ class AnemoiTrainer:
             return None
 
         fork_id = self.fork_run_server2server or self.config.training.fork_run_id
-        checkpoint = Path(
-            self.config.hardware.paths.checkpoints.parent,
-            fork_id or self.lineage_run,
-            self.config.hardware.files.warm_start or "last.ckpt",
-        )
+        checkpoint = self._get_warm_start_checkpoint() or self._get_checkpoint_directory(fork_id)
 
         # Check if the last checkpoint exists
         if checkpoint.exists():
@@ -406,7 +440,6 @@ class AnemoiTrainer:
             "Effective learning rate: %.3e",
             int(total_number_of_model_instances) * self.config.training.lr.rate,
         )
-        LOGGER.debug("Rollout window length: %d", self.config.training.rollout.start)
 
         if self.config.training.max_epochs is not None and self.config.training.max_steps not in (None, -1):
             LOGGER.info(
@@ -509,8 +542,8 @@ class AnemoiTrainer:
             ckpt_path=None if (self.load_weights_only) else self.last_checkpoint,
         )
 
-        if self.config.diagnostics.print_memory_summary:
-            LOGGER.info("memory summary: %s", torch.cuda.memory_summary())
+        if self.config.diagnostics.print_memory_summary and rank_zero_only.rank == 0:
+            LOGGER.info("memory summary: %s", torch.cuda.memory_summary(device=0))
 
         LOGGER.debug("---- DONE. ----")
 

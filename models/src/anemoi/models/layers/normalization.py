@@ -9,11 +9,16 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Union
 
 from torch import Size
 from torch import Tensor
 from torch import nn
+
+from anemoi.models.compile.conditional import ConditionalCompile
+
+LOG = logging.getLogger(__name__)
 
 
 class AutocastLayerNorm(nn.LayerNorm):
@@ -50,6 +55,7 @@ class ConditionalLayerNorm(nn.Module):
         self.scale = nn.Linear(condition_shape, normalized_shape)  # , bias=False)
         self.bias = nn.Linear(condition_shape, normalized_shape)  # , bias=False)
         self.autocast = autocast
+        # self.compile = True #This variable is consumed by the ConditionalCompile wrapper
 
         if w_one_bias_zero_init:
             nn.init.zeros_(self.scale.weight)
@@ -57,6 +63,7 @@ class ConditionalLayerNorm(nn.Module):
             nn.init.zeros_(self.bias.weight)
             nn.init.zeros_(self.bias.bias)
 
+    @ConditionalCompile(dynamic=True)
     def forward(self, x: Tensor, cond: Tensor) -> Tensor:
         """Conditional Layer Normalization.
 

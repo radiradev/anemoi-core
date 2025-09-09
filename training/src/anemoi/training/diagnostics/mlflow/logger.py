@@ -8,41 +8,38 @@
 # nor does it submit to any jurisdiction.
 
 
-from __future__ import annotations
-
 import io
 import logging
 import os
 import re
 import sys
 import time
+from argparse import Namespace
+from collections.abc import Mapping
 from pathlib import Path
 from threading import Thread
-from typing import TYPE_CHECKING
 from typing import Any
 from typing import Literal
 from weakref import WeakValueDictionary
 
-from packaging.version import Version
+import mlflow
+from mlflow.tracking import MlflowClient
 from pytorch_lightning.loggers.mlflow import MLFlowLogger
 from pytorch_lightning.loggers.mlflow import _convert_params
 from pytorch_lightning.loggers.mlflow import _flatten_dict
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
+from typing_extensions import override
 
+from anemoi.training.diagnostics.mlflow.utils import FixedLengthSet
+from anemoi.training.diagnostics.mlflow.utils import clean_config_params
+from anemoi.training.diagnostics.mlflow.utils import expand_iterables
 from anemoi.utils.mlflow.auth import TokenAuth
-from anemoi.utils.mlflow.utils import clean_config_params
-from anemoi.utils.mlflow.utils import expand_iterables
 from anemoi.utils.mlflow.utils import health_check
-
-if TYPE_CHECKING:
-    from argparse import Namespace
-
-    import mlflow
-    from mlflow.tracking import MlflowClient
 
 LOGGER = logging.getLogger(__name__)
 
 MAX_PARAMS_LENGTH = 2000
+LOG_MODEL = False
 
 
 class LogsMonitor:
@@ -265,6 +262,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
         authentication: bool | None = None,
         log_hyperparams: bool | None = True,
         on_resume_create_child: bool | None = True,
+        max_params_length: int | None = MAX_PARAMS_LENGTH,
     ) -> None:
         """Initialize the AnemoiMLflowLogger.
 
@@ -300,6 +298,8 @@ class AnemoiMLflowLogger(MLFlowLogger):
             Whether to log hyperparameters, by default True
         on_resume_create_child: bool | None, optional
             Whether to create a child run when resuming a run, by default False
+        max_params_length: int | None, optional
+            Maximum number of params to be logged to Mlflow
         """
         self._resumed = resumed
         self._forked = forked
@@ -308,6 +308,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
         self._fork_run_server2server = None
         self._parent_run_server2server = None
         self._parent_dry_run = False
+        self._max_params_length = max_params_length
 
         enabled = authentication and not offline
         self.auth = TokenAuth(tracking_uri, enabled=enabled)
@@ -348,6 +349,10 @@ class AnemoiMLflowLogger(MLFlowLogger):
             prefix=prefix,
             run_id=run_id,
         )
+
+        # Track logged metrics to prevent duplicate logs
+        # 2000 has been chosen as this should contain metrics form many steps
+        self._logged_metrics = FixedLengthSet(maxlen=2000)  # Track (key, step)
 
     def _check_dry_run(self, run: mlflow.entities.Run) -> None:
         """Check if the parent run is a dry run.
@@ -454,11 +459,24 @@ class AnemoiMLflowLogger(MLFlowLogger):
 
         return run_id, run_name, tags
 
+    @override
     @property
     def experiment(self) -> MLFlowLogger.experiment:
         if rank_zero_only.rank == 0:
             self.auth.authenticate()
         return super().experiment
+
+    @override
+    @rank_zero_only
+    def log_metrics(self, metrics: Mapping[str, float], step: int | None = None) -> None:
+        cleaned_metrics = metrics.copy()
+        for k in metrics:
+            metric_id = (k, step or 0)
+            if metric_id in self._logged_metrics:
+                cleaned_metrics.pop(k)
+                continue
+            self._logged_metrics.add(metric_id)
+        return super().log_metrics(metrics=cleaned_metrics, step=step)
 
     @rank_zero_only
     def log_system_metrics(self) -> None:
@@ -542,6 +560,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
             params,
             expand_keys=expand_keys,
             log_hyperparams=self._flag_log_hparams,
+            max_params_length=self._max_params_length,
         )
 
     @rank_zero_only
@@ -566,6 +585,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
         expand_keys: list[str] | None = None,
         log_hyperparams: bool | None = True,
         clean_params: bool = True,
+        max_params_length: int | None = MAX_PARAMS_LENGTH,
     ) -> None:
         """Log hyperparameters to MLflow server.
 
@@ -587,6 +607,8 @@ class AnemoiMLflowLogger(MLFlowLogger):
             by default None.
         log_hyperparams : bool | None, optional
             Whether to log hyperparameters, by default True.
+        max_params_length: int | None, optional
+            Maximum number of params to be logged to Mlflow
         """
         if log_hyperparams:
             params = _convert_params(params)
@@ -598,10 +620,10 @@ class AnemoiMLflowLogger(MLFlowLogger):
             import mlflow
             from mlflow.entities import Param
 
-            truncation_length = 250
-
-            if Version(mlflow.VERSION) >= Version("1.28.0"):
-                truncation_length = 500
+            try:  # Check maximum param value length is available and use it
+                truncation_length = mlflow.utils.validation.MAX_PARAM_VAL_LENGTH
+            except AttributeError:  # Fallback (in case of MAX_PARAM_VAL_LENGTH not available)
+                truncation_length = 250  # Historical default value
 
             AnemoiMLflowLogger.log_hyperparams_as_mlflow_artifact(client=client, run_id=run_id, params=params)
 
@@ -623,9 +645,13 @@ class AnemoiMLflowLogger(MLFlowLogger):
                 expanded_params = clean_config_params(expanded_params)
 
             LOGGER.info("Logging %s parameters", len(expanded_params))
-
-            if len(expanded_params) > MAX_PARAMS_LENGTH:
-                LOGGER.warning("Logging a large number of parameters to %s", len(expanded_params))
+            if len(expanded_params) > max_params_length:
+                msg = (
+                    f"Too many params: {len(expanded_params)} > {max_params_length}",
+                    "Please revisit the fields being logged and add redundant or irrelevant "
+                    "ones to the clean_config_params function.",
+                )
+                raise ValueError(msg)
 
             # Truncate parameter values.
             params_list = [Param(key=k, value=str(v)[:truncation_length]) for k, v in expanded_params.items()]

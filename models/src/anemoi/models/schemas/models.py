@@ -124,8 +124,8 @@ class NormalizedReluBoundingSchema(BaseModel):
         return self
 
 
-class LeakyNormalizedReluBoundingSchema(NormalizedReluBoundingSchema):
-    target_: Literal["anemoi.models.layers.bounding.LeakyNormalizedReluBounding"] = Field(..., alias="_target_")
+class NormalizedLeakyReluBoundingSchema(NormalizedReluBoundingSchema):
+    target_: Literal["anemoi.models.layers.bounding.NormalizedLeakyReluBounding"] = Field(..., alias="_target_")
     "Leaky normalized Relu bounding object defined in anemoi.models.layers.bounding."
 
 
@@ -138,7 +138,7 @@ Bounding = Annotated[
         HardtanhBoundingSchema,
         LeakyHardtanhBoundingSchema,
         NormalizedReluBoundingSchema,
-        LeakyNormalizedReluBoundingSchema,
+        NormalizedLeakyReluBoundingSchema,
     ],
     Field(discriminator="target_"),
 ]
@@ -211,4 +211,11 @@ class EnsModelSchema(BaseModelSchema):
     "Settings related to custom kernels for encoder processor and decoder blocks"
 
 
-ModelSchema = Union[BaseModelSchema, EnsModelSchema]
+class HierarchicalModelSchema(BaseModelSchema):
+    enable_hierarchical_level_processing: bool = Field(default=False)
+    "Toggle to do message passing at every downscaling and upscaling step"
+    level_process_num_layers: NonNegativeInt = Field(default=1)
+    "Number of message passing steps at each level"
+
+
+ModelSchema = Union[BaseModelSchema, EnsModelSchema, HierarchicalModelSchema]

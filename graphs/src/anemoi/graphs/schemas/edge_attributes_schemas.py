@@ -8,11 +8,8 @@
 #
 
 
-from __future__ import annotations
-
 from enum import Enum
 from typing import Literal
-from typing import Union
 
 from pydantic import Field
 
@@ -23,6 +20,7 @@ class ImplementedEdgeAttributeSchema(str, Enum):
     edge_length = "anemoi.graphs.edges.attributes.EdgeLength"
     edge_dirs = "anemoi.graphs.edges.attributes.EdgeDirection"
     azimuth = "anemoi.graphs.edges.attributes.Azimuth"
+    gaussian_weights = "anemoi.graphs.edges.attributes.GaussianDistanceWeights"
 
 
 class BaseEdgeAttributeSchema(BaseModel):
@@ -42,4 +40,4 @@ class EdgeAttributeFromNodeSchema(BaseModel):
     "Normalisation method applied to the edge attribute."
 
 
-EdgeAttributeSchema = Union[BaseEdgeAttributeSchema, EdgeAttributeFromNodeSchema]
+EdgeAttributeSchema = BaseEdgeAttributeSchema | EdgeAttributeFromNodeSchema

@@ -8,6 +8,8 @@
 # nor does it submit to any jurisdiction.
 
 
+from typing import Any
+
 import pytest
 import torch
 from _pytest.fixtures import SubRequest
@@ -18,6 +20,7 @@ from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.training.losses import get_loss_function
 from anemoi.training.losses.loss import get_metric_ranges
 from anemoi.training.losses.scalers import create_scalers
+from anemoi.training.losses.scalers.base_scaler import BaseUpdatingScaler
 from anemoi.training.utils.enums import TensorDim
 from anemoi.training.utils.masks import NoOutputMask
 from anemoi.training.utils.variables_metadata import ExtractVariableGroupAndLevel
@@ -56,6 +59,42 @@ def fake_data(request: SubRequest) -> tuple[DictConfig, IndexCollection]:
                 },
                 "metrics": ["other", "y_850"],
             },
+        },
+    )
+    name_to_index = {"x": 0, "y_50": 1, "y_500": 2, "y_850": 3, "z": 5, "q": 4, "other": 6, "d": 7}
+    data_indices = IndexCollection(config=config, name_to_index=name_to_index)
+    statistics = {"stdev": [0.0, 10.0, 10, 10, 7.0, 3.0, 1.0, 2.0, 3.5]}
+    statistics_tendencies = {"stdev": [0.0, 5, 5, 5, 4.0, 7.5, 8.6, 1, 10]}
+    return config, data_indices, statistics, statistics_tendencies
+
+
+@pytest.fixture
+def fake_data_no_param() -> tuple[DictConfig, IndexCollection]:
+    config = DictConfig(
+        {
+            "data": {
+                "forcing": ["x"],
+                "diagnostic": ["z", "q"],
+            },
+            "training": {
+                "training_loss": {
+                    "_target_": "anemoi.training.losses.MSELoss",
+                    "scalers": ["variable_masking"],
+                },
+                "variable_groups": {
+                    "default": "sfc",
+                    "pl": ["y"],
+                },
+                "scalers": {
+                    "builders": {
+                        "variable_masking": {
+                            "_target_": "anemoi.training.losses.scalers.VariableMaskingLossScaler",
+                            "variables": ["z", "other", "q"],
+                        },
+                    },
+                },
+            },
+            "metrics": [],
         },
     )
     name_to_index = {"x": 0, "y_50": 1, "y_500": 2, "y_850": 3, "z": 5, "q": 4, "other": 6, "d": 7}
@@ -260,3 +299,84 @@ def test_metric_range(fake_data: tuple[DictConfig, IndexCollection]) -> None:
     }
 
     assert metric_range == expected_metric_range
+
+
+@pytest.fixture
+def mock_updating_scalar() -> type[BaseUpdatingScaler]:
+    class UpdatingScalar(BaseUpdatingScaler):
+        """Mock updating scalar for testing."""
+
+        scale_dims = (TensorDim.VARIABLE,)
+
+        def get_scaling_values(self) -> torch.Tensor:
+            """Return initial scaling values."""
+            return torch.Tensor([1.0])
+
+        def on_training_start(self, model: Any) -> torch.Tensor:  # noqa: ARG002
+            return torch.Tensor([2.0])
+
+        def on_batch_start(self, model: Any) -> torch.Tensor:  # noqa: ARG002
+            return torch.Tensor([3.0])
+
+    return UpdatingScalar
+
+
+def test_updating_scalars(mock_updating_scalar: type[BaseUpdatingScaler]) -> None:
+    """Test that the updating scalar returns the correct values."""
+    scalar = mock_updating_scalar()
+
+    assert scalar.get_scaling_values() is not None
+    assert isinstance(scalar.get_scaling_values(), torch.Tensor)
+
+    assert scalar.get_scaling() is not None
+    assert scalar.get_scaling()[1] == torch.Tensor([1.0]), "Scalar values should be from the initial scaling values."
+
+    assert scalar.on_training_start(None) == torch.Tensor([2.0])
+    updated_scaling = scalar.update_scaling_values(callback="on_training_start", model=None)
+    assert updated_scaling is not None and updated_scaling[1] == torch.Tensor(
+        [2.0],
+    ), "Scalar values should be updated after on_training_start."
+
+    assert scalar.on_batch_start(None) == torch.Tensor([3.0])
+    updated_scaling = scalar.update_scaling_values(callback="on_batch_start", model=None)
+    assert updated_scaling is not None and updated_scaling[1] == torch.Tensor(
+        [3.0],
+    ), "Scalar values should be updated after on_batch_start."
+
+
+def test_variable_masking(
+    fake_data_no_param: tuple[DictConfig, IndexCollection, torch.Tensor, torch.Tensor],
+    graph_with_nodes: HeteroData,
+) -> None:
+    config, data_indices, statistics, statistics_tendencies = fake_data_no_param
+
+    metadata_extractor = ExtractVariableGroupAndLevel(
+        config.training.variable_groups,
+    )
+
+    scalers, _ = create_scalers(
+        config.training.scalers.builders,
+        data_indices=data_indices,
+        graph_data=graph_with_nodes,
+        statistics=statistics,
+        statistics_tendencies=statistics_tendencies,
+        metadata_extractor=metadata_extractor,
+        output_mask=NoOutputMask(),
+    )
+    vars_to_mask = ["z", "other", "q"]
+    indices_to_mask = [data_indices.model.output.name_to_index[v] for v in vars_to_mask]
+    assert scalers["variable_masking"][0][0] == len(vars_to_mask)
+    assert not scalers["variable_masking"][1][indices_to_mask].any(), "Expected scalers for masked variables to be zero"
+
+    config.training.scalers.builders["variable_masking"].update(invert=True)
+    scalers, _ = create_scalers(
+        config.training.scalers.builders,
+        data_indices=data_indices,
+        graph_data=graph_with_nodes,
+        statistics=statistics,
+        statistics_tendencies=statistics_tendencies,
+        metadata_extractor=metadata_extractor,
+        output_mask=NoOutputMask(),
+    )
+    assert scalers["variable_masking"][0][0] == len(vars_to_mask)
+    assert scalers["variable_masking"][1][indices_to_mask].all(), "Expected scalers for unmasked variables to be one"
