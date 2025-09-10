@@ -13,8 +13,14 @@ from __future__ import annotations
 import logging
 
 import torch
+from torch_geometric.data import HeteroData
+import xarray as xr 
+import numpy as np 
 
 from anemoi.training.losses.weightedloss import BaseWeightedLoss
+from anemoi.graphs.nodes.builders.from_vectors import LatLonNodes
+from anemoi.graphs.edges.builders.knn import KNNEdges
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -56,7 +62,43 @@ class WeightedAreaRelatetSortedIntensityLoss(BaseWeightedLoss):
         # ) 
         #TODO: remove original_node_weights and determine node_weights
         # of correct shape only once, of no change of depth during run time necessary
-        self.register_buffer("original_node_weights", self.node_weights, persistent=True)
+        #self.register_buffer("original_node_weights", self.node_weights, persistent=True)
+        self.neigbor_index = self._generate_index_tensor(z)
+
+    def _generate_index_tensor(refinmement_level: int):
+        """
+            return
+            ------ 
+            z (Nnodes, Nneigh): torch.tensor (int), holds in a given line the neighbor indices of the corresponding node
+            Nnodes: int, number of nodes in data domain
+            Nneigh: int, number of neighbors in area around each node 
+            generates index tensor that defines the neighborhood of each point 
+        """
+        # generate ValueError
+        grid_filename = "/shared/data/fe1ai/ml-datasets/structure/01_aicon-graph-files/icon_grid_0026_R03B07_G.nc"
+        grid_ds = xr.open_dataset(grid_filename) 
+        #INFO:mask currently hard coded 
+        mask = grid_ds["refinement_level_c"] <= refinmement_level
+        lat, lon = np.rad2deg(grid_ds["clat"].values), np.rad2deg(grid_ds["clon"].values)
+        lat, lon = lat[mask], lon[mask]
+        mygraph = HeteroData()
+        source_nodes = LatLonNodes(longitudes=lon, latitudes=lat, name = "source")
+        mygraph = source_nodes.update_graph(mygraph)
+        target_nodes = LatLonNodes(longitudes=lon, latitudes=lat, name = "target")
+        mygraph = target_nodes.update_graph(mygraph)
+        edges = KNNEdges(
+            source_name = "source",
+            target_name = "target",
+            num_nearest_neighbours=self.num_neighbors,
+            )
+        mygraph = edges.update_graph(mygraph)
+        edge_index = mygraph["source","to","target"].edge_index
+        Nnodes = mygraph["source"].x.shape[0]
+        # Sort edges by target node
+        sorted_targets, perm = torch.sort(edge_index[1])
+        sorted_sources = edge_index[0][perm]
+        z = sorted_sources.view(Nnodes, self.num_neighbors).int()
+        return z
 
     def _aggregate(self,
                   x: torch.Tensor, 
