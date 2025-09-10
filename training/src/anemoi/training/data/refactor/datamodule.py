@@ -30,6 +30,35 @@ if TYPE_CHECKING:
     from anemoi.training.schemas.base_schema import BaseSchema
 
 
+class Sharder:
+    # TODO: move to the right file
+    def __init__(self, group, shard_number, **options):
+        self.group = group
+        self.shard_number = shard_number
+        self.options = options
+
+        # for now, slice is just a full slice
+        # we need to define the right slicing here
+        # using the group, shard_number, etc
+        self.slice = slice(None)
+
+    def shard_latitudes(self, latitudes):
+        return latitudes[self.slice]
+
+    def shard_longitudes(self, longitudes):
+        return longitudes[self.slice]
+
+    def shard_latitudes_longitudes(self, latitudes_longitudes):
+        return latitudes_longitudes[self.slice, :]
+
+    def shard_data(self, data, dimensions_order: list[str] | tuple[str] = None):
+        # somewhere in the dimensions order we want to shard the data
+        # we actually want to shard on the "values" dimension
+        assert "values" in dimensions_order, f"Expected 'values' in dimensions_order, got {dimensions_order}"
+        slices = tuple(self.slice if dim == "values" else slice(None) for dim in dimensions_order)
+        return data[slices]
+
+
 class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
     """Anemoi Datasets data module for PyTorch Lightning."""
 
@@ -49,8 +78,10 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         validation_context = dict(sources=data_dict, **config.dataloader.sampler.validation)
 
         # Create Sampler provider
-        self.training_sample_provider = sample_provider_factory(**training_context, **sample_dict)
-        self.validation_sample_provider = sample_provider_factory(**validation_context, **sample_dict)
+        self.training_sample_provider = sample_provider_factory(**training_context, sharder=self.sharder, **sample_dict)
+        self.validation_sample_provider = sample_provider_factory(
+            **validation_context, sharder=self.sharder, **sample_dict,
+        )
         print("❌❌ TODO: ensure that validation name_to_index matches the training name_to_index ❌❌")
 
         dl_keys_to_ignore = ["sampler", "read_group_size", "grid_indices", "limit_batches"]
@@ -68,6 +99,11 @@ class AnemoiMultipleDatasetsDataModule(pl.LightningDataModule):
         # sources[stage.TRAINING].check_no_overlap(sources[stage.VALIDATION])
         # sources[stage.TRAINING].check_no_overlap(sources[stage.TEST])
         # sources[stage.VALIDATION].check_no_overlap(sources[stage.TEST])
+
+    @cached_property
+    def sharder(self):
+        # move this in the right place, see worker_init ?
+        return Sharder(group="a", shard_number="i", more="things")
 
     def train_dataloader(self) -> dict[str, DataLoader]:
         dataset = NativeGridMultDataset(self.training_sample_provider)

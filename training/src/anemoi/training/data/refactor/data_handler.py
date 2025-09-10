@@ -97,22 +97,37 @@ class DataHandler:
         from anemoi.training.data.refactor.structure import Box
 
         if request is None:
-            request = ["name_to_index", "statistics", "normaliser", "extra", "metadata", "number_of_features"]
+            request = {}
+        request["content"] = [
+            "name_to_index",
+            "statistics",
+            "normaliser",
+            "extra",
+            "metadata",
+            "number_of_features",
+            "dimensions_order",
+        ]
+
         static = self._get(request, None)
         static["_version"] = "0.0"
         return Box(static)
 
     def _get_item(self, request, item):
         if request is None:
-            request = ["data", "latitudes", "longitudes", "timedeltas"]
+            request = {}
+        request["content"] = request.get("content", ["data", "latitudes", "longitudes", "timedeltas"])
         return self._get(request, item)
 
     def _get(self, request, item: int):
+        from anemoi.training.data.refactor.structure import Box
+
         assert isinstance(item, (type(None), int, np.integer)), f"Expected integer for item, got {type(item)}: {item}"
-        assert isinstance(
-            request,
-            (type(None), list, tuple),
-        ), f"Expected list for request, got {type(request)}: {request}"
+        assert isinstance(request, dict), f"Expected dict for request, got {type(request)}: {request}"
+
+        content = request["content"]
+        assert isinstance(content, (list, tuple)), f"Expected list for content, got {type(content)}: {content}"
+        sharder = request.get("sharder", None)
+        del request
 
         ACTIONS = {
             "data": self.__getitem__,
@@ -128,13 +143,11 @@ class DataHandler:
             "extra": lambda x: self._extra_config,
             "metadata": lambda x: self.metadata,
             "number_of_features": lambda x: len(self.name_to_index),
+            "dimensions_order": lambda x: self._dimensions_order,
         }
 
-        assert isinstance(request, (list, tuple)), request
-
-        from anemoi.training.data.refactor.structure import Box
-
-        box = Box({r: ACTIONS[r](item) for r in request})
+        res = {r: ACTIONS[r](item) for r in content}
+        box = Box(res)
 
         if "data" in box:
             if box["data"].ndim == 2:
@@ -147,6 +160,32 @@ class DataHandler:
             ], f"Unexpected dimensions order {self._dimensions_order} for data {self.config}"
         else:
             box["_dimensions_order"] = self._dimensions_order
+
+        class DummySharder:
+            def shard_latitudes(self, latitudes):
+                return latitudes
+
+            def shard_longitudes(self, longitudes):
+                return longitudes
+
+            def shard_latitudes_longitudes(self, latitudes_longitudes):
+                return latitudes_longitudes
+
+            def shard_data(self, data, dimensions_order: list[str] | tuple[str] = None):
+                return data
+
+        if sharder is None:
+            sharder = DummySharder()
+
+        if "latitudes" in box:
+            box["latitudes"] = sharder.shard_latitudes(box["latitudes"])
+        if "longitudes" in box:
+            box["longitudes"] = sharder.shard_longitudes(box["longitudes"])
+        if "latitudes_longitudes" in box:
+            box["latitudes_longitudes"] = sharder.shard_latitudes_longitudes(box["latitudes_longitudes"])
+        if "data" in box:
+            box["data"] = sharder.shard_data(box["data"], dimensions_order=self._dimensions_order)
+
         return box
 
     @property

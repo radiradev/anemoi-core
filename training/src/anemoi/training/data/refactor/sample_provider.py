@@ -42,6 +42,7 @@ class Context:
     start = None
     end = None
     frequency = None
+    sharder = None
     sources = None
     _offset = None
     _all_nodes = None
@@ -55,6 +56,7 @@ class Context:
         frequency=None,
         sources=None,
         offset=None,
+        sharder=None,
         _parent=None,
     ):
         self._parent = _parent
@@ -70,6 +72,7 @@ class Context:
         self.end = self.end if end is None else end
 
         self.frequency = self.frequency if frequency is None else frequency_to_timedelta(frequency)
+        self.sharder = self.sharder if sharder is None else sharder
 
         self._all_nodes = self._all_nodes if self._all_nodes is not None else []
         self._visible_nodes = self._visible_nodes if self._visible_nodes is not None else []
@@ -99,6 +102,7 @@ class Context:
         self.start = _parent.start
         self.end = _parent.end
         self.frequency = _parent.frequency
+        self.sharder = _parent.sharder
         self.sources = _parent.sources
         self._offset = _parent._offset
         self._all_nodes = _parent._all_nodes
@@ -185,6 +189,7 @@ class SampleProvider:
         self._context = _context
         self._parent = _parent
         self._frequency = _context.frequency
+        self.sharder = _context.sharder
         self.offset = frequency_to_timedelta(_context.offset)
 
     # public
@@ -580,6 +585,8 @@ class BoxSampleProvider(SampleProvider):
     def _get_static(self, request):
         from anemoi.training.data.refactor.structure import Box
 
+        assert request is None, f"Expected None for request, got {request}"
+        request = dict(sharder=self.sharder)
         return Box(self.datahandler._get_static(request))
 
     def _get_item(self, request, item):
@@ -590,7 +597,11 @@ class BoxSampleProvider(SampleProvider):
             msg = f"Item {item} ({actual_item}) is out of bounds with i_offset {self.i_offset}, lenght of the dataset is {len(self.datahandler)} and dropped_samples is {self.dropped_samples}."
             raise IndexError(msg)
 
-        return self.datahandler._get_item(request, item)
+        from anemoi.training.data.refactor.structure import Box
+
+        assert request is None, f"Expected None for request, got {request}"
+        request = dict(sharder=self.sharder)
+        return Box(self.datahandler._get_item(request, item))
 
     @property
     def dataschema(self):
@@ -709,6 +720,7 @@ def sample_provider_factory(**kwargs):
         start=kwargs.pop("start", None),
         end=kwargs.pop("end", None),
         frequency=kwargs.pop("frequency"),
+        sharder=kwargs.pop("sharder", None),
     )
     return _sample_provider_factory(**kwargs, _parent=None, _context=_context)
 
