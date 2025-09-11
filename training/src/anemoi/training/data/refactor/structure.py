@@ -66,6 +66,9 @@ class Dict(dict):
 
         return self.__class__(copy.deepcopy(dict(self), memo))
 
+    def as_native(self):
+        return {k: v.as_native() if isinstance(v, Dict) else v for k, v in self.items()}
+
 
 class Box(Dict):
     # Flag a dict as a box
@@ -142,11 +145,26 @@ class Batch(Tree):
     def select_content(self, *keys):
         return self.__class__(select_content(self, *keys))
 
-    def merge_content(self, other):
+    def merge_content(self, other=None, /, **kwargs):
+        if other and kwargs:
+            raise ValueError("Cannot provide both other and kwargs to merge_content")
+        if kwargs:
+            other = self.wrap_in_box(**kwargs)
+            return self.merge_content(other)
         return self.__class__(merge_boxes(self, other))
 
     def unwrap(self, *requested_keys):
         return self.__class__(unwrap(*requested_keys))
+
+    def wrap_in_box(self, **structures):
+        def exit(path, key, old_parent, new_parent, new_items):
+            if not is_box(old_parent):
+                return _default_exit(path, key, old_parent, new_parent, new_items)
+            # If we reach here, it means old_parent is a box
+            # We wrap new items into a box
+            return Box({k: _get_path(structures[k], path + (key,)) for k in structures})
+
+        return _remap(self, exit=exit, enter=_stop_if_box_enter)
 
 
 def as_module_dict(structure):

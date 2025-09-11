@@ -92,6 +92,7 @@ class BaseGraphModule(pl.LightningModule, ABC):
             config.model_dump(by_alias=True).training.training_loss,
             # scalers={},  # self.scalers,
             #    data_indices=self.data_indices,
+            sample_static_info=self.sample_static_info,
         )
         # print_variable_scaling(self.loss, data_indices)
 

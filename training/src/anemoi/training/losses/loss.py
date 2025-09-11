@@ -36,8 +36,26 @@ def get_loss_function(
     config: DictConfig,
     scalers: dict[str, tuple[tuple[int] | np.ndarray]] | None = None,
     data_indices: dict | None = None,
+    sample_static_info: dict | None = None,
     **kwargs,
 ) -> DictLoss:
+
+    if sample_static_info is not None:
+        loss_config = OmegaConf.to_container(config, resolve=True)
+        target_info = sample_static_info.target
+        more_config = target_info.select_content("name_to_index", "extra", "number_of_features", "dimensions_order")
+        loss_config = more_config.merge_content(config=loss_config)
+
+        print(loss_config.to_str("Loss config with additional info if needed")
+        print(loss_config.as_native())
+        exit()
+        for k,v in loss_config.items():
+            print(v.to_str(f"Loss config for {k}"))
+            loss = instantiate(v, **kwargs, _recursive_=False)
+            print(loss)
+        exit()
+        return DictLoss(loss_config)
+
 
     loss_config = OmegaConf.to_container(config, resolve=True)
     loss_dict = {}
