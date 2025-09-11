@@ -54,30 +54,25 @@ class WeightedAreaRelatetSortedIntensityLoss(BaseWeightedLoss):
         for key in ["num_neighbors", "depth"]:
             if key in kwargs: setattr(self, key, kwargs[key]) 
 
-        # aggregate node_weights to have the correct shape
-        # self.node_weights = self._aggregate_node_weights(
-        #     self.node_weights, 
-        #     num_neighbors=self.num_neighbors, 
-        #     depth=self.depth,
-        # ) 
-        #TODO: remove original_node_weights and determine node_weights
-        # of correct shape only once, of no change of depth during run time necessary
-        #self.register_buffer("original_node_weights", self.node_weights, persistent=True)
-        self.neigbor_index = self._generate_index_tensor(z)
+        #INFO:mask currently hard coded 
+        self.register_buffer("neighbor_index", self._generate_index_tensor(5), persistent=True)
 
-    def _generate_index_tensor(refinmement_level: int):
+        self.register_buffer("original_node_weights", node_weights, persistent=True)
+
+    def _generate_index_tensor(self, refinmement_level: int):
         """
-            return
-            ------ 
-            z (Nnodes, Nneigh): torch.tensor (int), holds in a given line the neighbor indices of the corresponding node
-            Nnodes: int, number of nodes in data domain
-            Nneigh: int, number of neighbors in area around each node 
-            generates index tensor that defines the neighborhood of each point 
+        generates index tensor with neighborhood indices 
+
+        return
+        ------ 
+        z (Nnodes, Nneigh): torch.tensor (int), holds in a given line the neighbor indices of the corresponding node
+        Nnodes: int, number of nodes in data domain
+        Nneigh: int, number of neighbors in area around each node 
+        generates index tensor that defines the neighborhood of each point 
         """
         # generate ValueError
         grid_filename = "/shared/data/fe1ai/ml-datasets/structure/01_aicon-graph-files/icon_grid_0026_R03B07_G.nc"
         grid_ds = xr.open_dataset(grid_filename) 
-        #INFO:mask currently hard coded 
         mask = grid_ds["refinement_level_c"] <= refinmement_level
         lat, lon = np.rad2deg(grid_ds["clat"].values), np.rad2deg(grid_ds["clon"].values)
         lat, lon = lat[mask], lon[mask]
@@ -97,8 +92,36 @@ class WeightedAreaRelatetSortedIntensityLoss(BaseWeightedLoss):
         # Sort edges by target node
         sorted_targets, perm = torch.sort(edge_index[1])
         sorted_sources = edge_index[0][perm]
-        z = sorted_sources.view(Nnodes, self.num_neighbors).int()
-        return z
+
+        return sorted_sources.view(Nnodes, self.num_neighbors).int()
+
+    def _reindex(self, x: torch.Tensor):
+        """
+        generates tensor that holds neighborhood info for each node 
+
+        Parameters
+        ----------
+        x : torch.Tensor    
+            Either pred or target shape (bs, ensemble, lat*lon, n_outputs)
+            or (ensemble, lat*lon, n_outputs)
+        Returns
+        -------
+        torch.Tensor wit shape (number of nodes, number num_neighbors)
+
+        """
+        # determine if batch dimension present
+        no_batch = True if len(x.shape)==3 else False
+        # if no batch dimension create trivial 
+        if no_batch: x = x.unsqueeze(0)     
+  
+        # expand node feature tensor to (bs, ens, lat*lon, num_neighbors ,n_outputs)    
+        x = x.unsqueeze(-2).expand(-1, -1, -1, self.num_neighbors, -1)
+
+        # expand index tensor to shape of 
+        idx = self.neighbor_index.unsqueeze(0).unsqueeze(0).unsqueeze(-1)
+        idx = idx.expand(x.shape[0], x.shape[1], -1, -1, x.shape[-1])
+
+        return torch.gather(x, 2, idx)
 
     def _aggregate(self,
                   x: torch.Tensor, 
@@ -219,21 +242,9 @@ class WeightedAreaRelatetSortedIntensityLoss(BaseWeightedLoss):
             Weighted ARSIL loss
         """
 
-        # do aggretation
-        pred = self._aggregate(pred, num_neighbors=self.num_neighbors, depth=depth, sort=True) 
-        target = self._aggregate(target, num_neighbors=self.num_neighbors, depth=depth, sort=True)
-
-        #TODO: original_node_weights should become unneccary if no regular change
-        # of depth is needed, otherwise just determine reshpaed node_weights once
-        # Further the sorting of node_weights is not uniquely defined, since pred 
-        # and target are sorted differently -> solution: define coarse node_weights
-        # appropriate for target resolution where loss is defined deterministically
-        self.node_weights = self._aggregate_node_weights(
-            self.original_node_weights, 
-            num_neighbors=self.num_neighbors, 
-            depth=depth,
-            # sort=False,
-        ) 
+        pred = self._reindex(pred)
+        target = self._reindex(target)
+        self.node_weights = self._reindex(self.original_node_weights)
 
         out = torch.square(pred - target)
         out = self.scale(out, scalar_indices, without_scalars=without_scalars)
