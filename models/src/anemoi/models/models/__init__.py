@@ -8,6 +8,7 @@
 # nor does it submit to any jurisdiction.
 
 from .base import AnemoiModel
+from .downscaling import AnemoiDownscalingModel
 from .encoder_processor_decoder import AnemoiModelEncProcDec
 from .ens_encoder_processor_decoder import AnemoiEnsModelEncProcDec
 from .hierarchical import AnemoiModelEncProcDecHierarchical
@@ -20,4 +21,5 @@ __all__ = [
     "AnemoiEnsModelEncProcDec",
     "AnemoiModelEncProcDecHierarchical",
     "AnemoiModelEncProcDecInterpolator",
+    "AnemoiDownscalingModel",
 ]
