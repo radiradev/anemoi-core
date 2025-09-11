@@ -20,31 +20,22 @@ from anemoi.models.preprocessing import BasePreprocessor
 LOGGER = logging.getLogger(__name__)
 
 
-# def build_normaliser(normaliser, name_to_index, statistics, **kwargs):
+def build_normaliser(normaliser, name_to_index, statistics, **kwargs):
 
-#     if "_target_" not in kwargs:
-#         # If the normaliser is not a Hydra instantiation, use the config directly
-#         pass
-#     elif kwargs.get("_target_") == "anemoi.models.preprocessing.normaliser.InputNormaliser":
-#         # if the normaliser uses the default class, use the config directly
-#         pass
-#     elif kwargs.get("_target_") == "anemoi.models.preprocessing.normalizer.InputNormalizer":
-#         # backward compatilibily
-#         # if the normaliser uses the old class with a typo 'z', use the config directly
-#         pass
-#     else:
-#         raise NotImplementedError("TODO: use hydra instanciate for this custom normaliser")
+    if "_target_" not in kwargs:
+        # If the normaliser is not a Hydra instantiation, use the config directly
+        pass
+    elif kwargs.get("_target_") == "anemoi.models.preprocessing.normaliser.InputNormaliser":
+        # if the normaliser uses the default class, use the config directly
+        pass
+    elif kwargs.get("_target_") == "anemoi.models.preprocessing.normalizer.InputNormalizer":
+        # backward compatilibily
+        # if the normaliser uses the old class with a typo 'z', use the config directly
+        pass
+    else:
+        raise NotImplementedError("TODO: use hydra instanciate for this custom normaliser")
 
-#     f = InputNormaliser(config=normaliser, name_to_index=name_to_index, statistics=statistics)
-
-#     def func(data, **kwargs_):
-
-#         if not isinstance(data, torch.Tensor):
-#             raise ValueError(f"Input to InputNormaliser must be a torch.Tensor, got {type(data)}: {data}")
-
-#         return {"data": f(data), **kwargs_}
-
-#     return func
+    return InputNormaliser(config=normaliser, name_to_index=name_to_index, statistics=statistics)
 
 
 class InputNormaliser(BasePreprocessor):
@@ -139,6 +130,9 @@ class InputNormaliser(BasePreprocessor):
         assert maximum.size == n, (maximum.size, n)
         assert mean.size == n, (mean.size, n)
         assert stdev.size == n, (stdev.size, n)
+
+    def __call__(self, data: torch.Tensor, **kwargs) -> torch.Tensor:
+        return self.transform(data)
 
     def transform(self, x: torch.Tensor) -> torch.Tensor:
         """Normalizes an input tensor x of shape [..., nvars].

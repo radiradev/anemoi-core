@@ -108,14 +108,12 @@ class Batch(Tree):
 
     def create_function(self, func, *args, check_dict_output=True, **kwargs):
         tree_of_functions = self.box_to_any(func, *args, **kwargs)
-        res = FunctionTree(tree_of_functions)
-        return res
+        return Function(tree_of_functions)
 
     def create_module_dict(self, constructor, *args, **kwargs):
         # it is expected that 'constructor' creates a nn.Module
         tree_of_modules = self.box_to_any(constructor, *args, **kwargs)
-        res = as_module_dict(tree_of_modules)
-        return res
+        return as_module_dict(tree_of_modules)
 
     def box_to_box(self, func, *args, **kwargs):
         def transform(path, key, value):
@@ -152,43 +150,62 @@ def as_module_dict(structure):
     """Transform a structure into a nested MuduleDict.
     The leaves of the scructure must be nn.Module.
     """
-    from torch.nn import ModuleDict
 
     def to_module_dict_exit(path, key, old_parent, new_parent, new_items):
         res = _default_exit(path, key, old_parent, new_parent, new_items)
         if isinstance(old_parent, dict):
-            res = ModuleDict(res)
+            res = ModuleDictt(res)
         if isinstance(old_parent, Box):
             assert False, (path, key, old_parent, new_parent, new_items)
-        if isinstance(old_parent, list):
-            res = torch.nn.ModuleList(res)
-        if isinstance(old_parent, tuple):
-            res = tuple(res)
+        #if isinstance(old_parent, list):
+        #    res = torch.nn.ModuleList(res)
+        #if isinstance(old_parent, tuple):
+        #    res = tuple(res)
+        assert isinstance(res, torch.nn.Module), f"Expected nn.Module, got {type(res)} at {path}, {key}"
         return res
 
     return _remap(structure, exit=to_module_dict_exit, enter=_stop_if_box_enter)
 
 
-class FunctionTree(Tree):
+class ModuleDictt(torch.nn.ModuleDict):
+    def __call__(self, other, *args, _output_box=True, _output='data', **kwargs):
+        def apply(current, other_current, path):
+
+            if isinstance(current, torch.nn.ModuleDict) or isinstance(current, torch.nn.ModuleList):
+                res = Batch()
+                for k in current.keys():
+                    if k not in other_current:
+                        raise ValueError(f"Key {k} not found in at {path}. In {other}")
+                    res[k] = apply(current[k], other_current[k], path + (k,))
+                return res
+            
+            if not isinstance(current, torch.nn.Module):
+                raise ValueError(f"Expected nn.Module at {path}, got {type(current)}")
+
+            res = current(*args, **kwargs, **other_current)
+            if _output:
+                res = {**other_current, _output: res}
+
+            if _output_box:
+                if not isinstance(res, dict):
+                    raise ValueError(f"Function at {path} did not return a dict, got {type(res)}")
+                res = Box(res)
+
+            return res
+        return apply(self, other, ())
+
+
+class Function(Tree):
+    emoji = '()'
+
     def __call__(self, other, *args, _output_box=True, **kwargs):
-        """This assumes that self is a structure whose leaves are functions.
-        It also assumes that "other" is a parrallel structure where the leaves are boxes.
-        each function is applied to the corresponding box in "other".
-
-        And the output of the function
-
-        "_output_box" is private and is True. Don't use it.
-        If True, the output of each function is casted to a Box.
-        If False, the output of each function is kept as is.
-        """
-
         def apply(path, key, func):
             if not callable(func):
                 return key, func
 
             x = _get_path(other, path + (key,), default=None)
             if not x:
-                raise ValueError(f"Box not found in {other} at {path}, {key=}")
+                raise ValueError(f"Box not found in at {path}, {key=}. In {other}")
             res = func(*args, **kwargs, **x)
 
             if _output_box:
@@ -223,10 +240,10 @@ class FunctionTree(Tree):
         return Batch(res)
 
     def to_str(self, name):
-        return to_str(self, name=name + "()", _boxed=False)
+        return to_str(self, name=name + self.emoji, _boxed=False)
 
     def __repr__(self):
-        return to_str(self, name="()", _boxed=False)
+        return to_str(self, name=self.emoji, _boxed=False)
 
 
 def _check_key_in_dict(dic, key):
@@ -527,22 +544,28 @@ def test_custom(path):
 def test_one(training_context):
     from anemoi.training.data.refactor.sample_provider import sample_provider_factory
 
-    cfg_1 = """#dictionary:
-               # input:
-                    dictionary:
-                        lowres:
-                            container:
-                              data_group: "era5"
-                              variables: ["2t", "10u", "10v"]
-                              dimensions: ["values", "variables", "ensembles"]
+    cfg_1 = """dictionary:
+                    lowres:
+                        container:
+                          data_group: "era5"
+                          variables: ["2t", "10u", "10v"]
+                          dimensions: ["values", "variables", "ensembles"]
 
-                        highres:
-                          for_each:
-                            - offset: ["-6h", "0h"]
-                            - container:
-                                data_group: "era5"
-                                variables: ["2t", "10u", "10v"]
-                                dimensions: ["variables", "values"]
+                    highres:
+                      for_each:
+                        - offset: ["-6h", "0h", "+6h", "+12h", "+18h", "+24h"]
+                        - container:
+                            data_group: "era5"
+                            variables: ["2t", "10u", "10v"]
+                            dimensions: ["variables", "values"]
+                      #rollout:
+                      #  kind: prognostics
+                      #  steps: [0h, +6h, +12h, +18h, +24h]
+
+                      #  input: [-6h, 0h]
+                      #  target: 6h
+
+
             """
 
     print("✅✅✅✅✅✅✅✅✅✅✅✅✅✅")

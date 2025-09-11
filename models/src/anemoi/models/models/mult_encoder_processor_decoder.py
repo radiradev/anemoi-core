@@ -26,6 +26,7 @@ from torch_geometric.data import HeteroData
 from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.layers.projection import NodeEmbedder
 from anemoi.models.layers.projection import NodeProjector
+
 # from anemoi.models.preprocessing.normalisers import build_normaliser
 from anemoi.utils.config import DotDict
 
@@ -106,6 +107,7 @@ def num_channels(name_to_index, **kwargs):
 
 class AnemoiMultiModel(AnemoiModel):
     """Message passing graph neural network."""
+
     name = None
 
     def __init__(self, *, sample_static_info: "Structure", model_config: DotDict, metadata) -> None:
@@ -129,7 +131,13 @@ class AnemoiMultiModel(AnemoiModel):
         self.sample_static_info = sample_static_info
 
         # Instantiate processors - build normalisers directly into ModuleDict
-        self.normaliser = self._build_normaliser_moduledict()
+        # self.normaliser_old = self._build_normaliser_moduledict()
+
+        from anemoi.models.preprocessing.normalisers import build_normaliser
+
+        self.normaliser = self.sample_static_info.create_module_dict(build_normaliser)
+        # print(self.normaliser_old)
+        print(self.normaliser)
 
         # # apply is not supported anymore
         # preprocessors = self.sample_static_info.apply(processor_factory)
@@ -192,10 +200,9 @@ class AnemoiMultiModel(AnemoiModel):
         #         )
         # self.embeders = self.sample_static_info.create_function(build_embeder)
 
-
         self.node_embedder = NodeEmbedder(
             model_config.model.model.emb_data,
-            num_input_channels=self.num_input_channels, # coords missing, we need to add them
+            num_input_channels=self.num_input_channels,  # coords missing, we need to add them
             num_output_channels=num_encoded_channels,
             sources=self.encoder_sources,
             coord_dimension=NODE_COORDS_NDIMS,
@@ -269,9 +276,9 @@ class AnemoiMultiModel(AnemoiModel):
         return x_data, x_data_skip
 
     def _assemble_tensor(
-            self, name: str, x: torch.Tensor, graph: HeteroData, batch_size: int
-        ) -> tuple[torch.Tensor, torch.Tensor]:
-        if self.name == 'downscaling':
+        self, name: str, x: torch.Tensor, graph: HeteroData, batch_size: int
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        if self.name == "downscaling":
             x_dst_data_latent = torch.cat(
                 (
                     einops.rearrange(x, "batch vars grid -> (batch grid) vars"),
@@ -349,6 +356,9 @@ class AnemoiMultiModel(AnemoiModel):
     ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
         x_data_raw, x_hidden_raw = x
         x_data_latents = self.node_embedder(x_data_raw)
+
+        # We should create the graph here
+        # graph = create_graph(x, target)
 
         # TODO: Merge subgraph
         graph, _ = merge_graph_sources(graph, self.encoder_sources)
@@ -433,6 +443,7 @@ class AnemoiMultiModel(AnemoiModel):
 
     def get_node_coords(self, graph: HeteroData, name: str) -> torch.Tensor:
         assert name in graph.node_types, f"{name} do not exist. Valid graph nodes: {graph.node_types}."
+        #        assert number_dim(graph[name].x) == (n, 2)
         return torch.cat([torch.sin(graph[name].x), torch.cos(graph[name].x)], dim=-1)
 
     def forward(
@@ -447,7 +458,6 @@ class AnemoiMultiModel(AnemoiModel):
         print(x.to_str("x after"))
 
         # print(x.to_str("Input Batch"))
-
 
         batch_size = x[list(x.keys())[0]]["data"].shape[0]
         ensemble_size = 1
@@ -526,81 +536,96 @@ class AnemoiMultiModel(AnemoiModel):
 
     def _build_normaliser_moduledict(self):
         """Build normalisers ModuleDict by extracting data from sample_static_info."""
+        assert False, 'dead code'
         from anemoi.models.preprocessing.normalisers import InputNormaliser
-        
+
         normaliser = nn.ModuleDict()
-        
+
         def extract_and_build(path, key, value):
-            if hasattr(value, 'items') and 'name_to_index' in value and 'statistics' in value and 'normaliser' in value:
-                name_to_index = value['name_to_index']
-                statistics = value['statistics']  
-                normaliser_config = value['normaliser']
-                
+            if hasattr(value, "items") and "name_to_index" in value and "statistics" in value and "normaliser" in value:
+                name_to_index = value["name_to_index"]
+                statistics = value["statistics"]
+                normaliser_config = value["normaliser"]
+
                 module_key = "__".join(path + (key,)) if path else key
                 LOGGER.info(f"Building normaliser for {module_key}")
                 LOGGER.info(f"  normaliser_config: {normaliser_config}")
                 LOGGER.info(f"  name_to_index keys: {list(name_to_index.keys()) if name_to_index else 'None'}")
                 LOGGER.info(f"  statistics keys: {list(statistics.keys()) if statistics else 'None'}")
-                
-                actual_config = normaliser_config.get('config', normaliser_config)
-                
+
+                actual_config = normaliser_config.get("config", normaliser_config)
+
                 normaliser_module = InputNormaliser(
-                    config=actual_config, 
-                    name_to_index=name_to_index, 
-                    statistics=statistics
+                    config=actual_config, name_to_index=name_to_index, statistics=statistics
                 )
-                
+
                 normaliser[module_key] = normaliser_module
-            
+
             return key, value
-        
+
         # Traverse the sample_static_info structure
         _remap(self.sample_static_info, visit=extract_and_build)
-        
+
         return normaliser
 
     # def get_batch_input_names(self, batch, prefix=""):
     #     """Get all input names from a batch structure."""
     #     names = []
-        
+
     #     for key, value in batch.items():
     #         current_name = f"{prefix}__{key}" if prefix else key
-            
+
     #         if isinstance(value, dict):
     #             names.extend(self.get_batch_input_names(value, current_name))
     #         else:
     #             names.append(current_name)
-        
+
     #     return names
 
     def apply_normalisers(self, batch):
         """Apply normalisers to batch in-place."""
-        LOGGER.debug(f"Available normaliser keys: {list(self.normaliser.keys())}")
+        return self.normaliser(batch)
         
+        # boilerplate code for recursive application of normalisers has been removed
+
         def apply_to_nested_dict_inplace(data_dict, path=""):
             """Recursively apply normalisers to nested dictionary structure in-place."""
             for key, value in data_dict.items():
                 current_path = f"{path}__{key}" if path else key
-                
+
                 if isinstance(value, dict):
                     apply_to_nested_dict_inplace(value, current_path)
                 elif isinstance(value, torch.Tensor) and key == "data":
                     # Check if there's a normaliser for the parent path (e.g., input__low_res for input__low_res__data)
                     parent_path = path  # path is already the parent (e.g., "input__low_res")
                     if parent_path in self.normaliser:
-                        LOGGER.debug(f"Normalizing {current_path} using normaliser {parent_path} - tensor shape: {value.shape}")
-                        LOGGER.debug(f"  Before: min: {value.min().item():.4f}, max: {value.max().item():.4f}, mean: {value.mean().item():.4f}")
+                        LOGGER.debug(
+                            f"Normalizing {current_path} using normaliser {parent_path} - tensor shape: {value.shape}"
+                        )
+                        LOGGER.debug(
+                            f"  Before: min: {value.min().item():.4f}, max: {value.max().item():.4f}, mean: {value.mean().item():.4f}"
+                        )
                         normaliser = self.normaliser[parent_path]
-                        LOGGER.debug(f"  Normaliser _norm_mul range: {normaliser._norm_mul.min().item():.6f} to {normaliser._norm_mul.max().item():.6f}")
-                        LOGGER.debug(f"  Normaliser _norm_add range: {normaliser._norm_add.min().item():.6f} to {normaliser._norm_add.max().item():.6f}")
+                        LOGGER.debug(
+                            f"  Normaliser _norm_mul range: {normaliser._norm_mul.min().item():.6f} to {normaliser._norm_mul.max().item():.6f}"
+                        )
+                        LOGGER.debug(
+                            f"  Normaliser _norm_add range: {normaliser._norm_add.min().item():.6f} to {normaliser._norm_add.max().item():.6f}"
+                        )
                         normalized_data = normaliser(value)
-                        LOGGER.debug(f"  After: min: {normalized_data.min().item():.4f}, max: {normalized_data.max().item():.4f}, mean: {normalized_data.mean().item():.4f}")
+                        LOGGER.debug(
+                            f"  After: min: {normalized_data.min().item():.4f}, max: {normalized_data.max().item():.4f}, mean: {normalized_data.mean().item():.4f}"
+                        )
                         # Replace the tensor in-place
                         data_dict[key] = normalized_data
                     else:
-                        LOGGER.debug(f"Skipped {current_path} - tensor shape: {value.shape} (no normaliser for parent {parent_path})")
+                        LOGGER.debug(
+                            f"Skipped {current_path} - tensor shape: {value.shape} (no normaliser for parent {parent_path})"
+                        )
                 elif isinstance(value, torch.Tensor):
-                    LOGGER.debug(f"Skipped {current_path} - tensor shape: {value.shape} (coordinates/metadata, not normalized)")
-        
+                    LOGGER.debug(
+                        f"Skipped {current_path} - tensor shape: {value.shape} (coordinates/metadata, not normalized)"
+                    )
+
         apply_to_nested_dict_inplace(batch)
         return batch
