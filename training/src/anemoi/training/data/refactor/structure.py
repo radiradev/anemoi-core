@@ -8,6 +8,7 @@
 # nor does it submit to any jurisdiction.
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Mapping
 from collections.abc import Sequence
 from functools import wraps
@@ -85,6 +86,32 @@ class Tree(Dict):
 
     def to_str(self, name):
         return to_str(self, name=name)
+
+    @classmethod
+    def _split_path(self, path):
+        if isinstance(path, str):
+            path = tuple(int(x) if x.isdigit() else x for x in path.split("."))
+        assert isinstance(path, tuple), type(path)
+        return path
+
+    def __setitem__(self, path, value):
+        path = self._split_path(path)
+
+        if len(path) == 0:
+            raise ValueError("Path cannot be empty")
+        if len(path) > 1:
+            _get_path(self, path[:-1])[path[-1]] = value
+            return
+        super().__setitem__(path[0], value)
+
+    def __getitem__(self, path):
+        path = self._split_path(path)
+
+        if len(path) == 0:
+            raise ValueError("Path cannot be empty")
+        if len(path) > 1:
+            return _get_path(self, path)
+        return super().__getitem__(path[0])
 
 
 def cast_output_to_box(func, check_dict_output=True):
@@ -166,6 +193,48 @@ class Batch(Tree):
 
         return _remap(self, exit=exit, enter=_stop_if_box_enter)
 
+    def boxes(self):
+        res = {}
+
+        def visit(path, key, value):
+            if is_box(value):
+                res[path + (key,)] = value
+                return False
+            return key, value
+
+        _remap(self, visit=visit, enter=_stop_if_box_enter)
+        return res.items()
+
+    def empty_like(self, **kwargs):
+        new = {}
+        for path, box in self.boxes():
+            new[path] = Box()
+        return self.nest_like(new, **kwargs)
+
+    def nest_like(self, boxes, class_=None):
+        class_ = {None: self.__class__, "batch": Batch, "function": Function, "module_dict": ModuleDict}[class_]
+
+        boxes = dict(boxes)
+
+        def nested_dict():
+            return defaultdict(nested_dict)
+
+        root = nested_dict()
+        for path, value in boxes.items():
+            path = self._split_path(path)
+            d = root
+            for key in path[:-1]:
+                d = d[key]
+            d[path[-1]] = value
+
+        # convert defaultdicts back to dicts
+        def freeze(d):
+            if isinstance(d, defaultdict):
+                return class_({k: freeze(v) for k, v in d.items()})
+            return d
+
+        return freeze(root)
+
 
 def as_module_dict(structure):
     """Transform a structure into a nested MuduleDict.
@@ -175,7 +244,7 @@ def as_module_dict(structure):
     def to_module_dict_exit(path, key, old_parent, new_parent, new_items):
         res = _default_exit(path, key, old_parent, new_parent, new_items)
         if isinstance(old_parent, dict):
-            res = ModuleDictt(res)
+            res = ModuleDict(res)
         if isinstance(old_parent, Box):
             assert False, (path, key, old_parent, new_parent, new_items)
         # if isinstance(old_parent, list):
@@ -188,7 +257,7 @@ def as_module_dict(structure):
     return _remap(structure, exit=to_module_dict_exit, enter=_stop_if_box_enter)
 
 
-class ModuleDictt(torch.nn.ModuleDict):
+class ModuleDict(torch.nn.ModuleDict):
     def __call__(self, other, *args, _output_box=True, _output="data", **kwargs):
         def apply(current, other_current, path):
 
@@ -822,7 +891,7 @@ def test_three(training_context):
     cfg_3 = """dictionary:
                   ams:
                     for_each:
-                      - offset: ["-6h", "0h", "+6h"]
+                      - offset: ["-6h", "0h"]
                       - container:
                           variables: ["scatss_1", "scatss_2"]
                           data_group: "metop_a"
@@ -830,6 +899,22 @@ def test_three(training_context):
     config = yaml.safe_load(cfg_3)
     sp = sample_provider_factory(**training_context, **config)
     print(sp)
+    s = sp.static_info
+    print(s)
+    for path, box in s.boxes():
+        print(box.to_str(f"Box at {path}"))
+    print("--------------")
+    print(s["ams", "-6h"])
+    s["ams", "0h"] = s["ams", "-6h"]
+    print(s["ams.0h"]["_offset"])
+
+    nested = sp.static_info
+
+    modified = nested.empty_like()
+    for path, box in nested.boxes():
+        box["new_key"] = 48
+        modified[path] = box
+    print(modified.to_str("Modified static info"))
 
 
 def test():
