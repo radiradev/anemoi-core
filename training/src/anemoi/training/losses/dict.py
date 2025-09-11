@@ -36,6 +36,12 @@ class DictLoss(nn.Module):
         aggregated_loss = 0.0
         # TODO compute losses in parallel, then aggregate?
         # If we use the same loss function for all output datasets, we could flatten, concatenate, and then compute the loss in one call
+        assert set(pred.keys()) == set(
+            target.keys(),
+        ), f"Prediction and target must have the same keys. Got {pred.keys()} and {target.keys()}"
+        assert set(pred.keys()) == set(
+            self.loss_dict.keys(),
+        ), f"Prediction and loss_dict must have the same keys. Got {pred.keys()} and {self.loss_dict.keys()}"
         for output, loss in self.loss_dict.items():
             aggregated_loss += loss(pred[output], target[output], squash)
 

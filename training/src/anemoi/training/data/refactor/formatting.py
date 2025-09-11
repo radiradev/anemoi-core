@@ -91,7 +91,7 @@ def format_array(k, v):
 
         return f"{k}: no-min, no-max"
 
-    except (ValueError, ImportError):
+    except (ValueError, ImportError, RuntimeError):
         return f"{k}: [no-min, no-max]"
 
 

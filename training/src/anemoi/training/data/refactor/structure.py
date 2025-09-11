@@ -145,6 +145,9 @@ class Batch(Tree):
     def merge_content(self, other):
         return self.__class__(merge_boxes(self, other))
 
+    def unwrap(self, *requested_keys):
+        return self.__class__(unwrap(*requested_keys))
+
 
 def as_module_dict(structure):
     """Transform a structure into a nested MuduleDict.
@@ -219,7 +222,8 @@ class Function(Tree):
         res = _remap(self, visit=apply)
         return Batch(res)
 
-    def apply_on_multiple_structure(self, *args, _output_box=True, **kwargs):
+    def apply_on_multiple_structures(self, *args, _output_box=True, **kwargs):
+
         def apply(path, key, func):
             if not callable(func):
                 return key, func
@@ -298,6 +302,20 @@ def merge_boxes(*structs, overwrite=True):
         return res
 
     return _remap(structs[0], exit=exit)
+
+
+def wrap_in_box(**structures):
+    if all(isinstance(v, dict) for v in structures.values()):
+        first = next(iter(structures.values()))
+        b = Batch()
+        for key in first.keys():
+            assert all(
+                set(s.keys()) == set(first.keys()) for s in structures.values()
+            ), "All dicts must have the same keys to wrap in box"
+            values = {k: s[key] for k, s in structures.items()}
+            b[key] = wrap_in_box(**values)
+        return b
+    return Box(**structures)
 
 
 def _stop_if_box_enter(path, key, value):
@@ -449,6 +467,20 @@ def select_content(nested, *keys):
         return key, Box({k: box[k] for k in keys if k in box})
 
     return _remap(nested, visit=select, enter=_stop_if_box_enter)
+
+
+def unwrap(nested, *requested_keys):
+
+    res = []
+    for requested_key in requested_keys:
+
+        def select(path, key, box):
+            if not is_box(box):
+                return key, box
+            return key, box[requested_key]
+
+        res.append(_remap(nested, visit=select, enter=_stop_if_box_enter))
+    return res
 
 
 def rearrange(mappings, sources, _add_origin=True):

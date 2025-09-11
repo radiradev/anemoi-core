@@ -73,15 +73,31 @@ class ForecastingModule(BaseGraphModule):
 
         target_dtype = next(iter(batch["target"].values()))["data"].dtype
         loss = torch.zeros(1, dtype=target_dtype, device=self.device, requires_grad=True)
-        
+
+        target_data = batch["target"]
+        print(target_data.to_str("target data"))
+
+        from anemoi.training.data.refactor.structure import merge_boxes
+        from anemoi.training.data.refactor.structure import wrap_in_box
+
+        def add_semantic_to_prediction(y_pred, target, **kwargs):
+            return merge_boxes(target, y_pred, **kwargs)
+
+        # y_pred = self.loss.add_semantic(y_pred, target_data)
+        y_pred = wrap_in_box(data=y_pred)
+        y_pred = add_semantic_to_prediction(y_pred, target=target_data)
+        print(y_pred.to_str("prediction"))
+        self.loss(y_pred.unwrap("data"), target_data.unwrap("data"))
+        exit()
         # Iterate over all entries in batch["target"] and accumulate loss
         for target_key, target_data in batch["target"].items():
             loss += checkpoint(
-                self.loss, y_pred[target_key].unsqueeze(0), # add batch dimension, why do we not get this from the model?
+                self.loss,
+                y_pred[target_key].unsqueeze(0),  # add batch dimension, why do we not get this from the model?
                 target_data["data"].permute(0, 2, 1),
-                use_reentrant=False
-            ) # weighting will probably not be correct here ...
-        loss *= 1 / len(batch["target"]) # Average loss over all targets        
+                use_reentrant=False,
+            )  # weighting will probably not be correct here ...
+        loss *= 1 / len(batch["target"])  # Average loss over all targets
 
         metrics_next = {}
         if validation_mode:
