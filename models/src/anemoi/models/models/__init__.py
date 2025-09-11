@@ -8,12 +8,15 @@
 # nor does it submit to any jurisdiction.
 
 from .base import AnemoiModel
-from .downscaling import AnemoiDownscalingModel
 from .encoder_processor_decoder import AnemoiModelEncProcDec
 from .ens_encoder_processor_decoder import AnemoiEnsModelEncProcDec
 from .hierarchical import AnemoiModelEncProcDecHierarchical
 from .interpolator import AnemoiModelEncProcDecInterpolator
 from .mult_encoder_processor_decoder import AnemoiMultiModel
+
+print("todo fix import")
+# order matters: downscaling imports AnemoiMultiModel and must be after it
+from .downscaling import AnemoiDownscalingModel  # noqa(F401)
 
 __all__ = [
     "AnemoiModelEncProcDec",

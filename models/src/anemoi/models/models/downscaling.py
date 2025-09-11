@@ -11,4 +11,5 @@ from anemoi.models.models import AnemoiMultiModel
 
 
 class AnemoiDownscalingModel(AnemoiMultiModel):
+    name = "downscaling"
     pass
