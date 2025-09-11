@@ -121,7 +121,7 @@ class WeightedAreaRelatetSortedIntensityLoss(BaseWeightedLoss):
         idx = self.neighbor_index.unsqueeze(0).unsqueeze(0).unsqueeze(-1)
         idx = idx.expand(x.shape[0], x.shape[1], -1, -1, x.shape[-1])
 
-        return torch.gather(x, 2, idx)
+        return torch.gather(x, 2, idx.to(torch.int64))
 
     def _aggregate(self,
                   x: torch.Tensor, 
