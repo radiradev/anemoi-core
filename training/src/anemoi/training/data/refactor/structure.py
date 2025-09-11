@@ -157,9 +157,9 @@ def as_module_dict(structure):
             res = ModuleDictt(res)
         if isinstance(old_parent, Box):
             assert False, (path, key, old_parent, new_parent, new_items)
-        #if isinstance(old_parent, list):
+        # if isinstance(old_parent, list):
         #    res = torch.nn.ModuleList(res)
-        #if isinstance(old_parent, tuple):
+        # if isinstance(old_parent, tuple):
         #    res = tuple(res)
         assert isinstance(res, torch.nn.Module), f"Expected nn.Module, got {type(res)} at {path}, {key}"
         return res
@@ -168,7 +168,7 @@ def as_module_dict(structure):
 
 
 class ModuleDictt(torch.nn.ModuleDict):
-    def __call__(self, other, *args, _output_box=True, _output='data', **kwargs):
+    def __call__(self, other, *args, _output_box=True, _output="data", **kwargs):
         def apply(current, other_current, path):
 
             if isinstance(current, torch.nn.ModuleDict) or isinstance(current, torch.nn.ModuleList):
@@ -178,7 +178,7 @@ class ModuleDictt(torch.nn.ModuleDict):
                         raise ValueError(f"Key {k} not found in at {path}. In {other}")
                     res[k] = apply(current[k], other_current[k], path + (k,))
                 return res
-            
+
             if not isinstance(current, torch.nn.Module):
                 raise ValueError(f"Expected nn.Module at {path}, got {type(current)}")
 
@@ -192,11 +192,12 @@ class ModuleDictt(torch.nn.ModuleDict):
                 res = Box(res)
 
             return res
+
         return apply(self, other, ())
 
 
 class Function(Tree):
-    emoji = '()'
+    emoji = "()"
 
     def __call__(self, other, *args, _output_box=True, **kwargs):
         def apply(path, key, func):

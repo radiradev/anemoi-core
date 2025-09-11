@@ -9,7 +9,6 @@
 
 
 import logging
-import os
 import uuid
 from typing import Optional
 
@@ -536,7 +535,7 @@ class AnemoiMultiModel(AnemoiModel):
 
     def _build_normaliser_moduledict(self):
         """Build normalisers ModuleDict by extracting data from sample_static_info."""
-        assert False, 'dead code'
+        assert False, "dead code"
         from anemoi.models.preprocessing.normalisers import InputNormaliser
 
         normaliser = nn.ModuleDict()
@@ -585,7 +584,7 @@ class AnemoiMultiModel(AnemoiModel):
     def apply_normalisers(self, batch):
         """Apply normalisers to batch in-place."""
         return self.normaliser(batch)
-        
+
         # boilerplate code for recursive application of normalisers has been removed
 
         def apply_to_nested_dict_inplace(data_dict, path=""):
