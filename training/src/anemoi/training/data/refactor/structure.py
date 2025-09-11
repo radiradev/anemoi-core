@@ -111,6 +111,12 @@ class Batch(Tree):
         res = FunctionTree(tree_of_functions)
         return res
 
+    def create_module_dict(self, constructor, *args, **kwargs):
+        # it is expected that 'constructor' creates a nn.Module
+        tree_of_modules = self.box_to_any(constructor, *args, **kwargs)
+        res = as_module_dict(tree_of_modules)
+        return res
+
     def box_to_box(self, func, *args, **kwargs):
         def transform(path, key, value):
             if not isinstance(value, Box):
@@ -142,8 +148,40 @@ class Batch(Tree):
         return self.__class__(merge_boxes(self, other))
 
 
+def as_module_dict(structure):
+    """Transform a structure into a nested MuduleDict.
+    The leaves of the scructure must be nn.Module.
+    """
+    from torch.nn import ModuleDict
+
+    def to_module_dict_exit(path, key, old_parent, new_parent, new_items):
+        res = _default_exit(path, key, old_parent, new_parent, new_items)
+        if isinstance(old_parent, dict):
+            res = ModuleDict(res)
+        if isinstance(old_parent, Box):
+            assert False, (path, key, old_parent, new_parent, new_items)
+        if isinstance(old_parent, list):
+            res = torch.nn.ModuleList(res)
+        if isinstance(old_parent, tuple):
+            res = tuple(res)
+        return res
+
+    return _remap(structure, exit=to_module_dict_exit, enter=_stop_if_box_enter)
+
+
 class FunctionTree(Tree):
     def __call__(self, other, *args, _output_box=True, **kwargs):
+        """This assumes that self is a structure whose leaves are functions.
+        It also assumes that "other" is a parrallel structure where the leaves are boxes.
+        each function is applied to the corresponding box in "other".
+
+        And the output of the function
+
+        "_output_box" is private and is True. Don't use it.
+        If True, the output of each function is casted to a Box.
+        If False, the output of each function is kept as is.
+        """
+
         def apply(path, key, func):
             if not callable(func):
                 return key, func

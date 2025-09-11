@@ -21,7 +21,6 @@ from torch.distributed.distributed_c10d import ProcessGroup
 from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch_geometric.data import HeteroData
 
-from anemoi.models.models.mult_encoder_processor_decoder import AnemoiMultiModel
 from anemoi.training.data.refactor.sample_provider import SampleProvider
 from anemoi.training.data.refactor.structure import NestedTensor
 from anemoi.training.losses import get_loss_function
@@ -49,13 +48,13 @@ class BaseGraphModule(pl.LightningModule, ABC):
         super().__init__()
         self.sample_static_info = sample_static_info
 
-        self.graph_data = graph_data #.to(self.device) # at init this will be on cpu 
+        self.graph_data = graph_data  # .to(self.device) # at init this will be on cpu
 
         # TODO: oandle supporting arrays for multiple output masks (multiple outputs)
         # (It is handled in the loss function, but not the version here that is sent to model for supporting_arrays)
         # self.output_mask = instantiate(config.model_dump(by_alias=True).model.output_mask, graph_data=graph_data)
 
-        self.model = AnemoiMultiModel(
+        self.model = self.model_class(
             # self.config.model.model,
             model_config=convert_to_omegaconf(config),
             sample_static_info=sample_static_info,
