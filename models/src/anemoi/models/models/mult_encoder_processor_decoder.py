@@ -106,6 +106,7 @@ def num_channels(name_to_index, **kwargs):
 
 class AnemoiMultiModel(AnemoiModel):
     """Message passing graph neural network."""
+    name = None
 
     def __init__(self, *, sample_static_info: "Structure", model_config: DotDict, metadata) -> None:
         """Initializes the graph neural network.
@@ -267,10 +268,10 @@ class AnemoiMultiModel(AnemoiModel):
 
         return x_data, x_data_skip
 
-    if os.environ.get("DOWNSCALING"):
-        def _assemble_tensor(
+    def _assemble_tensor(
             self, name: str, x: torch.Tensor, graph: HeteroData, batch_size: int
         ) -> tuple[torch.Tensor, torch.Tensor]:
+        if self.name == 'downscaling':
             x_dst_data_latent = torch.cat(
                 (
                     einops.rearrange(x, "batch vars grid -> (batch grid) vars"),
@@ -280,10 +281,7 @@ class AnemoiMultiModel(AnemoiModel):
                 dim=-1,  # feature dimension
             )
             return x_dst_data_latent
-    elif os.environ.get("ENSEMBLE"):
-        def _assemble_tensor(
-            self, name: str, x: torch.Tensor, graph: HeteroData, batch_size: int
-        ) -> tuple[torch.Tensor, torch.Tensor]:
+        elif self.name is None:
             x_dst_data_latent = torch.cat(
                 (
                     einops.rearrange(x, "batch time ensemble vars grid -> (batch ensemble grid) (time vars)"),
@@ -293,8 +291,8 @@ class AnemoiMultiModel(AnemoiModel):
                 dim=-1,  # feature dimension
             )
             return x_dst_data_latent
-    else:
-        raise NotImplementedError
+        else:
+            raise NotImplementedError
 
     def _run_mapper(
         self,
