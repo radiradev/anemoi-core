@@ -48,7 +48,6 @@ def get_loss_function(
 
         print(loss_config.to_str("Loss config with additional info if needed"))
         print(loss_config.as_native())
-        exit()
         for k,v in loss_config.items():
             print(v.to_str(f"Loss config for {k}"))
             loss = instantiate(v, **kwargs, _recursive_=False)
