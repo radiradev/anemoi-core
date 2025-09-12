@@ -90,6 +90,8 @@ class NativeGridDataset(IterableDataset):
         # relative index of dates to extract
         self.relative_date_indices = relative_date_indices
 
+        self.num_chunks_per_model = 2
+
     @cached_property
     def statistics(self) -> dict:
         """Return dataset statistics."""
@@ -200,28 +202,6 @@ class NativeGridDataset(IterableDataset):
         """
         self.worker_id = worker_id
 
-        # Divide this equally across shards (one shard per group!)
-        shard_size = len(self.valid_date_indices) // self.sample_comm_num_groups
-        shard_start = self.sample_comm_group_id * shard_size
-        shard_end = (self.sample_comm_group_id + 1) * shard_size
-
-        shard_len = shard_end - shard_start
-        self.n_samples_per_worker = shard_len // n_workers
-
-        low = shard_start + worker_id * self.n_samples_per_worker
-        high = min(shard_start + (worker_id + 1) * self.n_samples_per_worker, shard_end)
-        self.chunk_index_range = np.arange(low, high, dtype=np.uint32)
-
-        LOGGER.info(
-            "Worker %d (pid %d, global_rank %d, model comm group %d)  has low/high range %d / %d",
-            worker_id,
-            os.getpid(),
-            self.global_rank,
-            self.model_comm_group_id,
-            low,
-            high,
-        )
-
         base_seed = get_base_seed()
 
         torch.manual_seed(base_seed)
@@ -229,10 +209,13 @@ class NativeGridDataset(IterableDataset):
         self.rng = np.random.default_rng(seed=base_seed)
         sanity_rnd = self.rng.random(1)
 
+        per_model_seed = base_seed + self.model_comm_group_id
+        self.rng_per_model = np.random.default_rng(seed=per_model_seed)
+
         LOGGER.info(
             (
                 "Worker %d (%s, pid %d, glob. rank %d, model comm group %d, "
-                "group_rank %d, seed group id %d, base_seed %d, sanity rnd %f)"
+                "group_rank %d, seed group id %d, base_seed %d, sanity rnd %f, per_model_seed %d)"
             ),
             worker_id,
             self.label,
@@ -243,6 +226,40 @@ class NativeGridDataset(IterableDataset):
             self.sample_comm_group_id,
             base_seed,
             sanity_rnd,
+            per_model_seed,
+        )
+
+        valid_date_indices = self.valid_date_indices
+
+        # chunk valid dates -> shuffle chunks
+        num_chunks = self.num_chunks_per_model * self.sample_comm_num_groups
+        chunk_size = len(valid_date_indices) // num_chunks
+        chunked_valid_dates = np.array([valid_date_indices[i*chunk_size: (i+1)*chunk_size] for i in range(num_chunks)])
+
+        self.rng.shuffle(chunked_valid_dates, axis=0) # shuffle chunks
+
+        # Divide chunks equally across shards (one shard per group!), flatten back to 1D
+        shard_size = len(chunked_valid_dates) // self.sample_comm_num_groups # by definition this is integer
+        shard_start = self.sample_comm_group_id * shard_size
+        shard_end = (self.sample_comm_group_id + 1) * shard_size
+        self.valid_date_indices_shard = np.concatenate(chunked_valid_dates[shard_start: shard_end])
+
+        # split valid dates across workers
+        self.n_samples_per_worker = len(self.valid_date_indices_shard) // n_workers
+        low = worker_id * self.n_samples_per_worker
+        high = min((worker_id + 1) * self.n_samples_per_worker, len(self.valid_date_indices_shard))
+        self.chunk_index_range = np.arange(low, high, dtype=np.int64)
+
+        LOGGER.info(
+            "Worker {} (pid {}, global_rank {}, model comm group {}) has low/high range {} / {}, indices[0:10]: {}".format(
+            worker_id,
+            os.getpid(),
+            self.global_rank,
+            self.model_comm_group_id,
+            low,
+            high,
+            self.valid_date_indices_shard[low: min(high, low + 10)],
+            )
         )
 
     def __iter__(self) -> torch.Tensor:
@@ -254,14 +271,11 @@ class NativeGridDataset(IterableDataset):
         Currently it receives data with an ensemble dimension, which is discarded for
         now. (Until the code is "ensemble native".)
         """
-        if self.shuffle:
-            shuffled_chunk_indices = self.rng.choice(
-                self.valid_date_indices,
-                size=len(self.valid_date_indices),
-                replace=False,
-            )[self.chunk_index_range]
-        else:
-            shuffled_chunk_indices = self.valid_date_indices[self.chunk_index_range]
+        shuffled_chunk_indices = self.rng_per_model.choice(
+            self.valid_date_indices_shard,
+            size=len(self.valid_date_indices_shard),
+            replace=False,
+        )[self.chunk_index_range]
 
         LOGGER.debug(
             (
