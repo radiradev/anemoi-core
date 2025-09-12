@@ -36,7 +36,7 @@ class BaseLoss(nn.Module, ABC):
 
     scaler: ScaleTensor
 
-    def __init__(self, ignore_nans: bool = False) -> None:
+    def __init__(self, ignore_nans: bool = False, **kwargs) -> None:
         """Node- and feature_weighted Loss.
 
         Exposes:
@@ -60,6 +60,8 @@ class BaseLoss(nn.Module, ABC):
 
         """
         super().__init__()
+        if kwargs:
+            print(f"Warning: unused kwargs in {self.__class__}: {kwargs}")
 
         self.scaler = ScaleTensor()
 

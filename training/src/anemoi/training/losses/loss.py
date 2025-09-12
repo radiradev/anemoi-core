@@ -48,13 +48,18 @@ def get_loss_function(
 
         print(loss_config.to_str("Loss config with additional info if needed"))
         print(loss_config.as_native())
-        for k,v in loss_config.items():
-            print(v.to_str(f"Loss config for {k}"))
-            loss = instantiate(v, **kwargs, _recursive_=False)
-            print(loss)
-        assert False
-        return DictLoss(loss_config)
 
+        print(
+            "❌TODO: building simple loss function: Assumes target and output have the same structure and variables, rmse loss for everybody",
+        )
+        res = loss_config.new_module_dict()
+        for path, box in loss_config.boxes():
+            from anemoi.training.losses.rmse import RMSELoss
+
+            res[path] = RMSELoss(**box)
+        return res
+
+    assert False
 
     loss_config = OmegaConf.to_container(config, resolve=True)
     loss_dict = {}
