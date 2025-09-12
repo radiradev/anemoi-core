@@ -67,6 +67,10 @@ class DataHandler:
     def __len__(self):
         return len(self.ds)
 
+    def reference_date(self, item=None):
+        assert item is not None, item
+        return self.ds.dates[item]
+
     def __getitem__(self, item: int):
         return self.ds[item][self.group]
 
@@ -94,8 +98,6 @@ class DataHandler:
         return np.array([lats, longs]).T
 
     def _get_static(self, request):
-        from anemoi.training.data.refactor.structure import Box
-
         if request is None:
             request = {}
         request["content"] = [
@@ -108,18 +110,24 @@ class DataHandler:
             "dimensions_order",
         ]
 
-        static = self._get(request, None)
-        static["_version"] = "0.0"
-        return Box(static)
+        return self._get(request, None)
 
     def _get_item(self, request, item):
         if request is None:
             request = {}
-        request["content"] = request.get("content", ["data", "latitudes", "longitudes", "timedeltas"])
+        request["content"] = request.get(
+            "content",
+            [
+                "data",
+                "latitudes",
+                "longitudes",
+                "timedeltas",
+                "_reference_date",
+            ],
+        )
         return self._get(request, item)
 
     def _get(self, request, item: int):
-        from anemoi.training.data.refactor.structure import Box
 
         assert isinstance(item, (type(None), int, np.integer)), f"Expected integer for item, got {type(item)}: {item}"
         assert isinstance(request, dict), f"Expected dict for request, got {type(request)}: {request}"
@@ -135,6 +143,7 @@ class DataHandler:
             "longitudes": self.longitudes,
             "latitudes_longitudes": self.latitudes_longitudes,
             "timedeltas": self.timedeltas,
+            "_reference_date": self.reference_date,
             "shape": lambda x: self._shape,
             "name_to_index": lambda x: self.name_to_index,
             "statistics": lambda x: self.statistics,
@@ -146,8 +155,7 @@ class DataHandler:
             "dimensions_order": lambda x: self._dimensions_order,
         }
 
-        res = {r: ACTIONS[r](item) for r in content}
-        box = Box(res)
+        box = {r: ACTIONS[r](item) for r in content}
 
         if "data" in box:
             if box["data"].ndim == 2:

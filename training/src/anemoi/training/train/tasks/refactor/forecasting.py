@@ -74,20 +74,27 @@ class ForecastingModule(BaseGraphModule):
         target_dtype = next(iter(batch["target"].values()))["data"].dtype
         loss = torch.zeros(1, dtype=target_dtype, device=self.device, requires_grad=True)
 
-        target_data = batch["target"]
+        target_data = batch.target
         print(target_data.to_str("target data"))
 
         from anemoi.training.data.refactor.structure import merge_boxes
         from anemoi.training.data.refactor.structure import wrap_in_box
 
-        def add_semantic_to_prediction(y_pred, target, **kwargs):
-            return merge_boxes(target, y_pred, **kwargs)
-
-        # y_pred = self.loss.add_semantic(y_pred, target_data)
         y_pred = wrap_in_box(data=y_pred)
-        y_pred = add_semantic_to_prediction(y_pred, target=target_data)
-        print(y_pred.to_str("prediction"))
-        self.loss(y_pred.unwrap("data"), target_data.unwrap("data"))
+
+        def add_semantic(y_pred, target_data):
+            y_pred_with_semantic = target_data.empty_like()
+            for path, box in target_data.boxes():
+                box = box.copy()
+                box["data"] = y_pred[path]["data"]
+                y_pred_with_semantic[path] = box
+            return y_pred_with_semantic
+
+        y_pred = add_semantic(y_pred, target_data)
+        print(self.loss.to_str("loss function"))
+
+        self.loss(pred=y_pred.unwrap("data"), target=target_data.unwrap("data"))
+
         exit()
         # Iterate over all entries in batch["target"] and accumulate loss
         for target_key, target_data in batch["target"].items():

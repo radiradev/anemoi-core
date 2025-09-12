@@ -52,12 +52,12 @@ def get_loss_function(
         print(
             "❌TODO: building simple loss function: Assumes target and output have the same structure and variables, rmse loss for everybody",
         )
-        res = loss_config.new_module_dict()
+        res = loss_config.empty_like()
         for path, box in loss_config.boxes():
             from anemoi.training.losses.rmse import RMSELoss
 
             res[path] = RMSELoss(**box)
-        return res
+        return res.as_module_dict()
 
     assert False
 

@@ -10,6 +10,7 @@ import datetime
 import os
 
 import numpy as np
+import torch
 from rich.console import Console
 from rich.tree import Tree
 
@@ -22,8 +23,8 @@ ICON_LEAF = "🌱"
 ICON_LEAF_BOX_NOT_FOUND = "🍀"
 
 
-def _choose_icon(k, v):
-    if k.startswith("_"):
+def choose_icon(k, v):
+    if str(k).startswith("_"):
         return "  "
     return dict(
         latitudes="🌍",
@@ -35,13 +36,14 @@ def _choose_icon(k, v):
         normaliser="  ",
         inputer="  ",
         extra="  ",
+        rollout="♻️ ",
     ).get(k, ICON_LEAF)
 
 
 def format_shorten(k, v):
     if len(str(v)) < 50:
-        return f"{k}: {v}"
-    return f"{k}: {str(v)[:50]}..."
+        return f"{v}"
+    return f"{str(v)[:50]}..."
 
 
 def format_timedeltas(k, v):
@@ -54,19 +56,17 @@ def format_timedeltas(k, v):
         if isinstance(v, np.ndarray):
             minimum = _to_str(np.min(v))
             maximum = _to_str(np.max(v))
-            return f"{k}: np.array{v.shape} [{minimum},{maximum}]"
-
-        import torch
+            return f"np.array{v.shape} [{minimum},{maximum}]"
 
         if isinstance(v, torch.Tensor):
             minimum = _to_str(torch.min(v).item())
             maximum = _to_str(torch.max(v).item())
-            return f"{k}: tensor({v.shape}) [{minimum},{maximum}]"
+            return f"tensor({v.shape}) [{minimum},{maximum}]"
 
-        return f"{k}: no-min, no-max"
+        return "no-min, no-max"
 
     except (ValueError, ImportError):
-        return f"{k}: [no-min, no-max]"
+        return "[no-min, no-max]"
 
 
 def format_array(k, v):
@@ -76,62 +76,85 @@ def format_array(k, v):
             maximum = np.max(v)
             mean = np.nanmean(v)
             stdev = np.nanstd(v)
-            return f"{k}: np.array{v.shape} {mean:.1f}±{stdev:.1f}"  # [{minimum:.1f},{maximum:.1f}]"
+            return f"np.array{v.shape} {mean:.5f}±{stdev:.1f}"  # [{minimum:.1f},{maximum:.1f}]"
 
         import torch
 
         if isinstance(v, torch.Tensor):
-            v = v[~torch.isnan(v)].flatten()
-            minimum = torch.min(v).item()
-            maximum = torch.max(v).item()
-            mean = torch.mean(v.float()).item()
-            stdev = torch.std(v.float()).item()
             shape = ", ".join(str(dim) for dim in v.size())
-            return f"{k} : tensor({shape}) on {v.device}, {mean:.1f}±{stdev:.1f}[{minimum:.1f}/{maximum:.1f}]"
+            v = v[~torch.isnan(v)].flatten()
+            if v.numel() == 0:
+                minimum = float("nan")
+                maximum = float("nan")
+                mean = float("nan")
+                stdev = float("nan")
+            else:
+                minimum = torch.min(v).item()
+                maximum = torch.max(v).item()
+                mean = torch.mean(v.float()).item()
+                stdev = torch.std(v.float()).item()
+            return f"tensor({shape}) on {v.device}, {mean:.5f}±{stdev:.1f}[{minimum:.1f}/{maximum:.1f}]"
 
-        return f"{k}: no-min, no-max"
+        return "no-min, no-max"
 
-    except (ValueError, ImportError, RuntimeError):
-        return f"{k}: [no-min, no-max]"
+    # except (ValueError, ImportError, RuntimeError):
+    #    return f"{k}: [no-min, no-max]"
+    except Exception as e:
+        return f"[error: {e!s}]"
 
 
 def format_key_value(k, v):
+    txt = f"{v.__class__.__name__}"
+
     if k == "timedeltas":
-        return format_timedeltas(k, v)
-    if isinstance(v, (int, float, bool)):
-        return f"{k}: {v}"
-    if isinstance(v, str):
-        return f"{k}: '{v}'"
-    if isinstance(v, (list, tuple)):
-        return format_shorten(k, str(v))
-    if isinstance(v, dict):
+        txt = format_timedeltas(k, v)
+    elif k == "rollout_usage":
+        txt = ""
+        for step, lst in v.items():
+            usages = ",".join(f"{kind}({when})" for kind, when in lst)
+            txt += f"step{step}:{usages} "
+
+    elif isinstance(v, (int, float, bool)):
+        txt = f"{v}"
+    elif isinstance(v, str):
+        txt = f"'{v}'"
+    elif isinstance(v, (list, tuple)):
+        txt = format_shorten(k, str(v))
+    elif isinstance(v, dict):
         keys = ",".join(f"{k_}" for k_ in v.keys())
-        return format_shorten(k, "dict with keys " + keys)
-    if isinstance(v, np.ndarray):
-        return format_array(k, v)
+        txt = format_shorten(k, "dict with keys " + keys)
+    elif isinstance(v, np.ndarray):
+        txt = format_array(k, v)
     try:
         import torch
 
         if isinstance(v, torch.Tensor):
-            return format_array(k, v)
+            txt = format_array(k, v)
     except ImportError:
         pass
-    return f"{k}: {v.__class__.__name__}"
+    if isinstance(v, np.datetime64):
+        txt = f'np.datetime64("{v!s}")'
+    if isinstance(v, datetime.datetime):
+        txt = f"datetime({v})"
+    from anemoi.training.data.refactor.sample_provider import Rollout
+
+    if isinstance(v, Rollout):
+        txt = str(v)
+    return txt
 
 
 def format_tree(key, value, boxed=True, **kwargs):
     """Recursively build a Tree from any nested structure."""
+    assert False, "dead code?"
     from anemoi.training.data.refactor.structure import Box
-    from anemoi.training.data.refactor.structure import is_final
-    from anemoi.training.data.refactor.structure import is_schema
 
-    if is_schema(value):
-        return format_schema(key, value)
-
-    if is_final(value):
-        return Tree(f"{ICON_LEAF_BOX_NOT_FOUND} {key} : {value}" if key is not None else str(value))
+    #    if is_schema(value):
+    #        return format_schema(key, value)
 
     if isinstance(value, Box):
+        if not all(isinstance(k, (int, str)) for k in value.keys()):
+            print(Box)
+            raise ValueError(f"Invalid keys in Box: {value.keys()}")
         if boxed:
             key = f"📦 {key}"
         t = Tree(f"{key} :", **kwargs)
@@ -150,11 +173,11 @@ def format_tree(key, value, boxed=True, **kwargs):
                 continue
             txt = format_key_value(k, v)
             if txt is not None:
-                txt = f"{_choose_icon(k, v)} {txt}"
+                txt = f"{txt}"
                 t.add(txt)
         return t
 
-    if isinstance(value, dict):  # must be after is_box because box is a dict
+    if isinstance(value, (dict, torch.nn.ModuleDict)):  # must be after is_box because box is a dict
         t = Tree(str(key) if key is not None else "", **kwargs)
         for k, v in value.items():
             # k = "🔑 " + k
@@ -167,7 +190,7 @@ def format_tree(key, value, boxed=True, **kwargs):
             t.add(format_tree("#" + str(i), v, boxed=boxed, **kwargs))
         return t
 
-    raise ValueError(f"Unknown type for value: {type(value)}. Key: {key}, Value: {value}")
+    raise ValueError(f"Unknown type for value: {type(value)}. Key: {key}")
 
 
 def format_schema(key, value):
@@ -208,6 +231,7 @@ def format_schema(key, value):
 
 
 def to_str(nested, name, _boxed=True, **kwargs):
+    nested = nested.as_nested()
     tree = format_tree(name, nested, boxed=_boxed, **kwargs)
     return _tree_to_string(tree).strip()
 

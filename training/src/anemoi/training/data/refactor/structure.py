@@ -8,7 +8,7 @@
 # nor does it submit to any jurisdiction.
 from __future__ import annotations
 
-from collections import defaultdict
+import os
 from collections.abc import Mapping
 from collections.abc import Sequence
 from functools import wraps
@@ -26,8 +26,6 @@ from boltons.iterutils import research as _research  # noqa: F401
 from rich import print
 
 from anemoi.training.data.refactor.formatting import to_str
-from anemoi.utils.dates import frequency_to_string
-from anemoi.utils.dates import frequency_to_timedelta
 
 # from typing import TYPE_CHECKING
 # if TYPE_CHECKING:
@@ -68,24 +66,142 @@ class Dict(dict):
         return self.__class__(copy.deepcopy(dict(self), memo))
 
     def as_native(self):
+        raise NotImplementedError("use as_nested")
+
+    @classmethod
+    def new_empty(cls):
+        return cls.__class__()
+
+    def as_nested(self):
+        tree = {}
+        for path, value in self.items():
+            node = tree
+            for key in path[:-1]:  # walk all but last
+                node = node.setdefault(key, {})
+            node[path[-1]] = value
+        return tree
+
+    @classmethod
+    def new_from_native(cls, structure, boxed=True):
+        if not isinstance(structure, dict):
+            return structure
+        if boxed and is_box(structure):
+            return structure
+        res = cls()
+        for prefix, value in structure.items():
+            value = cls.new_from_native(value).items()
+            if isinstance(value, cls):
+                for path, v in cls.new_from_native(value).items():
+                    res[(prefix,) + path] = v
+            else:
+                res[(prefix,)] = value
+        return res
+
+    def as_native(self):
         return {k: v.as_native() if isinstance(v, Dict) else v for k, v in self.items()}
 
-
-class Box(Dict):
-    # Flag a dict as a box
     def __repr__(self):
-        return to_str(self, name=" ")
+        # this function is quite long and has a lot of knowledge about the other types
+        # but it's ok because everything related to display is here
+        from rich.tree import Tree
+
+        from anemoi.training.data.refactor.formatting import choose_icon
+        from anemoi.training.data.refactor.formatting import format_key_value
+
+        def order_leaf(leaf):
+            def priority(k):
+                if str(k).startswith("_"):
+                    return 10
+                return dict(data=1, latitudes=2, longitudes=3, timedeltas=4).get(k, 9)
+
+            order = sorted(leaf.keys(), key=priority)
+            assert len(leaf) == len(order), (leaf, leaf.keys())
+            return {k: leaf[k] for k in order}
+
+        def expanded_leaf(path, leaf, debug=False):
+            if not isinstance(leaf, dict):
+                return f"{path}: " + format_key_value(path, leaf)
+
+            assert isinstance(leaf, dict)
+
+            leaf = order_leaf(leaf)
+            t = Tree(f"{path}")
+            for key, value in leaf.items():
+                if not debug and str(key).startswith("_"):
+                    continue
+                if key == "rollout_usage":
+                    subtree = Tree(f"{choose_icon(key, value)} {key} : {value}")
+                    t.add(subtree)
+                    continue
+                if key == "rollout":
+                    if debug:
+                        subtree = Tree(f"{choose_icon(key, value)} {key} :")
+                        for (kind, step), moves in value.rollout_info().items():
+                            txt = f"step {step}, {kind}: "
+                            txt += ",".join(to_ for from_, _, to_ in moves)
+                            txt += " ⟸️  "
+                            txt += ",".join(from_ for from_, _, to_ in moves)
+                            subtree.add(txt)
+                        t.add(subtree)
+                    else:
+                        t.add(Tree(f"{choose_icon(key, value)} {key} : {value}"))
+                    continue
+                t.add(choose_icon(key, value) + " " + f"{key} : " + format_key_value(key, value))
+            return t
+
+        def debug_leaf(path, leaf):
+            return expanded_leaf(path, leaf, debug=True)
+
+        def one_line_leaf(path, leaf):
+            leaf = leaf.copy()
+            txt = []
+            if "data" in leaf:
+                x = choose_icon("data", leaf["data"]) + " "
+                x += format_key_value("data", leaf.pop("data"))
+                x = x.replace("data : ", "")
+                x = x[:30] + ("…" if len(x) > 30 else "")
+                x += " "
+                txt.append(x)
+            for k in ["latitudes", "longitudes", "timedeltas"]:
+                if k in leaf:
+                    txt.append(choose_icon(k, leaf.pop(k)))
+            if leaf and txt:
+                txt.append(" +")
+            for k, v in leaf.items():
+                if str(k).startswith("_"):
+                    continue
+                txt.append(" " + k)
+
+            return Tree(f"{path}: " + "".join(txt))
+
+        name = self.__class__.__name__
+
+        for leaf in self.values():
+            if isinstance(leaf, dict) and "_reference_date" in leaf:
+                name += f" (Reference {leaf['_reference_date']})"
+                break
+
+        tree = Tree(name)
+        verbose = int(os.environ.get("ANEMOI_CONFIG_VERBOSE_STRUCTURE", 0))
+        leaf_to_tree = {0: one_line_leaf, 1: expanded_leaf, 2: debug_leaf}[verbose]
+        for path, leaf in self.items():
+            path = ".".join(str(p) for p in path)
+            if not isinstance(leaf, dict):
+                tree.add(f"{path}: " + format_key_value(path, leaf))
+                continue
+            if isinstance(leaf, dict) and not leaf:
+                tree.add(f"{path}: ❌ <empty-dict>")
+                continue
+            assert isinstance(leaf, dict)
+            tree.add(leaf_to_tree(path, leaf))
+
+        console = Console(record=True)
+        with console.capture() as capture:
+            console.print(tree, overflow="ellipsis")
+        return capture.get()
 
     def to_str(self, name):
-        return to_str(self, name=name)
-
-
-class Tree(Dict):
-    def __repr__(self):
-        return to_str(self, name=" ")
-
-    def to_str(self, name):
-        return to_str(self, name=name)
+        return name + " " + self.__repr__()
 
     @classmethod
     def _split_path(self, path):
@@ -96,197 +212,200 @@ class Tree(Dict):
 
     def __setitem__(self, path, value):
         path = self._split_path(path)
-
-        if len(path) == 0:
-            raise ValueError("Path cannot be empty")
-        if len(path) > 1:
-            _get_path(self, path[:-1])[path[-1]] = value
+        if isinstance(value, self.__class__):
+            for p, v in value.items():
+                self[path + p] = v
             return
-        super().__setitem__(path[0], value)
+        super().__setitem__(path, value)
 
     def __getitem__(self, path):
         path = self._split_path(path)
+        matching = {p[len(path) :]: value for p, value in self.items() if p[: len(path)] == path}
+        if not matching:
+            raise KeyError(f"Path {path} not found in Dict. Available paths: {list(self.keys())}")
+        if () in matching:  # exact match
+            return matching[()]
+        return Dict(matching)
 
-        if len(path) == 0:
-            raise ValueError("Path cannot be empty")
-        if len(path) > 1:
-            return _get_path(self, path)
-        return super().__getitem__(path[0])
+    def __getattr__(self, name):
+        try:
+            return self[name]
+        except KeyError:
+            raise AttributeError(f"'Dict' object has no attribute '{name}'")
 
+    def as_function(self):
+        return self._cast(Function, check_leaf_type=lambda x: callable(x))
 
-def cast_output_to_box(func, check_dict_output=True):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        res = func(*args, **kwargs)
-        if not isinstance(res, dict) and check_dict_output:
-            raise ValueError(f"Function {func.__name__} did not return a dict, got {type(res)}")
-        if isinstance(res, dict):
-            res = Box(res)
+    def as_module_dict(self):
+        return self._cast(AnemoiModuleDict, check_leaf_type=lambda x: isinstance(x, torch.nn.Module))
+
+    def as_batch(self):
+        return self._cast(Batch)
+
+    def _cast(self, cls, check_leaf_type=lambda x: True):
+        res = cls()
+        for path, v in self.items():
+            if not check_leaf_type(v):
+                raise ValueError(f"Unexpected leaf at {path}, got {type(v)}")
+            res[path] = v
         return res
 
-    return wrapper
-
-
-class Batch(Tree):
-    def __getattr__(self, name):
-        if name not in self:
-            raise AttributeError(f"'Batch' object has no attribute '{name}'")
-        value = self[name]
-        if isinstance(value, dict) and not isinstance(value, Box):
-            value = Batch(value)
-        return value
-
-    def create_function(self, func, *args, check_dict_output=True, **kwargs):
-        tree_of_functions = self.box_to_any(func, *args, **kwargs)
-        return Function(tree_of_functions)
-
-    def create_module_dict(self, constructor, *args, **kwargs):
-        # it is expected that 'constructor' creates a nn.Module
-        tree_of_modules = self.box_to_any(constructor, *args, **kwargs)
-        return as_module_dict(tree_of_modules)
-
-    def box_to_box(self, func, *args, **kwargs):
-        def transform(path, key, value):
-            if not isinstance(value, Box):
-                return key, value
-            # kwargs overwride the value content
-            box = {k: v for k, v in value.items() if k not in kwargs}
-            res = func(*args, **box, **kwargs)
-            return key, Box(res)
-
-        return _remap(self, visit=transform, enter=_stop_if_box_enter, exit=ensure_output_is_box_exit)
-
-    def box_to_any(self, func, *args, **kwargs):
-        def transform(path, key, value):
-            if not isinstance(value, Box):
-                return key, value
-            # kwargs overwride the value content
-            box = Box({k: v for k, v in value.items() if k not in kwargs})
-            return key, func(*args, **box, **kwargs)
-
-        return _remap(self, visit=transform, enter=_stop_if_box_enter, exit=ensure_output_is_box_exit)
-
-    def pop_content(self, key):
-        return self.__class__(remove_content(self, key))
+    def wrap_in_box(self, key):
+        return self.leaf_accessor.map(lambda v: {key: v})
 
     def select_content(self, *keys):
-        return self.__class__(select_content(self, *keys))
+        """Usage:
+        select_content(["latitudes", "longitudes"]) returns a Dict with boxes containing only the selected keys
+        select_content("data") returns a Dict with the content of the "data" key, no box
+        select_content("latitudes", "longitudes") returns a tuple of Dicts, each containing the content of the corresponding key, no boxing
+        select_content(["latitudes"], ["longitudes"]) returns a tuple of Dicts, each containing the content of the corresponding key, with boxing
+        """
+        if len(keys) == 0:
+            raise ValueError("At least one key must be provided")
+        if len(keys) > 1:
+            return tuple(self.select_content(k) for k in keys)
 
-    def merge_content(self, other=None, /, **kwargs):
-        if other and kwargs:
-            raise ValueError("Cannot provide both other and kwargs to merge_content")
-        if kwargs:
-            other = self.wrap_in_box(**kwargs)
-            return self.merge_content(other)
-        return self.__class__(merge_boxes(self, other))
+        assert len(keys) == 1
+        keys = keys[0]
 
-    def unwrap(self, *requested_keys):
-        return self.__class__(unwrap(*requested_keys))
+        def select(box):
+            if isinstance(keys, (list, tuple)):
+                return {k: v for k, v in box.items() if k in keys}
+            _check_key_in_dict(box, keys)
+            return box[keys]
 
-    def wrap_in_box(self, **structures):
-        def exit(path, key, old_parent, new_parent, new_items):
-            if not is_box(old_parent):
-                return _default_exit(path, key, old_parent, new_parent, new_items)
-            # If we reach here, it means old_parent is a box
-            # We wrap new items into a box
-            return Box({k: _get_path(structures[k], path + (key,)) for k in structures})
+        return self.each.map(select)
 
-        return _remap(self, exit=exit, enter=_stop_if_box_enter)
+    def merge_leaves(self, *args, **kwargs):
+        new = self.copy()
+        new.each.update(*args, **kwargs)
+        return new
 
-    def boxes(self):
-        res = {}
-
-        def visit(path, key, value):
-            if is_box(value):
-                res[path + (key,)] = value
-                return False
-            return key, value
-
-        _remap(self, visit=visit, enter=_stop_if_box_enter)
-        return res.items()
-
-    def empty_like(self, **kwargs):
-        new = {}
-        for path, box in self.boxes():
-            new[path] = Box()
-        return self.nest_like(new, **kwargs)
-
-    def nest_like(self, boxes, class_=None):
-        class_ = {None: self.__class__, "batch": Batch, "function": Function, "module_dict": ModuleDict}[class_]
-
-        boxes = dict(boxes)
-
-        def nested_dict():
-            return defaultdict(nested_dict)
-
-        root = nested_dict()
-        for path, value in boxes.items():
-            path = self._split_path(path)
-            d = root
-            for key in path[:-1]:
-                d = d[key]
-            d[path[-1]] = value
-
-        # convert defaultdicts back to dicts
-        def freeze(d):
-            if isinstance(d, defaultdict):
-                return class_({k: freeze(v) for k, v in d.items()})
-            return d
-
-        return freeze(root)
+    @property
+    def each(self):
+        return LeafAccessor(self)
 
 
-def as_module_dict(structure):
-    """Transform a structure into a nested MuduleDict.
-    The leaves of the scructure must be nn.Module.
-    """
+class LeafAccessor:
+    def __init__(self, parent):
+        self.parent = parent
 
-    def to_module_dict_exit(path, key, old_parent, new_parent, new_items):
-        res = _default_exit(path, key, old_parent, new_parent, new_items)
-        if isinstance(old_parent, dict):
-            res = ModuleDict(res)
-        if isinstance(old_parent, Box):
-            assert False, (path, key, old_parent, new_parent, new_items)
-        # if isinstance(old_parent, list):
-        #    res = torch.nn.ModuleList(res)
-        # if isinstance(old_parent, tuple):
-        #    res = tuple(res)
-        assert isinstance(res, torch.nn.Module), f"Expected nn.Module, got {type(res)} at {path}, {key}"
+    def copy(self):
+        return self.parent.__class__(self._apply_dict_method("copy"))
+
+    def pop(self, *args, **kwargs):
+        return self.parent.__class__(self._apply_dict_method("pop", *args, **kwargs))
+
+    def popitem(self, *args, **kwargs):
+        return self.parent.__class__(self._apply_dict_method("popitem", *args, **kwargs))
+
+    def reversed(self):
+        print("untested code")
+        return self.parent.__class__(self._apply_dict_method("reversed"))
+
+    def values(self):
+        print("untested code")
+        return self.parent.__class__(self._apply_dict_method("values"))
+
+    def __or__(self, other):
+        print("untested code")
+        return self.parent.__class__(self._apply_dict_method("__or__", other))
+
+    def __getitem__(self, key: str):
+        return self.parent.__class__(self._apply_dict_method("__getitem__", key))
+
+    def __setitem__(self, key: str, value):
+        self._apply_dict_method("__setitem__", key, value)
+
+    def update(self, *args, **kwargs):
+        self._apply_dict_method("update", *args, **kwargs)
+
+    def __ior__(self, other):
+        print("untested code")
+        self._apply_dict_method("__ior__", other)
+
+    def _apply_dict_method(self, method_name, *args, **kwargs):
+        def function_finder(path, leaf):
+            if not isinstance(leaf, dict):
+                raise ValueError(f"Expected dict at {path}, got {type(leaf)}")
+            return getattr(leaf, method_name)
+
+        return self._parallel_apply_on_leaves(function_finder, *args, **kwargs)
+
+    def __call__(self, *args, **kwargs):
+        def function_finder(path, leaf):
+            if not callable(leaf):
+                raise ValueError(f"Expected callable at {path}, got {type(leaf)}")
+            return leaf
+
+        res = self.parent.__class__()
+        for k, v in self._parallel_apply_on_leaves(function_finder, *args, **kwargs):
+            res[k] = v
         return res
 
-    return _remap(structure, exit=to_module_dict_exit, enter=_stop_if_box_enter)
+    def map(self, func, *args, **kwargs):
+        res = self.parent.__class__()
+        for path, leaf in self.parent.items():
+            args_ = [a[path] if isinstance(a, Dict) else a for a in args]
+            kwargs_ = {k: v[path] if isinstance(v, Dict) else v for k, v in kwargs.items()}
+            new = func(leaf, *args_, **kwargs_)
+            res[path] = new
+        return res
+
+    def _parallel_apply_on_leaves(self, func_finder, *args, **kwargs):
+        output = []
+        for path, leaf in self.parent.items():
+            # when args or kwargs are Dict, extract the corresponding leaf
+            args_ = [a[path] if isinstance(a, Dict) else a for a in args]
+            kwargs_ = {k: v[path] if isinstance(v, Dict) else v for k, v in kwargs.items()}
+            # find the function/method to apply and apply it
+            func = func_finder(path, leaf)
+            res = func(*args_, **kwargs_)
+            # stack in a list so that the caller decides how to handle it
+            output.append((path, res))
+        return output
 
 
-class ModuleDict(torch.nn.ModuleDict):
-    def __call__(self, other, *args, _output_box=True, _output="data", **kwargs):
-        def apply(current, other_current, path):
-
-            if isinstance(current, torch.nn.ModuleDict) or isinstance(current, torch.nn.ModuleList):
-                res = Batch()
-                for k in current.keys():
-                    if k not in other_current:
-                        raise ValueError(f"Key {k} not found in at {path}. In {other}")
-                    res[k] = apply(current[k], other_current[k], path + (k,))
-                return res
-
-            if not isinstance(current, torch.nn.Module):
-                raise ValueError(f"Expected nn.Module at {path}, got {type(current)}")
-
-            res = current(*args, **kwargs, **other_current)
-            if _output:
-                res = {**other_current, _output: res}
-
-            if _output_box:
-                if not isinstance(res, dict):
-                    raise ValueError(f"Function at {path} did not return a dict, got {type(res)}")
-                res = Box(res)
-
-            return res
-
-        return apply(self, other, ())
+class Batch(Dict):
+    pass
 
 
-class Function(Tree):
+class AnemoiModuleDict(torch.nn.ModuleDict):
+    emoji = "🔥"
+
+    def __init__(self, *args, **kwargs):
+        dic = dict(*args, **kwargs)
+
+        def deep_cast(x, cls):
+            if isinstance(x, dict):
+                return cls({k: deep_cast(v, cls) for k, v in x.items()})
+            if not isinstance(x, torch.nn.Module):
+                raise ValueError(f"Expected nn.Module, got {type(x)}")
+            return x
+
+        dic = deep_cast(dic, AnemoiModuleDict)
+        self.__init__(dic)
+
+    def __call__(self, *args, **kwargs):
+        first = None
+        if args:
+            first = args[0]
+            res = first.__class__()
+        elif kwargs:
+            first = next(iter(kwargs.values()))
+            res = first.__class__()
+        else:
+            res = Dict()
+
+        for path, module in self.items():
+            print(f"applying module {module} at path {path}")
+            args_ = [a[path] if isinstance(a, Dict) else a for a in args]
+            kwargs_ = {k: v[path] if isinstance(v, Dict) else v for k, v in kwargs.items()}
+            res[path] = module(*args_, **kwargs_)
+        return res
+
+
+class Function(Dict):
     emoji = "()"
 
     def __call__(self, other, *args, _output_box=True, **kwargs):
@@ -302,12 +421,11 @@ class Function(Tree):
             if _output_box:
                 if not isinstance(res, dict):
                     raise ValueError(f"Function at {path}, {key} did not return a dict, got {type(res)}")
-                res = Box(res)
 
             return key, res
 
         res = _remap(self, visit=apply)
-        return Batch(res)
+        return Dict(res)
 
     def apply_on_multiple_structures(self, *args, _output_box=True, **kwargs):
 
@@ -318,18 +436,17 @@ class Function(Tree):
             def search(x):
                 return _get_path(x, path + (key,), default=None)
 
-            args = [search(a) if isinstance(a, Batch) else a for a in args]
-            kwargs = {k: search(v) if isinstance(v, Batch) else v for k, v in kwargs.items()}
+            args = [search(a) if isinstance(a, Dict) else a for a in args]
+            kwargs = {k: search(v) if isinstance(v, Dict) else v for k, v in kwargs.items()}
 
             res = func(*args, **kwargs)
             if _output_box:
                 if not isinstance(res, dict):
                     raise ValueError(f"Function at {path}, {key} did not return a dict, got {type(res)}")
-                res = Box(res)
             return res
 
         res = _remap(self, visit=apply)
-        return Batch(res)
+        return Dict(res)
 
     def to_str(self, name):
         return to_str(self, name=name + self.emoji, _boxed=False)
@@ -352,15 +469,14 @@ def is_schema(x):
 
 
 def is_final(structure):
-    return not isinstance(structure, (dict, list, tuple))
+    return not isinstance(structure, (dict, list, tuple, torch.nn.ModuleDict))
 
 
 def is_box(structure):
-    if isinstance(structure, Box):
-        return True
     if not isinstance(structure, dict):
+        assert False, structure
         return False
-    # Not so reliable, see inside the dict if there is a final element
+    # See inside the dict if there is a final element
     return any(is_final(v) for v in structure.values())
 
 
@@ -380,7 +496,7 @@ def merge_boxes(*structs, overwrite=True):
             return _default_exit(path, key, old_parent, new_parent, new_items)
         # If we reach here, it means old_parent is a box
         # We need to merge new_items into the corresponding box in old_parent
-        res = Box()
+        res = {}
         for struct in structs:
             box = _get_path(struct, path + (key,), default={})
             if not overwrite and set(box.keys()) & set(res.keys()):
@@ -391,20 +507,6 @@ def merge_boxes(*structs, overwrite=True):
     return _remap(structs[0], exit=exit)
 
 
-def wrap_in_box(**structures):
-    if all(isinstance(v, dict) for v in structures.values()):
-        first = next(iter(structures.values()))
-        b = Batch()
-        for key in first.keys():
-            assert all(
-                set(s.keys()) == set(first.keys()) for s in structures.values()
-            ), "All dicts must have the same keys to wrap in box"
-            values = {k: s[key] for k, s in structures.items()}
-            b[key] = wrap_in_box(**values)
-        return b
-    return Box(**structures)
-
-
 def _stop_if_box_enter(path, key, value):
     if is_box(value):
         return value, []
@@ -412,39 +514,8 @@ def _stop_if_box_enter(path, key, value):
 
 
 def ensure_output_is_box_exit(path, key, old_parent, new_parent, new_items):
-
-    res = _default_exit(path, key, old_parent, new_parent, new_items)
-    if is_box(old_parent):
-        res = Box(res)
+    lkj
     return res
-
-
-def _for_each_expanded_box(fconfig_tree, func, *args, **kwargs):
-    # apply the func to each box in the fconfig_tree tree
-    is_callable = dict(callable=None)
-
-    def transform(path, key, fconfig_box):
-        if not is_box(fconfig_box):
-            # apply only on boxes
-            return key, fconfig_box
-        if any(callable(v) for k, v in fconfig_box.items()):
-            return key, fconfig_box
-
-        # print(f"DEBUG: {path} {key}, applying function {func.__name__} to {value} {args=} {kwargs=}")
-        value = func(**fconfig_box, **kwargs)
-        # print(f"  -> {value=}")
-        if isinstance(value, dict):
-            value = Box(value)
-
-        if is_callable["callable"] is None:
-            is_callable["callable"] = callable(value)
-        is_callable["callable"] = is_callable["callable"] and callable(value)
-        return key, value
-
-    structure = _remap(fconfig_tree, visit=transform, enter=_stop_if_box_enter, exit=ensure_output_is_box_exit)
-    # if is_callable["callable"]:
-    #    return nested_to_callable(structure)
-    return structure
 
 
 def apply(func, structure, *args, **kwargs):
@@ -531,29 +602,6 @@ def nested_to_callable(f_tree):
     function_on_tree._anemoi_function_str = to_str(f_tree, "(function)", _boxed=False)
 
     return function_on_tree
-
-
-def remove_content(nested, key):
-    def pop(path, k, box):
-        if not is_box(box):
-            return k, box
-        _check_key_in_dict(box, key)
-        v = box.pop(key)
-        return k, Box({key: v})
-
-    return _remap(nested, visit=pop, enter=_stop_if_box_enter)
-
-
-def select_content(nested, *keys):
-
-    def select(path, key, box):
-        if not is_box(box):
-            return key, box
-        for k in keys:
-            _check_key_in_dict(box, k)
-        return key, Box({k: box[k] for k in keys if k in box})
-
-    return _remap(nested, visit=select, enter=_stop_if_box_enter)
 
 
 def unwrap(nested, *requested_keys):
@@ -647,7 +695,7 @@ def rearrange(mappings, sources, _add_origin=True):
     for k, v in mappings.items():
         v = resolve(v)
         insert_path(root, _path_to_tuple(k), v)
-    return Batch(root)
+    return Dict(root)
 
 
 def test_custom(path):
@@ -678,12 +726,6 @@ def test_one(training_context):
                             data_group: "era5"
                             variables: ["2t", "10u", "10v"]
                             dimensions: ["variables", "values"]
-                      #rollout:
-                      #  kind: prognostics
-                      #  steps: [0h, +6h, +12h, +18h, +24h]
-
-                      #  input: [-6h, 0h]
-                      #  target: 6h
 
 
             """
@@ -700,70 +742,73 @@ def test_one(training_context):
 
     print("✅ sp.static_info", sp.static_info)
 
-    data = sp[1]
-    print(data)
-    print(to_str(data, name="✅ Data"))
+    batch_data = sp[1]
+    for k, v in batch_data.items():
+        print(f" - {k}: {type(v)}")
+    print("✅ Batch Data", batch_data)
 
-    data = sp.static_info.merge_content(data)
-    print("✅ Data", data)
+    data = sp.static_info.copy()
+    data.each.update(batch_data)
+    print("✅ Data full", data)
+    from anemoi.training.data.refactor.structure import Dict
 
-    def to_tensor(**kwargs):
-        import torch
+    assert isinstance(data, Dict), type(data)
+    assert "data" in data["lowres"], data["lowres"].keys()
+    assert "name_to_index" in data["lowres"], data["lowres"].keys()
 
-        def f(arr):
-            return torch.Tensor(arr)
+    def to_tensor(box):
+        return {k: torch.Tensor(v) if k == "data" else v for k, v in box.items()}
 
-        res = {k: f(v) if k == "data" else v for k, v in kwargs.items()}
-        res = Box(res)
-        return res
+    def to_gpu(box):
+        return {k: v.to("cuda") if k == "data" else v for k, v in box.items()}
 
-    data = data.box_to_box(to_tensor)
-
-    def to_gpu(**kwargs):
-        def f(arr):
-            return arr.to("cuda")
-
-        res = {k: f(v) if k == "data" else v for k, v in kwargs.items()}
-        # res = Box(res)
-        return res
-
-    new_data = data.box_to_box(to_gpu)
+    new_data = data.each.map(to_tensor)
+    new_data = new_data.each.map(to_gpu)
     print("✅ Data on GPU", new_data)
     print(type(new_data["lowres"]))
 
-    guessed = make_schema(data)
-    print(to_str(schema, "Actual Schema"))
-    print(to_str(guessed, "Actual Schema"))
+    # guessed = make_schema(data)
+    # print(to_str(schema, "Actual Schema"))
+    # print(to_str(guessed, "Actual Schema"))
 
-    extra = data.pop_content("extra")
-    print("Data after pop_content extra", data)
-    print("Extra after pop_content extra", extra)
+    extra = data.each.pop("extra")
+    print("Extra after pop extra", extra)
 
-    lat_lon = data.select_content("latitudes", "longitudes")
-    print("Selected lat_lon", lat_lon)
+    # lat,lon = data.select_content("latitudes", "longitudes")
+    lat = data.each["latitudes"]
+    lon = data.each["longitudes"]
+    print("Latitudes", lat)
+    print("Longitudes", lon)
 
-    def build_normaliser(statistics, **kwargs):
-        print("✅💬 Building from", statistics)
+    def build_normaliser(box):
+        statistics = box["statistics"]
         mean = np.mean(statistics["mean"])
 
-        def func(data, **kwargs):
-            new = data - mean
-            return dict(data=new, **kwargs)
-
-        # norm = Normaliser(mean,...)
-        # def f(x):
-        #    return norm.transform(x["data"])
+        def func(box):
+            box = box.copy()
+            box["data"] = box["data"] - mean
+            return box
 
         return func
 
-    normaliser = sp.static_info.create_function(build_normaliser)
+    # mimic this:
+    # normaliser = {}
+    # for path, value in sp.static_info.items():
+    #     normaliser[path] = build_normaliser(value)
+
+    # normaliser = Dict()
+    # normaliser = sp.static_info.new_empty()
+    # for path, value in sp.static_info.items():
+    #     normaliser[path] = build_normaliser(value)
+
+    normaliser = sp.static_info.each.map(build_normaliser)
 
     print("Normaliser function", normaliser)
-    n_data = normaliser(data)
+    n_data = normaliser.each(data)
 
-    d = data.select_content("data")
-    n = n_data.select_content("data")
-    print_columns(d.to_str("Unnormalised data"), n.to_str("Normalised data"))
+    d = data.each["data"]
+    n = n_data.each["data"]
+    print_columns(f"Unnormalised data {d}", f"Normalised data {n}")
 
 
 from rich.console import Console
@@ -785,36 +830,16 @@ def test_two(training_context):
     from anemoi.training.data.refactor.sample_provider import sample_provider_factory
 
     cfg_2 = """dictionary:
-                  prognostics:
-                    for_each:
-                      - offset: ["-6h", "0h", "+6h", "+12h", "+18h"]
-                      - container:
-                          dimensions: ["values", "variables"]
-                          variables: ["2t", "10u", "10v"]
-                          data_group: "era5"
-                  #forcings:
-                  #  for_each:
-                  #    - offset: ["-6h", "0h", "+6h", "+12h", "+18h"]
-                  #    - tensor:
-                  #        - ensembles: False
-                  #        - values: True
-                  #        - variables: ["era5.2t", "era5.10u", "era5.10v"]
-                  #diagnostics:
-                  #  for_each:
-                  #    - offset: ["-6h", "0h", "+6h", "+12h", "+18h"]
-                  #    - tensor:
-                  #        - ensembles: False
-                  #        - values: True
-                  #        - variables: ["era5.2t", "era5.10u", "era5.10v"]
-                  #prognostics_tuple:
-                  #  tuple:
-                  #    for_each:
-                  #      - offset: ["-6h", "0h", "+6h", "+12h", "+18h"]
-                  #    template:
-                  #      tensor:
-                  #        - ensembles: False
-                  #        - values: True
-                  #        - variables: ["era5.2t", "era5.10u", "era5.10v"]
+                state:
+                   dictionary:
+                     fields:
+                       rollout: prognostics
+                       # rollout: forcings
+                       # rollout: diagnostics
+                       container:
+                           dimensions: ["values", "variables"]
+                           variables: ["2t", "10u", "10v"]
+                           data_group: "era5"
 
                   #observations:
                   #  tuple:
@@ -824,65 +849,51 @@ def test_two(training_context):
                   #      tensor:
                   #        - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
             """
+
+    rollout_config = yaml.safe_load(
+        """
+        rollout:
+          steps: ["0h", "+6h", "+12h", "+18h", "+24h"]
+          input: ["-12h", "-6h", "0h"]
+          target: ["+6h", "12h"]
+        """,
+    )
+    print("Rollout config", rollout_config)
+
     config = yaml.safe_load(cfg_2)
-    sp = sample_provider_factory(**training_context, **config)
+    sp = sample_provider_factory(**training_context, **config, **rollout_config)
     print("static_info", sp.static_info)
     data = sp[1]
-    data = sp.static_info.merge_content(data)
-    print("Full Data", data)
+    print(data)
+    data = sp.static_info.merge_leaves(data)
+    data = data.select_content(["_offset", "data", "_reference_date"])
+    # data = data.select_content(["_offset", "rollout_usage", "data"])
+    print("Selected Data", data)
+    print("Rollout info : ", type(sp.rollout_info()), sp.rollout_info())
+    # merged = sp.rollout_info().merge_leaves(data)
+    # print("merged", merged)
+    rollout_steps = None
+    for path, rollout in sp.rollout_info().items():
+        rollout_steps = rollout.steps
+        break
+    print("Rollout steps", rollout_steps)
 
-    def i_to_delta(i, frequency):
-        frequency = frequency_to_timedelta(frequency)
-        delta = frequency * i
-        sign = "+" if i > 0 else ""
-        if delta:
-            return sign + frequency_to_string(delta)
-        return "0h"
+    rollout = sp.rollout_info()
+    print("Rollout info", rollout)
+    # step 0:
 
-    data = data.select_content("data", "_offset")
-
-    print("[red] ✅ Rollout for prognostic data[/red]")
-    # TODO: same logic for Forcings data, and for Diagnostic data
-    rollout_config = []
-    n_rollout = 3
-    n_step_input = 2  # TODO: use this below to create the config
-    frequency = "6h"
-    for i in range(n_rollout):
-        rollout_config.append(
-            {
-                "input.prognostics.0": "previous_input.prognostics.1",
-                "input.prognostics.1": "output.prognostics",
-                "target.prognostics": f"from_dataset.prognostics.{i_to_delta(i + 1, frequency)}",
-            },
-        )
-    rollout_config[0]["input.prognostics.0"] = f"from_dataset.prognostics.{i_to_delta(-1, frequency)}"
-    rollout_config[0]["input.prognostics.1"] = f"from_dataset.prognostics.{i_to_delta(0, frequency)}"
-
-    rollout_config[1]["input.prognostics.0"] = f"from_dataset.prognostics.{i_to_delta(0, frequency)}"
-
-    print(yaml.dump(dict(rollout=rollout_config), sort_keys=False))
-    from_dataset = data
-    previous_input = {}
-    output = {}
-    for i in [0, 1, 2]:
-        print(".............")
-        cfg = rollout_config[i]
-        print(cfg)
-        sources = dict(from_dataset=from_dataset, previous_input=previous_input, output=output)
-        print(f"Building data for rollout = {i}")
-        print_columns(
-            to_str(sources["from_dataset"], "from_dataset"),
-            to_str(sources["previous_input"], "previous_input"),
-            to_str(sources["output"], "output"),
-        )
-        input_target = rearrange(cfg, sources)
-        print()
-        input = input_target.input
-        target = input_target.target
-        print_columns(input.to_str(f"input({i})"), target.to_str(f"target({i})"))
-
-        output = input_target["target"]
-        previous_input = input_target["input"]
+    data.each["_tag"] = "✅ data"
+    input = None
+    output = None
+    for i, step in enumerate(rollout_steps):
+        input = rollout.each("input", step=step, database=data, previous_input=input, previous_output=output)
+        target = rollout.each("target", step=step, database=data)
+        # run model
+        output = target
+        print(f"-------- Rollout {i} {step=} --------")
+        print_columns(input.to_str(f"Input at step {i}"), target.to_str(f"Target at step {i}"))
+        output.each["_tag"] = "💬 previous_output"
+        input.each["_tag"] = "😊  previous_input"
 
 
 def test_three(training_context):
