@@ -219,6 +219,8 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
     ) -> NativeGridDataset:
 
         data_reader = self.add_trajectory_ids(data_reader)  # NOTE: Functionality to be moved to anemoi datasets
+        num_chunks_per_model = self.config.data.get("num_chunks_per_model", 1)
+        LOGGER.info("num_chunks_per_model: %d", num_chunks_per_model)
 
         return NativeGridDataset(
             data_reader=data_reader,
@@ -227,6 +229,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
             shuffle=shuffle,
             grid_indices=self.grid_indices,
             label=label,
+
         )
 
     def _get_dataloader(self, ds: NativeGridDataset, stage: str) -> DataLoader:
