@@ -53,7 +53,7 @@ def get_loss_function(
             print(v.to_str(f"Loss config for {k}"))
             loss = instantiate(v, **kwargs, _recursive_=False)
             print(loss)
-        exit()
+        assert False
         return DictLoss(loss_config)
 
 
