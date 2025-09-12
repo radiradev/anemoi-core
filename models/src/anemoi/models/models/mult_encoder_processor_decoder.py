@@ -135,7 +135,7 @@ class AnemoiMultiModel(AnemoiModel):
         from anemoi.models.preprocessing.normalisers import build_normaliser
 
         self.normaliser = self.sample_static_info.create_module_dict(build_normaliser)
-        # print(self.normaliser_old)
+
         print(self.normaliser)
 
         # # apply is not supported anymore

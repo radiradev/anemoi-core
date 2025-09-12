@@ -46,7 +46,7 @@ def get_loss_function(
         more_config = target_info.select_content("name_to_index", "extra", "number_of_features", "dimensions_order")
         loss_config = more_config.merge_content(config=loss_config)
 
-        print(loss_config.to_str("Loss config with additional info if needed")
+        print(loss_config.to_str("Loss config with additional info if needed"))
         print(loss_config.as_native())
         exit()
         for k,v in loss_config.items():
