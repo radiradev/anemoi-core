@@ -103,25 +103,59 @@ class WeightedAreaRelatetSortedIntensityLoss(BaseWeightedLoss):
         ----------
         x : torch.Tensor    
             Either pred or target shape (bs, ensemble, lat*lon, n_outputs)
-            or (ensemble, lat*lon, n_outputs)
+            or (ensemble, lat*lon, n_outputs) or (lat*lon)
+        Returns
+        -------
+        torch.Tensor with shape (bs, ensemble, lat*lon, number num_neighbors, n_outputs)
+            or (ensemble, lat*lon, number num_neighbors, n_outputs)
+
+
+        """
+        # determine if batch dimension present
+        # full_rank = True if len(x.shape)==4 else False
+        # if no batch dimension create trivial 
+        # if full_rank:
+        x = x.unsqueeze(-2).expand(-1, -1, -1, self.num_neighbors, -1).clone()
+        # else: 
+        #     print(f"{x.shape=}")
+        #     x = x.unsqueeze(1).expand(-1, self.num_neighbors)
+        #     print(f"{x.shape=}")
+
+  
+        # expand node feature tensor to (bs, ens, lat*lon, num_neighbors ,n_outputs)    
+
+        # expand index tensor to shape of 
+        idx = self.neighbor_index.unsqueeze(0).unsqueeze(0).unsqueeze(-1)
+        idx = idx.expand(x.shape[0], x.shape[1], -1, -1, x.shape[-1]).clone()
+        result = torch.gather(x, 2, idx.to(torch.int64))
+        result, _ = torch.sort(result, dim=-2)
+        # if not full_rank: result = result.squeeze(0)
+        # if no_batch: result = result.squeeze(0) 
+        return result 
+
+    def _reindex_weights(self, x: torch.Tensor):
+        """
+        generates tensor that holds neighborhood info for each node 
+
+        Parameters
+        ----------
+        x : torch.Tensor    
+            weight vector shape (lat*lon)
         Returns
         -------
         torch.Tensor wit shape (number of nodes, number num_neighbors)
 
         """
-        # determine if batch dimension present
-        no_batch = True if len(x.shape)==3 else False
-        # if no batch dimension create trivial 
-        if no_batch: x = x.unsqueeze(0)     
   
         # expand node feature tensor to (bs, ens, lat*lon, num_neighbors ,n_outputs)    
-        x = x.unsqueeze(-2).expand(-1, -1, -1, self.num_neighbors, -1)
+        x = x.unsqueeze(-1).expand(-1, self.num_neighbors).clone()
 
         # expand index tensor to shape of 
-        idx = self.neighbor_index.unsqueeze(0).unsqueeze(0).unsqueeze(-1)
-        idx = idx.expand(x.shape[0], x.shape[1], -1, -1, x.shape[-1])
-
-        return torch.gather(x, 2, idx.to(torch.int64))
+        idx = self.neighbor_index
+        # idx = self.neighbor_index.unsqueeze(0).unsqueeze(0).unsqueeze(-1)
+        # idx = idx.expand(x.shape[0], x.shape[1], -1, -1, x.shape[-1])
+        result = torch.gather(x, 0, idx.to(torch.int64))
+        return result 
 
     def _aggregate(self,
                   x: torch.Tensor, 
@@ -244,7 +278,8 @@ class WeightedAreaRelatetSortedIntensityLoss(BaseWeightedLoss):
 
         pred = self._reindex(pred)
         target = self._reindex(target)
-        self.node_weights = self._reindex(self.original_node_weights)
+        # self.node_weights = self._reindex_weights(self.original_node_weights)
+        self.node_weights = self.original_node_weights.unsqueeze(-1).expand(-1, self.num_neighbors).clone()
 
         out = torch.square(pred - target)
         out = self.scale(out, scalar_indices, without_scalars=without_scalars)
