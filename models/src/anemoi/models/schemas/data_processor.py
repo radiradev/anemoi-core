@@ -229,12 +229,13 @@ class RemapperSchema(BaseModel):
     "Variables not to be remapped."
 
 
-class LeftBoundaryZeroSchema(BaseModel):
-    # Accept the same minimal structure that `LeftBoundaryZero` expects:
-    # a default and one method key grouping variables to zero.
-    default: str = Field(literals=["none"], default="none")
-    zero: Union[list[str], None] = Field(default_factory=list)
-    none: Union[list[str], None] = Field(default_factory=list)
+class SetToZeroGroup(BaseModel):
+    vars: Union[list[str], None] = Field(default_factory=list)
+    time_index: int = Field(ge=0)
+
+
+class SetToZeroSchema(RootModel[list[SetToZeroGroup]]):
+    pass
 
 
 class PreprocessorTarget(str, Enum):
@@ -246,7 +247,7 @@ class PreprocessorTarget(str, Enum):
     conditional_zero_postprocessor = "anemoi.models.preprocessing.postprocessor.ConditionalZeroPostprocessor"
     conditional_nan_postprocessor = "anemoi.models.preprocessing.postprocessor.ConditionalNaNPostprocessor"
     normalized_relu_postprocessor = "anemoi.models.preprocessing.postprocessor.NormalizedReluPostprocessor"
-    left_boundary_zero = "anemoi.models.preprocessing.imputer.LeftBoundaryZero"
+    set_to_zero = "anemoi.models.preprocessing.overwriter.SetToZero"
 
 
 target_to_schema = {
@@ -258,12 +259,12 @@ target_to_schema = {
     PreprocessorTarget.conditional_zero_postprocessor: ConditionalZeroPostprocessorSchema,
     PreprocessorTarget.conditional_nan_postprocessor: ConditionalNaNPostprocessorSchema,
     PreprocessorTarget.normalized_relu_postprocessor: NormalizedReluPostprocessorSchema,
-    PreprocessorTarget.left_boundary_zero: LeftBoundaryZeroSchema,
+    PreprocessorTarget.set_to_zero: SetToZeroSchema,
 }
 
 
 class PreprocessorSchema(BaseModel, validate_assignment=False):
     target_: PreprocessorTarget = Field(..., alias="_target_")
     "Processor object from anemoi.models.preprocessing.[normalizer|imputer|remapper]."
-    config: Union[dict, NormalizerSchema, ImputerSchema, PostprocessorSchema, RemapperSchema, LeftBoundaryZeroSchema]
+    config: Union[dict, NormalizerSchema, ImputerSchema, PostprocessorSchema, RemapperSchema, SetToZeroSchema]
     "Target schema containing processor methods."

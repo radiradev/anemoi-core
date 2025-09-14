@@ -16,7 +16,6 @@ from typing import Optional
 import torch
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
-from torch import Tensor
 
 from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.models.preprocessing import BasePreprocessor
@@ -521,44 +520,3 @@ class DynamicCopyImputer(DynamicMixin, CopyImputer):
     def inverse_transform(self, x: torch.Tensor, in_place: bool = True) -> torch.Tensor:
         """Impute missing values in the input tensor."""
         return DynamicMixin.inverse_transform(self, x, in_place)
-
-
-# NOTES: Convo w/ Sara on Friday 5th Sept 2025
-# TODO: Make the value configurable so more generalised
-# TODO: move to overwriter instead of preprocessor
-# TODO: Add comment saying that reverse doesn't do anything
-class LeftBoundaryZero(BasePreprocessor):
-    def __init__(self, config=None, data_indices: Optional[IndexCollection] = None, statistics: Optional[dict] = None):
-        super().__init__(config, data_indices, statistics)
-        self.num_training_input_vars = len(self.data_indices.data.input.name_to_index)
-        self.num_inference_input_vars = len(self.data_indices.model.input.name_to_index)
-
-        self._train_idxs = []
-        self._infer_idxs = []
-        # variables to zero = keys listed in config under "zero"
-        vars_to_zero = [v for v, m in self.methods.items() if m != "none"]
-        for name in vars_to_zero:
-            self._train_idxs.append(self.data_indices.data.input.name_to_index.get(name, None))
-            self._infer_idxs.append(self.data_indices.model.input.name_to_index.get(name, None))
-
-    def transform(self, x: Tensor, in_place: bool = True) -> Tensor:
-        if not in_place:
-            x = x.clone()
-        if x.shape[-1] == self.num_training_input_vars:
-            idxs = self._train_idxs
-        elif x.shape[-1] == self.num_inference_input_vars:
-            idxs = self._infer_idxs
-        else:
-            raise ValueError(
-                f"Input tensor ({x.shape[-1]}) does not match training ({self.num_training_input_vars}) "
-                f"or inference ({self.num_inference_input_vars})"
-            )
-        # for i in idxs:
-        #     if i is None:
-        #         continue
-        #     sel = [slice(None)] * x.ndim
-        #     sel[1] = 0        # time dimension
-        #     sel[-1] = i       # variable dimension
-        #     x[tuple(sel)] = 0
-        x[:, 0, ..., idxs] = 0
-        return x

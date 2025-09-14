@@ -67,6 +67,8 @@ class AnemoiModelEncProcDecInterpolator(AnemoiModelEncProcDec):
         self.latent_skip = model_config.model.latent_skip
         self.grid_skip = model_config.model.grid_skip
 
+        self.setup_mass_conserving_accumulations(data_indices, model_config)
+
     def _calculate_input_dim(self, model_config):
         return (
             self.input_times * self.num_input_channels
@@ -340,3 +342,37 @@ class AnemoiModelEncProcDecInterpolator(AnemoiModelEncProcDec):
             y_preds[..., target_indices] = y_preds_accum
 
         return y_preds
+
+    def setup_mass_conserving_accumulations(self, data_indices: dict, config: dict):
+
+        # Mass-conserving accumulations: expose the config mapping on the underlying model and
+        # prepare aligned index lists. Each mapping pairs an output variable (prediction target)
+        # with an input constraint variable (accumulation/forcing), which we validate and index below.
+        self.map_mass_conserving_accums = getattr(config.model, "mass_conserving_accumulations", None)
+        if self.map_mass_conserving_accums is None:
+            self.map_accum_indices = None
+        else:
+            target_idx_list: list[int] = []
+            constraint_idx_list: list[int] = []
+            for output_varname, input_constraint_varname in self.map_mass_conserving_accums.items():
+                assert (
+                    input_constraint_varname in data_indices.data._forcing
+                ), f"Input constraint variable {input_constraint_varname} not found in data indices forcing variables."
+                assert (
+                    output_varname in data_indices.model.output.name_to_index
+                ), f"Output variable {output_varname} not found in data indices output variables."
+
+                target_idx_list.append(data_indices.model.output.name_to_index[output_varname])
+                constraint_idx_list.append(data_indices.model.input.name_to_index[input_constraint_varname])
+
+            self.map_accum_indices = torch.nn.ParameterDict(
+                {
+                    "target_idxs": torch.nn.Parameter(
+                        torch.tensor(target_idx_list, dtype=torch.long), requires_grad=False
+                    ),
+                    "constraint_idxs": torch.nn.Parameter(
+                        torch.tensor(constraint_idx_list, dtype=torch.long),
+                        requires_grad=False,
+                    ),
+                },
+            )

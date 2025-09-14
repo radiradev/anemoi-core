@@ -67,7 +67,6 @@ class GraphInterpolator(BaseGraphModule):
             metadata=metadata,
             supporting_arrays=supporting_arrays,
         )
-
         if len(config.training.target_forcing.data) >= 1:
             self.target_forcing_indices = itemgetter(*config.training.target_forcing.data)(
                 data_indices.data.input.name_to_index,
@@ -78,32 +77,6 @@ class GraphInterpolator(BaseGraphModule):
             self.target_forcing_indices = []
 
         self.use_time_fraction = config.training.target_forcing.time_fraction
-
-        # TODO (rilwan-adewoyin): Improve how this map_accum_indices is assigned to the Interface or Model or extend
-        # the postprocessors to  be able to work with functions which also condition on the input state
-        self.model.model.map_mass_conserving_accums = config.training.mass_conserving_accumulations
-        target_idx_list: list[int] = []
-        constraint_idx_list: list[int] = []
-        for output_varname, input_constraint_varname in self.model.model.map_mass_conserving_accums.items():
-            assert (
-                input_constraint_varname in data_indices.data._forcing
-            ), f"Input constraint variable {input_constraint_varname} not found in data indices forcing variables."
-            assert (
-                output_varname in data_indices.model.output.name_to_index
-            ), f"Output variable {output_varname} not found in data indices output variables."
-
-            target_idx_list.append(data_indices.model.output.name_to_index[output_varname])
-            constraint_idx_list.append(data_indices.model.input.name_to_index[input_constraint_varname])
-
-        self.model.model.map_accum_indices = torch.nn.ParameterDict(
-            {
-                "target_idxs": torch.nn.Parameter(torch.tensor(target_idx_list, dtype=torch.long), requires_grad=False),
-                "constraint_idxs": torch.nn.Parameter(
-                    torch.tensor(constraint_idx_list, dtype=torch.long),
-                    requires_grad=False,
-                ),
-            },
-        )
 
         self.boundary_times = config.training.explicit_times.input
         self.interp_times = config.training.explicit_times.target
