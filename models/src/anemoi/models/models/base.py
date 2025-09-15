@@ -179,6 +179,7 @@ class AnemoiGraphModelBase(nn.Module):
         x_dst_is_sharded: bool = False,
         keep_x_dst_sharded: bool = False,
         use_reentrant: bool = False,
+        **kwargs,
     ) -> Tensor:
         """Run mapper with activation checkpoint.
 
@@ -209,19 +210,20 @@ class AnemoiGraphModelBase(nn.Module):
         Tensor
             Mapped data
         """
-        kwargs = {
+        mapper_args = {
             "batch_size": batch_size,
             "shard_shapes": shard_shapes,
             "model_comm_group": model_comm_group,
             "x_src_is_sharded": x_src_is_sharded,
             "x_dst_is_sharded": x_dst_is_sharded,
             "keep_x_dst_sharded": keep_x_dst_sharded,
+            **kwargs,
         }
 
         if isinstance(mapper, GraphTransformerBaseMapper) and mapper.shard_strategy == "edges":
-            return mapper(data, **kwargs)
+            return mapper(data, **mapper_args)
 
-        return checkpoint(mapper, data, **kwargs, use_reentrant=use_reentrant)
+        return checkpoint(mapper, data, **mapper_args, use_reentrant=use_reentrant)
 
     def _build_boundings(
         self,
