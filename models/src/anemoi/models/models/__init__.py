@@ -19,8 +19,8 @@ __all__ = [
     "AnemoiGraphModelBase",
     "AnemoiModelEncProcDec",
     "AnemoiEnsModelEncProcDec",
-    "AnemoiDiffusionModelEncProcDec",
-    "AnemoiDiffusionTendModelEncProcDec",
     "AnemoiModelEncProcDecHierarchical",
     "AnemoiModelEncProcDecInterpolator",
+    "AnemoiDiffusionModelEncProcDec",
+    "AnemoiDiffusionTendModelEncProcDec",
 ]

@@ -134,6 +134,7 @@ class AnemoiGraphModelBase(nn.Module):
         self.input_dim = (
             self.multi_step * self.num_input_channels + self.node_attributes.attr_ndims[self._graph_name_data]
         )
+        self.input_dim_latent = self.node_attributes.attr_ndims[self._graph_name_hidden]
 
     def _assert_matching_indices(self, data_indices: dict) -> None:
         assert len(self._internal_output_idx) == len(data_indices.model.output.full) - len(

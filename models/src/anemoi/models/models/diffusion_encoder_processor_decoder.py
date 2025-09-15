@@ -25,7 +25,7 @@ from anemoi.models.distributed.graph import gather_tensor
 from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.shapes import apply_shard_shapes
 from anemoi.models.distributed.shapes import get_shard_shapes
-from anemoi.models.models.encoder_processor_decoder import AnemoiModelEncProcDec
+from anemoi.models.models import AnemoiModelEncProcDec
 from anemoi.models.samplers import diffusion_samplers
 from anemoi.utils.config import DotDict
 
