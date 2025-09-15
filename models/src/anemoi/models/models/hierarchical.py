@@ -84,7 +84,7 @@ class AnemoiModelEncProcDecHierarchical(AnemoiModelEncProcDec):
             model_config.model.encoder,
             _recursive_=False,  # Avoids instantiation of layer_kernels here
             in_channels_src=self.input_dim,
-            in_channels_dst=self.node_attributes.attr_ndims[self._graph_hidden_names[0]],
+            in_channels_dst=self.input_dim_latent,
             hidden_dim=self.hidden_dims[self._graph_hidden_names[0]],
             sub_graph=self._graph_data[(self._graph_name_data, "to", self._graph_hidden_names[0])],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_data],

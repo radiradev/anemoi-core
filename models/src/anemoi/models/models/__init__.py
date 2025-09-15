@@ -8,6 +8,8 @@
 # nor does it submit to any jurisdiction.
 
 from .base import AnemoiGraphModelBase
+from .diffusion_encoder_processor_decoder import AnemoiDiffusionModelEncProcDec
+from .diffusion_encoder_processor_decoder import AnemoiDiffusionTendModelEncProcDec
 from .encoder_processor_decoder import AnemoiModelEncProcDec
 from .ens_encoder_processor_decoder import AnemoiEnsModelEncProcDec
 from .hierarchical import AnemoiModelEncProcDecHierarchical
@@ -17,6 +19,8 @@ __all__ = [
     "AnemoiGraphModelBase",
     "AnemoiModelEncProcDec",
     "AnemoiEnsModelEncProcDec",
+    "AnemoiDiffusionModelEncProcDec",
+    "AnemoiDiffusionTendModelEncProcDec",
     "AnemoiModelEncProcDecHierarchical",
     "AnemoiModelEncProcDecInterpolator",
 ]
