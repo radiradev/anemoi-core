@@ -22,7 +22,7 @@ LOGGER = logging.getLogger(__name__)
 class SetToZero(BasePreprocessor):
     def __init__(self, config=None, data_indices: Optional[IndexCollection] = None, statistics: Optional[dict] = None):
         super().__init__(config, data_indices, statistics)
-        groups = [] if config is None else config.root
+        groups = [] if config is None else config.groups
 
         self.num_training_input_vars = len(self.data_indices.data.input.name_to_index)
         self.num_inference_input_vars = len(self.data_indices.model.input.name_to_index)
@@ -32,13 +32,8 @@ class SetToZero(BasePreprocessor):
         train_map = self.data_indices.data.input.name_to_index
         infer_map = self.data_indices.model.input.name_to_index
 
-        # Accept config as:
+        # Accept config.groups as:
         # - list[{"vars": [...], "time_index": [int]}]
-        # - pydantic RootModel with ".root" holding the list
-        groups = config or []
-        if hasattr(groups, "root"):
-            groups = groups.root  # pydantic RootModel
-
         if not isinstance(groups, list):
             LOGGER.warning(
                 "SetToZero config is not a list; got %r. No variables will be zeroed.", type(groups).__name__

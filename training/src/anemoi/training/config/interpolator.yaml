@@ -85,10 +85,11 @@ data:
     set_to_zero:
       _target_: anemoi.models.preprocessing.overwriter.SetToZero
       config:
-        - vars:
-            - "tp_accum"
-            - "cp_accum"
-          time_index: [0]
+        groups:
+          - vars:
+              - "tp_accum"
+              - "cp_accum"
+            time_index: [0]
 
 #dataloader:
   # model_run_info: #Add for non-analysis training

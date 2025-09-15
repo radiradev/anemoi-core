@@ -231,11 +231,11 @@ class RemapperSchema(BaseModel):
 
 class SetToZeroGroup(BaseModel):
     vars: Union[list[str], None] = Field(default_factory=list)
-    time_index: int = Field(ge=0)
+    time_index: Union[list[int], None] = Field(default_factory=list)
 
 
-class SetToZeroSchema(RootModel[list[SetToZeroGroup]]):
-    pass
+class SetToZeroSchema(BaseModel):
+    groups: Union[list[SetToZeroGroup], None] = Field(default_factory=list)
 
 
 class PreprocessorTarget(str, Enum):
