@@ -11,13 +11,14 @@
 from __future__ import annotations
 
 import logging
+from icecream import ic
 from typing import TYPE_CHECKING
 
 import torch
 from torch.utils.checkpoint import checkpoint
-
+from anemoi.training.losses.base import BaseLoss
 from anemoi.training.losses.scalers.base_scaler import AvailableCallbacks
-
+from anemoi.training.utils.enums import TensorDim
 from anemoi.training.train.tasks.base import BaseGraphModule
 
 if TYPE_CHECKING:
@@ -129,18 +130,16 @@ class GraphDiffusionDownscaler(BaseGraphModule):
         self,
         batch: list[torch.Tensor],
         batch_idx: int,
+        training_mode: bool = True,
         validation_mode: bool = False,
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
-        """Process batch size 3 with dimensions:
+        """Process batch size of len 3 with each item of dimensions:
         [batch_size, dates, ensemble, gridpoints, variables].
         """
         del batch_idx
-        training_mode = True
-        loss = torch.zeros(
-            1, dtype=batch[0].dtype, device=self.device, requires_grad=False
-        )
-        metrics = {}
-        y_preds = []
+        # loss = torch.zeros(
+        #    1, dtype=batch[0].dtype, device=self.device, requires_grad=False
+        # )
 
         x_in, x_in_hres, y = batch
 
@@ -199,17 +198,16 @@ class GraphDiffusionDownscaler(BaseGraphModule):
             self.compute_loss_metrics,
             y_pred[:, 0, ...],
             residuals_target[:, 0, ...],  # removing time dim for loss computation,
-            training_mode,
-            validation_mode,
+            rollout_step=0,
+            training_mode=training_mode,
+            validation_mode=validation_mode,
             weights=noise_weights,
             use_reentrant=False,
         )
 
         y_preds = [x_in_interp_to_hres + y_pred, y_pred]
 
-        print("loss", loss)
-
-        return loss, metrics, y_preds
+        return loss, metrics_next, y_preds
 
     def _noise_target(self, x: torch.Tensor, sigma: torch.Tensor) -> torch.Tensor:
         """Add noise to the state."""
@@ -264,6 +262,122 @@ class GraphDiffusionDownscaler(BaseGraphModule):
         """
 
         return batch  # already have the full grid
+
+    def validation_step(self, batch: torch.Tensor, batch_idx: int) -> None:
+        """Calculate the loss over a validation batch using the training loss function.
+
+        Parameters
+        ----------
+        batch : torch.Tensor
+            Validation batch
+        batch_idx : int
+            Batch inces
+
+        """
+        with torch.no_grad():
+            val_loss, metrics, y_preds = self._step(
+                batch, batch_idx, training_mode=False, validation_mode=True
+            )
+
+        self.log(
+            "val_" + self.loss.name + "_loss",
+            val_loss,
+            on_epoch=True,
+            on_step=True,
+            prog_bar=True,
+            logger=self.logger_enabled,
+            batch_size=batch[0].shape[0],
+            sync_dist=True,
+        )
+
+        for mname, mvalue in metrics.items():
+            self.log(
+                "val_" + mname,
+                mvalue,
+                on_epoch=True,
+                on_step=False,
+                prog_bar=False,
+                logger=self.logger_enabled,
+                batch_size=batch[0].shape[0],
+                sync_dist=True,
+            )
+
+        return val_loss, y_preds
+
+    def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
+        train_loss, _, _ = self._step(
+            batch, batch_idx, training_mode=True, validation_mode=False
+        )
+        self.log(
+            "train_" + self.loss.name + "_loss",
+            train_loss,
+            on_epoch=True,
+            on_step=True,
+            prog_bar=True,
+            logger=self.logger_enabled,
+            batch_size=batch[0].shape[0],
+            sync_dist=True,
+        )
+
+        return train_loss
+
+    def calculate_val_metrics(
+        self,
+        y_pred: torch.Tensor,
+        y: torch.Tensor,
+        rollout_step: int = 0,
+        grid_shard_slice: slice | None = None,
+    ) -> dict[str, torch.Tensor]:
+        """Calculate metrics on the validation output.
+
+        Parameters
+        ----------
+        y_pred: torch.Tensor
+            Predicted ensemble
+        y: torch.Tensor
+            Ground truth (target).
+        rollout_step: int
+            Rollout step
+
+        Returns
+        -------
+        val_metrics : dict[str, torch.Tensor]
+            validation metrics and predictions
+        """
+        metrics = {}
+        y_postprocessed = self.model.post_processors(
+            y, in_place=False, dataset="output"
+        )
+        y_pred_postprocessed = self.model.post_processors(
+            y_pred, in_place=False, dataset="output"
+        )
+
+        for metric_name, metric in self.metrics.items():
+            if not isinstance(metric, BaseLoss):
+                # If not a loss, we cannot feature scale, so call normally
+                metrics[f"{metric_name}_metric/{rollout_step + 1}"] = metric(
+                    y_pred_postprocessed, y_postprocessed
+                )
+                continue
+
+            for mkey, indices in self.val_metric_ranges.items():
+                metric_step_name = f"{metric_name}_metric/{mkey}/{rollout_step + 1}"
+                if len(metric.scaler.subset_by_dim(TensorDim.VARIABLE.value)):
+                    exception_msg = (
+                        "Validation metrics cannot be scaled over the variable dimension"
+                        " in the post processed space."
+                    )
+                    raise ValueError(exception_msg)
+
+                metrics[metric_step_name] = metric(
+                    y_pred_postprocessed,
+                    y_postprocessed,
+                    scaler_indices=[..., indices],
+                    grid_shard_slice=grid_shard_slice,
+                    group=self.model_comm_group,
+                )
+
+        return metrics
 
 
 def match_tensor_channels(input_name_to_index, output_name_to_index):
