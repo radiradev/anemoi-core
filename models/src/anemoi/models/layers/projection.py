@@ -17,37 +17,26 @@ class NodeEmbedder(nn.Module):
     def __init__(
         self,
         config,
-        num_input_channels: dict[str, int],
-        num_output_channels: dict[str, int],
-        sources: dict[str, str],
-        coord_dimension: int = 4, # sin() cos() of lat and lon
+        num_input_channels: int,
+        num_output_channels: int,
+        coord_dimension: int = 4,  # sin() cos() of lat and lon
         **kwargs
     ):
         super().__init__()
         self.num_input_channels = num_input_channels
         self.num_output_channels = num_output_channels
-        self.sources = sources
 
-        self.embedders = nn.ModuleDict(
-            {
-                in_source: instantiate(
-                    config,
-                    _recursive_=False,
-                    in_features=num_input_channels[in_source] + coord_dimension,
-                    out_features=num_output_channels[out_source],
-                )
-                for in_source, out_source in sources.items()
-            }
+        self.embedder = instantiate(
+            config,
+            _recursive_=False,
+            in_features=num_input_channels + coord_dimension,
+            out_features=num_output_channels,
         )
 
-    def forward(self, x: dict[str, torch.Tensor], **kwargs) -> HeteroData:
-        new = {}
-        for data_source, encoded_source in self.sources.items():
-            new[encoded_source] = self.embedders[data_source](x[data_source])
-
+    def forward(self, x: torch.Tensor, **kwargs) -> HeteroData:
         # input: [{"1": tensor, "1": tensor, "2": tensor, ...}]
         # TODO: x_data_latent = concat_tensor_from_same_source(x_data_latent)
-        return new
+        return self.embeder(x)
 
 
 class NodeProjector(nn.Module):

@@ -70,7 +70,7 @@ class Dict(dict):
 
     @classmethod
     def new_empty(cls):
-        return cls.__class__()
+        return cls()
 
     def as_nested(self):
         tree = {}
@@ -102,7 +102,8 @@ class Dict(dict):
 
     def __repr__(self):
         # this function is quite long and has a lot of knowledge about the other types
-        # but it's ok because everything related to display is here
+        # it is not too bad because everything related to display is here
+        # but this is ugly
         from rich.tree import Tree
 
         from anemoi.training.data.refactor.formatting import choose_icon
@@ -175,13 +176,12 @@ class Dict(dict):
             return Tree(f"{path}: " + "".join(txt))
 
         name = self.__class__.__name__
-
         for leaf in self.values():
             if isinstance(leaf, dict) and "_reference_date" in leaf:
                 name += f" (Reference {leaf['_reference_date']})"
                 break
-
         tree = Tree(name)
+
         verbose = int(os.environ.get("ANEMOI_CONFIG_VERBOSE_STRUCTURE", 0))
         leaf_to_tree = {0: one_line_leaf, 1: expanded_leaf, 2: debug_leaf}[verbose]
         for path, leaf in self.items():
@@ -372,19 +372,6 @@ class Batch(Dict):
 
 class AnemoiModuleDict(torch.nn.ModuleDict):
     emoji = "🔥"
-
-    def __init__(self, *args, **kwargs):
-        dic = dict(*args, **kwargs)
-
-        def deep_cast(x, cls):
-            if isinstance(x, dict):
-                return cls({k: deep_cast(v, cls) for k, v in x.items()})
-            if not isinstance(x, torch.nn.Module):
-                raise ValueError(f"Expected nn.Module, got {type(x)}")
-            return x
-
-        dic = deep_cast(dic, AnemoiModuleDict)
-        self.__init__(dic)
 
     def __call__(self, *args, **kwargs):
         first = None

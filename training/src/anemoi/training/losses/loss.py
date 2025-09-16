@@ -40,24 +40,33 @@ def get_loss_function(
     **kwargs,
 ) -> DictLoss:
 
-    if sample_static_info is not None:
-        loss_config = OmegaConf.to_container(config, resolve=True)
-        target_info = sample_static_info.target
-        more_config = target_info.select_content("name_to_index", "extra", "number_of_features", "dimensions_order")
-        loss_config = more_config.merge_content(config=loss_config)
+    assert sample_static_info is not None
 
-        print(loss_config.to_str("Loss config with additional info if needed"))
-        print(loss_config.as_native())
+    generic_config = OmegaConf.to_container(config, resolve=True)
 
-        print(
-            "❌TODO: building simple loss function: Assumes target and output have the same structure and variables, rmse loss for everybody",
+    loss_config = sample_static_info.new_empty()
+    for path, box in sample_static_info.items():
+        loss_config[path] = dict(
+            config=generic_config,
+            name_to_index=box["name_to_index"],
+            extra=box.get("extra", {}),
+            number_of_features=box["number_of_features"],
+            dimensions_order=box["dimensions_order"],
         )
-        res = loss_config.empty_like()
-        for path, box in loss_config.boxes():
-            from anemoi.training.losses.rmse import RMSELoss
 
-            res[path] = RMSELoss(**box)
-        return res.as_module_dict()
+    print(loss_config.to_str("Loss config with additional info if needed"))
+
+    print(
+        "❌TODO: building simple loss function: Assumes target and output have the same structure and variables, rmse loss for everybody",
+    )
+    from anemoi.training.losses.rmse import RMSELoss
+
+    res = loss_config.new_empty()  # or res = Dict()
+    for path, box in loss_config.items():
+        res[path] = RMSELoss(**box)
+    res = res.as_module_dict()
+    print(res.to_str("Loss function"))
+    return res
 
     assert False
 

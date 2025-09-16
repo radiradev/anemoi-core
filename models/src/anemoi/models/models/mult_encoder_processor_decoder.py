@@ -10,6 +10,7 @@
 
 import logging
 import uuid
+import warnings
 from typing import Optional
 
 import einops
@@ -94,16 +95,6 @@ def merge_graph_sources(graph: HeteroData, sources: dict[str, str]) -> HeteroDat
     return graph, slices
 
 
-def num_channels(name_to_index, **kwargs):
-    import warnings
-
-    warnings.warn("assuming only one offset per tensor")
-    num_channels = len(name_to_index)
-    if "add_channels" in kwargs:
-        num_channels += kwargs["add_channels"]
-    return num_channels
-
-
 class AnemoiMultiModel(AnemoiModel):
     """Message passing graph neural network."""
 
@@ -129,22 +120,16 @@ class AnemoiMultiModel(AnemoiModel):
 
         self.sample_static_info = sample_static_info
 
-        # Instantiate processors - build normalisers directly into ModuleDict
-        # self.normaliser_old = self._build_normaliser_moduledict()
-
         from anemoi.models.preprocessing.normalisers import build_normaliser
 
-        self.normaliser = self.sample_static_info.create_module_dict(build_normaliser)
-
+        self.normaliser = self.sample_static_info.new_empty()
+        for path, value in self.sample_static_info.items():
+            self.normaliser[path] = build_normaliser(**value)
+        # also possible:
+        #  self.normaliser = self.sample_static_info.each.map(build_normaliser)
         print(self.normaliser)
 
-        # # apply is not supported anymore
-        # preprocessors = self.sample_static_info.apply(processor_factory)
-        # # Assign the processor list pre- and post-processors
-        # self.input_pre_processors = Processors(preprocessors["input"].processor_factory)
-        # self.target_pre_processors = Processors(preprocessors["target"].processor_factory)
-        # self.target_post_processors = Processors(preprocessors["target"].processor_factory, inverse=True)
-        # # TODO: Implemente structure.processor_factory (not only at LeafStructure)
+        # TODO? re-add generic preprocessors if needed.
 
         self.num_channels = model_config.model.num_channels
 
@@ -176,8 +161,18 @@ class AnemoiMultiModel(AnemoiModel):
 
         # NODE_COORDS_NDIMS = 4  # cos_lat, sin_lat, cos_lon, sin_lon
         # should be in the input ?
-        self.num_input_channels = sample_static_info.input.box_to_any(num_channels)
-        self.num_target_channels = sample_static_info.target.box_to_any(num_channels)
+        self.num_input_channels = sample_static_info.new_empty()
+        self.num_target_channels = sample_static_info.new_empty()
+        for path, value in self.sample_static_info.items():
+            name_to_index = value["name_to_index"]
+            warnings.warn("assuming only one offset per tensor")
+            num_channels = len(name_to_index)
+            # num_channels += kwargs["add_channels"]
+            self.num_input_channels[path] = num_channels
+            self.num_target_channels[path] = num_channels
+        # also possible:
+        #  self.num_input_channels = self.sample_static_info.each.map(lambda x: len(x['name_to_index']))
+        #  self.num_target_channels = self.sample_static_info.each.map(lambda x: len(x['name_to_index']))
 
         self.hidden_name: str = model_config.model.model.hidden_name
         encoders, self.encoder_sources, num_encoded_channels = extract_sources(model_config.model.model.encoders)
@@ -198,14 +193,28 @@ class AnemoiMultiModel(AnemoiModel):
         #             # TODO
         #         )
         # self.embeders = self.sample_static_info.create_function(build_embeder)
+        self.node_embeders = self.sample_static_info.new_empty()
+        for path, value in self.sample_static_info.items():
+            num_input_channels = self.num_input_channels[path]
+            kwargs = dict(
+                config=model_config.model.model.emb_data,
+                num_input_channels=num_input_channels,  # coords missing, we need to add them
+                num_output_channels=num_encoded_channels,
+                coord_dimension=NODE_COORDS_NDIMS,
+            )
+            try:
+                self.node_embeders[path] = NodeEmbedder(**kwargs)
+            except Exception as e:
+                print("❌❌❌ fix me ❌❌❌")
+                print("❌❌❌ fix me ❌❌❌")
+                print("❌❌❌ fix me ❌❌❌")
+                print("❌❌❌ fix me ❌❌❌")
+                print(f"Error building NodeEmbedder for path {path} with {kwargs}: {e}")
+                print("keep going without full initialisation")
+                return
+        # also possible:
+        #  self.embeders = self.sample_static_info.each.map(build_node_embeder, self.num_input_channels, ...)
 
-        self.node_embedder = NodeEmbedder(
-            model_config.model.model.emb_data,
-            num_input_channels=self.num_input_channels,  # coords missing, we need to add them
-            num_output_channels=num_encoded_channels,
-            sources=self.encoder_sources,
-            coord_dimension=NODE_COORDS_NDIMS,
-        )
         self.node_projector = NodeProjector(
             model_config.model.model.emb_data,
             num_input_channels=num_decoded_channels,
