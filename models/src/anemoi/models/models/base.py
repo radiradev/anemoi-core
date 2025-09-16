@@ -221,7 +221,7 @@ class AnemoiGraphModelBase(nn.Module):
         }
 
         if isinstance(mapper, GraphTransformerBaseMapper) and mapper.shard_strategy == "edges":
-            return mapper(data, **mapper_args)
+            return mapper(data, **mapper_args)  # finer grained checkpointing inside GTM with edge sharding
 
         return checkpoint(mapper, data, **mapper_args, use_reentrant=use_reentrant)
 
