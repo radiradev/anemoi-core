@@ -76,6 +76,9 @@ class AnemoiModelEncProcDecHierarchical(AnemoiModelEncProcDec):
         self._build_networks(model_config)
         self._build_boundings(model_config, self.data_indices, self.statistics)
 
+    def _calculate_input_dim_latent(self) -> int:
+        return self.node_attributes.attr_ndims[self._graph_hidden_names[0]]
+
     def _build_networks(self, model_config):
         """Builds the model components."""
 

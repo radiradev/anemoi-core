@@ -125,16 +125,20 @@ class AnemoiGraphModelBase(nn.Module):
 
         return x
 
+    def _calculate_input_dim(self) -> int:
+        return self.multi_step * self.num_input_channels + self.node_attributes.attr_ndims[self._graph_name_data]
+
+    def _calculate_input_dim_latent(self) -> int:
+        return self.node_attributes.attr_ndims[self._graph_name_hidden]
+
     def _calculate_shapes_and_indices(self, data_indices: dict) -> None:
         self.num_input_channels = len(data_indices.model.input)
         self.num_output_channels = len(data_indices.model.output)
         self.num_input_channels_prognostic = len(data_indices.model.input.prognostic)
         self._internal_input_idx = data_indices.model.input.prognostic
         self._internal_output_idx = data_indices.model.output.prognostic
-        self.input_dim = (
-            self.multi_step * self.num_input_channels + self.node_attributes.attr_ndims[self._graph_name_data]
-        )
-        self.input_dim_latent = self.node_attributes.attr_ndims[self._graph_name_hidden]
+        self.input_dim = self._calculate_input_dim()
+        self.input_dim_latent = self._calculate_input_dim_latent()
 
     def _assert_matching_indices(self, data_indices: dict) -> None:
         assert len(self._internal_output_idx) == len(data_indices.model.output.full) - len(

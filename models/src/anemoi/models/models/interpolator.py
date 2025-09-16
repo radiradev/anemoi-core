@@ -63,7 +63,7 @@ class AnemoiModelEncProcDecInterpolator(AnemoiModelEncProcDec):
         self.latent_skip = model_config.model.latent_skip
         self.grid_skip = model_config.model.grid_skip
 
-    def _calculate_input_dim(self, model_config):
+    def _calculate_input_dim(self):
         return (
             self.input_times * self.num_input_channels
             + self.node_attributes.attr_ndims[self._graph_name_data]

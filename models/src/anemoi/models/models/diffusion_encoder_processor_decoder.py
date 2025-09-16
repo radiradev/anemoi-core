@@ -66,8 +66,8 @@ class AnemoiDiffusionModelEncProcDec(AnemoiModelEncProcDec):
         self.noise_embedder = instantiate(diffusion_config.noise_embedder)
         self.noise_cond_mlp = self._create_noise_conditioning_mlp()
 
-    def _calculate_input_dim(self, model_config):
-        base_input_dim = super()._calculate_input_dim(model_config)
+    def _calculate_input_dim(self):
+        base_input_dim = super()._calculate_input_dim()
         return base_input_dim + self.num_output_channels  # input + noised targets
 
     def _create_noise_conditioning_mlp(self) -> nn.Sequential:
@@ -522,7 +522,7 @@ class AnemoiDiffusionTendModelEncProcDec(AnemoiDiffusionModelEncProcDec):
             truncation_data=truncation_data,
         )
 
-    def _calculate_input_dim(self, model_config):
+    def _calculate_input_dim(self):
         input_dim = self.multi_step * self.num_input_channels + self.node_attributes.attr_ndims[self._graph_name_data]
         input_dim += self.num_output_channels  # noised targets
         input_dim += len(self.data_indices.model.input.prognostic)  # truncated input state
