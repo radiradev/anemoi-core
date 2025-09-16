@@ -45,15 +45,15 @@ class AnemoiDiffusionModelEncProcDec(AnemoiModelEncProcDec):
         truncation_data: dict,
     ) -> None:
 
-        model_config_local = DotDict(model_config)
+        # model_config_local = DotDict(model_config)
 
-        diffusion_config = model_config_local.model.model.diffusion
-        self.noise_channels = diffusion_config.noise_channels
-        self.noise_cond_dim = diffusion_config.noise_cond_dim
-        self.sigma_data = diffusion_config.sigma_data
-        self.sigma_max = diffusion_config.sigma_max
-        self.sigma_min = diffusion_config.sigma_min
-        self.inference_defaults = diffusion_config.inference_defaults
+        # diffusion_config = model_config_local.model.model.diffusion
+        # self.noise_channels = diffusion_config.noise_channels
+        # self.noise_cond_dim = diffusion_config.noise_cond_dim
+        # self.sigma_data = diffusion_config.sigma_data
+        # self.sigma_max = diffusion_config.sigma_max
+        # self.sigma_min = diffusion_config.sigma_min
+        # self.inference_defaults = diffusion_config.inference_defaults
 
         super().__init__(
             model_config=model_config,
@@ -63,6 +63,18 @@ class AnemoiDiffusionModelEncProcDec(AnemoiModelEncProcDec):
             truncation_data=truncation_data,
         )
 
+    def _set_up_diffusion_settings(self, diffusion_config):
+        self.noise_channels = diffusion_config.noise_channels
+        self.noise_cond_dim = diffusion_config.noise_cond_dim
+        self.sigma_data = diffusion_config.sigma_data
+        self.sigma_max = diffusion_config.sigma_max
+        self.sigma_min = diffusion_config.sigma_min
+        self.inference_defaults = diffusion_config.inference_defaults
+
+    def _build_networks(self, model_config):
+        super()._build_networks(model_config)
+        diffusion_config = model_config.model.model.diffusion
+        self._set_up_diffusion_settings(diffusion_config)
         self.noise_embedder = instantiate(diffusion_config.noise_embedder)
         self.noise_cond_mlp = self._create_noise_conditioning_mlp()
 
