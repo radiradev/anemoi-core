@@ -12,7 +12,6 @@ import itertools
 import os
 import warnings
 from abc import abstractmethod
-from collections import defaultdict
 from functools import cached_property
 
 import einops
@@ -24,6 +23,130 @@ from rich.tree import Tree
 
 from .data_handler import DataHandler
 
+SEPARATOR = "__"
+
+MAPPING_OF_ALLOWED_CHARACTERS_IN_DICT_KEYS = {
+    # "Xbackslash_": "\\",
+    # "Xbar_": "|",
+    "Xcolon_": ":",
+    # "Xequal_": "=",
+    "Xgreater_": "<",
+    "Xless_": ">",
+    "Xminus_": "-",
+    "Xplus_": "+",
+    # "Xquestion_": "?",
+    # "Xslash_": "/",
+    "Xstar_": "*",
+    # "Xtilde_": "~",
+}
+ALLOWED_CHARACTERS_IN_DICT_KEYS = set(MAPPING_OF_ALLOWED_CHARACTERS_IN_DICT_KEYS.values())
+
+
+def _check_no_conflict(dic):
+    for key in dic:
+        conflicts = {k: v for k, v in dic.items() if k.startswith(key)}
+        if len(conflicts) > 1:
+            raise ValueError(f"Conflict in allowed characters mapping: {conflicts}")
+
+
+_check_no_conflict(MAPPING_OF_ALLOWED_CHARACTERS_IN_DICT_KEYS)
+
+
+def check_dictionary_key(k):
+    if not isinstance(k, str):
+        raise TypeError(f"Expected string for dictionary key, got {type(k)}: {k}")
+    if SEPARATOR in k:
+        raise ValueError(f"Keys in dictionary must not contain '{SEPARATOR}', got: {k}")
+    if k.startswith("_"):
+        raise ValueError(f"Keys in dictionary must not start with '_', got: {k}")
+    if not all(c.isalnum() or c in ALLOWED_CHARACTERS_IN_DICT_KEYS for c in k):
+        raise ValueError(f"Keys in dictionary must only contain alphanumeric characters and +/-/=/~, got: {k}")
+
+    if k.lower() != k:
+        # we could allow capital letters and encode the case in the mapping
+        # but the encoded keys would be hard to read
+        # and this would need careful handling
+        raise ValueError(f"Keys in dictionary must be lowercase, got: {k}.")
+
+    # if k[0].isdigit():
+    # this is to keep open the possibility to handle lists/tuples in the future
+    #    raise ValueError(f"Keys in dictionary must not start with a digit for now, got: {k}")
+    RESERVED_WORDS_FOR_TORCH_MODULE = [  # from torch.nn.Module
+        "dump_patches",
+        "call_super_init",
+        "forward",
+        "register_buffer",
+        "register_parameter",
+        "add_module",
+        "register_module",
+        "get_submodule",
+        "set_submodule",
+        "get_parameter",
+        "get_buffer",
+        "get_extra_state",
+        "set_extra_state",
+        "apply",
+        "cuda",
+        "ipu",
+        "xpu",
+        "mtia",
+        "cpu",
+        "type",
+        "float",
+        "double",
+        "half",
+        "bfloat16",
+        "to_empty",
+        "to",
+        "register_full_backward_pre_hook",
+        "register_backward_hook",
+        "register_full_backward_hook",
+        "register_forward_pre_hook",
+        "register_forward_hook",
+        "register_state_dict_post_hook",
+        "register_state_dict_pre_hook",
+        "T_destination",
+        "state_dict",
+        "register_load_state_dict_pre_hook",
+        "register_load_state_dict_post_hook",
+        "load_state_dict",
+        "parameters",
+        "named_parameters",
+        "buffers",
+        "named_buffers",
+        "children",
+        "named_children",
+        "modules",
+        "named_modules",
+        "train",
+        "eval",
+        "requires_grad_",
+        "zero_grad",
+        "share_memory",
+        "extra_repr",
+        "compile",
+    ]
+    if k in RESERVED_WORDS_FOR_TORCH_MODULE:
+        raise ValueError(
+            f"Keys in dictionary must not be a reserved word for torch.nn.Module, got: {k}. Recommending to use '{k}_' instead",
+        )
+    try:
+        import torch
+
+        for cls in [
+            torch.nn.Module,
+            torch.nn.ModuleDict,
+            torch.nn.ParameterDict,
+            torch.nn.ModuleList,
+            torch.nn.ParameterList,
+        ]:
+            if k in cls.__dict__:
+                raise ValueError(f"Keys in dictionary must not be a {cls.__name__} attribute, got: {k}")
+    except ImportError:
+        pass
+
+    return k
+
 
 def normalise_offset(x):
     return offset_to_string(offset_to_timedelta(x))
@@ -32,16 +155,20 @@ def normalise_offset(x):
 def offset_to_string(x):
     from anemoi.utils.dates import frequency_to_string
 
-    if not x:
-        return "+0"
     assert isinstance(x, datetime.timedelta), type(x)
-    if x > datetime.timedelta(0):
-        return "+" + frequency_to_string(x)
-    return frequency_to_string(x)
+    # if x > datetime.timedelta(0):
+    #    return "+" + frequency_to_string(x)
+    res = frequency_to_string(x)
+    if res[0] == "-":
+        res = "m" + res[1:]
+    return res
 
 
 def offset_to_timedelta(x):
     from anemoi.utils.dates import frequency_to_timedelta
+
+    if isinstance(x, str) and x.startswith("m"):
+        x = "-" + x[1:]
 
     return frequency_to_timedelta(x)
 
@@ -171,56 +298,6 @@ class Context:
 
     def __repr__(self):
         return f"Context(start={self.start}, end={self.end}, offset={self.offset})"
-
-
-class VariablesList:
-    def __init__(self, variables: list[str] | dict, group):
-        self.lst = [f"{group}.{v}" for v in variables]
-        return
-
-        if isinstance(variables, dict):
-            self.lst = []
-            for group, vars_ in variables.items():
-                if isinstance(vars_, str):
-                    vars_ = [vars_]
-                if not isinstance(vars_, (list, tuple)):
-                    raise ValueError(f"Expected list or tuple for variables, got {type(vars_)}: {vars_}")
-                for v in vars_:
-                    if not isinstance(v, str):
-                        raise ValueError(f"Expected string for variable, got {type(v)}: {v}")
-                    if "." in v:
-                        raise ValueError(
-                            f"Variable '{v}' should not contain a group name ('.' expected) in {variables})",
-                        )
-                self.lst += [f"{group}.{v}" for v in vars_]
-            return
-
-        if not isinstance(variables, (list, tuple)):
-            raise ValueError(f"Expected list or tuple for variables, got {type(variables)}: {variables}")
-
-        for v in variables:
-            if not isinstance(v, str):
-                raise ValueError(f"Expected string for variable, got {type(v)}: {v} in {variables}")
-            if "." not in v:
-                raise ValueError(f"Variable '{v}' does not contain a group name ('.' expected) in {variables})")
-        self.lst = variables
-
-    @property
-    def as_list(self):
-        return self.lst
-
-    @cached_property
-    def as_dict(self):
-        dic = {}
-        for v in self.lst:
-            group, var = v.split(".", 1)
-            if group not in dic:
-                dic[group] = []
-            dic[group].append(var)
-        return dic
-
-    def __repr__(self):
-        return f"({', '.join(self.lst)})"
 
 
 class SampleProvider:
@@ -479,22 +556,9 @@ class DictSampleProvider(_DictSampleProvider):
             raise TypeError(f"Expected dictionary, got {type(dictionary)}: {dictionary}")
         if len(dictionary) == 0:
             raise ValueError("Dictionary is empty, cannot create sample provider.")
-        for k in dictionary:
-            if not isinstance(k, str):
-                raise ValueError(f"Keys in dictionary must be strings, got {type(k)}, {k}")
-
-        def check_key(k):
-            if not isinstance(k, str):
-                raise TypeError(f"Expected string for dictionary key, got {type(k)}: {k}")
-            if k.startswith("_"):
-                raise ValueError(f"Keys in dictionary must not start with '_', got: {k}")
-            ALLOWED_CHARACTERS = set("_+-<=>|~")
-            if not all(c.isalnum() or c in ALLOWED_CHARACTERS for c in k):
-                raise ValueError(f"Keys in dictionary must only contain alphanumeric characters and +/-/=/~, got: {k}")
-            return k.lower()
 
         for k, v in dictionary.items():
-            check_key(k)
+            check_dictionary_key(k)
             if not isinstance(v, dict):
                 raise ValueError(f"Expected dictionary for sample provider, got {type(v)}: {v}. ")
 
@@ -503,6 +567,7 @@ class DictSampleProvider(_DictSampleProvider):
 
         res = Dict()
         for k, sample in self._samples.items():
+            check_dictionary_key(k)
             res[k] = sample._get_rollout_info()
         return res
 
@@ -587,17 +652,17 @@ class Rearranger:
 
 
 class Rollout(Rearranger):
-    def normalise_and_set(self, steps, input, target):
-        if any(offset_to_timedelta(s) > datetime.timedelta(0) for s in input):
-            raise ValueError(f"All input steps must be negative, got {input}")
-        if any(offset_to_timedelta(s) < datetime.timedelta(0) for s in target):
-            raise ValueError(f"All target steps must be positive, got {target}")
+    def normalise_and_set(self, steps, input_steps, target_steps):
+        if any(offset_to_timedelta(s) > datetime.timedelta(0) for s in input_steps):
+            raise ValueError(f"All input steps must be negative, got {input_steps}")
+        if any(offset_to_timedelta(s) < datetime.timedelta(0) for s in target_steps):
+            raise ValueError(f"All target steps must be positive, got {target_steps}")
         if any(offset_to_timedelta(s) < datetime.timedelta(0) for s in steps):
             raise ValueError(f"All rollout steps must be positive, got {steps}")
         self.steps = [normalise_offset(s) for s in steps]
-        self.input = [normalise_offset(s) for s in input]
-        self.target = [normalise_offset(s) for s in target]
-        return self.steps, self.input, self.target
+        self.input_steps = [normalise_offset(s) for s in input_steps]
+        self.target_steps = [normalise_offset(s) for s in target_steps]
+        return self.steps, self.input_steps, self.target_steps
 
     def run_action(self, action, element, database=None, previous_input=None, previous_output=None):
         step, role, key = element
@@ -639,12 +704,35 @@ class Rollout(Rearranger):
 
         raise ValueError(f"Unknown action {action} for {element}")
 
+    def __repr__(self):
+        console = Console(record=True, width=120)
+        tree = self.tree()
+        with console.capture() as capture:
+            console.print(tree)
+        return capture.get()
+
+    def tree(self, prefix=""):
+        tree = Tree(prefix + "♻️ Rollout")
+        config_tree = tree.add("Configuration")
+        config_tree.add(f"Rollout steps: {self.steps}")
+        config_tree.add(f"Input steps: {self.input_steps}")
+        config_tree.add(f"Target steps: {self.target_steps}")
+        domain_tree = tree.add("Domain")
+        for steps, roles, keys in self.domain:
+            for role in roles:
+                domain_tree.add(f"At rollout steps {steps} for '{role}' : {keys})")
+        actions_tree = tree.add("Actions")
+        for (steps, roles, keys), action in self.actions:
+            for role in roles:
+                actions_tree.add(f"At rollout steps {steps} for '{role}' : {keys} <- {action}")
+        return tree
+
 
 class ForcingRollout(Rollout):
-    def __init__(self, steps, input, target):
-        steps, input, target = self.normalise_and_set(steps, input, target)
+    def __init__(self, steps, input_steps, target_steps):
+        steps, input_steps, target_steps = self.normalise_and_set(steps, input_steps, target_steps)
 
-        domain = [(steps, "input", input)]
+        domain = [(steps, "input", input_steps)]
         # always take input from database for forcings
         actions = [(("*", "*", "*"), "database")]
 
@@ -652,10 +740,10 @@ class ForcingRollout(Rollout):
 
 
 class DiagnosticRollout(Rollout):
-    def __init__(self, steps, input, target):
-        steps, input, target = self.normalise_and_set(steps, input, target)
+    def __init__(self, steps, input_steps, target_steps):
+        steps, input_steps, target_steps = self.normalise_and_set(steps, input_steps, target_steps)
 
-        domain = [(steps, "target", target)]
+        domain = [(steps, "target", target_steps)]
         # always take target from database
         actions = [(("*", "*", "*"), "database")]
 
@@ -663,95 +751,23 @@ class DiagnosticRollout(Rollout):
 
 
 class PrognosticRollout(Rollout):
-    def __init__(self, steps, input, target):
-        steps, input, target = self.normalise_and_set(steps, input, target)
+    def __init__(self, steps, input_steps, target_steps):
+        steps, input_steps, target_steps = self.normalise_and_set(steps, input_steps, target_steps)
 
-        domain = [(steps, "input", input), (steps, "target", target)]
+        domain = [(steps, "input", input_steps), (steps, "target", target_steps)]
 
         actions = []
         # always take target from database
         actions.append((("*", "target", "*"), "database"))
 
         # for the first step, take all the input from database
-        actions.append(((steps[0], "input", input), "database"))
+        actions.append(((steps[0], "input", input_steps), "database"))
         # for other steps take it from the previous input
-        actions.append((("*", "input", input[:-1]), "previous_input"))
+        actions.append((("*", "input", input_steps[:-1]), "previous_input"))
         # except for the last one, take it from the previous output
-        actions.append((("*", "input", input[-1]), "previous_output"))
+        actions.append((("*", "input", input_steps[-1]), "previous_output"))
 
         super().__init__(domain, actions)
-
-
-class Actionner:
-
-    @abstractmethod
-    def __call__(self, step, role, to_, data_or_recorder):
-        pass
-
-
-class DatabaseActionner(Actionner):
-
-    def __call__(self, step, role, to_, data_or_recorder):
-        return data_or_recorder[(to_,)]
-
-
-class OldRollout:
-    def __init__(self, steps=None, input=None, target=None):
-        self.steps = steps if steps is not None else []
-        self.input = input if input is not None else []
-        self.target = target if target is not None else []
-
-        self.steps = self._normalise_offsets(self.steps)
-        self.input = self._normalise_offsets(self.input)
-        self.target = self._normalise_offsets(self.target)
-
-    def __call__(self, data, step, kind):
-        mappings = self.rollout_info()[(kind, step)]
-        from anemoi.training.data.refactor.structure import Dict
-
-        return Dict({(to_,): data[(from_,)] for to_, _, from_ in mappings})
-
-    def _normalise_offsets(self, lst):
-        lst = [offset_to_timedelta(x) for x in lst]
-        return [offset_to_string(x) for x in lst]
-
-    def _offset_to_usage(self):
-        dic = defaultdict(list)
-        for offset in self.steps:
-            for input_offset in self.input:
-                total = sum_offsets(offset, input_offset)
-                dic[total].append(("input", offset, input_offset))
-            for target_offset in self.target:
-                total = sum_offsets(offset, target_offset)
-                dic[total].append(("target", offset, target_offset))
-        return dict(dic)
-
-    def rollout_info(self):
-        def reorganize2(usage):
-            dic = defaultdict(list)
-            for total, lst in usage.items():
-                for info in lst:
-                    kind, step, relative_offset = info
-                    dic[(kind, step)].append([total, "->", relative_offset])
-            dic = {k: dic[k] for k in sorted(dic, key=lambda x: (offset_to_timedelta(x[1]), x[0]))}
-            return dic
-
-        return reorganize2(self._offset_to_usage())
-
-    def offset_to_usage(self):
-        def reorganize(usage):
-            dic = defaultdict(list)
-            for kind, step, when in usage:
-                dic[kind].append((step, when))
-            for kind in dic:
-                dic[kind] = sorted(dic[kind], key=lambda x: offset_to_timedelta(x[0]))
-            dic = {k: v for k, v in dic.items()}
-            return dic
-
-        return {k: reorganize(v) for k, v in self._offset_to_usage().items()}
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}({','.join(self.steps)} input={','.join(self.input)} target={','.join(self.target)})"
 
 
 class RolloutSampleProvider(_DictSampleProvider):
@@ -780,20 +796,22 @@ class RolloutSampleProvider(_DictSampleProvider):
         return self.rollout
 
 
-class _FilterSampleProvider(SampleProvider):
+class OffsetSampleProvider(SampleProvider):
+    emoji = "⏱️"
+    label = "Offset"
+    keyword = "offset"
+
     emoji = "filter-emoji"
     label = "_Filter"
 
     keyword = None
 
-    def __init__(self, _context: Context, _parent, **kwargs):
+    def __init__(self, _context: Context, _parent, offset, **kwargs):
         super().__init__(_context, _parent)
-        kwargs = kwargs.copy()
 
-        assert self.keyword in kwargs, f"Keyword '{self.keyword}' not found in {kwargs}"
-        self.values = kwargs.pop(self.keyword)
+        self.values = offset_to_string(offset_to_timedelta(offset))
 
-        new_context = Context(**{"_parent": _context, self.keyword: self.values})
+        new_context = Context(_parent=_context, offset=self.values)
         self._forward = _sample_provider_factory(new_context, **kwargs, _parent=_parent)
 
     @property
@@ -822,21 +840,6 @@ class _FilterSampleProvider(SampleProvider):
 
     def __len__(self):
         return len(self._forward)
-
-
-class OffsetSampleProvider(_FilterSampleProvider):
-    emoji = "⏱️"
-    label = "Offset"
-    keyword = "offset"
-
-    def __init__(self, _context: Context, _parent, offset, **kwargs):
-        offset = offset_to_string(offset_to_timedelta(offset))
-        super().__init__(_context, _parent, offset=offset, **kwargs)
-
-    def _get_static(self, request):
-        static = super()._get_static(request)
-        static["_offset"] = self.values
-        return static
 
 
 class TensorReshapeSampleProvider(ForwardSampleProvider):
@@ -937,6 +940,8 @@ class BoxSampleProvider(SampleProvider):
         res = self.datahandler._get_static(request)
         res["_rollout"] = self.rollout
         res["rollout_usage"] = self.rollout_usage
+        if self.offset is not None:
+            res["_offset"] = offset_to_string(self.offset)
         return res
 
     def _get_rollout_info(self):

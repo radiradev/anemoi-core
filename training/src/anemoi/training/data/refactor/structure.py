@@ -14,7 +14,6 @@ from collections.abc import Sequence
 from functools import wraps
 from typing import Union
 
-import boltons
 import numpy as np
 import torch
 import yaml
@@ -26,6 +25,9 @@ from boltons.iterutils import research as _research  # noqa: F401
 from rich import print
 
 from anemoi.training.data.refactor.formatting import to_str
+from anemoi.training.data.refactor.sample_provider import ALLOWED_CHARACTERS_IN_DICT_KEYS
+from anemoi.training.data.refactor.sample_provider import MAPPING_OF_ALLOWED_CHARACTERS_IN_DICT_KEYS
+from anemoi.training.data.refactor.sample_provider import SEPARATOR
 
 # from typing import TYPE_CHECKING
 # if TYPE_CHECKING:
@@ -53,7 +55,67 @@ def make_schema(structure):
     assert False, f"Unknown structure type: {type(structure)}"
 
 
+def _path_as_str(path):
+    if isinstance(path, (list, tuple)):
+        return SEPARATOR.join(_path_as_str(x) for x in path)
+    if not isinstance(path, str):
+        raise KeyError(f"Path must be str, list or tuple, got {type(path)}")
+    if path.startswith("."):
+        raise KeyError(f"Path starting with {SEPARATOR} is not allowed. Got {path}")
+
+    for k, v in MAPPING_OF_ALLOWED_CHARACTERS_IN_DICT_KEYS.items():
+        if v in path:
+            path = path.replace(v, k)
+
+    path = path.replace(".", SEPARATOR)
+    check_path(path)
+    return path
+
+
+def check_path(path):
+    for c in path:
+        _check_path_character(c, path)
+
+
+def _check_path_character(c, path):
+    # should be next to check_dictionary_key
+    if c == ".":
+        raise KeyError(f"Path cannot contain '.', got {path}")
+    for allowed in ALLOWED_CHARACTERS_IN_DICT_KEYS:
+        if c == allowed:  # should have been converted
+            raise KeyError(f"Path cannot contain '{c}', got {path}", ALLOWED_CHARACTERS_IN_DICT_KEYS)
+    if c in [SEPARATOR, "X", "_"]:
+        return
+    if c.isupper():
+        raise KeyError(f"Path cannot contain uppercase letters, got {path}")
+
+
+def _join_paths(path1, path2):
+    return SEPARATOR.join([path1, path2])
+
+
+def _path_as_tuple(path):
+    if isinstance(path, str):
+        return tuple(int(x) if x.isdigit() else x for x in path.split(SEPARATOR))
+    if isinstance(path, int):
+        return (path,)
+    if isinstance(path, tuple):
+        return path
+    if isinstance(path, list):
+        return tuple(path)
+    raise ValueError(f"Path must be str, int, list or tuple, got {type(path)}")
+
+
 class Dict(dict):
+    def __init__(self, *args, **kwargs):
+        # Nothing in the __init__, this is an actual python dict
+
+        # we are only converting the keys to strings usable as Module names for pytorch ModuleDict
+        # i.e. convert funny characters (including '.') in a reversible way.
+        dic = dict(*args, **kwargs)
+        dic = {_path_as_str(k): v for k, v in dic.items()}
+        super().__init__(**dic)
+
     def copy(self):
         return self.__class__(self)
 
@@ -65,42 +127,13 @@ class Dict(dict):
 
         return self.__class__(copy.deepcopy(dict(self), memo))
 
-    def as_native(self):
-        raise NotImplementedError("use as_nested")
-
     @classmethod
     def new_empty(cls):
         return cls()
 
-    def as_nested(self):
-        tree = {}
-        for path, value in self.items():
-            node = tree
-            for key in path[:-1]:  # walk all but last
-                node = node.setdefault(key, {})
-            node[path[-1]] = value
-        return tree
-
-    @classmethod
-    def new_from_native(cls, structure, boxed=True):
-        if not isinstance(structure, dict):
-            return structure
-        if boxed and is_box(structure):
-            return structure
-        res = cls()
-        for prefix, value in structure.items():
-            value = cls.new_from_native(value).items()
-            if isinstance(value, cls):
-                for path, v in cls.new_from_native(value).items():
-                    res[(prefix,) + path] = v
-            else:
-                res[(prefix,)] = value
-        return res
-
-    def as_native(self):
-        return {k: v.as_native() if isinstance(v, Dict) else v for k, v in self.items()}
-
     def __repr__(self):
+        if not self:
+            return f"{self.__class__.__name__} (empty)"
         # this function is quite long and has a lot of knowledge about the other types
         # it is not too bad because everything related to display is here
         # but this is ugly
@@ -136,14 +169,7 @@ class Dict(dict):
                     continue
                 if key == "rollout":
                     if debug:
-                        subtree = Tree(f"{choose_icon(key, value)} {key} :")
-                        for (kind, step), moves in value.rollout_info().items():
-                            txt = f"step {step}, {kind}: "
-                            txt += ",".join(to_ for from_, _, to_ in moves)
-                            txt += " ⟸️  "
-                            txt += ",".join(from_ for from_, _, to_ in moves)
-                            subtree.add(txt)
-                        t.add(subtree)
+                        t.add(value.tree(prefix=key))
                     else:
                         t.add(Tree(f"{choose_icon(key, value)} {key} : {value}"))
                     continue
@@ -185,7 +211,6 @@ class Dict(dict):
         verbose = int(os.environ.get("ANEMOI_CONFIG_VERBOSE_STRUCTURE", 0))
         leaf_to_tree = {0: one_line_leaf, 1: expanded_leaf, 2: debug_leaf}[verbose]
         for path, leaf in self.items():
-            path = ".".join(str(p) for p in path)
             if not isinstance(leaf, dict):
                 tree.add(f"{path}: " + format_key_value(path, leaf))
                 continue
@@ -203,29 +228,30 @@ class Dict(dict):
     def to_str(self, name):
         return name + " " + self.__repr__()
 
-    @classmethod
-    def _split_path(self, path):
-        if isinstance(path, str):
-            path = tuple(int(x) if x.isdigit() else x for x in path.split("."))
-        assert isinstance(path, tuple), type(path)
-        return path
-
     def __setitem__(self, path, value):
-        path = self._split_path(path)
-        if isinstance(value, self.__class__):
+        path = _path_as_str(path)
+        if not path:
+            raise KeyError("Empty path is not allowed")
+        if isinstance(value, Dict):
             for p, v in value.items():
-                self[path + p] = v
+                assert p, f"Empty sub-path is not allowed when setting {path} to a Dict"
+                new_path = _join_paths(path, p)
+                self[new_path] = v
             return
         super().__setitem__(path, value)
 
     def __getitem__(self, path):
-        path = self._split_path(path)
-        matching = {p[len(path) :]: value for p, value in self.items() if p[: len(path)] == path}
+        path = _path_as_str(path)
+        if path in self:
+            return super().__getitem__(path)
+        prefix = path + SEPARATOR
+        matching = {p[len(prefix) :]: v for p, v in self.items() if p.startswith(prefix)}
         if not matching:
-            raise KeyError(f"Path {path} not found in Dict. Available paths: {list(self.keys())}")
-        if () in matching:  # exact match
-            return matching[()]
-        return Dict(matching)
+            print("❌", prefix)
+            for p, v in self.items():
+                print(p, p.startswith(prefix))
+            raise KeyError(f"Path '{path}' not found in Dict with keys: {list(self.keys())}")
+        return self.__class__(matching)
 
     def __getattr__(self, name):
         try:
@@ -234,24 +260,32 @@ class Dict(dict):
             raise AttributeError(f"'Dict' object has no attribute '{name}'")
 
     def as_function(self):
-        return self._cast(Function, check_leaf_type=lambda x: callable(x))
-
-    def as_module_dict(self):
-        return self._cast(AnemoiModuleDict, check_leaf_type=lambda x: isinstance(x, torch.nn.Module))
-
-    def as_batch(self):
-        return self._cast(Batch)
-
-    def _cast(self, cls, check_leaf_type=lambda x: True):
-        res = cls()
+        res = Function()
         for path, v in self.items():
-            if not check_leaf_type(v):
+            if not callable(v):
                 raise ValueError(f"Unexpected leaf at {path}, got {type(v)}")
             res[path] = v
         return res
 
+    def as_module_dict(self):
+        res = AnemoiModuleDict()
+        for path, v in self.items():
+            if not isinstance(v, torch.nn.Module):
+                raise ValueError(f"Unexpected leaf at {path}, got {type(v)}")
+            res[path] = v
+        return res
+
+    def as_batch(self):
+        res = Batch()
+        for path, v in self.items():
+            res[path] = v
+        return res
+
+    def as_native(self):
+        return {k: v.as_native() if isinstance(v, Dict) else v for k, v in self.items()}
+
     def wrap_in_box(self, key):
-        return self.leaf_accessor.map(lambda v: {key: v})
+        return self.each.map(lambda v: {key: v})
 
     def select_content(self, *keys):
         """Usage:
@@ -268,13 +302,18 @@ class Dict(dict):
         assert len(keys) == 1
         keys = keys[0]
 
-        def select(box):
-            if isinstance(keys, (list, tuple)):
-                return {k: v for k, v in box.items() if k in keys}
-            _check_key_in_dict(box, keys)
-            return box[keys]
+        def select(box, k):
+            if isinstance(k, (list, tuple)):
+                return {k_: select(box, k_) for k_ in k}
 
-        return self.each.map(select)
+            if not isinstance(box, dict):
+                raise ValueError(f"Expected dict, got {type(box)}")
+            if k not in box:
+                raise ValueError(f"Key {k} not found in dict. Available keys are: {list(box.keys())}")
+
+            return box[k]
+
+        return self.each.map(select, k=keys)
 
     def merge_leaves(self, *args, **kwargs):
         new = self.copy()
@@ -346,10 +385,14 @@ class LeafAccessor:
     def map(self, func, *args, **kwargs):
         res = self.parent.__class__()
         for path, leaf in self.parent.items():
-            args_ = [a[path] if isinstance(a, Dict) else a for a in args]
-            kwargs_ = {k: v[path] if isinstance(v, Dict) else v for k, v in kwargs.items()}
-            new = func(leaf, *args_, **kwargs_)
-            res[path] = new
+            try:
+                args_ = [a[path] if isinstance(a, Dict) else a for a in args]
+                kwargs_ = {k: v[path] if isinstance(v, Dict) else v for k, v in kwargs.items()}
+                new = func(leaf, *args_, **kwargs_)
+                res[path] = new
+            except Exception as e:
+                e.add_note(f"When processing path {path}")
+                raise e
         return res
 
     def _parallel_apply_on_leaves(self, func_finder, *args, **kwargs):
@@ -370,8 +413,19 @@ class Batch(Dict):
     pass
 
 
+def _path_as_str_for_pytorch_module_dict(path):
+    if not isinstance(path, str):
+        raise ValueError(f"Path must be str, got {type(path)}")
+    return path
+
+
 class AnemoiModuleDict(torch.nn.ModuleDict):
     emoji = "🔥"
+
+    def __init__(self, *args, **kwargs):
+        dic = dict(*args, **kwargs)
+        dic = {_path_as_str_for_pytorch_module_dict(k): v for k, v in dic.items()}
+        super().__init__(dic)
 
     def __call__(self, *args, **kwargs):
         first = None
@@ -391,62 +445,24 @@ class AnemoiModuleDict(torch.nn.ModuleDict):
             res[path] = module(*args_, **kwargs_)
         return res
 
+    def as_batch(self):
+        res = Batch()
+        for path, v in self.items():
+            res[path] = v
+        return res
+
+    def __repr__(self):
+        return self.as_batch().__repr__()
+
+    def to_str(self, name=""):
+        return self.as_batch().to_str(self.emoji + name)
+
 
 class Function(Dict):
     emoji = "()"
 
     def __call__(self, other, *args, _output_box=True, **kwargs):
-        def apply(path, key, func):
-            if not callable(func):
-                return key, func
-
-            x = _get_path(other, path + (key,), default=None)
-            if not x:
-                raise ValueError(f"Box not found in at {path}, {key=}. In {other}")
-            res = func(*args, **kwargs, **x)
-
-            if _output_box:
-                if not isinstance(res, dict):
-                    raise ValueError(f"Function at {path}, {key} did not return a dict, got {type(res)}")
-
-            return key, res
-
-        res = _remap(self, visit=apply)
-        return Dict(res)
-
-    def apply_on_multiple_structures(self, *args, _output_box=True, **kwargs):
-
-        def apply(path, key, func):
-            if not callable(func):
-                return key, func
-
-            def search(x):
-                return _get_path(x, path + (key,), default=None)
-
-            args = [search(a) if isinstance(a, Dict) else a for a in args]
-            kwargs = {k: search(v) if isinstance(v, Dict) else v for k, v in kwargs.items()}
-
-            res = func(*args, **kwargs)
-            if _output_box:
-                if not isinstance(res, dict):
-                    raise ValueError(f"Function at {path}, {key} did not return a dict, got {type(res)}")
-            return res
-
-        res = _remap(self, visit=apply)
-        return Dict(res)
-
-    def to_str(self, name):
-        return to_str(self, name=name + self.emoji, _boxed=False)
-
-    def __repr__(self):
-        return to_str(self, name=self.emoji, _boxed=False)
-
-
-def _check_key_in_dict(dic, key):
-    if not isinstance(dic, dict):
-        raise ValueError(f"Expected dict, got {type(dic)}")
-    if key not in dic:
-        raise ValueError(f"Key {key} not found in dict. Available keys are: {list(dic.keys())}")
+        assert False, "dead code?"
 
 
 def is_schema(x):
@@ -470,7 +486,7 @@ def is_box(structure):
 def merge_boxes(*structs, overwrite=True):
     """Merge multiple structures
     >>> a = {"foo": [{"x": 1, "y": 2}, {"a": 3}]}
-    >>> b = {"foo": [{"z": 10}, {"b": 4}]}
+    n>>> b = {"foo": [{"z": 10}, {"b": 4}]}
     >>> merge_boxes(a, b)
     {'foo': [{'x': 1, 'y': 2, 'z': 10}, {'a': 3, 'b': 4}]}
     >>> c = {"foo": [{"z": 10}, {"a": 999}]}
@@ -605,86 +621,6 @@ def unwrap(nested, *requested_keys):
     return res
 
 
-def rearrange(mappings, sources, _add_origin=True):
-    """Rearrange the boxes from sources according to the mapping.
-
-    sources is a nested structure where the leaf are boxes
-
-    mapping is a dict {target_path: source_path}
-    where target_path and source_path are path to boxes
-    source_path must be consitent with the sources provided
-
-    """
-
-    def _path_to_tuple(p):
-        if isinstance(p, (list, tuple)):
-            return p
-        return tuple(int(x) if x.isdigit() else x for x in p.split("."))
-
-    def resolve(path):
-        _path = _path_to_tuple(path)
-        try:
-            box = _get_path(sources, _path)
-        except boltons.iterutils.PathAccessError as e:
-            if len(_path) > 1:
-                container = _get_path(sources, _path[:-1], None)
-                if isinstance(container, dict):
-                    e.add_note(f"Available keys in container: {list(container.keys())}")
-                if isinstance(container, list):
-                    e.add_note(f"Container is a list of length {len(container)}")
-            raise
-
-        if _add_origin:
-            box["_origin"] = path
-        return box
-
-    def insert_path_in_list(cur, path, value):
-        p, *rest = path
-        assert isinstance(p, int)
-
-        while len(cur) <= p:
-            cur.append(None)
-
-        if not rest:  # last step
-            cur[p] = value
-            return
-
-        if not isinstance(cur[p], (dict, list)):
-            cur[p] = {} if isinstance(rest[0], str) else []
-
-        insert_path(cur[p], rest, value)
-
-    def insert_path_in_dict(cur, path, value):
-        p, *rest = path
-        assert isinstance(p, str)
-
-        if not rest:  # last step
-            cur[p] = value
-            return
-
-        if p not in cur:
-            cur[p] = {} if isinstance(rest[0], str) else []
-
-        insert_path(cur[p], rest, value)
-
-    def insert_path(cur, path, value):
-        p = path[0]
-        if isinstance(p, int):
-            if not isinstance(cur, list):
-                raise TypeError(f"Expected list at {path}, got {type(cur).__name__}")
-            insert_path_in_list(cur, path, value)
-        else:
-            if not isinstance(cur, dict):
-                raise TypeError(f"Expected dict at {path}, got {type(cur).__name__}")
-            insert_path_in_dict(cur, path, value)
-
-    root = {}
-    for k, v in mappings.items():
-        v = resolve(v)
-        insert_path(root, _path_to_tuple(k), v)
-    return Dict(root)
-
-
 def test_custom(path):
     path = yaml.safe_load(path)
     with open(path) as f:
@@ -708,7 +644,7 @@ def test_one(training_context):
 
                     highres:
                       for_each:
-                        - offset: ["-6h", "0h", "+6h", "+12h", "+18h", "+24h"]
+                        - offset: ["-6h", "+0h", "+6h", "+12h", "+18h", "+24h"]
                         - container:
                             data_group: "era5"
                             variables: ["2t", "10u", "10v"]
@@ -841,8 +777,8 @@ def test_two(training_context):
         """
         rollout:
           steps: ["0h", "+6h", "+12h", "+18h", "+24h"]
-          input: ["-12h", "-6h", "0h"]
-          target: ["+6h", "12h"]
+          input_steps: ["-12h", "-6h", "0h"]
+          target_steps: ["+6h", "12h"]
         """,
     )
     print("Rollout config", rollout_config)
@@ -853,6 +789,7 @@ def test_two(training_context):
     data = sp[1]
     print(data)
     data = sp.static_info.merge_leaves(data)
+    print("Merged data", data)
     data = data.select_content(["_offset", "data", "_reference_date"])
     # data = data.select_content(["_offset", "rollout_usage", "data"])
     print("Selected Data", data)

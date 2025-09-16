@@ -77,10 +77,9 @@ class ForecastingModule(BaseGraphModule):
         target_data = batch.target
         print(target_data.to_str("target data"))
 
-        from anemoi.training.data.refactor.structure import merge_boxes
         from anemoi.training.data.refactor.structure import wrap_in_box
 
-        y_pred = wrap_in_box(data=y_pred)
+        y_pred = y_pred.wrap_in_box("data")
 
         def add_semantic(y_pred, target_data):
             y_pred_with_semantic = target_data.empty_like()
