@@ -8,17 +8,10 @@
 import logging
 import os
 from functools import cached_property
-from typing import Callable
-
-import pytorch_lightning as pl
-from anemoi.datasets import open_dataset
 from anemoi.training.data.datamodule.singledatamodule import AnemoiDatasetsDataModule
-from anemoi.training.data.dataset import worker_init_func
 from anemoi.training.data.dataset.downscalingdataset import DownscalingDataset
-from omegaconf import DictConfig, OmegaConf
 import numpy as np
-from torch.utils.data import DataLoader
-from icecream import ic
+from anemoi.datasets.data import open_dataset
 
 LOGGER = logging.getLogger(__name__)
 
@@ -28,52 +21,49 @@ class DownscalingAnemoiDatasetsDataModule(AnemoiDatasetsDataModule):
 
     @cached_property
     def statistics(self) -> dict:
-        if self.config.training.predict_residuals == True:
 
-            residual_statistics = np.load(
-                os.path.join(
-                    self.config.hardware.paths.residual_statistics,
-                    self.config.hardware.files.residual_statistics,
-                ),
-                allow_pickle=True,
-            ).item()
+        residual_statistics = np.load(
+            os.path.join(
+                self.config.hardware.paths.residual_statistics,
+                self.config.hardware.files.residual_statistics,
+            ),
+            allow_pickle=True,
+        ).item()
 
-            reduced_name_to_index = self.ds_train.name_to_index[2].keys()
-            reduced_residual_statistics = {
-                "mean": np.array(
-                    [
-                        residual_statistics["mean"][field_name]
-                        for field_name in reduced_name_to_index
-                    ]
-                ),
-                "stdev": np.array(
-                    [
-                        residual_statistics["stdev"][field_name]
-                        for field_name in reduced_name_to_index
-                    ]
-                ),
-                "maximum": np.array(
-                    [
-                        residual_statistics["maximum"][field_name]
-                        for field_name in reduced_name_to_index
-                    ]
-                ),
-                "minimum": np.array(
-                    [
-                        residual_statistics["minimum"][field_name]
-                        for field_name in reduced_name_to_index
-                    ]
-                ),
-            }
+        reduced_name_to_index = self.ds_train.name_to_index[2].keys()
+        reduced_residual_statistics = {
+            "mean": np.array(
+                [
+                    residual_statistics["mean"][field_name]
+                    for field_name in reduced_name_to_index
+                ]
+            ),
+            "stdev": np.array(
+                [
+                    residual_statistics["stdev"][field_name]
+                    for field_name in reduced_name_to_index
+                ]
+            ),
+            "maximum": np.array(
+                [
+                    residual_statistics["maximum"][field_name]
+                    for field_name in reduced_name_to_index
+                ]
+            ),
+            "minimum": np.array(
+                [
+                    residual_statistics["minimum"][field_name]
+                    for field_name in reduced_name_to_index
+                ]
+            ),
+        }
 
-            statistics = list(
-                self.ds_train.statistics
-            )  # to list as statistics is a tuple immutable
-            statistics[2] = reduced_residual_statistics
-            return tuple(statistics)
-
-        else:
-            return self.ds_train.statistics
+        statistics = list(
+            self.ds_train.statistics
+        )  # to list as statistics is a tuple immutable
+        statistics[2] = reduced_residual_statistics
+        return tuple(statistics)
+        #return reduced_residual_statistics
 
     def _get_dataset(
         self,
@@ -94,3 +84,14 @@ class DownscalingAnemoiDatasetsDataModule(AnemoiDatasetsDataModule):
             grid_indices=self.grid_indices,
         )
         return data
+
+    @cached_property
+    def ds_valid(self) -> DownscalingDataset:
+
+        return self._get_dataset(
+            open_dataset(self.config.dataloader.validation),
+            shuffle=False,
+            label="validation",
+        )
+
+

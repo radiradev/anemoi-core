@@ -29,9 +29,7 @@ class IndexCollection:
 
     def __init__(self, config, name_to_index) -> None:
         self.config = OmegaConf.to_container(config, resolve=True)
-        self.name_to_index = dict(
-            sorted(name_to_index.items(), key=operator.itemgetter(1))
-        )
+
         self.forcing = (
             []
             if config.data.forcing is None
@@ -97,11 +95,6 @@ class IndexCollection:
             self.forcing,
             [name_to_index_model_input_lres, name_to_index_model_input_hres],
             name_to_index_model_output,
-        )
-
-    def __repr__(self) -> str:
-        return (
-            f"IndexCollection(config={self.config}, name_to_index={self.name_to_index})"
         )
 
     def __eq__(self, other):

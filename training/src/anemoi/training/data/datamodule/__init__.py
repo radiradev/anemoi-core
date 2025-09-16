@@ -9,5 +9,10 @@
 
 from .ensdatamodule import AnemoiEnsDatasetsDataModule
 from .singledatamodule import AnemoiDatasetsDataModule
+from .downscalingdatamodule import DownscalingAnemoiDatasetsDataModule
 
-__all__ = ["AnemoiDatasetsDataModule", "AnemoiEnsDatasetsDataModule"]
+__all__ = [
+    "AnemoiDatasetsDataModule",
+    "AnemoiEnsDatasetsDataModule",
+    "DownscalingAnemoiDatasetsDataModule",
+]

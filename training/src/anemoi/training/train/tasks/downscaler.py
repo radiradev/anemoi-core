@@ -18,9 +18,11 @@ from torch.utils.checkpoint import checkpoint
 
 from anemoi.training.losses.scalers.base_scaler import AvailableCallbacks
 
-from .forecaster import GraphForecaster
+from anemoi.training.train.tasks.base import BaseGraphModule
 
 if TYPE_CHECKING:
+
+    from collections.abc import Mapping
     from collections.abc import Generator
 
     from torch_geometric.data import HeteroData
@@ -52,19 +54,35 @@ class GraphDiffusionDownscaler(BaseGraphModule):
             graph_data=graph_data,
             truncation_data=truncation_data,
             statistics=statistics,
-            statistics_tendencies=statistics_tendencies,
+            statistics_tendencies=None,
             data_indices=data_indices,
             metadata=metadata,
             supporting_arrays=supporting_arrays,
         )
 
         self.rho = config.model.model.diffusion.rho
+        self.lognormal_mean = config.model.model.diffusion.log_normal_mean
+        self.lognormal_std = config.model.model.diffusion.log_normal_std
+        self.training_approach = "probabilistic"
+        self.x_in_matching_channel_indices = match_tensor_channels(
+            self.data_indices.data.input[0].name_to_index,
+            {
+                k: v
+                for k, v in self.data_indices.data.output.name_to_index.items()
+                if v in self.data_indices.data.output.full
+            },
+        )
 
     def forward(
-        self, x: torch.Tensor, y_noised: torch.Tensor, sigma: torch.Tensor
+        self,
+        x_in_lres_interp_hres: torch.Tensor,
+        x_in_hres: torch.Tensor,
+        y_noised: torch.Tensor,
+        sigma: torch.Tensor,
     ) -> torch.Tensor:
         return self.model.model.fwd_with_preconditioning(
-            x,
+            x_in_lres_interp_hres,
+            x_in_hres,
             y_noised,
             sigma,
             model_comm_group=self.model_comm_group,
@@ -113,71 +131,83 @@ class GraphDiffusionDownscaler(BaseGraphModule):
         batch_idx: int,
         validation_mode: bool = False,
     ) -> tuple[torch.Tensor, Mapping[str, torch.Tensor]]:
+        """Process batch size 3 with dimensions:
+        [batch_size, dates, ensemble, gridpoints, variables].
+        """
         del batch_idx
         training_mode = True
         loss = torch.zeros(
-            1, dtype=batch.dtype, device=self.device, requires_grad=False
+            1, dtype=batch[0].dtype, device=self.device, requires_grad=False
         )
         metrics = {}
         y_preds = []
 
-        """ ROllout step """
-        x_in, x_in_hres, Y = batch
-        # Y = Y[:, :, :, ..., self.data_indices.data.output.full] #(see if necessary)
+        x_in, x_in_hres, y = batch
 
-        # Residuals prediction
-        x_in_interp_to_hres = self.model.interpolate_down(
-            x_in[:, 0, 0, ...], grad_checkpoint=False
-        )[:, None, None, ...]
+        x_in_interp_to_hres = self.model.model.apply_interpolate_to_high_res(
+            x_in[:, 0, ...],
+            self.grid_shard_shapes,
+            self.model_comm_group,
+        )[:, None, ...]
+
         self.x_in_matching_channel_indices = self.x_in_matching_channel_indices.to(
             x_in_interp_to_hres.device
         )
-        y = y - x_in_interp_to_hres[..., self.x_in_matching_channel_indices]
+        residuals_target = self.model.model.compute_residuals(
+            y,
+            x_in_interp_to_hres[..., self.x_in_matching_channel_indices],
+        )
 
-        # Normalisation
+        # Y = Y[:, :, :, ..., self.data_indices.data.output.full] #(see if necessary)
+
         x_in_interp_to_hres = self.model.pre_processors(
-            x_in_interp_to_hres, "input_lres"
+            x_in_interp_to_hres, dataset="input_lres"
         )  # need in place ?, in_place=False)
         # x_in_interp_to_hres = x_in_interp_to_hres[  :, :, ..., self.data_indices.data.input[0].full] (see if necessary)
         x_in_hres = self.model.pre_processors(
-            x_in_hres, "input_hres"
+            x_in_hres, dataset="input_hres"
         )  # , in_place=False
         # x_in_hres = x_in_hres[:, :, ..., self.data_indices.data.input[1].full]
-        y = self.model.pre_processors(Y, "output")
+        residuals_target = self.model.pre_processors(residuals_target, dataset="output")
 
         # Scaler update
         self.update_scalers(callback=AvailableCallbacks.ON_BATCH_START)
 
         # get noise level and associated loss weights
         sigma, noise_weights = self._get_noise_level(
-            shape=(Y.shape[0],) + (1,) * (Y.ndim - 2),
+            shape=(residuals_target.shape[0],) + (1,) * (residuals_target.ndim - 2),
             sigma_max=self.model.model.sigma_max,
             sigma_min=self.model.model.sigma_min,
             sigma_data=self.model.model.sigma_data,
             rho=self.rho,
-            device=Y.device,
+            device=residuals_target.device,
         )
 
         # get targets and noised targets
-        y_noised = self._noise_target(y, sigma)
+        residuals_target_noised = self._noise_target(residuals_target, sigma)
 
         # prediction, fwd_with_preconditioning
         y_pred = self(
-            torch.cat((x_in_interp_to_hres, x_in_hres), dim=-1),
-            y_noised,
+            x_in_interp_to_hres,
+            x_in_hres,
+            residuals_target_noised,
             sigma,
         )  # shape is (bs, ens, latlon, nvar)
 
         # Use checkpoint for compute_loss_metrics
         loss, metrics_next = checkpoint(
             self.compute_loss_metrics,
-            y_pred,
-            y,
+            y_pred[:, 0, ...],
+            residuals_target[:, 0, ...],  # removing time dim for loss computation,
             training_mode,
             validation_mode,
             weights=noise_weights,
             use_reentrant=False,
         )
+
+        y_preds = [x_in_interp_to_hres + y_pred, y_pred]
+
+        print("loss", loss)
 
         return loss, metrics, y_preds
 
@@ -218,6 +248,22 @@ class GraphDiffusionDownscaler(BaseGraphModule):
 
         weight = (sigma**2 + sigma_data**2) / (sigma * sigma_data) ** 2
         return sigma, weight
+
+    def allgather_batch(self, batch: torch.Tensor) -> torch.Tensor:
+        """Allgather the batch-shards across the reader group.
+
+        Parameters
+        ----------
+        batch : torch.Tensor
+            Batch-shard of current reader rank
+
+        Returns
+        -------
+        torch.Tensor
+            Allgathered (full) batch
+        """
+
+        return batch  # already have the full grid
 
 
 def match_tensor_channels(input_name_to_index, output_name_to_index):
