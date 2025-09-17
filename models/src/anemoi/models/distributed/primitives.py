@@ -104,6 +104,7 @@ def _gather(
         )
 
         dist.all_gather_into_tensor(output, input_, group=group)
+        dist.barrier()
     else:
         tensor_list = [
             torch.empty(
@@ -115,6 +116,7 @@ def _gather(
         tensor_list[comm_rank] = input_
         if gather_in_backward:
             dist.all_gather(tensor_list, input_, group=group)
+            dist.barrier()
 
         # Note: torch.cat already creates a contiguous tensor.
         output = torch.cat(tensor_list, dim=dim_).contiguous(memory_format=input_format)
@@ -149,9 +151,11 @@ def _reduce(input_: Tensor, use_fp32: bool = True, group: Optional[ProcessGroup]
         dtype = input_.dtype
         inputf_ = input_.float()
         dist.all_reduce(inputf_, group=group)
+        dist.barrier()
         input_ = inputf_.to(dtype)
     else:
         dist.all_reduce(input_, group=group)
+        dist.barrier()
 
     return input_
 
@@ -190,6 +194,7 @@ def _gather_channels_alltoall(input_: Tensor, shapes: list, group: Optional[Proc
         for rank in range(comm_size)
     ]
     dist.all_to_all(output_list, input_list, group=group)
+    dist.barrier()
 
     return torch.cat(output_list, dim=-1).contiguous(memory_format=input_format)
 
@@ -226,5 +231,6 @@ def _split_channels_alltoall(input_: Tensor, shapes: list, group: Optional[Proce
     ]
 
     dist.all_to_all(output_list, input_list, group=group)
+    dist.barrier()
 
     return torch.cat(output_list, dim=-2).contiguous(memory_format=input_format)

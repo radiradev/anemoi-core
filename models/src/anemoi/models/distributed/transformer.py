@@ -53,6 +53,7 @@ def _headsalltoall(input_: Tensor, shapes: list, group: Optional[ProcessGroup] =
     ]
 
     dist.all_to_all(output_list, input_list, group=group)
+    dist.barrier()
 
     # Note: torch.cat already creates a contiguous tensor.
     return torch.cat(output_list, dim=-2).contiguous(memory_format=input_format)
@@ -79,6 +80,7 @@ def _seqalltoall(input_: Tensor, shapes: list, group: Optional[ProcessGroup] = N
     output_list = [torch.empty_like(input_list[comm_rank]) for _ in range(comm_size)]
 
     dist.all_to_all(output_list, input_list, group=group)
+    dist.barrier()
 
     # Note: torch.cat already creates a contiguous tensor.
     return torch.cat(output_list, dim=-3).contiguous(memory_format=input_format)
