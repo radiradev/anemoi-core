@@ -64,7 +64,7 @@ class BaseBlock(nn.Module, ABC):
 
 
 class PointWiseMLPProcessorBlock(BaseBlock):
-    """Point-wise MLP block with MultiHeadSelfAttention and MLPs."""
+    """Point-wise block with MLPs."""
 
     def __init__(self, *, num_channels: int, hidden_dim: int, layer_kernels: DotDict, dropout_p: float = 0.0):
         super().__init__()
