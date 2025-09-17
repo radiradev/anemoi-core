@@ -25,9 +25,9 @@ from boltons.iterutils import research as _research  # noqa: F401
 from rich import print
 
 from anemoi.training.data.refactor.formatting import to_str
-from anemoi.training.data.refactor.sample_provider import ALLOWED_CHARACTERS_IN_DICT_KEYS
-from anemoi.training.data.refactor.sample_provider import MAPPING_OF_ALLOWED_CHARACTERS_IN_DICT_KEYS
 from anemoi.training.data.refactor.sample_provider import SEPARATOR
+from anemoi.training.data.refactor.sample_provider import _join_paths
+from anemoi.training.data.refactor.sample_provider import _path_as_str
 
 # from typing import TYPE_CHECKING
 # if TYPE_CHECKING:
@@ -53,57 +53,6 @@ def make_schema(structure):
     if isinstance(structure, (list, tuple)):
         return {"type": "tuple", "content": [make_schema(v) for v in structure], "_anemoi_schema": True}
     assert False, f"Unknown structure type: {type(structure)}"
-
-
-def _path_as_str(path):
-    if isinstance(path, (list, tuple)):
-        return SEPARATOR.join(_path_as_str(x) for x in path)
-    if not isinstance(path, str):
-        raise KeyError(f"Path must be str, list or tuple, got {type(path)}")
-    if path.startswith("."):
-        raise KeyError(f"Path starting with {SEPARATOR} is not allowed. Got {path}")
-
-    for k, v in MAPPING_OF_ALLOWED_CHARACTERS_IN_DICT_KEYS.items():
-        if v in path:
-            path = path.replace(v, k)
-
-    path = path.replace(".", SEPARATOR)
-    check_path(path)
-    return path
-
-
-def check_path(path):
-    for c in path:
-        _check_path_character(c, path)
-
-
-def _check_path_character(c, path):
-    # should be next to check_dictionary_key
-    if c == ".":
-        raise KeyError(f"Path cannot contain '.', got {path}")
-    for allowed in ALLOWED_CHARACTERS_IN_DICT_KEYS:
-        if c == allowed:  # should have been converted
-            raise KeyError(f"Path cannot contain '{c}', got {path}", ALLOWED_CHARACTERS_IN_DICT_KEYS)
-    if c in [SEPARATOR, "X", "_"]:
-        return
-    if c.isupper():
-        raise KeyError(f"Path cannot contain uppercase letters, got {path}")
-
-
-def _join_paths(path1, path2):
-    return SEPARATOR.join([path1, path2])
-
-
-def _path_as_tuple(path):
-    if isinstance(path, str):
-        return tuple(int(x) if x.isdigit() else x for x in path.split(SEPARATOR))
-    if isinstance(path, int):
-        return (path,)
-    if isinstance(path, tuple):
-        return path
-    if isinstance(path, list):
-        return tuple(path)
-    raise ValueError(f"Path must be str, int, list or tuple, got {type(path)}")
 
 
 class Dict(dict):

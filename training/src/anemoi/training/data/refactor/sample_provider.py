@@ -59,8 +59,11 @@ def check_dictionary_key(k):
         raise ValueError(f"Keys in dictionary must not contain '{SEPARATOR}', got: {k}")
     if k.startswith("_"):
         raise ValueError(f"Keys in dictionary must not start with '_', got: {k}")
-    if not all(c.isalnum() or c in ALLOWED_CHARACTERS_IN_DICT_KEYS for c in k):
-        raise ValueError(f"Keys in dictionary must only contain alphanumeric characters and +/-/=/~, got: {k}")
+    for c in k:
+        if not c.isalnum() and c not in ALLOWED_CHARACTERS_IN_DICT_KEYS and c not in ["_", "X"]:
+            raise ValueError(
+                f"Keys in dictionary must only contain {ALLOWED_CHARACTERS_IN_DICT_KEYS} characters and _, got: '{c}' in '{k}'",
+            )
 
     if k.lower() != k:
         # we could allow capital letters and encode the case in the mapping
@@ -146,6 +149,57 @@ def check_dictionary_key(k):
         pass
 
     return k
+
+
+def _path_as_str(path):
+    if isinstance(path, (list, tuple)):
+        return SEPARATOR.join(_path_as_str(x) for x in path)
+    if not isinstance(path, str):
+        raise KeyError(f"Path must be str, list or tuple, got {type(path)}")
+    if path.startswith("."):
+        raise KeyError(f"Path starting with {SEPARATOR} is not allowed. Got {path}")
+
+    for k, v in MAPPING_OF_ALLOWED_CHARACTERS_IN_DICT_KEYS.items():
+        if v in path:
+            path = path.replace(v, k)
+
+    path = path.replace(".", SEPARATOR)
+    check_path(path)
+    return path
+
+
+def check_path(path):
+    for c in path:
+        _check_path_character(c, path)
+
+
+def _check_path_character(c, path):
+    # should be next to check_dictionary_key
+    if c == ".":
+        raise KeyError(f"Path cannot contain '.', got {path}")
+    for allowed in ALLOWED_CHARACTERS_IN_DICT_KEYS:
+        if c == allowed:  # should have been converted
+            raise KeyError(f"Path cannot contain '{c}', got {path}", ALLOWED_CHARACTERS_IN_DICT_KEYS)
+    if c in [SEPARATOR, "X", "_"]:
+        return
+    if c.isupper():
+        raise KeyError(f"Path cannot contain uppercase letters, got {path}")
+
+
+def _join_paths(path1, path2):
+    return SEPARATOR.join([path1, path2])
+
+
+def _path_as_tuple(path):
+    if isinstance(path, str):
+        return tuple(int(x) if x.isdigit() else x for x in path.split(SEPARATOR))
+    if isinstance(path, int):
+        return (path,)
+    if isinstance(path, tuple):
+        return path
+    if isinstance(path, list):
+        return tuple(path)
+    raise ValueError(f"Path must be str, int, list or tuple, got {type(path)}")
 
 
 def normalise_offset(x):
@@ -548,6 +602,7 @@ class _DictSampleProvider(SampleProvider):
 class DictSampleProvider(_DictSampleProvider):
     def __init__(self, _context: Context, _parent, dictionary: dict):
         super().__init__(_context, _parent)
+        dictionary = {_path_as_str(k): v for k, v in dictionary.items()}
         self.check_input(dictionary)
         self._samples = {k: _sample_provider_factory(_context, **v, _parent=self) for k, v in dictionary.items()}
 
