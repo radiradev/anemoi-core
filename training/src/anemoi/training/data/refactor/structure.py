@@ -247,9 +247,6 @@ class Dict(dict):
         prefix = path + SEPARATOR
         matching = {p[len(prefix) :]: v for p, v in self.items() if p.startswith(prefix)}
         if not matching:
-            print("❌", prefix)
-            for p, v in self.items():
-                print(p, p.startswith(prefix))
             raise KeyError(f"Path '{path}' not found in Dict with keys: {list(self.keys())}")
         return self.__class__(matching)
 

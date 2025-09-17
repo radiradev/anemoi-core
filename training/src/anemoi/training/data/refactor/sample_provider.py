@@ -781,7 +781,6 @@ class RolloutSampleProvider(_DictSampleProvider):
             rollout
         ]
         self.rollout = rollout_class(**_context.rollout)
-        print(self.rollout)
 
         self._samples = {}
         # rearranger.expand_actions(action='database') -> create batch
@@ -951,7 +950,6 @@ class BoxSampleProvider(SampleProvider):
         actual_item = item + self.i_offset
 
         if actual_item < 0 or actual_item >= len(self.datahandler):
-            print("❌", self)
             msg = f"Item {item} ({actual_item}) is out of bounds with i_offset {self.i_offset}, lenght of the dataset is {len(self.datahandler)} and dropped_samples is {self.dropped_samples}."
             raise IndexError(msg)
 
