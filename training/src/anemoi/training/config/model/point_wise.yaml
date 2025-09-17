@@ -34,13 +34,13 @@ processor:
   layer_kernels: ${model.layer_kernels}
 
 encoder:
-  _target_: anemoi.models.layers.mapper.GraphInterpolationForwardMapper
+  _target_: anemoi.models.layers.mapper.GraphTransformerForwardMapper
   sub_graph_edge_attributes: ${model.attributes.edges}
   cpu_offload: ${model.cpu_offload}
   layer_kernels: ${model.layer_kernels}
 
 decoder:
-  _target_: anemoi.models.layers.mapper.GraphInterpolationBackwardMapper
+  _target_: anemoi.models.layers.mapper.GraphTransformerBackwardMapper
   sub_graph_edge_attributes: ${model.attributes.edges}
   initialise_data_extractor_zero: False
   cpu_offload: ${model.cpu_offload}
