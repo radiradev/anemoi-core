@@ -108,7 +108,7 @@ Point-wise MLP
 ==============
 
 The Point-wise MLP applies the same multilayer perceptron independently
-to each node. Because it ignores neighboring nodes (no message passing), 
+to each node. Because it ignores neighboring nodes (no message passing),
 the processor is location-independent.
 
 .. note::

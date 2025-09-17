@@ -89,6 +89,7 @@ class BaseProcessor(nn.Module, ABC):
 
 class PointWiseMLPProcessor(BaseProcessor):
     """Point-wise MLP Processor."""
+
     def __init__(
         self,
         *,
