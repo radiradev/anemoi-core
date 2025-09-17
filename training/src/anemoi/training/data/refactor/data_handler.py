@@ -71,6 +71,9 @@ class DataHandler:
         assert item is not None, item
         return self.ds.dates[item]
 
+    def reference_date_str(self, item=None):
+        return self.reference_date(item).strftime("%Y-%m-%d %H:%M:%S")
+
     def __getitem__(self, item: int):
         return self.ds[item][self.group]
 
@@ -122,7 +125,7 @@ class DataHandler:
                 "latitudes",
                 "longitudes",
                 "timedeltas",
-                "_reference_date",
+                "_reference_date_str",
             ],
         )
         return self._get(request, item)
@@ -144,6 +147,7 @@ class DataHandler:
             "latitudes_longitudes": self.latitudes_longitudes,
             "timedeltas": self.timedeltas,
             "_reference_date": self.reference_date,
+            "_reference_date_str": self.reference_date_str,
             "shape": lambda x: self._shape,
             "name_to_index": lambda x: self.name_to_index,
             "statistics": lambda x: self.statistics,

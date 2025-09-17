@@ -97,14 +97,9 @@ class BaseGraphModule(pl.LightningModule, ABC):
         # print_variable_scaling(self.loss, data_indices)
 
         self.metrics = torch.nn.ModuleDict({})
-        #    {
-        #        metric_name: get_loss_function(val_metric_config, scalers=self.scalers, data_indices=self.data_indices)
-        #        for metric_name, val_metric_config in config.model_dump(
-        #            by_alias=True,
-        #        ).training.validation_metrics.items()
-        #    },
-        # )
+
         if config.training.loss_gradient_scaling:
+            print("registering_full_backward_hook for grad_scaler")
             self.loss.register_full_backward_hook(grad_scaler, prepend=False)
 
         self.is_first_step = True
@@ -137,6 +132,7 @@ class BaseGraphModule(pl.LightningModule, ABC):
 
         self.reader_group_id = 0
         self.reader_group_rank = 0
+        print("✅ BaseGraphModule initialized")
 
     def log(self, *args, **kwargs):
         kwargs["logger"] = kwargs.get("logger", self.logger_enabled)

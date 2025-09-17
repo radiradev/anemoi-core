@@ -368,11 +368,6 @@ def _path_as_str_for_pytorch_module_dict(path):
 class AnemoiModuleDict(torch.nn.ModuleDict):
     emoji = "🔥"
 
-    def __init__(self, *args, **kwargs):
-        dic = dict(*args, **kwargs)
-        dic = {_path_as_str_for_pytorch_module_dict(k): v for k, v in dic.items()}
-        super().__init__(dic)
-
     def __call__(self, *args, **kwargs):
         first = None
         if args:
@@ -391,17 +386,17 @@ class AnemoiModuleDict(torch.nn.ModuleDict):
             res[path] = module(*args_, **kwargs_)
         return res
 
-    def as_batch(self):
-        res = Batch()
+    def as_anemoi_dict(self):
+        res = Dict()
         for path, v in self.items():
             res[path] = v
         return res
 
     def __repr__(self):
-        return self.as_batch().__repr__()
+        return self.as_anemoi_dict().__repr__()
 
     def to_str(self, name=""):
-        return self.as_batch().to_str(self.emoji + name)
+        return self.as_anemoi_dict().to_str(self.emoji + name)
 
 
 class Function(Dict):
@@ -595,8 +590,6 @@ def test_one(training_context):
                             data_group: "era5"
                             variables: ["2t", "10u", "10v"]
                             dimensions: ["variables", "values"]
-
-
             """
 
     print("✅✅✅✅✅✅✅✅✅✅✅✅✅✅")
@@ -705,6 +698,11 @@ def test_two(training_context):
                        rollout: prognostics
                        # rollout: forcings
                        # rollout: diagnostics
+                       container:
+                           dimensions: ["values", "variables"]
+                           variables: ["2t", "10u", "10v"]
+                           data_group: "era5"
+                     other:
                        container:
                            dimensions: ["values", "variables"]
                            variables: ["2t", "10u", "10v"]

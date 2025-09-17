@@ -46,6 +46,7 @@ class ForecastingModule(BaseGraphModule):
         #
         # we should create a sample_provider in AnemoiTrainer?
         # or in this module then give it to the dataloader and dataset?
+        print("Starting _step")
 
         static_info = self.model.sample_static_info
 
@@ -77,7 +78,6 @@ class ForecastingModule(BaseGraphModule):
         target_data = batch.target
         print(target_data.to_str("target data"))
 
-        from anemoi.training.data.refactor.structure import wrap_in_box
 
         y_pred = y_pred.wrap_in_box("data")
 
@@ -92,9 +92,9 @@ class ForecastingModule(BaseGraphModule):
         y_pred = add_semantic(y_pred, target_data)
         print(self.loss.to_str("loss function"))
 
-        self.loss(pred=y_pred.unwrap("data"), target=target_data.unwrap("data"))
+        loss = self.loss(pred=y_pred.unwrap("data"), target=target_data.unwrap("data"))
+        print("computed loss:", loss)
 
-        exit()
         # Iterate over all entries in batch["target"] and accumulate loss
         for target_key, target_data in batch["target"].items():
             loss += checkpoint(
@@ -109,4 +109,5 @@ class ForecastingModule(BaseGraphModule):
         if validation_mode:
             metrics_next = self.calculate_val_metrics(y_pred, batch["target"], rollout_step=0)
 
+        print(f"computed loss: {loss}, metrics: {metrics_next}, y_pred: {y_pred.to_str('y_pred')}")
         return loss, metrics_next, y_pred

@@ -10,17 +10,16 @@
 
 import logging
 import warnings
-from typing import Optional
 
+import einops
 import numpy as np
 import torch
 
-from anemoi.models.preprocessing import BasePreprocessor
 
 LOGGER = logging.getLogger(__name__)
 
 
-def build_normaliser(normaliser, name_to_index, statistics, **kwargs):
+def build_normaliser(**kwargs):
 
     if "_target_" not in kwargs:
         # If the normaliser is not a Hydra instantiation, use the config directly
@@ -35,18 +34,21 @@ def build_normaliser(normaliser, name_to_index, statistics, **kwargs):
     else:
         raise NotImplementedError("TODO: use hydra instanciate for this custom normaliser")
 
-    return InputNormaliser(config=normaliser, name_to_index=name_to_index, statistics=statistics)
+    return Normaliser(**kwargs)
 
 
-class InputNormaliser(BasePreprocessor):
+class Normaliser(torch.nn.Module):
     """Normalizes input data with a configurable method."""
 
     def __init__(
         self,
-        config=None,
-        name_to_index=None,
-        statistics=None,
-        dataset: Optional = None,
+        normaliser,
+        name_to_index,
+        statistics,
+        dimensions_order,
+        _dimensions_order,
+        inverse=False,
+        **kwargs,
     ) -> None:
         """Initialize the normalizer.
 
@@ -59,24 +61,21 @@ class InputNormaliser(BasePreprocessor):
         statistics : dict
             Data statistics dictionary
         """
-        super().__init__(config, dataset)
+        super().__init__()
+
+        if dimensions_order != _dimensions_order:
+            warnings.warn("❌❌❌ todo fix this dimensions orders mismatch")
+        dimensions_order = _dimensions_order
+
+        self.inverse = inverse
+
+        self.methods = self._invert_key_value_list(normaliser)
+        self.dimensions_order = dimensions_order
 
         minimum = statistics["minimum"]
         maximum = statistics["maximum"]
         mean = statistics["mean"]
         stdev = statistics["stdev"]
-
-        # Optionally reuse statistic of one variable for another variable
-        statistics_remap = {}
-        for remap, source in self.remap.items():
-            idx_src, idx_remap = name_to_index[source], name_to_index[remap]
-            statistics_remap[idx_remap] = (minimum[idx_src], maximum[idx_src], mean[idx_src], stdev[idx_src])
-
-        # Two-step to avoid overwriting the original statistics in the loop (this reduces dependence on order)
-        for idx, new_stats in statistics_remap.items():
-            minimum[idx], maximum[idx], mean[idx], stdev[idx] = new_stats
-
-        self._validate_normalization_inputs(name_to_index, minimum, maximum, mean, stdev)
 
         _norm_add = np.zeros((minimum.size,), dtype=np.float32)
         _norm_mul = np.ones((minimum.size,), dtype=np.float32)
@@ -116,75 +115,30 @@ class InputNormaliser(BasePreprocessor):
             else:
                 raise ValueError[f"Unknown normalisation method for {name}: {method}"]
 
+        # use self.dimensions_order to know which dimension is the "variables" dimension
+        # new_shape is like : "1 variables 1" or "1 1 variables"
+        new_shape = ["variables" if d == "variables" else "1" for d in self.dimensions_order]
+        new_shape = " ".join([str(d) for d in new_shape])
+        _norm_add = einops.rearrange(_norm_add, f"variables -> {new_shape}")
+        _norm_mul = einops.rearrange(_norm_mul, f"variables -> {new_shape}")
+
         # register buffer - this will ensure they get copied to the correct device(s)
         self.register_buffer("_norm_mul", torch.from_numpy(_norm_mul), persistent=True)
         self.register_buffer("_norm_add", torch.from_numpy(_norm_add), persistent=True)
 
-    def _validate_normalization_inputs(self, name_to_index_training_input: dict, minimum, maximum, mean, stdev):
-        assert len(self.methods) == sum(len(v) for v in self.method_config.values()), (
-            f"Error parsing methods in InputNormaliser methods ({len(self.methods)}) "
-            f"and entries in config ({sum(len(v) for v in self.method_config)}) do not match."
-        )
+    def forward(self, data: torch.Tensor, **kwargs) -> torch.Tensor:
+        if self.inverse is False:
+            data.mul_(self._norm_mul).add_(self._norm_add)
+            return data
+        else:
+            data.sub_(self._norm_add).div_(self._norm_mul)
+            return data
 
-        n = minimum.size
-        assert maximum.size == n, (maximum.size, n)
-        assert mean.size == n, (mean.size, n)
-        assert stdev.size == n, (stdev.size, n)
-
-    def __call__(self, data: torch.Tensor, **kwargs) -> torch.Tensor:
-        return self.transform(data)
-
-    def transform(self, x: torch.Tensor) -> torch.Tensor:
-        """Normalizes an input tensor x of shape [..., nvars].
-
-        Normalization done in-place unless specified otherwise.
-
-        The default usecase either assume the full batch tensor or the full input tensor.
-        A dataindex is based on the full data can be supplied to choose which variables to normalise.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            Data to normalize
-
-        Returns
-        -------
-        torch.Tensor
-            _description_
-        """
-
-        # if self._norm_add.device != x.device or self._norm_mul.device != x.device:
-        #     print(f"Moving normaliser to {x.device}")
-        #     self._norm_add = self._norm_add.to(x.device)
-        #     self._norm_mul = self._norm_mul.to(x.device)
-
-        print(self._norm_mul.shape, self._norm_add.shape)
-
-        x.mul_(self._norm_mul.view(1, -1, 1)).add_(self._norm_add.view(1, -1, 1))
-        return x
-
-    def inverse_transform(self, x: torch.Tensor) -> torch.Tensor:
-        """Denormalizes an input tensor x of shape [..., nvars | nvars_pred].
-
-        Denormalization done in-place unless specified otherwise.
-
-        The default usecase either assume the full batch tensor or the full output tensor.
-        A dataindex is based on the full data can be supplied to choose which variables to denormalise.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            Data to denormalize
-
-        Returns
-        -------
-        torch.Tensor
-            Denormalized data
-        """
-        if self._norm_add.device != x.device or self._norm_mul.device != x.device:
-            print(f"Moving normaliser to {x.device}")
-            self._norm_add = self._norm_add.to(x.device)
-            self._norm_mul = self._norm_mul.to(x.device)
-
-        x.subtract_(self._norm_add.view(1, -1, 1)).div_(self._norm_mul.view(1, -1, 1))
-        return x
+    def _invert_key_value_list(self, method_config: dict[str, list[str]]) -> dict[str, str]:
+        self.default = method_config.get("default", "none")
+        return {
+            variable: method
+            for method, variables in method_config.items()
+            if not isinstance(variables, str)
+            for variable in variables
+        }

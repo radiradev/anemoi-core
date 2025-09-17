@@ -65,7 +65,7 @@ def get_loss_function(
     for path, box in loss_config.items():
         res[path] = RMSELoss(**box)
     res = res.as_module_dict()
-    print(res.to_str("Loss function"))
+    print(res.to_str("Created Loss function in get_loss_function"))
     return res
 
     assert False
