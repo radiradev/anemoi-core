@@ -29,12 +29,8 @@ diagnostics:
     callbacks: []
 hardware:
   files:
-    dataset: null
-    low_res_dataset: null
-    high_res_dataset: null
     graph: "debug.pt"
   paths:
-    data: None
     output: ${oc.env:HPCPERM}/aifs/refactor/
   accelerator: auto
   num_gpus_per_node: 1
