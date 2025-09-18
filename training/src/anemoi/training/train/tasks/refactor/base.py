@@ -54,14 +54,11 @@ class BaseGraphModule(pl.LightningModule, ABC):
         # (It is handled in the loss function, but not the version here that is sent to model for supporting_arrays)
         # self.output_mask = instantiate(config.model_dump(by_alias=True).model.output_mask, graph_data=graph_data)
 
-        self.model = self.model_class(
-            # self.config.model.model,
-            model_config=convert_to_omegaconf(config),
+        self.model = self.build_model(
+            model_config=convert_to_omegaconf(config).model,
             sample_static_info=sample_static_info,
             metadata=metadata,
-            # graph_data=self.graph_data,
             # truncation_data=self.truncation_data,
-            # _recursive_=False,  # Disables recursive instantiation by Hydra
         )
 
         self.config = config
@@ -133,6 +130,9 @@ class BaseGraphModule(pl.LightningModule, ABC):
         self.reader_group_id = 0
         self.reader_group_rank = 0
         print("✅ BaseGraphModule initialized")
+
+    def build_model(self, model_config, sample_static_info, metadata) -> torch.nn.Module:
+        return instantiate(model_config)
 
     def log(self, *args, **kwargs):
         kwargs["logger"] = kwargs.get("logger", self.logger_enabled)

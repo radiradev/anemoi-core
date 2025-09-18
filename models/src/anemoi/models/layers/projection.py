@@ -17,20 +17,26 @@ class NodeEmbedder(nn.Module):
     def __init__(
         self,
         config,
-        num_input_channels: int,
-        num_output_channels: int,
+        num_input_channels: dict[str, int],
+        num_output_channels: dict[str, int],
         coord_dimension: int = 4,  # sin() cos() of lat and lon
         **kwargs
     ):
         super().__init__()
+        assert set(num_input_channels.keys()) == set(num_output_channels.keys())
         self.num_input_channels = num_input_channels
         self.num_output_channels = num_output_channels
 
-        self.embedder = instantiate(
-            config,
-            _recursive_=False,
-            in_features=num_input_channels + coord_dimension,
-            out_features=num_output_channels,
+        self.embedders = nn.ModuleDict(
+            {
+                key: instantiate(
+                    config,
+                    _recursive_=False,
+                    in_features=num_input_channels[key] + coord_dimension,
+                    out_features=num_output_channels[key],
+                )
+                for key in self.num_input_channels.keys()
+            }
         )
 
     def forward(self, x: torch.Tensor, **kwargs) -> HeteroData:

@@ -131,12 +131,12 @@ class AnemoiMultiModel(AnemoiModel):
 
         # TODO? re-add generic preprocessors if needed.
 
-        self.num_channels = model_config.model.num_channels
+        self.num_channels = model_config.num_channels
 
         self.latent_residual_connection = True
-        self.merge_latents_method = model_config.model.model.merge_latents
+        self.merge_latents_method = model_config.model.merge_latents
 
-        if model_config.model.get("residual_connections"):
+        if model_config.get("residual_connections"):
             warnings.warn("Residual connections not supported")
         # def _define_residual_connection_indices(
         #     input,
@@ -156,7 +156,7 @@ class AnemoiMultiModel(AnemoiModel):
         # self.residual_connection_indices = _define_residual_connection_indices(
         #     sample_static_info["input"],
         #     sample_static_info["target"],
-        #     residual_connections=model_config.model.get("residual_connections", []),
+        #     residual_connections=model_config.get("residual_connections", []),
         # )
 
         # NODE_COORDS_NDIMS = 4  # cos_lat, sin_lat, cos_lon, sin_lon
@@ -174,10 +174,10 @@ class AnemoiMultiModel(AnemoiModel):
         #  self.num_input_channels = self.sample_static_info.each.map(lambda x: len(x['name_to_index']))
         #  self.num_target_channels = self.sample_static_info.each.map(lambda x: len(x['name_to_index']))
 
-        self.hidden_name: str = model_config.model.model.hidden_name
-        encoders, self.encoder_sources, num_encoded_channels = extract_sources(model_config.model.model.encoders)
+        self.hidden_name: str = model_config.model.hidden_name
+        encoders, self.encoder_sources, num_encoded_channels = extract_sources(model_config.model.encoders)
         decoders, self.decoder_sources, num_decoded_channels = extract_sources(
-            model_config.model.model.decoders, reversed=True
+            model_config.model.decoders, reversed=True
         )
         # def build_embeder(number_of_features, **kwargs):
         #     return NodeEmbedder(
@@ -193,30 +193,15 @@ class AnemoiMultiModel(AnemoiModel):
         #             # TODO
         #         )
         # self.embeders = self.sample_static_info.create_function(build_embeder)
-        self.node_embeders = self.sample_static_info.new_empty()
-        for path, value in self.sample_static_info.items():
-            num_input_channels = self.num_input_channels[path]
-            kwargs = dict(
-                config=model_config.model.model.emb_data,
-                num_input_channels=num_input_channels,  # coords missing, we need to add them
-                num_output_channels=num_encoded_channels,
-                coord_dimension=NODE_COORDS_NDIMS,
-            )
-            try:
-                self.node_embeders[path] = NodeEmbedder(**kwargs)
-            except Exception as e:
-                print("❌❌❌ fix me ❌❌❌")
-                print("❌❌❌ fix me ❌❌❌")
-                print("❌❌❌ fix me ❌❌❌")
-                print("❌❌❌ fix me ❌❌❌")
-                print(f"Error building NodeEmbedder for path {path} with {kwargs}: {e}")
-                print("keep going without full initialisation")
-                return
-        # also possible:
-        #  self.embeders = self.sample_static_info.each.map(build_node_embeder, self.num_input_channels, ...)
 
+        num_encoded_channels = None
+        self.node_embeders = NodeEmbedder(
+            model_config.model.emb_data,
+            num_input_channels=self.num_input_channels,
+            num_output_channels=num_encoded_channels,
+        )
         self.node_projector = NodeProjector(
-            model_config.model.model.emb_data,
+            model_config.model.emb_data,
             num_input_channels=num_decoded_channels,
             num_output_channels=self.num_target_channels,
             sources=self.decoder_sources,
@@ -236,7 +221,7 @@ class AnemoiMultiModel(AnemoiModel):
 
         # Processor hidden -> hidden
         self.processor = instantiate(
-            model_config.model.model.processor,
+            model_config.model.processor,
             _recursive_=False,
             num_channels=self.num_channels,
             edge_dim=EDGE_ATTR_NDIM,
