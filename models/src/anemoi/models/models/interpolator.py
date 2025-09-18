@@ -293,9 +293,9 @@ class AnemoiModelEncProcDecInterpolator(AnemoiModelEncProcDec):
 
         return y_preds
 
+
 def resolve_mass_conservations(self, y_preds, x_input, include_right_boundary=False) -> torch.Tensor:
-    """
-    Enforce a "mass conservation" style constraint on a subset of output variables by
+    """Enforce a "mass conservation" style constraint on a subset of output variables by
     redistributing a known total (taken from the input constraints) across the time
     dimension using softmax weights derived from the model's logits.
 
@@ -388,15 +388,12 @@ def resolve_mass_conservations(self, y_preds, x_input, include_right_boundary=Fa
 
         # For *non-target* variables, set the (T+1)-th step to the right-boundary input values.
         # This preserves/copies boundary conditions for outputs we are not re-allocating.
-        y_preds[:, -1:, ..., y_index_ex_target_indices] = x_input[
-            :, -1:, ..., data_indices_model_input_model_output
-        ]
+        y_preds[:, -1:, ..., y_index_ex_target_indices] = x_input[:, -1:, ..., data_indices_model_input_model_output]
 
         # Write the allocated values back into the target channels across all T+1 steps.
         y_preds[..., target_indices] = y_preds_accum
 
     return y_preds
-
 
     def setup_mass_conserving_accumulations(self, data_indices: dict, config: dict):
 
