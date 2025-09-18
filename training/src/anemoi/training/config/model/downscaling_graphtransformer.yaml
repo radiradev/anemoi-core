@@ -20,9 +20,13 @@ model:
     final_activation: GELU
     layer_kernels: ${model.layer_kernels}
   encoders:
-  - name: enc
+  - name: enc1
     mapper: ${model.mappers.encoder}
     sources: [ "low_res" ]
+    num_channels: ${model.num_channels}
+  - name: enc2
+    mapper: ${model.mappers.encoder}
+    sources: [ "high_res" ]
     num_channels: ${model.num_channels}
   merge_latents: average # options: average, sum, concatenation
   hidden_name: "hidden"

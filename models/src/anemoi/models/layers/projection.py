@@ -39,10 +39,10 @@ class NodeEmbedder(nn.Module):
             }
         )
 
-    def forward(self, x: torch.Tensor, **kwargs) -> HeteroData:
+    def forward(self, x: dict[str, torch.Tensor], **kwargs) -> HeteroData:
         # input: [{"1": tensor, "1": tensor, "2": tensor, ...}]
         # TODO: x_data_latent = concat_tensor_from_same_source(x_data_latent)
-        return self.embeder(x)
+        return {self.embeders[key](tensor) for key, tensor in x.items()}
 
 
 class NodeProjector(nn.Module):

@@ -1,3 +1,5 @@
+import datetime
+
 import einops
 import numpy as np
 
@@ -69,7 +71,11 @@ class DataHandler:
 
     def reference_date(self, item=None):
         assert item is not None, item
-        return self.ds.dates[item]
+        date = self.ds.dates[item]
+        if isinstance(date, np.datetime64):
+            date = date.tolist()
+        assert isinstance(date, datetime.datetime), f"Expected datetime, got {type(date)}: {date}"
+        return date
 
     def reference_date_str(self, item=None):
         return self.reference_date(item).strftime("%Y-%m-%d %H:%M:%S")
