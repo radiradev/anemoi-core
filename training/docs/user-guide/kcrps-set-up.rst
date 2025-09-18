@@ -18,7 +18,7 @@ training:
       -  CRPS
 
    -  -  Forecaster
-      -  :class:`GraphForecaster`
+      -  :class:`GraphForecasterPLModule`
       -  :class:`GraphEnsForecaster`
 
    -  -  Strategy

@@ -35,7 +35,7 @@ from anemoi.training.utils.enums import TensorDim
 LOGGER = logging.getLogger(__name__)
 
 
-class BaseGraphModule(pl.LightningModule, ABC):
+class BaseGraphPLModule(pl.LightningModule, ABC):
     """Abstract base class for Anemoi GNN forecasters using PyTorch Lightning."""
 
     def __init__(
@@ -131,7 +131,7 @@ class BaseGraphModule(pl.LightningModule, ABC):
 
         self.reader_group_id = 0
         self.reader_group_rank = 0
-        print("✅ BaseGraphModule initialized")
+        print("✅ BaseGraphPLModule initialized")
 
     def build_model(self, model_config, sample_static_info, metadata) -> torch.nn.Module:
         return instantiate(model_config)

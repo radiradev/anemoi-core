@@ -1,5 +1,5 @@
-from anemoi.training.train.tasks.refactor.forecasting import ForecastingModule
+from anemoi.training.train.tasks.refactor.forecasting import ForecastingPLModule
 
 
-class AutoencodingModule(ForecastingModule):
+class AutoencodingPLModule(ForecastingPLModule):
     pass

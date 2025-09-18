@@ -8,12 +8,12 @@
 # nor does it submit to any jurisdiction.
 
 # from .ensforecaster import GraphEnsForecaster
-# from .forecaster import GraphForecaster
+# from .forecaster import GraphForecasterPLModule
 # from .interpolator import GraphInterpolator
 #
 # __all__ = [
 #     "GraphDownscaling",
 #     "GraphEnsForecaster",
-#     "GraphForecaster",
+#     "GraphForecasterPLModule",
 #     "GraphInterpolator",
 # ]

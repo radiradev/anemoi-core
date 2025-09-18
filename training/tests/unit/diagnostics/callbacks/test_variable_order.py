@@ -15,7 +15,7 @@ import pytest
 
 from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.training.diagnostics.callbacks.sanity import CheckVariableOrder
-from anemoi.training.train.tasks.forecaster import GraphForecaster
+from anemoi.training.train.tasks.forecaster import GraphForecasterPLModule
 from anemoi.training.train.train import AnemoiTrainer
 
 
@@ -215,9 +215,9 @@ def test_on_epoch_wrong_validation(
 
 def test_on_load_checkpoint_restores_name_to_index() -> None:
 
-    model = GraphForecaster.__new__(GraphForecaster)
+    model = GraphForecasterPLModule.__new__(GraphForecasterPLModule)
 
-    model.on_load_checkpoint = types.MethodType(GraphForecaster.on_load_checkpoint, GraphForecaster)
+    model.on_load_checkpoint = types.MethodType(GraphForecasterPLModule.on_load_checkpoint, GraphForecasterPLModule)
 
     mock_name_to_index = {"var1": 0, "var2": 1}
     mock_checkpoint = {"hyper_parameters": {"data_indices": MagicMock(name_to_index=mock_name_to_index)}}

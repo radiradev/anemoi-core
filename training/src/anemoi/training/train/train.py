@@ -225,7 +225,7 @@ class AnemoiTrainer:
 
         model_task = get_class(self.my_config.model_task)
         print(f"✅ {model_task=}")
-        model_task = model_task(**kwargs)  # GraphForecaster -> pl.LightningModule
+        model_task = model_task(**kwargs)  # GraphForecasterPLModule -> pl.LightningModule
         # assert isinstance(model_task, pytorch_lightning.LightningModule), type(model_task)
 
         # Load the model_task weights
@@ -520,6 +520,7 @@ class AnemoiTrainer:
             # we have our own DDP-compliant sampler logic baked into the dataset
             use_distributed_sampler=False,
             profiler=self.profiler,
+            enable_model_summary=True,
         )
 
         LOGGER.debug("Starting training..")

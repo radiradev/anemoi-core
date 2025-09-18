@@ -7,7 +7,7 @@ anemoi-training:
 
 **Model Tasks:**
 
-#. Deterministic Forecasting (GraphForecaster)
+#. Deterministic Forecasting (GraphForecasterPLModule)
 #. Ensemble Forecasting (GraphEnsForecaster)
 #. Time Interpolation (GraphInterpolator)
 

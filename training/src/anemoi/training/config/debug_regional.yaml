@@ -47,7 +47,7 @@ dataloader:
     training: 2
     validation: 2
 training:
-  model_task: anemoi.training.train.tasks.refactor.ForecastingModule
+  model_task: anemoi.training.train.tasks.refactor.ForecastingPLModule
   max_epochs: 2
   training_loss:
     # loss classes to initialise

@@ -4,13 +4,13 @@ from typing import TYPE_CHECKING
 import torch
 from torch.utils.checkpoint import checkpoint
 
-from anemoi.training.train.tasks.refactor.base import BaseGraphModule
+from anemoi.training.train.tasks.refactor.base import BaseGraphPLModule
 
 if TYPE_CHECKING:
     from anemoi.training.data.refactor.structure import NestedTensor
 
 
-class ForecastingModule(BaseGraphModule):
+class ForecastingPLModule(BaseGraphPLModule):
 
     def _step(
         self,

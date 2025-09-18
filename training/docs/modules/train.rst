@@ -7,7 +7,7 @@ Neural Networks (GNNs), designed for tasks such as forecasting,
 interpolation, and ensemble learning. The training setup is structured
 around three key components:
 
--  ``BaseGraphModule``: The abstract base class for all task-specific
+-  ``BaseGraphPLModule``: The abstract base class for all task-specific
    models, encapsulating shared logic for training, evaluation, and
    distributed execution.
 
@@ -18,17 +18,18 @@ around three key components:
    and managing the training and validation loops.
 
 To train a model, users typically subclass one of the pre-implemented
-graph modules or create a new one by extending ``BaseGraphModule``.
+graph modules or create a new one by extending ``BaseGraphPLModule``.
 
-*****************
- BaseGraphModule
-*****************
+*******************
+ BaseGraphPLModule
+*******************
 
-All model tasks subclass :class:`~anemoi.graphmodules.BaseGraphModule`,
-which itself inherits from PyTorch Lightning's
-:class:`~pytorch_lightning.LightningModule`. This base class defines the
-standard interface for all models in Anemoi and implements the core
-logic required for training, validation, and distributed inference.
+All model tasks subclass
+:class:`~anemoi.graphmodules.BaseGraphPLModule`, which itself inherits
+from PyTorch Lightning's :class:`~pytorch_lightning.LightningModule`.
+This base class defines the standard interface for all models in Anemoi
+and implements the core logic required for training, validation, and
+distributed inference.
 
 Key responsibilities include:
 
@@ -39,7 +40,7 @@ Key responsibilities include:
 -  Input/output masking to support variable or region-specific
    processing
 
-``BaseGraphModule`` is not intended to be instantiated directly.
+``BaseGraphPLModule`` is not intended to be instantiated directly.
 Instead, model developers should subclass it to implement specific
 forecasting or interpolation tasks by overriding the :meth:`_step`
 method and optionally customizing the initialization logic in
@@ -69,7 +70,7 @@ Additional features include optional sharding of input batches across
 devices (to reduce communication overhead), dynamic creation of scalers
 from statistics.
 
-.. autoclass:: anemoi.graphmodules.BaseGraphModule
+.. autoclass:: anemoi.graphmodules.BaseGraphPLModule
    :members:
    :undoc-members:
    :show-inheritance:
@@ -79,13 +80,13 @@ from statistics.
 *****************
 
 Anemoi supports multiple task-specific models, which are high-level
-subclasses of :class:`~anemoi.graphmodules.BaseGraphModule` and provide
-working implementations for key scientific workflows.
+subclasses of :class:`~anemoi.graphmodules.BaseGraphPLModule` and
+provide working implementations for key scientific workflows.
 
 Current supported graphmodules include:
 
 #. **Deterministic Forecasting** —
-   :class:`~anemoi.training.train.tasks.forecaster.GraphForecaster`
+   :class:`~anemoi.training.train.tasks.forecaster.GraphForecasterPLModule`
 #. **Ensemble Forecasting** —
    :class:`~anemoi.training.train.tasks.ensforecaster.GraphEnsForecaster`
 #. **Time Interpolation** —

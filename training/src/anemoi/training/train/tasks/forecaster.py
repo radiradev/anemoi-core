@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import torch
 from torch.utils.checkpoint import checkpoint
 
-from anemoi.training.train.tasks.base import BaseGraphModule
+from anemoi.training.train.tasks.base import BaseGraphPLModule
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
-class GraphForecaster(BaseGraphModule):
+class GraphForecasterPLModule(BaseGraphPLModule):
     """Graph neural network forecaster for PyTorch Lightning."""
 
     def __init__(

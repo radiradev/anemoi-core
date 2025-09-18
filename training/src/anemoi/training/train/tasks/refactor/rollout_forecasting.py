@@ -2,13 +2,13 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from anemoi.training.train.tasks.refactor.forecasting import ForecastingModule
+from anemoi.training.train.tasks.refactor.forecasting import ForecastingPLModule
 
 if TYPE_CHECKING:
     from anemoi.training.data.refactor.structure import NestedTensor
 
 
-class RolloutForecastingModule(ForecastingModule):
+class RolloutForecastingPLModule(ForecastingPLModule):
     def select_rollout_target(self, batch: dict, rollout_step: int) -> dict:
         return batch["target"][rollout_step]
 
