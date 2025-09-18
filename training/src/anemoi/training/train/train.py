@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import os
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -46,6 +47,24 @@ if TYPE_CHECKING:
     from torch_geometric.data import HeteroData
 
 LOGGER = logging.getLogger(__name__)
+
+if "DEBUG" in os.environ:
+    from hydra.utils import instantiate as hydra_instantiate
+
+    def instanciate_wrapper(config, *args, **kwargs):
+        config_keys = "+".join(k for k in config if k != "_target_")
+        try:
+            target = config._target_
+        except Exception:
+            target = ""
+        config_keys = str(target) + "+" + config_keys
+        _args = ",".join(str(a.__class__.__name__) for a in args)
+        _kwargs = ",".join(f"{k}={v.__class__.__name__}" for k, v in kwargs.items())
+        print(f"🐉 instanciate({','.join([config_keys,_args,_kwargs])})")
+        return hydra_instantiate(config, *args, **kwargs)
+
+    hydra.utils.instantiate = instanciate_wrapper
+    instantiate = hydra.utils.instantiate
 
 
 class AnemoiTrainer:
@@ -519,9 +538,11 @@ class AnemoiTrainer:
 
 @hydra.main(version_base=None, config_path="../config", config_name="debug_downscaling")
 def main(config: DictConfig) -> None:
-    with open("Full_config.yaml", "w") as f:
-        yaml_str = OmegaConf.to_yaml(config)
-        f.write(yaml_str)
+
+    if "DEBUG" in os.environ:
+        with open("Full_config.yaml", "w") as f:
+            yaml_str = OmegaConf.to_yaml(config)
+            f.write(yaml_str)
     AnemoiTrainer(config).train()
 
 
