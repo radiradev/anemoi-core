@@ -297,15 +297,3 @@ class FunctionalLoss(BaseLoss):
         out = self.scale(out, scaler_indices, without_scalers=without_scalers, grid_shard_slice=grid_shard_slice)
 
         return self.reduce(out, squash, group=group if is_sharded else None)
-
-    def add_semantic(self, y_pred, target, **kwargs):
-        from anemoi.training.data.refactor.structure import Box
-
-        for key, box in target.items():
-            pred_box = y_pred[key]
-            assert isinstance(box, Box)
-            for k, content in box.items():
-                if k != "data":
-                    assert k not in pred_box
-                    pred_box[k] = content
-        return Box(y_pred)

@@ -519,6 +519,9 @@ class AnemoiTrainer:
 
 @hydra.main(version_base=None, config_path="../config", config_name="debug_downscaling")
 def main(config: DictConfig) -> None:
+    with open("Full_config.yaml", "w") as f:
+        yaml_str = OmegaConf.to_yaml(config)
+        f.write(yaml_str)
     AnemoiTrainer(config).train()
 
 

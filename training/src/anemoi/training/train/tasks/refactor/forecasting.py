@@ -84,9 +84,11 @@ class ForecastingModule(BaseGraphModule):
         # add semantic information to y_pred from target_data (should use static info)
         print(target_data)
         semantic = target_data.copy()
-        semantic.each.pop("data")  # remove data just to be sure
+        for k, v in semantic.items():  # remove data just to be sure
+            v.pop("data")
         for k, v in semantic.items():
             assert "data" not in v
+
         print(y_pred.to_str("⚠️y_pred before merging semantic info from target"))
         y_pred = semantic + y_pred.wrap("data")
         print(y_pred.to_str("⚠️y_pred after merging semantic info from target"))
