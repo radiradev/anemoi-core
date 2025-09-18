@@ -906,7 +906,7 @@ class TensorReshapeSampleProvider(ForwardSampleProvider):
 
         self._static_cache = sample.static_info
         self.to_dimensions_order = dimensions
-        self.from_dimensions_order = self._static_cache["_dimensions_order"]
+        self.from_dimensions_order = self._static_cache["dimensions_order"]
 
         for d in self.to_dimensions_order:
             if d not in self.from_dimensions_order:
@@ -922,7 +922,7 @@ class TensorReshapeSampleProvider(ForwardSampleProvider):
             from_dims = " ".join([d if d in self.from_dimensions_order else "1" for d in self.from_dimensions_order])
             to_dims = " ".join(self.to_dimensions_order)
             box["shape"] = TODO
-        box["_dimensions_order"] = self.to_dimensions_order
+        box["dimensions_order"] = self.to_dimensions_order
         return box
 
     def _get_item(self, request, item):
@@ -942,7 +942,7 @@ class TensorReshapeSampleProvider(ForwardSampleProvider):
     @property
     def dataschema(self):
         schema = self._forward.dataschema
-        schema["_dimensions_order"] = self.to_dimensions_order
+        schema["dimensions_order"] = self.to_dimensions_order
         return schema
 
     def shape(self):

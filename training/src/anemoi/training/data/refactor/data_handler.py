@@ -1,6 +1,5 @@
 import datetime
 
-import einops
 import numpy as np
 
 from anemoi.datasets import open_dataset
@@ -132,6 +131,7 @@ class DataHandler:
                 "longitudes",
                 "timedeltas",
                 "_reference_date_str",
+                "dimensions_order",
             ],
         )
         return self._get(request, item)
@@ -166,18 +166,6 @@ class DataHandler:
         }
 
         box = {r: ACTIONS[r](item) for r in content}
-
-        if "data" in box:
-            if box["data"].ndim == 2:
-                box["data"] = einops.rearrange(box["data"], "variables values -> variables 1 values")
-            assert box["data"].ndim == 3
-            assert self._dimensions_order == [
-                "variables",
-                "ensembles",
-                "values",
-            ], f"Unexpected dimensions order {self._dimensions_order} for data {self.config}"
-        else:
-            box["_dimensions_order"] = self._dimensions_order
 
         class DummySharder:
             def shard_latitudes(self, latitudes):
