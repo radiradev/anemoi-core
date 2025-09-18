@@ -46,7 +46,7 @@ log:
     enabled: False
     offline: False
     authentication: False
-    tracking_uri: null
+    tracking_uri: ???
     experiment_name: 'anemoi-debug'
     project_name: 'Anemoi'
     system: False
