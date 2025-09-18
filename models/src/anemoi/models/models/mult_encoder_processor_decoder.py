@@ -126,10 +126,25 @@ class AnemoiMultiModel(AnemoiModel):
         for path, value in self.sample_static_info.items():
             self.normaliser[path] = build_normaliser(**value)
         # also possible:
-        #  self.normaliser = self.sample_static_info.each.map(build_normaliser)
+        #  self.normaliser = self.sample_static_info.map_expanded(build_normaliser)
         print(self.normaliser)
 
         # TODO? re-add generic preprocessors if needed.
+
+        input_info = self.sample_static_info["input"]
+        target_info = self.sample_static_info["target"]
+
+        # here we assume that the tree structure of the input and target match
+        # if this is not the case, we need to do something more complicated
+        # and define an actual downscaling/other model
+        linear = input_info.new_empty()
+        for path, value in input_info.items():
+            input_shape = len(input_info[path]["name_to_index"])
+            target_shape = len(target_info[path]["name_to_index"])
+            linear[path] = nn.Linear(input_shape, target_shape)
+        linear = linear.as_module_dict()
+        self.linear = linear
+        return
 
         self.num_channels = model_config.model.num_channels
 
@@ -171,8 +186,8 @@ class AnemoiMultiModel(AnemoiModel):
             self.num_input_channels[path] = num_channels
             self.num_target_channels[path] = num_channels
         # also possible:
-        #  self.num_input_channels = self.sample_static_info.each.map(lambda x: len(x['name_to_index']))
-        #  self.num_target_channels = self.sample_static_info.each.map(lambda x: len(x['name_to_index']))
+        #  self.num_input_channels = self.sample_static_info.map(lambda x: len(x['name_to_index']))
+        #  self.num_target_channels = self.sample_static_info.map(lambda x: len(x['name_to_index']))
 
         self.hidden_name: str = model_config.model.model.hidden_name
         encoders, self.encoder_sources, num_encoded_channels = extract_sources(model_config.model.model.encoders)
@@ -213,7 +228,7 @@ class AnemoiMultiModel(AnemoiModel):
                 print("keep going without full initialisation")
                 return
         # also possible:
-        #  self.embeders = self.sample_static_info.each.map(build_node_embeder, self.num_input_channels, ...)
+        #  self.embeders = self.sample_static_info.map(build_node_embeder, self.num_input_channels, ...)
 
         self.node_projector = NodeProjector(
             model_config.model.model.emb_data,
@@ -459,11 +474,36 @@ class AnemoiMultiModel(AnemoiModel):
     ) -> dict[str, Tensor]:
         # at this point, the input (x) has already been normalised
         # if this is not wanted, don't normalise it in the task
+        print("❤️💬----- Forward pass of AnemoiMultiModel -----")
         print(self.sample_static_info.to_str("Sample Info"))
         # print(x.to_str("x before merge"))
 
-        x = self.sample_static_info.input.merge_content(x)
+        # check matching keys
+        assert set(x.keys()) == set(
+            self.sample_static_info["input"].keys()
+        ), f"Input keys {list(x.keys())} do not match sample_static_info keys {list(self.sample_static_info['input'].keys())}"
+        x = self.sample_static_info["input"] + x
+
         print(x.to_str("x after"))
+        output = self.sample_static_info["target"].new_empty()
+        for path, value in self.sample_static_info["target"].items():
+            linear = self.linear[path]
+            data = value["data"]
+            # value['_dimensions_order'] = ['variables', 'values']
+            try:
+                data = einops.rearrange(data, "batch variables values -> batch values variables")
+            except Exception as e:
+                e.add_note(f"when processing path {path} with data shape {data.shape}")
+                e.add_note("expected data shape (batch, time, ensemble, vars, grid)")
+                from anemoi.training.data.refactor.structure import Dict
+
+                e.add_note(f"value: {Dict(value=value)}")
+                raise
+            output[path] = linear(data)
+        print(output.to_str("output after linear"))
+        assert len(output), "ouput must not be empty"
+        print("❤️🆗----- End of Forward pass of AnemoiMultiModel -----")
+        return output
 
         # print(x.to_str("Input Batch"))
 

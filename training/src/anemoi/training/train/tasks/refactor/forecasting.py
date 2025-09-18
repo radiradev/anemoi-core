@@ -46,14 +46,17 @@ class ForecastingModule(BaseGraphModule):
         #
         # we should create a sample_provider in AnemoiTrainer?
         # or in this module then give it to the dataloader and dataset?
-        print("Starting _step")
-
+        print("️⚠️💬 Starting _step")
         static_info = self.model.sample_static_info
 
-        batch = static_info.merge_content(batch)
-        print(batch.to_str("batch before normalistation"))
-        batch = self.model.apply_normalisers(batch)
-        print(batch.to_str("batch after normalistation"))
+        # merge batch with static data
+        batch = static_info + batch
+        assert batch
+
+        print(batch.to_str("⚠️batch before normalistation"))
+        normalised = self.normaliser.each(batch.unwrap("data"))
+        batch.each["data"] = normalised
+        print(batch.to_str("⚠️batch after normalistation"))
 
         # print(f"Normalising batch: {batch}")
         # removed process_batch, only normaliser is supported for now
@@ -76,24 +79,30 @@ class ForecastingModule(BaseGraphModule):
         loss = torch.zeros(1, dtype=target_dtype, device=self.device, requires_grad=True)
 
         target_data = batch.target
-        print(target_data.to_str("target data"))
+        print(target_data.to_str("⚠️target data"))
 
+        # add semantic information to y_pred from target_data (should use static info)
+        print(target_data)
+        semantic = target_data.copy()
+        semantic.each.pop("data")  # remove data just to be sure
+        for k, v in semantic.items():
+            assert "data" not in v
+        print(y_pred.to_str("⚠️y_pred before merging semantic info from target"))
+        y_pred = semantic + y_pred.wrap("data")
+        print(y_pred.to_str("⚠️y_pred after merging semantic info from target"))
 
-        y_pred = y_pred.wrap_in_box("data")
+        print(self.loss.to_str("⚠️loss function"))
 
-        def add_semantic(y_pred, target_data):
-            y_pred_with_semantic = target_data.empty_like()
-            for path, box in target_data.boxes():
-                box = box.copy()
-                box["data"] = y_pred[path]["data"]
-                y_pred_with_semantic[path] = box
-            return y_pred_with_semantic
+        y_pred_data = y_pred.unwrap("data")
+        target_data = target_data.unwrap("data")
 
-        y_pred = add_semantic(y_pred, target_data)
-        print(self.loss.to_str("loss function"))
-
-        loss = self.loss(pred=y_pred.unwrap("data"), target=target_data.unwrap("data"))
+        losses = target_data.new_empty()
+        loss = 0
+        for k, module in self.loss.items():
+            losses[k] = module(pred=y_pred_data[k], target=target_data[k])
+            loss += losses[k]
         print("computed loss:", loss)
+        stop_here
 
         # Iterate over all entries in batch["target"] and accumulate loss
         for target_key, target_data in batch["target"].items():
@@ -110,4 +119,5 @@ class ForecastingModule(BaseGraphModule):
             metrics_next = self.calculate_val_metrics(y_pred, batch["target"], rollout_step=0)
 
         print(f"computed loss: {loss}, metrics: {metrics_next}, y_pred: {y_pred.to_str('y_pred')}")
+        print("️⚠️💬 End of _step")
         return loss, metrics_next, y_pred

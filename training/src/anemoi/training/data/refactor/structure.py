@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import os
+import warnings
 from collections.abc import Mapping
 from collections.abc import Sequence
 from functools import wraps
@@ -230,8 +231,11 @@ class Dict(dict):
     def as_native(self):
         return {k: v.as_native() if isinstance(v, Dict) else v for k, v in self.items()}
 
-    def wrap_in_box(self, key):
-        return self.each.map(lambda v: {key: v})
+    def wrap(self, key):
+        return self.map(lambda v: {key: v})
+
+    def unwrap(self, key):
+        return self.map(lambda v: v[key])
 
     def select_content(self, *keys):
         """Usage:
@@ -240,40 +244,88 @@ class Dict(dict):
         select_content("latitudes", "longitudes") returns a tuple of Dicts, each containing the content of the corresponding key, no boxing
         select_content(["latitudes"], ["longitudes"]) returns a tuple of Dicts, each containing the content of the corresponding key, with boxing
         """
-        if len(keys) == 0:
-            raise ValueError("At least one key must be provided")
         if len(keys) > 1:
+            # return tuple when asked for multiple keys or multiple key lists
             return tuple(self.select_content(k) for k in keys)
-
-        assert len(keys) == 1
         keys = keys[0]
 
-        def select(box, k):
-            if isinstance(k, (list, tuple)):
-                return {k_: select(box, k_) for k_ in k}
-
+        def select(box):
             if not isinstance(box, dict):
-                raise ValueError(f"Expected dict, got {type(box)}")
-            if k not in box:
-                raise ValueError(f"Key {k} not found in dict. Available keys are: {list(box.keys())}")
+                raise ValueError(f"Expected dict, got {type(box)}, cannot select_content on {type(box)}")
+            for k in keys:
+                if isinstance(k, str) and k not in box:
+                    raise ValueError(f"Key '{k}' not found in dict. Available keys are: {list(box.keys())}")
+            res = {}
+            for k, v in box.items():
+                if isinstance(keys, (tuple, list, set)):
+                    if k in keys:
+                        res[k] = v
+                elif isinstance(keys, str):
+                    if k == keys:
+                        res[k] = v
+                elif callable(keys):
+                    if keys(k):
+                        res[k] = v
+                else:
+                    raise ValueError(f"Unexpected type for keys: {type(keys)} '{keys}'")
+            return res
 
-            return box[k]
+        return self.map(select)
 
-        return self.each.map(select, k=keys)
+    def __add__(self, other):
+        new = self.copy()
+        new.each.update(other)
+        return new
 
     def merge_leaves(self, *args, **kwargs):
-        new = self.copy()
-        new.each.update(*args, **kwargs)
-        return new
+        assert False, "This method has been renamed use + operator : Dict() + Dict()"
+
+    def map(self, func, *args, **kwargs):
+        res = self.__class__()
+        for path, leaf in self.items():
+            try:
+                args_ = [a[path] if isinstance(a, Dict) else a for a in args]
+                kwargs_ = {k: v[path] if isinstance(v, Dict) else v for k, v in kwargs.items()}
+                new = func(leaf, *args_, **kwargs_)
+                res[path] = new
+            except Exception as e:
+                e.add_note(f"When processing path {path}")
+                raise e
+        return res
+
+    def map_expanded(self, func, *args, **kwargs):
+        res = self.__class__()
+        for path, leaf in self.items():
+            try:
+                args_ = [a[path] if isinstance(a, Dict) else a for a in args]
+                kwargs_ = {k: v[path] if isinstance(v, Dict) else v for k, v in kwargs.items()}
+                new = func(*args_, **leaf, **kwargs_)
+                res[path] = new
+            except Exception as e:
+                e.add_note(f"When processing path {path}")
+                raise e
+        return res
 
     @property
     def each(self):
         return LeafAccessor(self)
 
 
-class LeafAccessor:
+class BaseAccessor:
     def __init__(self, parent):
         self.parent = parent
+
+    # def merge(self, *args, **kwargs):
+    #     # Usage:
+    #     # merge(dict1, dict2, key=value) merges all dicts into each leaf box
+    #     def _merge(box, *_args, **_kwargs):
+    #         box = box.copy()
+    #         for a in _args:
+    #             box.update(a)
+    #         for k,a in _kwargs.items():
+    #             box.update(**{k:a})
+    #         return box
+    #     return self.map(_merge, *args, **kwargs)
 
     def copy(self):
         return self.parent.__class__(self._apply_dict_method("copy"))
@@ -299,6 +351,17 @@ class LeafAccessor:
     def __getitem__(self, key: str):
         return self.parent.__class__(self._apply_dict_method("__getitem__", key))
 
+    def filter(self, *keys_or_lists, remove=False):
+        """Usage:
+        select_content(["latitudes", "longitudes"]) returns a Dict with boxes containing only the selected keys
+        select_content("data") returns a Dict with the content of the "data" key, no box
+        select_content("latitudes", "longitudes") returns a tuple of Dicts, each containing the content of the corresponding key, no boxing
+        select_content(["latitudes"], ["longitudes"]) returns a tuple of Dicts, each containing the content of the corresponding key, with boxing
+        """
+        if len(keys_or_lists) > 1:
+            # return tuple when asked for multiple keys or multiple key lists
+            return tuple(self.filter(k, remove) for k in keys_or_lists)
+
     def __setitem__(self, key: str, value):
         self._apply_dict_method("__setitem__", key, value)
 
@@ -323,23 +386,14 @@ class LeafAccessor:
                 raise ValueError(f"Expected callable at {path}, got {type(leaf)}")
             return leaf
 
-        res = self.parent.__class__()
+        res = self.result_parent_class()
         for k, v in self._parallel_apply_on_leaves(function_finder, *args, **kwargs):
             res[k] = v
         return res
 
     def map(self, func, *args, **kwargs):
-        res = self.parent.__class__()
-        for path, leaf in self.parent.items():
-            try:
-                args_ = [a[path] if isinstance(a, Dict) else a for a in args]
-                kwargs_ = {k: v[path] if isinstance(v, Dict) else v for k, v in kwargs.items()}
-                new = func(leaf, *args_, **kwargs_)
-                res[path] = new
-            except Exception as e:
-                e.add_note(f"When processing path {path}")
-                raise e
-        return res
+        warnings.warn("don't use .each.map, use .map directly")
+        return self.parent.map(func, *args, **kwargs)
 
     def _parallel_apply_on_leaves(self, func_finder, *args, **kwargs):
         output = []
@@ -349,10 +403,26 @@ class LeafAccessor:
             kwargs_ = {k: v[path] if isinstance(v, Dict) else v for k, v in kwargs.items()}
             # find the function/method to apply and apply it
             func = func_finder(path, leaf)
-            res = func(*args_, **kwargs_)
+            try:
+                res = func(*args_, **kwargs_)
+            except Exception as e:
+                e.add_note(f"While processing path '{path}', leaf keys={leaf.keys()}, {args_=}, {kwargs_=}")
+                raise e
             # stack in a list so that the caller decides how to handle it
             output.append((path, res))
         return output
+
+
+class LeafAccessor(BaseAccessor):
+    @property
+    def result_parent_class(self):
+        return self.parent.__class__
+
+
+class ModuleDictAccessor(BaseAccessor):
+    @property
+    def result_parent_class(self):
+        return Dict
 
 
 class Batch(Dict):
@@ -368,6 +438,10 @@ def _path_as_str_for_pytorch_module_dict(path):
 class AnemoiModuleDict(torch.nn.ModuleDict):
     emoji = "🔥"
 
+    @property
+    def each(self):
+        return ModuleDictAccessor(self)
+
     def __call__(self, *args, **kwargs):
         first = None
         if args:
@@ -382,7 +456,15 @@ class AnemoiModuleDict(torch.nn.ModuleDict):
         for path, module in self.items():
             print(f"applying module {module} at path {path}")
             args_ = [a[path] if isinstance(a, Dict) else a for a in args]
-            kwargs_ = {k: v[path] if isinstance(v, Dict) else v for k, v in kwargs.items()}
+            kwargs_ = {}
+            for k, v in kwargs.items():
+                if isinstance(v, Dict):
+                    try:
+                        v = v[path]
+                    except KeyError as e:
+                        e.add_note(f"While processing path kwargs '{k}'. Available paths are: {list(v.keys())}")
+                        raise e
+                kwargs_[k] = v
             res[path] = module(*args_, **kwargs_)
         return res
 
@@ -609,8 +691,7 @@ def test_one(training_context):
         print(f" - {k}: {type(v)}")
     print("✅ Batch Data", batch_data)
 
-    data = sp.static_info.copy()
-    data.each.update(batch_data)
+    data = sp.static_info + batch_data
     print("✅ Data full", data)
     from anemoi.training.data.refactor.structure import Dict
 
@@ -624,8 +705,8 @@ def test_one(training_context):
     def to_gpu(box):
         return {k: v.to("cuda") if k == "data" else v for k, v in box.items()}
 
-    new_data = data.each.map(to_tensor)
-    new_data = new_data.each.map(to_gpu)
+    new_data = data.map(to_tensor)
+    new_data = new_data.map(to_gpu)
     print("✅ Data on GPU", new_data)
     print(type(new_data["lowres"]))
 
@@ -642,8 +723,7 @@ def test_one(training_context):
     print("Latitudes", lat)
     print("Longitudes", lon)
 
-    def build_normaliser(box):
-        statistics = box["statistics"]
+    def build_normaliser(statistics, **kwargs):
         mean = np.mean(statistics["mean"])
 
         def func(box):
@@ -660,10 +740,10 @@ def test_one(training_context):
 
     # normaliser = Dict()
     # normaliser = sp.static_info.new_empty()
-    # for path, value in sp.static_info.items():
-    #     normaliser[path] = build_normaliser(value)
+    # for k, v in sp.static_info.items():
+    #     normaliser[k] = build_normaliser(v)
 
-    normaliser = sp.static_info.each.map(build_normaliser)
+    normaliser = sp.static_info.map_expanded(build_normaliser)
 
     print("Normaliser function", normaliser)
     n_data = normaliser.each(data)
@@ -702,11 +782,6 @@ def test_two(training_context):
                            dimensions: ["values", "variables"]
                            variables: ["2t", "10u", "10v"]
                            data_group: "era5"
-                     other:
-                       container:
-                           dimensions: ["values", "variables"]
-                           variables: ["2t", "10u", "10v"]
-                           data_group: "era5"
 
                   #observations:
                   #  tuple:
@@ -732,14 +807,14 @@ def test_two(training_context):
     print("static_info", sp.static_info)
     data = sp[1]
     print(data)
-    data = sp.static_info.merge_leaves(data)
+    data = sp.static_info + data
+    assert len(data) > 0, data
     print("Merged data", data)
-    data = data.select_content(["_offset", "data", "_reference_date"])
+    data = data.select_content(["_offset", "data", "_reference_date_str"])
     # data = data.select_content(["_offset", "rollout_usage", "data"])
     print("Selected Data", data)
+    assert len(data) > 0, data
     print("Rollout info : ", type(sp.rollout_info()), sp.rollout_info())
-    # merged = sp.rollout_info().merge_leaves(data)
-    # print("merged", merged)
     rollout_steps = None
     for path, rollout in sp.rollout_info().items():
         rollout_steps = rollout.steps

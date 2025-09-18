@@ -602,8 +602,8 @@ class _DictSampleProvider(SampleProvider):
 class DictSampleProvider(_DictSampleProvider):
     def __init__(self, _context: Context, _parent, dictionary: dict):
         super().__init__(_context, _parent)
-        dictionary = {_path_as_str(k): v for k, v in dictionary.items()}
         self.check_input(dictionary)
+        dictionary = {_path_as_str(k): v for k, v in dictionary.items()}
         self._samples = {k: _sample_provider_factory(_context, **v, _parent=self) for k, v in dictionary.items()}
 
     def check_input(self, dictionary):
@@ -622,7 +622,6 @@ class DictSampleProvider(_DictSampleProvider):
 
         res = Dict()
         for k, sample in self._samples.items():
-            check_dictionary_key(k)
             res[k] = sample._get_rollout_info()
         return res
 

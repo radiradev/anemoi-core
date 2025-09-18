@@ -21,6 +21,7 @@ from torch.distributed.distributed_c10d import ProcessGroup
 from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch_geometric.data import HeteroData
 
+from anemoi.models.preprocessing.normalisers import build_normaliser
 from anemoi.training.data.refactor.sample_provider import SampleProvider
 from anemoi.training.data.refactor.structure import NestedTensor
 from anemoi.training.losses import get_loss_function
@@ -47,6 +48,7 @@ class BaseGraphModule(pl.LightningModule, ABC):
     ) -> None:
         super().__init__()
         self.sample_static_info = sample_static_info
+        self.normaliser = sample_static_info.map_expanded(build_normaliser).as_module_dict()
 
         self.graph_data = graph_data  # .to(self.device) # at init this will be on cpu
 
@@ -92,7 +94,7 @@ class BaseGraphModule(pl.LightningModule, ABC):
             config.model_dump(by_alias=True).training.training_loss,
             # scalers={},  # self.scalers,
             #    data_indices=self.data_indices,
-            sample_static_info=self.sample_static_info,
+            sample_static_info=self.sample_static_info["target"],
         )
         # print_variable_scaling(self.loss, data_indices)
 

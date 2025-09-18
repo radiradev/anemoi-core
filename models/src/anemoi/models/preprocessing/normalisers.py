@@ -15,11 +15,14 @@ import einops
 import numpy as np
 import torch
 
-
 LOGGER = logging.getLogger(__name__)
 
 
-def build_normaliser(**kwargs):
+def build_normaliser(*args, **kwargs):
+    if args and not kwargs:
+        if len(args) > 1:
+            raise ValueError("Expected at most one positional argument")
+        kwargs = args[0]
 
     if "_target_" not in kwargs:
         # If the normaliser is not a Hydra instantiation, use the config directly

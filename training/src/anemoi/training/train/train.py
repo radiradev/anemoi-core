@@ -207,6 +207,7 @@ class AnemoiTrainer:
         model_task = get_class(self.my_config.model_task)
         print(f"✅ {model_task=}")
         model_task = model_task(**kwargs)  # GraphForecaster -> pl.LightningModule
+        # assert isinstance(model_task, pytorch_lightning.LightningModule), type(model_task)
 
         # Load the model_task weights
         if self.load_weights_only:
@@ -468,6 +469,9 @@ class AnemoiTrainer:
     def train(self) -> None:
         """Training entry point."""
         LOGGER.debug("Setting up trainer..")
+        # print("💬💬💬💬💬💬💬💬💬Strategy")
+        # print(type(self.strategy))
+        # print(self.strategy)
 
         trainer = pl.Trainer(
             deterministic=self.my_config.deterministic,
