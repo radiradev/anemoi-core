@@ -8,7 +8,6 @@
 # nor does it submit to any jurisdiction.
 from __future__ import annotations
 
-import os
 import warnings
 from collections.abc import Mapping
 from collections.abc import Sequence
@@ -16,11 +15,11 @@ from typing import Union
 
 import torch
 from rich import print
-from rich.console import Console
 
+from anemoi.training.data.refactor.formatting import anemoi_dict_to_str
 from anemoi.training.data.refactor.path_keys import SEPARATOR
 from anemoi.training.data.refactor.path_keys import _join_paths
-from anemoi.training.data.refactor.path_keys import _path_as_str
+from anemoi.training.data.refactor.path_keys import encode_path_if_needed
 
 # from typing import TYPE_CHECKING
 # if TYPE_CHECKING:
@@ -34,13 +33,13 @@ NestedTensor = Union[
 class Dict(dict):
 
     def __init__(self, *args, **kwargs):
-        # Nothing in the __init__, this is an actual python dict
+        # Nothing special in the __init__, this is an actual python dict
 
         # we are only converting the keys to strings usable as Module names for pytorch ModuleDict
         # i.e. convert funny characters (including '.') in a reversible way.
         dic = dict(*args, **kwargs)
-        dic = {_path_as_str(k): v for k, v in dic.items()}
-        super().__init__(**dic)
+        for k, v in dic.items():
+            self[k] = v
 
     def copy(self):
         return self.__class__(self)
@@ -58,104 +57,13 @@ class Dict(dict):
         return cls()
 
     def __repr__(self):
-        if not self:
-            return f"{self.__class__.__name__} (empty)"
-        # this function is quite long and has a lot of knowledge about the other types
-        # it is not too bad because everything related to display is here
-        # but this is ugly
-        from rich.tree import Tree
-
-        from anemoi.training.data.refactor.formatting import choose_icon
-        from anemoi.training.data.refactor.formatting import format_key_value
-
-        def order_leaf(leaf):
-            def priority(k):
-                if str(k).startswith("_"):
-                    return 10
-                return dict(data=1, latitudes=2, longitudes=3, timedeltas=4).get(k, 9)
-
-            order = sorted(leaf.keys(), key=priority)
-            assert len(leaf) == len(order), (leaf, leaf.keys())
-            return {k: leaf[k] for k in order}
-
-        def expanded_leaf(path, leaf, debug=False):
-            if not isinstance(leaf, dict):
-                return f"{path}: " + format_key_value(path, leaf)
-
-            assert isinstance(leaf, dict)
-
-            leaf = order_leaf(leaf)
-            t = Tree(f"{path}")
-            for key, value in leaf.items():
-                if not debug and str(key).startswith("_"):
-                    continue
-                if key == "rollout_usage":
-                    subtree = Tree(f"{choose_icon(key, value)} {key} : {value}")
-                    t.add(subtree)
-                    continue
-                if key == "rollout":
-                    if debug:
-                        t.add(value.tree(prefix=key))
-                    else:
-                        t.add(Tree(f"{choose_icon(key, value)} {key} : {value}"))
-                    continue
-                t.add(choose_icon(key, value) + " " + f"{key} : " + format_key_value(key, value))
-            return t
-
-        def debug_leaf(path, leaf):
-            return expanded_leaf(path, leaf, debug=True)
-
-        def one_line_leaf(path, leaf):
-            leaf = leaf.copy()
-            txt = []
-            if "data" in leaf:
-                x = choose_icon("data", leaf["data"]) + " "
-                x += format_key_value("data", leaf.pop("data"))
-                x = x.replace("data : ", "")
-                x = x[:30] + ("…" if len(x) > 30 else "")
-                x += " "
-                txt.append(x)
-            for k in ["latitudes", "longitudes", "timedeltas"]:
-                if k in leaf:
-                    txt.append(choose_icon(k, leaf.pop(k)))
-            if leaf and txt:
-                txt.append(" +")
-            for k, v in leaf.items():
-                if str(k).startswith("_"):
-                    continue
-                txt.append(" " + k)
-
-            return Tree(f"{path}: " + "".join(txt))
-
-        name = self.__class__.__name__
-        for leaf in self.values():
-            if isinstance(leaf, dict) and "_reference_date" in leaf:
-                name += f" (Reference {leaf['_reference_date']})"
-                break
-        tree = Tree(name)
-
-        verbose = int(os.environ.get("ANEMOI_CONFIG_VERBOSE_STRUCTURE", 0))
-        leaf_to_tree = {0: one_line_leaf, 1: expanded_leaf, 2: debug_leaf}[verbose]
-        for path, leaf in self.items():
-            if not isinstance(leaf, dict):
-                tree.add(f"{path}: " + format_key_value(path, leaf))
-                continue
-            if isinstance(leaf, dict) and not leaf:
-                tree.add(f"{path}: ❌ <empty-dict>")
-                continue
-            assert isinstance(leaf, dict)
-            tree.add(leaf_to_tree(path, leaf))
-
-        console = Console(record=True)
-        with console.capture() as capture:
-            console.print(tree, overflow="ellipsis")
-        return capture.get()
+        return anemoi_dict_to_str(self)
 
     def to_str(self, name):
         return name + " " + self.__repr__()
 
     def __setitem__(self, path, value):
-        path = _path_as_str(path)
+        path = encode_path_if_needed(path)
         if not path:
             raise KeyError("Empty path is not allowed")
         if isinstance(value, Dict):
@@ -167,7 +75,7 @@ class Dict(dict):
         super().__setitem__(path, value)
 
     def __getitem__(self, path):
-        path = _path_as_str(path)
+        path = encode_path_if_needed(path)
         if path in self:
             return super().__getitem__(path)
         prefix = path + SEPARATOR

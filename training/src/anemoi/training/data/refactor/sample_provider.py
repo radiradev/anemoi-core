@@ -24,7 +24,6 @@ from rich.console import Console
 from rich.tree import Tree
 
 from anemoi.training.data.refactor.data_handler import DataHandler
-from anemoi.training.data.refactor.path_keys import _path_as_str
 from anemoi.training.data.refactor.path_keys import check_dictionary_key
 from anemoi.training.data.refactor.structure import Dict
 
@@ -425,8 +424,10 @@ class _DictSampleProvider(SampleProvider):
 class DictSampleProvider(_DictSampleProvider):
     def __init__(self, _context: Context, _parent, dictionary: dict):
         super().__init__(_context, _parent)
+
         self.check_input(dictionary)
-        dictionary = {_path_as_str(k): v for k, v in dictionary.items()}
+
+        # dictionary = {encode_path_if_needed(k): v for k, v in dictionary.items()}
         self._samples = {k: _sample_provider_factory(_context, **v, _parent=self) for k, v in dictionary.items()}
 
     def check_input(self, dictionary):
@@ -1252,21 +1253,8 @@ def test_three(training_context):
     sp = sample_provider_factory(**training_context, **config)
     print(sp)
     s = sp.static_info
-    print(s)
-    for path, box in s.boxes():
-        print(box.to_str(f"Box at {path}"))
     print("--------------")
-    print(s["ams", "-6h"])
-    s["ams", "0h"] = s["ams", "-6h"]
-    print(s["ams.0h"]["_offset"])
-
-    nested = sp.static_info
-
-    modified = nested.empty_like()
-    for path, box in nested.boxes():
-        box["new_key"] = 48
-        modified[path] = box
-    print(modified.to_str("Modified static info"))
+    print(s["ams"])
 
 
 def test():

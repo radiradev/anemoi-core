@@ -7,13 +7,13 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 import datetime
+import os
 
 import numpy as np
 import torch
+from rich.console import Console
 
 from anemoi.utils.dates import frequency_to_string
-
-# more imports at the end of this file
 
 ICON_BOX = "📦"
 ICON_LEAF = "🌱"
@@ -138,3 +138,104 @@ def format_key_value(k, v):
     if isinstance(v, Rollout):
         txt = str(v)
     return txt
+
+
+def anemoi_dict_to_str(obj):
+    assert isinstance(obj, dict), type(obj)
+    from anemoi.training.data.refactor.structure import Dict
+
+    assert isinstance(obj, Dict), type(obj)
+
+    if not obj:
+        return f"{obj.__class__.__name__} (empty)"
+    # this function is quite long and has a lot of knowledge about the other types
+    # it is not too bad because everything related to display is here
+    # but this is ugly
+    from rich.tree import Tree
+
+    from anemoi.training.data.refactor.formatting import choose_icon
+    from anemoi.training.data.refactor.formatting import format_key_value
+
+    def order_leaf(leaf):
+        def priority(k):
+            if str(k).startswith("_"):
+                return 10
+            return dict(data=1, latitudes=2, longitudes=3, timedeltas=4).get(k, 9)
+
+        order = sorted(leaf.keys(), key=priority)
+        assert len(leaf) == len(order), (leaf, leaf.keys())
+        return {k: leaf[k] for k in order}
+
+    def expanded_leaf(path, leaf, debug=False):
+        if not isinstance(leaf, dict):
+            return f"{path}: " + format_key_value(path, leaf)
+
+        assert isinstance(leaf, dict)
+
+        leaf = order_leaf(leaf)
+
+        t = Tree(f"{path}")
+        for key, value in leaf.items():
+            if not debug and str(key).startswith("_"):
+                continue
+            if key == "rollout_usage":
+                subtree = Tree(f"{choose_icon(key, value)} {key} : {value}")
+                t.add(subtree)
+                continue
+            if key == "rollout":
+                if debug:
+                    t.add(value.tree(prefix=key))
+                else:
+                    t.add(Tree(f"{choose_icon(key, value)} {key} : {value}"))
+                continue
+            t.add(choose_icon(key, value) + " " + f"{key} : " + format_key_value(key, value))
+        return t
+
+    def debug_leaf(path, leaf):
+        return expanded_leaf(path, leaf, debug=True)
+
+    def one_line_leaf(path, leaf):
+        leaf = leaf.copy()
+        txt = []
+        if "data" in leaf:
+            x = choose_icon("data", leaf["data"]) + " "
+            x += format_key_value("data", leaf.pop("data"))
+            x = x.replace("data : ", "")
+            x = x[:30] + ("…" if len(x) > 30 else "")
+            x += " "
+            txt.append(x)
+        for k in ["latitudes", "longitudes", "timedeltas"]:
+            if k in leaf:
+                txt.append(choose_icon(k, leaf.pop(k)))
+        if leaf and txt:
+            txt.append(" +")
+        for k, v in leaf.items():
+            if str(k).startswith("_"):
+                continue
+            txt.append(" " + k)
+
+        return Tree(f"{path}: " + "".join(txt))
+
+    name = obj.__class__.__name__
+    for leaf in obj.values():
+        if isinstance(leaf, dict) and "_reference_date" in leaf:
+            name += f" (Reference {leaf['_reference_date']})"
+            break
+    tree = Tree(name)
+
+    verbose = int(os.environ.get("ANEMOI_CONFIG_VERBOSE_STRUCTURE", 0))
+    leaf_to_tree = {0: one_line_leaf, 1: expanded_leaf, 2: debug_leaf}[verbose]
+    for path, leaf in obj.items():
+        if not isinstance(leaf, dict):
+            tree.add(f"{path}: " + format_key_value(path, leaf))
+            continue
+        if isinstance(leaf, dict) and not leaf:
+            tree.add(f"{path}: ❌ <empty-dict>")
+            continue
+        assert isinstance(leaf, dict)
+        tree.add(leaf_to_tree(path, leaf))
+
+    console = Console(record=True)
+    with console.capture() as capture:
+        console.print(tree, overflow="ellipsis")
+    return capture.get()
