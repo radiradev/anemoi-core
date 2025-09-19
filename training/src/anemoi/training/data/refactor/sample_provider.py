@@ -16,190 +16,17 @@ from functools import cached_property
 
 import einops
 import numpy as np
+import torch
+import yaml
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from rich.console import Console
 from rich.tree import Tree
 
-from .data_handler import DataHandler
-
-SEPARATOR = "__"
-
-MAPPING_OF_ALLOWED_CHARACTERS_IN_DICT_KEYS = {
-    # "Xbackslash_": "\\",
-    # "Xbar_": "|",
-    "Xcolon_": ":",
-    # "Xequal_": "=",
-    "Xgreater_": "<",
-    "Xless_": ">",
-    "Xminus_": "-",
-    "Xplus_": "+",
-    # "Xquestion_": "?",
-    # "Xslash_": "/",
-    "Xstar_": "*",
-    # "Xtilde_": "~",
-}
-ALLOWED_CHARACTERS_IN_DICT_KEYS = set(MAPPING_OF_ALLOWED_CHARACTERS_IN_DICT_KEYS.values())
-
-
-def _check_no_conflict(dic):
-    for key in dic:
-        conflicts = {k: v for k, v in dic.items() if k.startswith(key)}
-        if len(conflicts) > 1:
-            raise ValueError(f"Conflict in allowed characters mapping: {conflicts}")
-
-
-_check_no_conflict(MAPPING_OF_ALLOWED_CHARACTERS_IN_DICT_KEYS)
-
-
-def check_dictionary_key(k):
-    if not isinstance(k, str):
-        raise TypeError(f"Expected string for dictionary key, got {type(k)}: {k}")
-    if SEPARATOR in k:
-        raise ValueError(f"Keys in dictionary must not contain '{SEPARATOR}', got: {k}")
-    if k.startswith("_"):
-        raise ValueError(f"Keys in dictionary must not start with '_', got: {k}")
-    for c in k:
-        if not c.isalnum() and c not in ALLOWED_CHARACTERS_IN_DICT_KEYS and c not in ["_", "X"]:
-            raise ValueError(
-                f"Keys in dictionary must only contain {ALLOWED_CHARACTERS_IN_DICT_KEYS} characters and _, got: '{c}' in '{k}'",
-            )
-
-    if k.lower() != k:
-        # we could allow capital letters and encode the case in the mapping
-        # but the encoded keys would be hard to read
-        # and this would need careful handling
-        raise ValueError(f"Keys in dictionary must be lowercase, got: {k}.")
-
-    # if k[0].isdigit():
-    # this is to keep open the possibility to handle lists/tuples in the future
-    #    raise ValueError(f"Keys in dictionary must not start with a digit for now, got: {k}")
-    RESERVED_WORDS_FOR_TORCH_MODULE = [  # from torch.nn.Module
-        "dump_patches",
-        "call_super_init",
-        "forward",
-        "register_buffer",
-        "register_parameter",
-        "add_module",
-        "register_module",
-        "get_submodule",
-        "set_submodule",
-        "get_parameter",
-        "get_buffer",
-        "get_extra_state",
-        "set_extra_state",
-        "apply",
-        "cuda",
-        "ipu",
-        "xpu",
-        "mtia",
-        "cpu",
-        "type",
-        "float",
-        "double",
-        "half",
-        "bfloat16",
-        "to_empty",
-        "to",
-        "register_full_backward_pre_hook",
-        "register_backward_hook",
-        "register_full_backward_hook",
-        "register_forward_pre_hook",
-        "register_forward_hook",
-        "register_state_dict_post_hook",
-        "register_state_dict_pre_hook",
-        "T_destination",
-        "state_dict",
-        "register_load_state_dict_pre_hook",
-        "register_load_state_dict_post_hook",
-        "load_state_dict",
-        "parameters",
-        "named_parameters",
-        "buffers",
-        "named_buffers",
-        "children",
-        "named_children",
-        "modules",
-        "named_modules",
-        "train",
-        "eval",
-        "requires_grad_",
-        "zero_grad",
-        "share_memory",
-        "extra_repr",
-        "compile",
-    ]
-    if k in RESERVED_WORDS_FOR_TORCH_MODULE:
-        raise ValueError(
-            f"Keys in dictionary must not be a reserved word for torch.nn.Module, got: {k}. Recommending to use '{k}_' instead",
-        )
-    try:
-        import torch
-
-        for cls in [
-            torch.nn.Module,
-            torch.nn.ModuleDict,
-            torch.nn.ParameterDict,
-            torch.nn.ModuleList,
-            torch.nn.ParameterList,
-        ]:
-            if k in cls.__dict__:
-                raise ValueError(f"Keys in dictionary must not be a {cls.__name__} attribute, got: {k}")
-    except ImportError:
-        pass
-
-    return k
-
-
-def _path_as_str(path):
-    if isinstance(path, (list, tuple)):
-        return SEPARATOR.join(_path_as_str(x) for x in path)
-    if not isinstance(path, str):
-        raise KeyError(f"Path must be str, list or tuple, got {type(path)}")
-    if path.startswith("."):
-        raise KeyError(f"Path starting with {SEPARATOR} is not allowed. Got {path}")
-
-    for k, v in MAPPING_OF_ALLOWED_CHARACTERS_IN_DICT_KEYS.items():
-        if v in path:
-            path = path.replace(v, k)
-
-    path = path.replace(".", SEPARATOR)
-    check_path(path)
-    return path
-
-
-def check_path(path):
-    for c in path:
-        _check_path_character(c, path)
-
-
-def _check_path_character(c, path):
-    # should be next to check_dictionary_key
-    if c == ".":
-        raise KeyError(f"Path cannot contain '.', got {path}")
-    for allowed in ALLOWED_CHARACTERS_IN_DICT_KEYS:
-        if c == allowed:  # should have been converted
-            raise KeyError(f"Path cannot contain '{c}', got {path}", ALLOWED_CHARACTERS_IN_DICT_KEYS)
-    if c in [SEPARATOR, "X", "_"]:
-        return
-    if c.isupper():
-        raise KeyError(f"Path cannot contain uppercase letters, got {path}")
-
-
-def _join_paths(path1, path2):
-    return SEPARATOR.join([path1, path2])
-
-
-def _path_as_tuple(path):
-    if isinstance(path, str):
-        return tuple(int(x) if x.isdigit() else x for x in path.split(SEPARATOR))
-    if isinstance(path, int):
-        return (path,)
-    if isinstance(path, tuple):
-        return path
-    if isinstance(path, list):
-        return tuple(path)
-    raise ValueError(f"Path must be str, int, list or tuple, got {type(path)}")
+from anemoi.training.data.refactor.data_handler import DataHandler
+from anemoi.training.data.refactor.path_keys import _path_as_str
+from anemoi.training.data.refactor.path_keys import check_dictionary_key
+from anemoi.training.data.refactor.structure import Dict
 
 
 def normalise_offset(x):
@@ -555,16 +382,12 @@ class _DictSampleProvider(SampleProvider):
     emoji = "📖"
 
     def _get_item(self, request, item):
-        from anemoi.training.data.refactor.structure import Dict
-
         res = Dict()
         for k, sample in self._samples.items():
             res[k] = sample._get_item(request, item)
         return res
 
     def _get_static(self, request):
-        from anemoi.training.data.refactor.structure import Dict
-
         res = Dict()
         for k, sample in self._samples.items():
             res[k] = sample._get_static(request)
@@ -618,8 +441,6 @@ class DictSampleProvider(_DictSampleProvider):
                 raise ValueError(f"Expected dictionary for sample provider, got {type(v)}: {v}. ")
 
     def _get_rollout_info(self):
-        from anemoi.training.data.refactor.structure import Dict
-
         res = Dict()
         for k, sample in self._samples.items():
             res[k] = sample._get_rollout_info()
@@ -688,8 +509,6 @@ class Rearranger:
             for available in self.expand_actions(role=role):
                 print(available)
             raise ValueError(f"No action found for role={role}, step={step}, key={key}")
-
-        from anemoi.training.data.refactor.structure import Dict
 
         res = Dict()
         for (step_, role_, key_), action_ in found:
@@ -1213,3 +1032,279 @@ def _sample_provider_factory(_context=None, **kwargs):
 
     # print('✅ created obj : ' , obj)
     return obj
+
+
+def test_custom(path):
+    path = yaml.safe_load(path)
+    with open(path) as f:
+        yaml_str = f.read()
+    CONFIG = yaml.safe_load(yaml_str)
+    sample_config = CONFIG["sample"]
+    sources_config = CONFIG["data"]
+
+    do_something_with_this
+
+
+def test_one(training_context):
+
+    cfg_1 = """dictionary:
+                    lowres:
+                        container:
+                          data_group: "era5"
+                          variables: ["2t", "10u", "10v"]
+                          dimensions: ["values", "variables", "ensembles"]
+
+                    highres:
+                      for_each:
+                        - offset: ["-6h", "+0h", "+6h", "+12h", "+18h", "+24h"]
+                        - container:
+                            data_group: "era5"
+                            variables: ["2t", "10u", "10v"]
+                            dimensions: ["variables", "values"]
+            """
+
+    print("✅✅✅✅✅✅✅✅✅✅✅✅✅✅")
+    config = yaml.safe_load(cfg_1)
+
+    sp = sample_provider_factory(**training_context, **config)
+    print(sp)
+    schema = sp.dataschema
+
+    # print(schema)
+    # print(repr_schema(schema, "schema"))
+
+    print("✅ sp.static_info", sp.static_info)
+
+    batch_data = sp[1]
+    for k, v in batch_data.items():
+        print(f" - {k}: {type(v)}")
+    print("✅ Batch Data", batch_data)
+
+    data = sp.static_info + batch_data
+    print("✅ Data full", data)
+
+    assert isinstance(data, Dict), type(data)
+    assert "data" in data["lowres"], data["lowres"].keys()
+    assert "name_to_index" in data["lowres"], data["lowres"].keys()
+
+    def to_tensor(box):
+        return {k: torch.Tensor(v) if k == "data" else v for k, v in box.items()}
+
+    def to_gpu(box):
+        return {k: v.to("cuda") if k == "data" else v for k, v in box.items()}
+
+    new_data = data.map(to_tensor)
+    new_data = new_data.map(to_gpu)
+    print("✅ Data on GPU", new_data)
+    print(type(new_data["lowres"]))
+
+    # guessed = make_schema(data)
+    # print(to_str(schema, "Actual Schema"))
+    # print(to_str(guessed, "Actual Schema"))
+
+    extra = data.each.pop("extra")
+    print("Extra after pop extra", extra)
+
+    # lat,lon = data.select_content("latitudes", "longitudes")
+    lat = data.each["latitudes"]
+    lon = data.each["longitudes"]
+    print("Latitudes", lat)
+    print("Longitudes", lon)
+
+    def build_normaliser(statistics, **kwargs):
+        mean = np.mean(statistics["mean"])
+
+        def func(box):
+            box = box.copy()
+            box["data"] = box["data"] - mean
+            return box
+
+        return func
+
+    # mimic this:
+    # normaliser = {}
+    # for path, value in sp.static_info.items():
+    #     normaliser[path] = build_normaliser(value)
+
+    # normaliser = Dict()
+    # normaliser = sp.static_info.new_empty()
+    # for k, v in sp.static_info.items():
+    #     normaliser[k] = build_normaliser(v)
+
+    normaliser = sp.static_info.map_expanded(build_normaliser)
+
+    print("Normaliser function", normaliser)
+    n_data = normaliser.each(data)
+
+    d = data.each["data"]
+    n = n_data.each["data"]
+    print_columns(f"Unnormalised data {d}", f"Normalised data {n}")
+
+
+from rich.table import Table
+
+
+def print_columns(*args):
+
+    console = Console()
+    table = Table(show_header=False, box=None)
+    for a in args:
+        table.add_column()
+    table.add_row(*args)
+    console.print(table)
+
+
+def test_two(training_context):
+    cfg_2 = """dictionary:
+                state:
+                   dictionary:
+                     fields:
+                       rollout: prognostics
+                       # rollout: forcings
+                       # rollout: diagnostics
+                       container:
+                           dimensions: ["values", "variables"]
+                           variables: ["2t", "10u", "10v"]
+                           data_group: "era5"
+
+                  #observations:
+                  #  tuple:
+                  #    for_each:
+                  #      - offset: ["-6h", "0h", "+6h"]
+                  #    template:
+                  #      tensor:
+                  #        - variables: ["metop_a.scatss_1", "metop_a.scatss_2"]
+            """
+
+    rollout_config = yaml.safe_load(
+        """
+        rollout:
+          steps: ["0h", "+6h", "+12h", "+18h", "+24h"]
+          input_steps: ["-12h", "-6h", "0h"]
+          target_steps: ["+6h", "12h"]
+        """,
+    )
+    print("Rollout config", rollout_config)
+
+    config = yaml.safe_load(cfg_2)
+    sp = sample_provider_factory(**training_context, **config, **rollout_config)
+    print("static_info", sp.static_info)
+    data = sp[1]
+    print(data)
+    data = sp.static_info + data
+    assert len(data) > 0, data
+    print("Merged data", data)
+    data = data.select_content(["_offset", "data", "_reference_date_str"])
+    # data = data.select_content(["_offset", "rollout_usage", "data"])
+    print("Selected Data", data)
+    assert len(data) > 0, data
+    print("Rollout info : ", type(sp.rollout_info()), sp.rollout_info())
+    rollout_steps = None
+    for path, rollout in sp.rollout_info().items():
+        rollout_steps = rollout.steps
+        break
+    print("Rollout steps", rollout_steps)
+
+    rollout = sp.rollout_info()
+    print("Rollout info", rollout)
+    # step 0:
+
+    data.each["_tag"] = "✅ data"
+    input = None
+    output = None
+    for i, step in enumerate(rollout_steps):
+        input = rollout.each("input", step=step, database=data, previous_input=input, previous_output=output)
+        target = rollout.each("target", step=step, database=data)
+        # run model
+        output = target
+        print(f"-------- Rollout {i} {step=} --------")
+        print_columns(input.to_str(f"Input at step {i}"), target.to_str(f"Target at step {i}"))
+        output.each["_tag"] = "💬 previous_output"
+        input.each["_tag"] = "😊  previous_input"
+
+
+def test_three(training_context):
+    cfg_3 = """dictionary:
+                  ams:
+                    for_each:
+                      - offset: ["-6h", "0h"]
+                      - container:
+                          variables: ["scatss_1", "scatss_2"]
+                          data_group: "metop_a"
+            """
+    config = yaml.safe_load(cfg_3)
+    sp = sample_provider_factory(**training_context, **config)
+    print(sp)
+    s = sp.static_info
+    print(s)
+    for path, box in s.boxes():
+        print(box.to_str(f"Box at {path}"))
+    print("--------------")
+    print(s["ams", "-6h"])
+    s["ams", "0h"] = s["ams", "-6h"]
+    print(s["ams.0h"]["_offset"])
+
+    nested = sp.static_info
+
+    modified = nested.empty_like()
+    for path, box in nested.boxes():
+        box["new_key"] = 48
+        modified[path] = box
+    print(modified.to_str("Modified static info"))
+
+
+def test():
+
+    import sys
+
+    if len(sys.argv) > 1 and not sys.argv[1].isdigit():
+        return test_custom(sys.argv[1])
+
+    source_yaml = """sources:
+                         training:
+                           era5:
+                             dataset:
+                               dataset: aifs-ea-an-oper-0001-mars-o96-1979-2023-6h-v8
+                               set_group: era5
+                           snow:
+                             dataset: observations-testing-2018-2018-6h-v0
+                           metop_a:
+                             dataset: observations-testing-2018-2018-6h-v0
+                             normaliser:
+                                   "scatss_1": "mean-std"
+                                   "scatss_2": "min-max"
+                                   "scatss_3": {"name": "custom-normaliser", "theta": 0.5, "rho": 0.1}
+                             imputer:
+                                   "scatss_1": special
+                                   "scatss_2": other
+                                   "scatss_3": {"name": "custom-imputer", "theta": 0.5, "rho": 0.1}
+                             extra:
+                               user_key_1: a
+                               user_key_2:
+                                   1: foo
+                                   2: bar
+    """
+    sources_config = yaml.safe_load(source_yaml)["sources"]["training"]
+    print(sources_config)
+
+    training_context = dict(sources=sources_config, start=None, end=None, frequency="6h")
+
+    ONE = "1" in sys.argv
+    TWO = "2" in sys.argv
+    THREE = "3" in sys.argv
+    if ONE:
+        print("✅-✅")
+        test_one(training_context)
+
+    if TWO:
+        print("✅--✅")
+        test_two(training_context)
+
+    if THREE:
+        print("✅---✅")
+        test_three(training_context)
+
+
+if __name__ == "__main__":
+
+    test()

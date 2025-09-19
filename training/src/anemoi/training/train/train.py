@@ -60,7 +60,7 @@ if "DEBUG" in os.environ:
         config_keys = str(target) + "+" + config_keys
         _args = ",".join(str(a.__class__.__name__) for a in args)
         _kwargs = ",".join(f"{k}={v.__class__.__name__}" for k, v in kwargs.items())
-        print(f"🐉 instanciate({','.join([config_keys,_args,_kwargs])})")
+        print(f"🆕 instanciate({','.join([config_keys,_args,_kwargs])})")
         return hydra_instantiate(config, *args, **kwargs)
 
     hydra.utils.instantiate = instanciate_wrapper
