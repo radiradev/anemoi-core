@@ -12,8 +12,11 @@ import os
 import numpy as np
 import torch
 from rich.console import Console
+from rich.tree import Tree
 
 from anemoi.utils.dates import frequency_to_string
+# this file is quite long and has a lot of knowledge about the other types
+# it is not too bad because everything related to display is here
 
 ICON_BOX = "📦"
 ICON_LEAF = " "
@@ -151,11 +154,6 @@ def format_key_value(k, v):
     if isinstance(v, Rollout):
         txt = str(v)
     return txt
-
-
-# this file is quite long and has a lot of knowledge about the other types
-# it is not too bad because everything related to display is here
-from rich.tree import Tree
 
 
 class AnemoiTree:

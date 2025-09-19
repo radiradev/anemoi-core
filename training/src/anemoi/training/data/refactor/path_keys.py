@@ -160,9 +160,6 @@ def decode_path_if_needed(path):
     if is_decoded(path):
         return path
 
-    if not is_encoded(path):
-        raise KeyError(f"Path is neither encoded nor decoded, cannot decode: {path}")
-
     for k, v in _MAPPING_OF_ALLOWED_CHARACTERS_IN_DICT_KEYS.items():
         if k in path:
             path = path.replace(k, v)
