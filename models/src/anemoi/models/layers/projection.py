@@ -48,12 +48,12 @@ class NodeEmbedder(nn.Module):
         out = x.new_empty()
         for key, box in x.items():
             data = box["data"]  # shape: (1, num_channels, num_points)
-            assert box["dimensions_order"] == ["ensemble", "variables", "values"], "Expected dimensions_order to be ['ensemble', 'variables', 'values']"
-            sincos_latlons = self._get_coords(box["latitudes"], box["longitudes"]) # shape: (4, num_points)
+            assert box["dimensions_order"] == [("variables",), ("values",)], "Expected dimensions_order to be ['variables', 'values']"
+            sincos_latlons = _get_coords(box["latitudes"], box["longitudes"]) # shape: (4, num_points)
             assert sincos_latlons.shape == (4, data.shape[2]), f"sincos_latlons shape {sincos_latlons.shape} does not match expected (4, {data.shape[2]})"
             sincos_latlons = einops.rearrange(sincos_latlons, "coords grid -> 1 coords grid")
             data = torch.cat([data, sincos_latlons], dim=1)
-            data = einops.rearrange(data, "1 vars grid -> grid vars")
+            data = einops.rearrange(data, "bs vars grid -> (bs grid) vars")
             out[key] = self.embedders[key](data)
         return out
 

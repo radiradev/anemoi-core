@@ -318,14 +318,15 @@ class AnemoiMultiModel(AnemoiModel):
 
     def encode(
         self,
-        x: dict[str, torch.Tensor],
+        x_data_raw: dict[str, torch.Tensor],
         graph: HeteroData,
-        shard_shapes_hidden: tuple[list],
         batch_size: int,
         model_comm_group: Optional[ProcessGroup] = None,
     ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
-        x_data_raw, x_hidden_raw = x
         x_data_latents = self.node_embedder(x_data_raw)
+
+        x_hidden_raw = self.get_node_coords(graph, self.hidden_name)
+        shard_shapes_hidden = get_shard_shapes(x_hidden_raw, 0, model_comm_group)
 
         # We should create the graph here
         # graph = create_graph(x, target)
@@ -454,7 +455,7 @@ class AnemoiMultiModel(AnemoiModel):
         x = self.sample_static_info["input"] + x
 
         # TODO: Remove. TOY FORWARD
-        return self.forward_toy(x)
+        #return self.forward_toy(x)
 
         batch_size = 1
         ensemble_size = 1
@@ -463,10 +464,6 @@ class AnemoiMultiModel(AnemoiModel):
         #     return data.shape
 
         # shapes = x.box_to_any(shape_function)
-
-        x_hidden = self.get_node_coords(graph, self.hidden_name)
-        shard_shapes_hidden = get_shard_shapes(x_hidden, 0, model_comm_group)
-
         # x = x.box_to_box(reshape_for_graph_with_get_node)
 
         # cat all data
@@ -476,10 +473,9 @@ class AnemoiMultiModel(AnemoiModel):
         # assert x.shape == math.product(shapes)
 
         x_data_latents, x_hidden_latent = self.encode(
-            (x, x_hidden),
+            x,
             graph,
             batch_size=batch_size,
-            shard_shapes_hidden=shard_shapes_hidden,
             model_comm_group=model_comm_group,
         )
 
