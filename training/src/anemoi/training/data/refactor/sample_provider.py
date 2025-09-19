@@ -721,57 +721,71 @@ class TensorReshapeSampleProvider(ForwardSampleProvider):
     def __init__(self, _context: Context, _parent, reshape):
         reshape = reshape.copy()
         dimensions = reshape.pop("dimensions")
+        if not isinstance(dimensions, (list, tuple)):
+            raise ValueError(f"Expected list/tuple for dimensions, got {type(dimensions)}: {dimensions}")
+        if not all(isinstance(d, str) for d in dimensions):
+            raise ValueError(f"Expected list/tuple of strings for dimensions, got {dimensions}")
         sample = _sample_provider_factory(_context, _parent=self, **reshape)
 
-        self._static_cache = sample.static_info
-        self.to_dimensions_order = dimensions
-        self.from_dimensions_order = self._static_cache["dimensions_order"]
+        self._static = sample.static_info.copy()
+        self.new_order = dimensions
+        self.initial_order = self._static["dimensions_order"]
 
-        for d in self.to_dimensions_order:
-            if d not in self.from_dimensions_order:
+        for d in self.new_order:
+            if d not in self.initial_order:
                 raise ValueError(f"Dimension '{d}' not found in dataset for {sample}")
+
+        initial_dims = " ".join([d if d in self.new_order else "1" for d in self.initial_order])
+        to_dims = " ".join(self.new_order)
+        self.einops_rearrange_str = f"{initial_dims} -> {to_dims}"
 
         super().__init__(_context, _parent, sample)
 
-    def _get_static(self, request):
-        box = self._forward._get_static(request)
-
+    def _update_box(self, box):
         box = box.copy()
+
+        if "_initial_dimensions_order" in box:
+            # this shouldn't be a problem to implement, but we don't need it yet
+            # And we want to avoid silent bugs, where the previous '_initial_dimensions_order' is lost
+            raise NotImplementedError(f"Reshaping twice is not implemented, got {box}")
+        if "dimensions_order" in box:
+            box["_initial_dimensions_order"] = self.initial_order
+            box["dimensions_order"] = self.new_order
+
         if "shape" in box:
-            from_dims = " ".join([d if d in self.from_dimensions_order else "1" for d in self.from_dimensions_order])
-            to_dims = " ".join(self.to_dimensions_order)
-            box["shape"] = TODO
-        box["dimensions_order"] = self.to_dimensions_order
-        return box
+            raise NotImplementedError("TODO: implement shape update")
 
-    def _get_item(self, request, item):
-        box = self._forward._get_item(request, item)
-        box = box.copy()
-        from_dims = " ".join([d if d in self.to_dimensions_order else "1" for d in self.from_dimensions_order])
-        to_dims = " ".join(self.to_dimensions_order)
         if "data" in box:
             try:
-                box["data"] = einops.rearrange(box["data"], f"{from_dims} -> {to_dims}")
+                box["data"] = einops.rearrange(box["data"], self.einops_rearrange_str)
             except Exception as e:
-                e.add_note(f"{e} while rearranging {(box['data'].shape)} from '{from_dims}' to '{to_dims}'")
+                e.add_note(f"{e} while rearranging {(box['data'].shape)} from {self.einops_rearrange_str}")
                 e.add_note(f"{self}")
                 raise e
         return box
 
+    def _get_static(self, request):
+        box = self._forward._get_static(request)
+        return self._update_box(box)
+
+    def _get_item(self, request, item):
+        box = self._forward._get_item(request, item)
+        return self._update_box(box)
+
     @property
     def dataschema(self):
         schema = self._forward.dataschema
-        schema["dimensions_order"] = self.to_dimensions_order
+        schema["dimensions_order"] = self.new_order
         return schema
 
     def shape(self):
         raise NotImplementedError("Dead code here, remove all 'shape' methods")
 
     def tree(self, prefix=""):
-        if not hasattr(self, "to_dimensions_order"):
+        if not hasattr(self, "new_order"):
             return Tree(f"{prefix}{self.emoji} {self.label}")
 
-        tree = Tree(f"{prefix}{self.emoji} {self.label} ({self.to_dimensions_order})")
+        tree = Tree(f"{prefix}{self.emoji} {self.label} ({self.new_order})")
         tree.add(self._forward.tree(prefix=" "))
 
         return tree
