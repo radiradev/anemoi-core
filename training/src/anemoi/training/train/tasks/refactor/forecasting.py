@@ -51,6 +51,8 @@ class ForecastingPLModule(BaseGraphPLModule):
 
         # merge batch with static data
         batch = static_info + batch
+        batch = batch.add_batch_first_in_dimensions_order()
+
         assert batch
 
         print(batch.to_str("⚠️batch before normalistation"))

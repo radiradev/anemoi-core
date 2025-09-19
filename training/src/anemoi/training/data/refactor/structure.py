@@ -56,6 +56,7 @@ def make_schema(structure):
 
 
 class Dict(dict):
+
     def __init__(self, *args, **kwargs):
         # Nothing in the __init__, this is an actual python dict
 
@@ -308,6 +309,13 @@ class Dict(dict):
     @property
     def each(self):
         return LeafAccessor(self)
+
+    # TODO clean this up/rename
+    def add_batch_first_in_dimensions_order(self):
+        new = self.copy()
+        for box in new.values():
+            box["dimensions_order"] = ("batch",) + box["dimensions_order"]
+        return new
 
 
 class BaseAccessor:

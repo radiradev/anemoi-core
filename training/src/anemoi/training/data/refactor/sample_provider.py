@@ -725,6 +725,8 @@ class TensorReshapeSampleProvider(ForwardSampleProvider):
             raise ValueError(f"Expected list/tuple for dimensions, got {type(dimensions)}: {dimensions}")
         if not all(isinstance(d, str) for d in dimensions):
             raise ValueError(f"Expected list/tuple of strings for dimensions, got {dimensions}")
+        dimensions = tuple(dimensions)
+
         sample = _sample_provider_factory(_context, _parent=self, **reshape)
 
         self._static = sample.static_info.copy()

@@ -40,7 +40,7 @@ class DataHandler:
 
         self.ds = open_dataset(dataset=self.config["dataset"], select=self.variables)
         # TODO: read from ds
-        self._dimensions_order = ["variables", "ensembles", "values"]
+        self._dimensions_order = tuple(["variables", "ensembles", "values"])
 
         self.frequency = frequency_to_timedelta(self.ds.frequency)
         self.statistics = self.ds.statistics[group]
@@ -131,7 +131,7 @@ class DataHandler:
                 "longitudes",
                 "timedeltas",
                 "_reference_date_str",
-                "dimensions_order",
+                # "dimensions_order",
             ],
         )
         return self._get(request, item)
