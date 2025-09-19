@@ -106,7 +106,7 @@ class ForecastingPLModule(BaseGraphPLModule):
             losses[k] = module(pred=y_pred_data[k], target=target_data[k])
             loss += losses[k]
         print("computed loss:", loss)
-        stop_here
+        assert False, "stop here"
 
         # Iterate over all entries in batch["target"] and accumulate loss
         for target_key, target_data in batch["target"].items():
