@@ -16,25 +16,35 @@ from rich.console import Console
 from anemoi.utils.dates import frequency_to_string
 
 ICON_BOX = "📦"
-ICON_LEAF = "🌱"
+ICON_LEAF = " "
 ICON_LEAF_BOX_NOT_FOUND = "🍀"
+
+VERBOSITY = int(os.environ.get("ANEMOI_CONFIG_VERBOSE_STRUCTURE", "0"))
+DEBUG = VERBOSITY == 2
+
+
+KNOWN_EXTRA_KEYS = [
+    "statistics",
+    "name_to_index",
+    "normaliser",
+    "inputer",
+    "extra",
+    "metadata",
+    "number_of_features",
+    "dimensions_order",
+    "rollout_usage",
+]
 
 
 def choose_icon(k, v):
-    if str(k).startswith("_"):
-        return "  "
     return dict(
         latitudes="🌍",
         longitudes="🌍",
         timedeltas="🕐",
         data="🔢",
-        statistics="  ",
-        name_to_index="  ",
-        normaliser="  ",
-        inputer="  ",
-        extra="  ",
-        rollout="♻️ ",
-    ).get(k, ICON_LEAF)
+        rollout="🤖♻️ ",
+        rollout_usage="♻️ ",
+    ).get(k, None)
 
 
 def format_shorten(k, v):
@@ -90,7 +100,7 @@ def format_array(k, v):
                 maximum = torch.max(v).item()
                 mean = torch.mean(v.float()).item()
                 stdev = torch.std(v.float()).item()
-            return f"tensor({shape}) on {v.device}, {mean:.5f}±{stdev:.1f}[{minimum:.1f}/{maximum:.1f}]"
+            return f"tensor({shape}) {v.device}, {mean:.5f}±{stdev:.1f}[{minimum:.1f}/{maximum:.1f}]"
 
         return "no-min, no-max"
 
@@ -102,6 +112,9 @@ def format_array(k, v):
 
 def format_key_value(k, v):
     txt = f"{v.__class__.__name__}"
+    assert k != "Value"
+    assert "Value" not in str(k)
+    assert "Value" not in str(v)
 
     if k == "timedeltas":
         txt = format_timedeltas(k, v)
@@ -140,100 +153,157 @@ def format_key_value(k, v):
     return txt
 
 
-def anemoi_dict_to_str(obj):
-    assert isinstance(obj, dict), type(obj)
-    from anemoi.training.data.refactor.structure import Dict
+# this file is quite long and has a lot of knowledge about the other types
+# it is not too bad because everything related to display is here
+from rich.tree import Tree
 
-    assert isinstance(obj, Dict), type(obj)
 
-    if not obj:
-        return f"{obj.__class__.__name__} (empty)"
-    # this function is quite long and has a lot of knowledge about the other types
-    # it is not too bad because everything related to display is here
-    # but this is ugly
-    from rich.tree import Tree
+class AnemoiTree:
+    def __init__(self, obj):
+        assert isinstance(obj, dict), type(obj)
 
-    from anemoi.training.data.refactor.formatting import choose_icon
-    from anemoi.training.data.refactor.formatting import format_key_value
+        from anemoi.training.data.refactor.structure import Dict
 
-    def order_leaf(leaf):
+        assert isinstance(obj, Dict), type(obj)
+
+        self.obj = obj
+        self.name = obj.__class__.__name__
+
+    def build_tree(self):
+        from anemoi.training.data.refactor.path_keys import decode_path_if_needed
+
+        if not self.obj:
+            return f"{self.obj.__class__.__name__} (empty)"
+
+        tree = Tree(self.name)
+
+        for k, v in self.obj.items():
+            k = decode_path_if_needed(k)
+            if hasattr(v, "tree") and callable(v.tree):  # when it is a Rollout
+                tree.add(v.tree(prefix=k))
+                continue
+
+            if isinstance(v, dict):
+                if VERBOSITY == 0:
+                    box = OneLineBox(k, v)
+                else:
+                    box = VerboseBox(k, v)
+                box.add_to_tree(tree)
+                continue
+
+            value = Value("root-path", k, v)
+            value.add_to_tree(tree)
+
+        return tree
+
+
+class Box:
+    def __init__(self, path, box):
+        assert isinstance(box, dict), type(box)
+        self.path = path
+
         def priority(k):
             if str(k).startswith("_"):
                 return 10
             return dict(data=1, latitudes=2, longitudes=3, timedeltas=4).get(k, 9)
 
-        order = sorted(leaf.keys(), key=priority)
-        assert len(leaf) == len(order), (leaf, leaf.keys())
-        return {k: leaf[k] for k in order}
+        order = sorted(box.keys(), key=priority)
+        box = {k: box[k] for k in order}
 
-    def expanded_leaf(path, leaf, debug=False):
-        if not isinstance(leaf, dict):
-            return f"{path}: " + format_key_value(path, leaf)
+        self.values = {k: Value(path, k, v) for k, v in box.items()}
 
-        assert isinstance(leaf, dict)
 
-        leaf = order_leaf(leaf)
+class VerboseBox(Box):
 
-        t = Tree(f"{path}")
-        for key, value in leaf.items():
-            if not debug and str(key).startswith("_"):
+    def add_to_tree(self, tree):
+        name = self.path
+        if "_reference_date" in self.values:
+            name += f" (Reference {self['_reference_date']})"
+        t = Tree(name)
+        for v in self.values.values():
+            v.add_to_tree(t)
+        tree.add(t)
+
+
+class OneLineBox(Box):
+
+    def add_to_tree(self, tree):
+
+        has_known_extra = False
+        has_underscores = False
+
+        if len(self.values) == 1:
+            self.values[list(self.values.keys())[0]].add_to_tree(tree)
+            return
+
+        txt = ""
+        for k, v in self.values.items():
+            if k == "data":
+                x = v.icon + " "
+                x += format_key_value("data", v.value)
+                x = x.replace("data : ", "")
+                x = x[:30] + ("…" if len(x) > 30 else "")
+                txt += x
                 continue
-            if key == "rollout_usage":
-                subtree = Tree(f"{choose_icon(key, value)} {key} : {value}")
-                t.add(subtree)
-                continue
-            if key == "rollout":
-                if debug:
-                    t.add(value.tree(prefix=key))
-                else:
-                    t.add(Tree(f"{choose_icon(key, value)} {key} : {value}"))
-                continue
-            t.add(choose_icon(key, value) + " " + f"{key} : " + format_key_value(key, value))
-        return t
 
-    def debug_leaf(path, leaf):
-        return expanded_leaf(path, leaf, debug=True)
+            if v.icon:
+                txt += v.icon
+                continue
 
-    def one_line_leaf(path, leaf):
-        leaf = leaf.copy()
-        txt = []
-        if "data" in leaf:
-            x = choose_icon("data", leaf["data"]) + " "
-            x += format_key_value("data", leaf.pop("data"))
-            x = x.replace("data : ", "")
-            x = x[:30] + ("…" if len(x) > 30 else "")
-            x += " "
-            txt.append(x)
-        for k in ["latitudes", "longitudes", "timedeltas"]:
-            if k in leaf:
-                txt.append(choose_icon(k, leaf.pop(k)))
-        if leaf and txt:
-            txt.append(" +")
-        for k, v in leaf.items():
+            if v._is_known_extra:
+                has_known_extra = True
+                continue
+
             if str(k).startswith("_"):
+                has_underscores = True
                 continue
-            txt.append(" " + k)
 
-        return Tree(f"{path}: " + "".join(txt))
+            txt += "+" + k
 
-    name = obj.__class__.__name__
-    for leaf in obj.values():
-        if isinstance(leaf, dict) and "_reference_date" in leaf:
-            name += f" (Reference {leaf['_reference_date']})"
-            break
-    tree = Tree(name)
+        if has_underscores:
+            txt = "_ " + txt
 
-    verbose = int(os.environ.get("ANEMOI_CONFIG_VERBOSE_STRUCTURE", 0))
-    leaf_to_tree = {0: one_line_leaf, 1: expanded_leaf, 2: debug_leaf}[verbose]
-    for path, leaf in obj.items():
-        if not isinstance(leaf, dict):
-            tree.add(f"{path}: " + format_key_value(path, leaf))
-            continue
-        if isinstance(leaf, dict) and not leaf:
-            tree.add(f"{path}: ❌ <empty-dict>")
-            continue
-        assert isinstance(leaf, dict)
-        tree.add(leaf_to_tree(path, leaf))
+        if has_known_extra:
+            txt = "* " + txt
+
+        tree.add(f"{self.path}: {txt}")
+
+
+class Value:
+    def __init__(self, path, key, value):
+        self.path = path
+        self.key = key
+        self.value = value
+        self.icon = choose_icon(key, value)
+        self._is_known_extra = key in KNOWN_EXTRA_KEYS
+
+    def add_to_tree(self, tree):
+        if not DEBUG and str(self.key).startswith("_"):
+            return
+
+        if self.key == "rollout_usage":
+            subtree = Tree(f"{self.icon} {self.key} : {self.value}")
+            tree.add(subtree)
+            return
+
+        if self.key == "rollout":
+            if DEBUG:
+                tree.add(self.value.tree(prefix=self.key))
+            else:
+                tree.add(Tree(f"{self.icon} {self.key} : {self.value}"))
+            return
+
+        if isinstance(self.value, dict):
+            if not self.value:
+                tree.add(f"{self.icon or ICON_LEAF} {self.key} : ❌ <empty-dict> {self.value}")
+                return
+
+        tree.add(f"{self.icon or ICON_LEAF} {self.key} : {format_key_value(self.key, self.value)}")
+
+
+def anemoi_dict_to_str(obj):
+    x = AnemoiTree(obj)
+    tree = x.build_tree()
 
     console = Console(record=True)
     with console.capture() as capture:

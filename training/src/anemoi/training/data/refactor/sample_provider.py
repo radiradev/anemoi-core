@@ -586,7 +586,7 @@ class Rollout(Rearranger):
         return capture.get()
 
     def tree(self, prefix=""):
-        tree = Tree(prefix + "♻️ Rollout")
+        tree = Tree(prefix + " ♻️  Rollout")
         config_tree = tree.add("Configuration")
         config_tree.add(f"Rollout steps: {self.steps}")
         config_tree.add(f"Input steps: {self.input_steps}")
@@ -1115,10 +1115,6 @@ def test_one(training_context):
     print("✅ Data on GPU", new_data)
     print(type(new_data["lowres"]))
 
-    # guessed = make_schema(data)
-    # print(to_str(schema, "Actual Schema"))
-    # print(to_str(guessed, "Actual Schema"))
-
     extra = data.each.pop("extra")
     print("Extra after pop extra", extra)
 
@@ -1211,7 +1207,7 @@ def test_two(training_context):
     data = sp.static_info + data
     assert len(data) > 0, data
     print("Merged data", data)
-    data = data.select_content(["_offset", "data", "_reference_date_str"])
+    data = data.select_content(["_offset", "data", "_reference_date_str", "_offset"])
     # data = data.select_content(["_offset", "rollout_usage", "data"])
     print("Selected Data", data)
     assert len(data) > 0, data
@@ -1224,9 +1220,12 @@ def test_two(training_context):
 
     rollout = sp.rollout_info()
     print("Rollout info", rollout)
-    # step 0:
 
-    data.each["_tag"] = "✅ data"
+    print("*******************")
+    print("Rollout preparation")
+    print("*******************")
+    for k, v in data.items():
+        v["_tag"] = f"🟢 from batch {v['_offset']}"
     input = None
     output = None
     for i, step in enumerate(rollout_steps):
@@ -1235,9 +1234,38 @@ def test_two(training_context):
         # run model
         output = target
         print(f"-------- Rollout {i} {step=} --------")
-        print_columns(input.to_str(f"Input at step {i}"), target.to_str(f"Target at step {i}"))
-        output.each["_tag"] = "💬 previous_output"
-        input.each["_tag"] = "😊  previous_input"
+        print_columns(
+            input.unwrap("_tag").to_str(f"Input at step {i} : "),
+            target.unwrap("_tag").to_str(f"Target at step {i} : "),
+        )
+
+        for k, v in input.items():
+            v["_tag"] = f"🔵 from previous_input {v['_offset']}"
+        for k, v in output.items():
+            v["_tag"] = f"🟠 from previous_output {v['_offset']}"
+
+    print()
+    print("***************")
+    print("Rollout applied")
+    print("***************")
+
+    for k, v in data.items():
+        v["_tag"] = f"🟢 from batch {v['_offset']}"
+    input = None
+    output = None
+    for i, step in enumerate(rollout_steps):
+        input = rollout.each("input", step=step, database=data, previous_input=input, previous_output=output)
+        target = rollout.each("target", step=step, database=data)
+        # run model
+        output = target
+        print(f"-------- Rollout {i} {step=} --------")
+        print_columns(
+            input.unwrap("data").to_str(f"Input at step {i} : "), target.unwrap("data").to_str(f"Target at step {i} : "),
+        )
+        for k, v in input.items():
+            v["_tag"] = f"🔵 from previous_input {v['_offset']}"
+        for k, v in output.items():
+            v["_tag"] = f"🟠 from previous_output {v['_offset']}"
 
 
 def test_three(training_context):

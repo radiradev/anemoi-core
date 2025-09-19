@@ -156,6 +156,22 @@ def check_encoded_path(path):
         raise KeyError(f"Cannot contain '___' sequence, got {path}")
 
 
+def decode_path_if_needed(path):
+    if is_decoded(path):
+        return path
+
+    if not is_encoded(path):
+        raise KeyError(f"Path is neither encoded nor decoded, cannot decode: {path}")
+
+    for k, v in _MAPPING_OF_ALLOWED_CHARACTERS_IN_DICT_KEYS.items():
+        if k in path:
+            path = path.replace(k, v)
+
+    path = path.replace(SEPARATOR, ".")
+    assert is_decoded(path), path
+    return path
+
+
 def check_dictionary_key(k):
     # some of these checks are duplicates, but it's safer to have them all here
     # speed optimisation is not critical here

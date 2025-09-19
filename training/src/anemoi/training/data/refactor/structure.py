@@ -112,8 +112,8 @@ class Dict(dict):
             res[path] = v
         return res
 
-    def as_native(self):
-        return {k: v.as_native() if isinstance(v, Dict) else v for k, v in self.items()}
+    def as_dict(self):
+        return {k: v.as_dict() if isinstance(v, Dict) else v for k, v in self.items()}
 
     def wrap(self, key):
         return self.map(lambda v: {key: v})
@@ -360,6 +360,7 @@ class AnemoiModuleDict(torch.nn.ModuleDict):
         return ModuleDictAccessor(self)
 
     def __call__(self, *args, **kwargs):
+        assert False, "not used?, should be deleted?"
         first = None
         if args:
             first = args[0]
