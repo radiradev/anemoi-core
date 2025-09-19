@@ -85,7 +85,7 @@ class NodeProjector(nn.Module):
             }
         )
 
-    def forward(self, x: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    def forward(self, x: dict[str, torch.Tensor], batch_size: int) -> dict[str, torch.Tensor]:
         """Projects the tensor into the different datasets/report types.
 
         Arguments
@@ -100,5 +100,7 @@ class NodeProjector(nn.Module):
         """
         out = x.new_empty()
         for name, data in x.items():
-            out[name] = self.projectors[name](data)
+            out[name] = einops.rearrange(
+                self.projectors[name](data), "(batch values) variables -> batch variables values", batch=batch_size
+            )
         return out

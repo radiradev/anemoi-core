@@ -383,7 +383,7 @@ class AnemoiMultiModel(AnemoiModel):
                 model_comm_group=model_comm_group,
             )
 
-        x_out = self.unemb_target_nodes(x_out)
+        x_out = self.unemb_target_nodes(x_out, batch_size=batch_size)
 
         return x_out
 
@@ -397,7 +397,7 @@ class AnemoiMultiModel(AnemoiModel):
         return y
 
     def bound(self, x: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        y = {}
+        y = x.new_empty()
         for tensor_name, pred in x.items():
             for bounding in self.boundings:
                 # bounding performed in the order specified in the config file
@@ -450,7 +450,7 @@ class AnemoiMultiModel(AnemoiModel):
         #        x = self.sample_static_info["input"] + x
 
         # TODO: Remove. TOY FORWARD
-        #return self.forward_toy(x)
+        return self.forward_toy(x)
 
         batch_size = 1
         ensemble_size = 1
