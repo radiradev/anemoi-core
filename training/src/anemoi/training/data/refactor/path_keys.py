@@ -111,7 +111,7 @@ def is_encoded(path):
     if "." in path:  # Found dot, this only happens in human readable paths
         return False
     if any(c.isupper() for c in path):  # there is a capital letter, this only happens in encoded paths
-        return False
+        return True
     if any(c in _ALLOWED_CHARACTERS_IN_DICT_KEYS for c in path):
         return False
     return True
@@ -159,6 +159,9 @@ def check_encoded_path(path):
 def decode_path_if_needed(path):
     if is_decoded(path):
         return path
+
+    if not is_encoded(path):
+        raise KeyError(f"Path is neither encoded nor decoded, cannot decode: {path}")
 
     for k, v in _MAPPING_OF_ALLOWED_CHARACTERS_IN_DICT_KEYS.items():
         if k in path:
