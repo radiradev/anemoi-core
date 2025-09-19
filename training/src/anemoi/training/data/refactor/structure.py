@@ -273,9 +273,9 @@ class Dict(dict):
         return self.map(select)
 
     def __add__(self, other):
-        new = self.copy()
-        new.each.update(other)
-        return new
+        if not isinstance(other, Dict):
+            raise ValueError(f"Cannot add {type(self)} and {type(other)}")
+        return self.each + other.each
 
     def merge_leaves(self, *args, **kwargs):
         assert False, "This method has been renamed use + operator : Dict() + Dict()"
@@ -418,6 +418,41 @@ class BaseAccessor:
             # stack in a list so that the caller decides how to handle it
             output.append((path, res))
         return output
+
+    def __add__(self, other):
+
+        if not isinstance(other, BaseAccessor):
+            raise ValueError(f"Cannot add {type(self)} and {type(other)}")
+
+        res = self.result_parent_class()
+        for path, box in self.parent.items():
+            if not isinstance(box, dict):
+                raise ValueError(f"Unexpected leaf at {path} for the first operand, got {type(box)}")
+
+            other_box = other.parent[path]
+
+            if not isinstance(other_box, dict):
+                raise ValueError(f"Unexpected leaf at {path} for the second operand, got {type(other_box)}")
+
+            res[path] = _merge_dicts_allow_overwrite_none(box, other_box)
+
+        return res
+
+
+def _merge_dicts_allow_overwrite_none(d1, d2):
+    merged = d1.copy()
+    for key, value in d2.items():
+        if key not in merged:
+            merged[key] = value
+            continue
+        # found conflicting key
+        if merged[key] is not None and value is not None:
+            raise ValueError(f"Conflicting key '{key}' found, values: {merged[key]} and {value}")
+        if merged[key] is None:
+            merged[key] = value
+        assert value is None
+
+    return merged
 
 
 class LeafAccessor(BaseAccessor):
