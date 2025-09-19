@@ -178,7 +178,7 @@ class AnemoiMultiModel(AnemoiModel):
         #  self.num_input_channels = self.sample_static_info.map(lambda x: len(x['name_to_index']))
         #  self.num_target_channels = self.sample_static_info.map(lambda x: len(x['name_to_index']))
 
-        # TODO: Remove. TOY MODEL. 
+        # TODO: Remove. TOY MODEL.
         # here we assume that the tree structure of the input and target match
         # if this is not the case, we need to do something more complicated
         # and define an actual downscaling/other model
@@ -451,7 +451,7 @@ class AnemoiMultiModel(AnemoiModel):
         assert set(x.keys()) == set(
             self.sample_static_info["input"].keys()
         ), f"Input keys {list(x.keys())} do not match sample_static_info keys {list(self.sample_static_info['input'].keys())}"
-        x = self.sample_static_info["input"] + x
+        #        x = self.sample_static_info["input"] + x
 
         # TODO: Remove. TOY FORWARD
         return self.forward_toy(x)

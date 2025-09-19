@@ -85,7 +85,7 @@ class ForecastingPLModule(BaseGraphPLModule):
 
         # add semantic information to y_pred from target_data (should use static info)
         print(target_data)
-        semantic = target_data.copy()
+        semantic = target_data.each.copy()
         for k, v in semantic.items():  # remove data just to be sure
             v.pop("data")
         for k, v in semantic.items():
