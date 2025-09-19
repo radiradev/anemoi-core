@@ -36,7 +36,7 @@ class BaseLoss(nn.Module, ABC):
 
     scaler: ScaleTensor
 
-    def __init__(self, ignore_nans: bool = False, **kwargs) -> None:
+    def __init__(self, dimensions_order: list[str], ignore_nans: bool = False, **kwargs) -> None:
         """Node- and feature_weighted Loss.
 
         Exposes:
@@ -60,6 +60,7 @@ class BaseLoss(nn.Module, ABC):
 
         """
         super().__init__()
+        self.dimensions_order = dimensions_order
         if kwargs:
             print(f"Warning: unused kwargs in {self.__class__}: {kwargs}")
 
@@ -171,27 +172,24 @@ class BaseLoss(nn.Module, ABC):
         ValueError
             If squash_mode is not one of ['avg', 'sum']
         """
-        if squash:
+        if squash: # squash = True, during training
             if squash_mode == "avg":
-                out = self.avg_function(out, dim=TensorDim.VARIABLE)
+                out = self.avg_function(out, dim=variable_dimension)
             elif squash_mode == "sum":
-                out = self.sum_function(out, dim=TensorDim.VARIABLE)
+                out = self.sum_function(out, dim=variable_dimension)
             else:
                 msg = f"Invalid squash_mode '{squash_mode}'. Supported modes are: 'avg', 'sum'"
                 raise ValueError(msg)
+            dims = list(range(out.ndim))
+        else: # squash = False, plotting. It is used for PlotLoss callback.
+            dims = list(range(out.ndim))
+            dims.pop(variable_dimension)
 
         # here the grid dimension is summed because the normalisation is handled in the node weighting
-        grid_summed = self.sum_function(out, dim=(TensorDim.GRID))
-        out = self.avg_function(
-            grid_summed,
-            dim=(
-                TensorDim.BATCH_SIZE,
-                TensorDim.TIME_DIM,
-                TensorDim.ENSEMBLE_DIM,
-            ),
-        )
+        out = self.avg_function(out, dim=tuple(dims)) 
 
-        return out if group is None else reduce_tensor(out, group)
+        out = out if group is None else reduce_tensor(out, group)
+        return out
 
     @property
     def name(self) -> str:
@@ -293,6 +291,7 @@ class FunctionalLoss(BaseLoss):
             Weighted loss
         """
         is_sharded = grid_shard_slice is not None
+
         out = self.calculate_difference(pred, target)
         out = self.scale(out, scaler_indices, without_scalers=without_scalers, grid_shard_slice=grid_shard_slice)
 

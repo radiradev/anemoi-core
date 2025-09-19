@@ -134,7 +134,7 @@ class BaseNormaliser(torch.nn.Module):
         pass
 
     def __repr__(self):
-        extra = f"(methods={', '.join(f"{k}={v}" for k, v in self.methods.items())})"
+        extra = f"(methods={', '.join(f'{k}={v}' for k, v in self.methods.items())})"
         extra = extra[:20] + "..." if len(extra) > 53 else extra
         return super().__repr__() + extra
 

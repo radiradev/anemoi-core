@@ -8,24 +8,8 @@
 # nor does it submit to any jurisdiction.
 
 
-import logging
-import uuid
-import warnings
-from typing import Optional
+from anemoi.models.models import AnemoiMultiModel
 
-import einops
-import torch
-from boltons.iterutils import remap as _remap
-from hydra.utils import instantiate
-from torch import Tensor
-from torch import nn
-from torch.distributed.distributed_c10d import ProcessGroup
-from torch.utils.checkpoint import checkpoint
-from torch_geometric.data import HeteroData
-
-from anemoi.models.distributed.shapes import get_shard_shapes
-from anemoi.models.layers.projection import NodeEmbedder
-from anemoi.models.layers.projection import NodeProjector
 
 # from anemoi.models.preprocessing.normalisers import build_normaliser
 from anemoi.utils.config import DotDict
@@ -39,63 +23,7 @@ NODE_COORDS_NDIMS = 4  # cos_lat, sin_lat, cos_lon, sin_lon
 EDGE_ATTR_NDIM = 3  # edge_length, edge_dir0, edge_dir1
 
 
-def processor_factory(name_to_index, statistics, processors, **kwargs) -> list[list]:
-
-    return [
-        [name, instantiate(cfg, name_to_index=name_to_index["variables"], statistics=statistics["variables"])]
-        for name, cfg in processors.items()
-    ]
-
-
-def extract_sources(config, reversed: bool = False) -> tuple[dict, dict[str, list[str]]]:
-    mapper_config, sources, num_channels = {}, {}, {}
-    for i, component in enumerate(config):
-        name = component.pop("name", f"{i+1}")
-        for source in component.pop("sources"):
-            if reversed:
-                sources[name] = source
-            else:
-                sources[source] = name
-        mapper_config[name] = component["mapper"]
-        num_channels[name] = component["num_channels"]
-    return mapper_config, sources, num_channels
-
-
-def merge_nodes(graph: HeteroData, merged_name: str, nodes_names: list[str]) -> tuple[HeteroData, dict]:
-    if len(nodes_names) == 1:
-        graph = graph.rename(nodes_names[0], merged_name)
-        slices = {nodes_names[0]: slice(0, graph[nodes_names[0]].num_nodes)}
-        return graph, slices
-
-    num_nodes = {name: graph[name].num_nodes for name in nodes_names}
-    graph[merged_name].x = torch.cat([graph[nodes].x for nodes in nodes_names])
-    # TODO: Merge edge_index of all subgraphs
-    slices, count = {}, 0
-    for nodes in nodes_names:
-        num_nodes = graph[nodes].num_nodes
-        slices[nodes] = slice(count, count + num_nodes)
-        count += num_nodes
-    return graph, slices
-
-
-def merge_graph_sources(graph: HeteroData, sources: dict[str, str]) -> HeteroData:
-    if sources is None or len(sources) == 0:
-        return graph, None
-
-    graph = graph.clone()
-    new = {}
-    for k, v in sources.items():
-        new[v] = (new[v] + [k]) if v in new else [k]
-
-    slices = {}
-    for new_node_names, old_node_names in new.items():
-        graph, nodes_slices = merge_nodes(graph, new_node_names, old_node_names)
-        slices[new_node_names] = nodes_slices
-
-    return graph, slices
-
-
-class AnemoiMultiModel(AnemoiModel):
+class AnemoiSingleModel(AnemoiMultiModel):
     """Message passing graph neural network."""
 
     name = None

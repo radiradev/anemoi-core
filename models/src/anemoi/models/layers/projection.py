@@ -8,9 +8,14 @@
 #
 
 import torch
+import einops
 from hydra.utils import instantiate
 from torch import nn
 from torch_geometric.data import HeteroData
+
+def _get_coords(latitudes: torch.Tensor, longitudes: torch.Tensor) -> torch.Tensor:
+    coords = torch.cat([latitudes, longitudes], dim=0)
+    return torch.cat([torch.sin(coords), torch.cos(coords)], dim=0)
 
 
 class NodeEmbedder(nn.Module):
@@ -29,9 +34,7 @@ class NodeEmbedder(nn.Module):
 
         self.embedders = nn.ModuleDict(
             {
-                key: instantiate(
-                    config,
-                    _recursive_=False,
+                key: nn.Linear(
                     in_features=num_input_channels[key] + coord_dimension,
                     out_features=num_output_channels[key],
                 )
@@ -42,7 +45,17 @@ class NodeEmbedder(nn.Module):
     def forward(self, x: dict[str, torch.Tensor], **kwargs) -> HeteroData:
         # input: [{"1": tensor, "1": tensor, "2": tensor, ...}]
         # TODO: x_data_latent = concat_tensor_from_same_source(x_data_latent)
-        return {self.embeders[key](tensor) for key, tensor in x.items()}
+        out = x.new_empty()
+        for key, box in x.items():
+            data = box["data"]  # shape: (1, num_channels, num_points)
+            assert box["dimensions_order"] == ["ensemble", "variables", "values"], "Expected dimensions_order to be ['ensemble', 'variables', 'values']"
+            sincos_latlons = self._get_coords(box["latitudes"], box["longitudes"]) # shape: (4, num_points)
+            assert sincos_latlons.shape == (4, data.shape[2]), f"sincos_latlons shape {sincos_latlons.shape} does not match expected (4, {data.shape[2]})"
+            sincos_latlons = einops.rearrange(sincos_latlons, "coords grid -> 1 coords grid")
+            data = torch.cat([data, sincos_latlons], dim=1)
+            data = einops.rearrange(data, "1 vars grid -> grid vars")
+            out[key] = self.embedders[key](data)
+        return out
 
 
 class NodeProjector(nn.Module):

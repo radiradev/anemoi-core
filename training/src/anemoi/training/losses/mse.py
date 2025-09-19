@@ -39,7 +39,4 @@ class MSELoss(FunctionalLoss):
         torch.Tensor
             MSE loss
         """
-        print("Calculating MSE loss")
-        print(f"target shape: {target.shape}")
-        print(f"pred shape: {pred.shape}")
         return torch.square(pred - target)
