@@ -12,19 +12,12 @@ import os
 import warnings
 from collections.abc import Mapping
 from collections.abc import Sequence
-from functools import wraps
 from typing import Union
 
 import torch
-from boltons.iterutils import default_enter as _default_enter
-from boltons.iterutils import default_exit as _default_exit
-from boltons.iterutils import get_path as _get_path
-from boltons.iterutils import remap as _remap
-from boltons.iterutils import research as _research  # noqa: F401
 from rich import print
 from rich.console import Console
 
-from anemoi.training.data.refactor.formatting import to_str
 from anemoi.training.data.refactor.path_keys import SEPARATOR
 from anemoi.training.data.refactor.path_keys import _join_paths
 from anemoi.training.data.refactor.path_keys import _path_as_str
@@ -36,23 +29,6 @@ NestedTensor = Union[
     Sequence["NestedTensor"],  # list/tuple of NestedTensor
     Mapping[str | int, "NestedTensor"],  # dict with str/int keys
 ]
-
-
-def make_schema(structure):
-    """Return a fully nested schema from any structure."""
-
-    def element_description(element):
-        return dict(type=type(element).__name__, content=None)
-
-    if is_box(structure):
-        content = {k: element_description(v) for k, v in structure.items()}
-        content["_anemoi_schema"] = True
-        return {"type": "box", "content": content, "_anemoi_schema": True}
-    if isinstance(structure, dict):
-        return {"type": "dict", "content": {k: make_schema(v) for k, v in structure.items()}, "_anemoi_schema": True}
-    if isinstance(structure, (list, tuple)):
-        return {"type": "tuple", "content": [make_schema(v) for v in structure], "_anemoi_schema": True}
-    assert False, f"Unknown structure type: {type(structure)}"
 
 
 class Dict(dict):
@@ -322,18 +298,6 @@ class BaseAccessor:
     def __init__(self, parent):
         self.parent = parent
 
-    # def merge(self, *args, **kwargs):
-    #     # Usage:
-    #     # merge(dict1, dict2, key=value) merges all dicts into each leaf box
-    #     def _merge(box, *_args, **_kwargs):
-    #         box = box.copy()
-    #         for a in _args:
-    #             box.update(a)
-    #         for k,a in _kwargs.items():
-    #             box.update(**{k:a})
-    #         return box
-    #     return self.map(_merge, *args, **kwargs)
-
     def copy(self):
         return self.parent.__class__(self._apply_dict_method("copy"))
 
@@ -375,9 +339,37 @@ class BaseAccessor:
     def update(self, *args, **kwargs):
         self._apply_dict_method("update", *args, **kwargs)
 
-    def __ior__(self, other):
-        print("untested code")
-        self._apply_dict_method("__ior__", other)
+    # def __ior__(self, other):
+    #     print("untested code")
+    #     self._apply_dict_method("__ior__", other)
+
+    def __add__(self, other):
+        # this method does not exists for python dict
+        # this is to add adding two Dicts to merge their leaves
+        #
+        # only this is supported:
+        # a + b  where a and b are Dict , see Dict.__add__
+        #
+        # we may want to support
+        # a.each + b where a and b are Dict
+        # a.each + c where a is Dict and b is regular (constant) dict
+
+        if not isinstance(other, BaseAccessor):
+            raise ValueError(f"Cannot add {type(self)} and {type(other)}")
+
+        res = self.result_parent_class()
+        for path, box in self.parent.items():
+            if not isinstance(box, dict):
+                raise ValueError(f"Unexpected leaf at {path} for the first operand, got {type(box)}")
+
+            other_box = other.parent[path]
+
+            if not isinstance(other_box, dict):
+                raise ValueError(f"Unexpected leaf at {path} for the second operand, got {type(other_box)}")
+
+            res[path] = _merge_dicts_allow_overwrite_none(box, other_box)
+
+        return res
 
     def _apply_dict_method(self, method_name, *args, **kwargs):
         def function_finder(path, leaf):
@@ -418,25 +410,6 @@ class BaseAccessor:
             # stack in a list so that the caller decides how to handle it
             output.append((path, res))
         return output
-
-    def __add__(self, other):
-
-        if not isinstance(other, BaseAccessor):
-            raise ValueError(f"Cannot add {type(self)} and {type(other)}")
-
-        res = self.result_parent_class()
-        for path, box in self.parent.items():
-            if not isinstance(box, dict):
-                raise ValueError(f"Unexpected leaf at {path} for the first operand, got {type(box)}")
-
-            other_box = other.parent[path]
-
-            if not isinstance(other_box, dict):
-                raise ValueError(f"Unexpected leaf at {path} for the second operand, got {type(other_box)}")
-
-            res[path] = _merge_dicts_allow_overwrite_none(box, other_box)
-
-        return res
 
 
 def _merge_dicts_allow_overwrite_none(d1, d2):
@@ -522,159 +495,3 @@ class Function(Dict):
 
     def __call__(self, other, *args, _output_box=True, **kwargs):
         assert False, "dead code?"
-
-
-def is_schema(x):
-    if not isinstance(x, dict):
-        return False
-    return "_anemoi_schema" in x
-
-
-def is_final(structure):
-    return not isinstance(structure, (dict, list, tuple, torch.nn.ModuleDict))
-
-
-def is_box(structure):
-    if not isinstance(structure, dict):
-        assert False, structure
-        return False
-    # See inside the dict if there is a final element
-    return any(is_final(v) for v in structure.values())
-
-
-def merge_boxes(*structs, overwrite=True):
-    """Merge multiple structures
-    >>> a = {"foo": [{"x": 1, "y": 2}, {"a": 3}]}
-    n>>> b = {"foo": [{"z": 10}, {"b": 4}]}
-    >>> merge_boxes(a, b)
-    {'foo': [{'x': 1, 'y': 2, 'z': 10}, {'a': 3, 'b': 4}]}
-    >>> c = {"foo": [{"z": 10}, {"a": 999}]}
-    >>> merge_boxes(a, c)
-    {'foo': [{'x': 1, 'y': 2, 'z': 10}, {'a': 3, 'b': 4}]}
-    """
-
-    def exit(path, key, old_parent, new_parent, new_items):
-        if not is_box(old_parent):
-            return _default_exit(path, key, old_parent, new_parent, new_items)
-        # If we reach here, it means old_parent is a box
-        # We need to merge new_items into the corresponding box in old_parent
-        res = {}
-        for struct in structs:
-            box = _get_path(struct, path + (key,), default={})
-            if not overwrite and set(box.keys()) & set(res.keys()):
-                raise ValueError(f"Conflicting keys found in structures: {set(box.keys()) & set(res.keys())}")
-            res.update(**box)
-        return res
-
-    return _remap(structs[0], exit=exit)
-
-
-def _stop_if_box_enter(path, key, value):
-    if is_box(value):
-        return value, []
-    return _default_enter(path, key, value)
-
-
-def ensure_output_is_box_exit(path, key, old_parent, new_parent, new_items):
-    lkj
-    return res
-
-
-def apply(func, structure, *args, **kwargs):
-    _made_callable = False
-    if not callable(func):
-        func = nested_to_callable(func)
-        _made_callable = True
-    try:
-        return func(structure, *args, **kwargs)
-    except Exception as e:
-        e.add_note(f"While applying function to structure: {to_str(func, 'Function Tree')}. {_made_callable=}")
-        raise ValueError(f"Error applying function to structure: {e}")
-
-
-# decorator
-def box_to_function(func, **options):
-    if options or not callable(func):
-        raise Exception("box_to_function decorator takes at most one non-keyword argument, the function to wrap.")
-
-    @wraps(func)
-    def wrapper(fconfig_n, *fargs, **fkwargs):
-        res_n = _for_each_expanded_box(fconfig_n, func, *fargs, **fkwargs)
-        return nested_to_callable(res_n)
-
-    return wrapper
-
-
-# decorator
-def apply_to_box(func, **options):
-    if options or not callable(func):
-        raise Exception("apply_to_box decorator takes at most one non-keyword argument : the function to wrap.")
-
-    @wraps(func)
-    def wrapper(fconfig_n, *fargs, **fkwargs):
-        return _for_each_expanded_box(fconfig_n, func, *fargs, **fkwargs)
-
-    return wrapper
-
-
-# decorator
-def make_output_callable(func):
-    """Func is a function which takes a nested structure and returns a nested structure where the leaves are functions
-    This decorator adds one step where the output of this function is made callable
-    """
-    if not callable(func):
-        raise Exception("make_output_callable decorator takes a callable argument, the function to wrap.")
-
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        res_tree = func(*args, **kwargs)
-        return nested_to_callable(res_tree)
-
-    return wrapper
-
-
-def nested_to_callable(f_tree):
-    """The input is a nested structure where the leaves are functions
-    The output is a callable as follow:
-
-    The input of this callable must be a similar structure
-    The output of this callable is a similar stucture where each function is applied to each box.
-    """
-    if callable(f_tree):
-        print("DEBUG: already callable")
-        return f_tree
-
-    def function_on_tree(x_tree, *args, **kwargs):
-
-        def apply(path, key, func):
-            if not callable(func):
-                # apply only on functions
-                return key, func
-
-            x = _get_path(x_tree, path + (key,), default=None)
-            if not x:
-                raise ValueError(f"Box not found in {x_tree} at {path}, {key=}")
-            new_box = func(*args, **kwargs, **x)
-            if not isinstance(new_box, dict):
-                raise ValueError(f"Expected dict, but function returned {type(new_box)} in {path}, {key=}")
-            return key, new_box
-
-        return _remap(f_tree, visit=apply)
-
-    function_on_tree._anemoi_function_str = to_str(f_tree, "(function)", _boxed=False)
-
-    return function_on_tree
-
-
-def unwrap(nested, *requested_keys):
-
-    res = []
-    for requested_key in requested_keys:
-
-        def select(path, key, box):
-            if not is_box(box):
-                return key, box
-            return key, box[requested_key]
-
-        res.append(_remap(nested, visit=select, enter=_stop_if_box_enter))
-    return res

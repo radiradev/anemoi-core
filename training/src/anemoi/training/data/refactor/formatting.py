@@ -7,12 +7,9 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 import datetime
-import os
 
 import numpy as np
 import torch
-from rich.console import Console
-from rich.tree import Tree
 
 from anemoi.utils.dates import frequency_to_string
 
@@ -141,103 +138,3 @@ def format_key_value(k, v):
     if isinstance(v, Rollout):
         txt = str(v)
     return txt
-
-
-def format_tree(key, value, boxed=True, **kwargs):
-    """Recursively build a Tree from any nested structure."""
-    assert False, "dead code?"
-    from anemoi.training.data.refactor.structure import Box
-
-    #    if is_schema(value):
-    #        return format_schema(key, value)
-
-    if isinstance(value, Box):
-        if not all(isinstance(k, (int, str)) for k in value.keys()):
-            print(Box)
-            raise ValueError(f"Invalid keys in Box: {value.keys()}")
-        if boxed:
-            key = f"📦 {key}"
-        t = Tree(f"{key} :", **kwargs)
-
-        def priority(k):
-            if k.startswith("_"):
-                return 10
-            return dict(latitudes=1, longitudes=2, timedeltas=3).get(k, 0)
-
-        order = sorted(value.keys(), key=priority)
-        assert len(order) == len(value), (order, value.keys())
-
-        for k in order:
-            v = value[k]
-            if not os.environ.get("DEBUG") and k.startswith("_"):
-                continue
-            txt = format_key_value(k, v)
-            if txt is not None:
-                txt = f"{txt}"
-                t.add(txt)
-        return t
-
-    if isinstance(value, (dict, torch.nn.ModuleDict)):  # must be after is_box because box is a dict
-        t = Tree(str(key) if key is not None else "", **kwargs)
-        for k, v in value.items():
-            # k = "🔑 " + k
-            t.add(format_tree(k, v, boxed=boxed, **kwargs))
-        return t
-
-    if isinstance(value, (list, tuple)):
-        t = Tree(str(key) if key is not None else "", **kwargs)
-        for i, v in enumerate(value):
-            t.add(format_tree("#" + str(i), v, boxed=boxed, **kwargs))
-        return t
-
-    raise ValueError(f"Unknown type for value: {type(value)}. Key: {key}")
-
-
-def format_schema(key, value):
-    if not isinstance(value, dict):
-        raise ValueError(f"Expected dict for schema for {key=}, got {type(value)}: {value}")
-    if "type" not in value:
-        raise ValueError(f"Schema must contain 'type' key, for {key=}: {value}, got {value.keys()}")
-    if "content" not in value:
-        raise ValueError(f"Schema must contain 'content' key, for {key=}: {value}")
-
-    type_ = value["type"]
-    if type_ == "box":
-        t = Tree(f"{ICON_BOX} {key} :")
-        for k, v in value["content"].items():
-            if k == "_anemoi_schema":
-                continue
-            __type = v.get("type")
-            t.add(Tree(f"{k} : {__type}"))
-        return t
-
-    if type_ == "dict":
-        t = Tree(str(key))
-        for k, v in value["content"].items():
-            if k == "_anemoi_schema":
-                continue
-            t.add(format_schema(k, v))
-        return t
-
-    if type_ == "tuple":
-        t = Tree(str(key))
-        for i, v in enumerate(value["content"]):
-            if k == "_anemoi_schema":
-                continue
-            t.add(format_schema("#" + str(i), v))
-        return t
-
-    return Tree(f"{ICON_LEAF} {key} : {type_}")
-
-
-def to_str(nested, name, _boxed=True, **kwargs):
-    nested = nested.as_nested()
-    tree = format_tree(name, nested, boxed=_boxed, **kwargs)
-    return _tree_to_string(tree).strip()
-
-
-def _tree_to_string(tree):
-    console = Console(record=True, width=120)
-    with console.capture() as capture:
-        console.print(tree)
-    return capture.get()
