@@ -15,6 +15,7 @@ from .scalers import create_scalers
 from .variable import GeneralVariableLossScaler
 from .variable_level import LinearVariableLevelScaler
 from .variable_level import NoVariableLevelScaler
+from .variable_level import ConstantLevelScaler
 from .variable_level import PolynomialVariableLevelScaler
 from .variable_level import ReluVariableLevelScaler
 from .variable_level import StepVariableLevelScaler
@@ -29,6 +30,7 @@ __all__ = [
     "LinearVariableLevelScaler",
     "NaNMaskScaler",
     "NoTendencyScaler",
+    "ConstantTendencyScaler",
     "NoVariableLevelScaler",
     "PolynomialVariableLevelScaler",
     "ReluVariableLevelScaler",
