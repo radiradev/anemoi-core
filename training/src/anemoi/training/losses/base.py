@@ -172,7 +172,8 @@ class BaseLoss(nn.Module, ABC):
         ValueError
             If squash_mode is not one of ['avg', 'sum']
         """
-        if squash: # squash = True, during training
+        variable_dimension = self.dimensions_order.index("variables")
+        if squash:  # squash = True, during training
             if squash_mode == "avg":
                 out = self.avg_function(out, dim=variable_dimension)
             elif squash_mode == "sum":
@@ -181,12 +182,12 @@ class BaseLoss(nn.Module, ABC):
                 msg = f"Invalid squash_mode '{squash_mode}'. Supported modes are: 'avg', 'sum'"
                 raise ValueError(msg)
             dims = list(range(out.ndim))
-        else: # squash = False, plotting. It is used for PlotLoss callback.
+        else:  # squash = False, plotting. It is used for PlotLoss callback.
             dims = list(range(out.ndim))
             dims.pop(variable_dimension)
 
         # here the grid dimension is summed because the normalisation is handled in the node weighting
-        out = self.avg_function(out, dim=tuple(dims)) 
+        out = self.avg_function(out, dim=tuple(dims))
 
         out = out if group is None else reduce_tensor(out, group)
         return out
@@ -291,6 +292,18 @@ class FunctionalLoss(BaseLoss):
             Weighted loss
         """
         is_sharded = grid_shard_slice is not None
+        pred = pred["data"]
+        target = target["data"]
+        assert len(self.dimensions_order) == pred.ndim, (
+            f"Prediction tensor has {pred.ndim} dimensions, "
+            f"but dimensions_order has {len(self.dimensions_order)} entries: {self.dimensions_order}",
+            f" pred shape: {pred.shape}",
+        )
+        assert len(self.dimensions_order) == target.ndim, (
+            f"Target tensor has {target.ndim} dimensions, "
+            f"but dimensions_order has {len(self.dimensions_order)} entries: {self.dimensions_order}",
+            f" target shape: {target.shape}",
+        )
 
         out = self.calculate_difference(pred, target)
         out = self.scale(out, scaler_indices, without_scalers=without_scalers, grid_shard_slice=grid_shard_slice)

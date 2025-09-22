@@ -48,6 +48,8 @@ class BaseGraphPLModule(pl.LightningModule, ABC):
     ) -> None:
         super().__init__()
         self.sample_static_info = sample_static_info
+        self.batch_staticinfo = sample_static_info.add_batch_first_in_dimensions_order()
+
         self.normaliser = sample_static_info.map_expanded(build_normaliser).as_module_dict()
 
         self.graph_data = graph_data  # .to(self.device) # at init this will be on cpu
@@ -89,9 +91,7 @@ class BaseGraphPLModule(pl.LightningModule, ABC):
 
         self.loss = get_loss_function(
             config.model_dump(by_alias=True).training.training_loss,
-            # scalers={},  # self.scalers,
-            #    data_indices=self.data_indices,
-            sample_static_info=self.sample_static_info["target"],
+            static_info=self.batch_staticinfo["target"],
         )
         # print_variable_scaling(self.loss, data_indices)
 

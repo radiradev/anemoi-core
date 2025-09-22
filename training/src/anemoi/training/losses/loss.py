@@ -35,17 +35,16 @@ LOGGER = logging.getLogger(__name__)
 def get_loss_function(
     config: DictConfig,
     scalers: dict[str, tuple[tuple[int] | np.ndarray]] | None = None,
-    data_indices: dict | None = None,
-    sample_static_info: dict | None = None,
+    static_info: dict | None = None,
     **kwargs,
 ) -> DictLoss:
 
-    assert sample_static_info is not None
+    assert static_info is not None
 
     generic_config = OmegaConf.to_container(config, resolve=True)
 
-    loss_config = sample_static_info.new_empty()
-    for path, box in sample_static_info.items():
+    loss_config = static_info.new_empty()
+    for path, box in static_info.items():
         loss_config[path] = dict(
             config=generic_config,
             name_to_index=box["name_to_index"],

@@ -84,11 +84,11 @@ class Dict(dict):
             raise KeyError(f"Path '{path}' not found in Dict with keys: {list(self.keys())}")
         return self.__class__(matching)
 
-    def __getattr__(self, name):
-        try:
-            return self[name]
-        except KeyError:
-            raise AttributeError(f"'Dict' object has no attribute '{name}'")
+    # def __getattr__(self, name):
+    #     try:
+    #         return self[name]
+    #     except KeyError:
+    #         raise AttributeError(f"'Dict' object has no attribute '{name}'")
 
     def as_function(self):
         res = Function()
@@ -200,6 +200,11 @@ class Dict(dict):
         for box in new.values():
             box["dimensions_order"] = ("batch",) + box["dimensions_order"]
         return new
+
+    @property
+    def first(self):
+        """Return the first value in the Dict. Useful for accessing properties common to all boxes."""
+        return next(iter(self.values()))
 
 
 class BaseAccessor:
