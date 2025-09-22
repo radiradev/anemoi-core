@@ -307,6 +307,9 @@ class AnemoiMultiModel(AnemoiModel):
         batch_size: int,
         model_comm_group: Optional[ProcessGroup] = None,
     ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+        # do we need to have the batch size in argument ?
+        assert batch_size == x_data_raw.first["data"].shape[0], (batch_size, x_data_raw.first["data"].shape)
+
         x_data_latents = self.node_embedder(x_data_raw, batch_size=batch_size)
 
         # TODO: Merge subgraph
