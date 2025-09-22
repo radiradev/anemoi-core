@@ -14,6 +14,7 @@ from collections.abc import Sequence
 from typing import Union
 
 import torch
+from torch.utils.checkpoint import checkpoint
 from rich import print
 
 from anemoi.training.data.refactor.formatting import anemoi_dict_to_str
@@ -363,6 +364,9 @@ class AnemoiModuleDict(torch.nn.ModuleDict):
     @property
     def each(self):
         return ModuleDictAccessor(self)
+
+    def call_with_checkpointing(self, *args, **kwargs):
+        return checkpoint(self, *args, **kwargs)
 
     def __call__(self, *args, **kwargs):
         assert False, "not used?, should be deleted?"
