@@ -75,7 +75,7 @@ class AnemoiDatasetsDataModule(pl.LightningDataModule):
 
     @cached_property
     def data_indices(self) -> IndexCollection:
-        return IndexCollection(self.config, self.ds_train.name_to_index)
+        return IndexCollection(self.config.data, self.ds_train.name_to_index)
 
     def relative_date_indices(self, val_rollout: int = 1) -> list:
         """Determine a list of relative time indices to load for each batch."""

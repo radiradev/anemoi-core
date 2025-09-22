@@ -122,9 +122,11 @@ def get_metric_ranges(
     config: DictConfig,
     data_indices: IndexCollection,
     metadata_extractor: ExtractVariableGroupAndLevel,
+    metrics_to_log: list | None = None,
 ) -> tuple[METRIC_RANGE_DTYPE, METRIC_RANGE_DTYPE]:
 
-    metrics_to_log = config.training.metrics or []
+    if metrics_to_log is None:
+        metrics_to_log = config.training.metrics or []
 
     return _get_metric_ranges(
         metadata_extractor,

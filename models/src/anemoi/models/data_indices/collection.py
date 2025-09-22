@@ -27,12 +27,12 @@ LOGGER = logging.getLogger(__name__)
 class IndexCollection:
     """Collection of data and model indices."""
 
-    def __init__(self, config, name_to_index) -> None:
-        self.config = OmegaConf.to_container(config, resolve=True)
+    def __init__(self, data_config, name_to_index) -> None:
+        self.config = OmegaConf.to_container(data_config, resolve=True)
         self.name_to_index = dict(sorted(name_to_index.items(), key=operator.itemgetter(1)))
-        self.forcing = [] if config.data.forcing is None else OmegaConf.to_container(config.data.forcing, resolve=True)
+        self.forcing = [] if data_config.forcing is None else OmegaConf.to_container(data_config.forcing, resolve=True)
         self.diagnostic = (
-            [] if config.data.diagnostic is None else OmegaConf.to_container(config.data.diagnostic, resolve=True)
+            [] if data_config.diagnostic is None else OmegaConf.to_container(data_config.diagnostic, resolve=True)
         )
 
         assert set(self.diagnostic).isdisjoint(self.forcing), (
@@ -50,7 +50,7 @@ class IndexCollection:
         self.model = ModelIndex(self.diagnostic, self.forcing, name_to_index_model_input, name_to_index_model_output)
 
     def __repr__(self) -> str:
-        return f"IndexCollection(config={self.config}, name_to_index={self.name_to_index})"
+        return f"IndexCollection(data_config={self.config}, name_to_index={self.name_to_index})"
 
     def __eq__(self, other):
         if not isinstance(other, IndexCollection):
