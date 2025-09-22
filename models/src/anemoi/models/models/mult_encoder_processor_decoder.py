@@ -24,6 +24,7 @@ from torch_geometric.data import HeteroData
 from anemoi.models.distributed.shapes import get_shard_shapes
 from anemoi.models.layers.projection import NodeEmbedder
 from anemoi.models.layers.projection import NodeProjector
+from anemoi.training.data.refactor.structure import Dict
 
 # from anemoi.models.preprocessing.normalisers import build_normaliser
 from anemoi.utils.config import DotDict
@@ -37,15 +38,10 @@ NODE_COORDS_NDIMS = 4  # cos_lat, sin_lat, cos_lon, sin_lon
 EDGE_ATTR_NDIM = 3  # edge_length, edge_dir0, edge_dir1
 
 
-def processor_factory(name_to_index, statistics, processors, **kwargs) -> list[list]:
-
-    return [
-        [name, instantiate(cfg, name_to_index=name_to_index["variables"], statistics=statistics["variables"])]
-        for name, cfg in processors.items()
-    ]
-
-
 def extract_sources(config, reversed: bool = False) -> tuple[dict, dict[str, list[str]]]:
+    # TODO: remove useless argument?
+    assert reversed is False
+
     mapper_config, sources, num_channels = {}, {}, {}
     for i, component in enumerate(config.copy()):
         name = component.pop("name", f"{i+1}")
@@ -122,16 +118,13 @@ class AnemoiMultiModel(AnemoiModel):
         self.build()
 
     def build(self):
-        from anemoi.models.preprocessing.normalisers import build_normaliser_moduledict
+        from anemoi.models.preprocessing.normalisers import build_normaliser
 
-        self.normaliser = build_normaliser_moduledict(self.sample_static_info)
-        print(self.normaliser)
-
-        # TODO? re-add generic preprocessors if needed.
+        self.normaliser = self.sample_static_info.map_expanded(build_normaliser).as_module_dict()
+        print("Normaliser for full batch", self.normaliser)
 
         input_info = self.sample_static_info["input"]
         target_info = self.sample_static_info["target"]
-        from anemoi.training.data.refactor.structure import Dict
 
         print(type(input_info), input_info)
         print(type(input_info["high_res"]), input_info["high_res"])
@@ -167,8 +160,10 @@ class AnemoiMultiModel(AnemoiModel):
 
         self.num_input_channels = {k: v["number_of_features"] for k, v in self.sample_static_info["input"].items()}
         self.num_target_channels = {k: v["number_of_features"] for k, v in self.sample_static_info["target"].items()}
-        input_dims_order = {k: ("batch", ) + v["dimensions_order"] for k, v in self.sample_static_info["input"].items()}
-        target_dims_order = {k: ("batch", ) + v["dimensions_order"] for k, v in self.sample_static_info["target"].items()}
+        input_dims_order = {k: ("batch",) + v["dimensions_order"] for k, v in self.sample_static_info["input"].items()}
+        target_dims_order = {
+            k: ("batch",) + v["dimensions_order"] for k, v in self.sample_static_info["target"].items()
+        }
 
         self.hidden_name: str = self.model_config.model.hidden_name
         encoders, self.encoder_sources, num_encoded_channels = extract_sources(self.model_config.model.encoders)
@@ -318,22 +313,30 @@ class AnemoiMultiModel(AnemoiModel):
         # We should create the graph here
         # graph = create_graph(x, target)
 
-        x_hidden_latents = {}
+        x_data_latents = x_data_latents.wrap("data")
+
+        for source, x_data_latent in x_data_latents.items():
+            x_data_latent["shard_shapes"] = get_shard_shapes(x_data_latent["data"], 0, model_comm_group)
+            x_data_latent["model_comm_group"] = model_comm_group
+
         x_hidden_raw = self.get_node_coords(graph, self.hidden_name)
         shard_shapes_hidden = get_shard_shapes(x_hidden_raw, 0, model_comm_group)
-        for encoder_source, x_data_latent in x_data_latents.items():
-            shard_shapes_input_data = get_shard_shapes(x_data_latent, 0, model_comm_group)
 
-            _, x_hidden_latents[encoder_source] = self._run_mapper(
-                self.encoders[self.encoder_sources[encoder_source]],
-                (x_data_latent, x_hidden_raw),
-                sub_graph=graph[(encoder_source, "to", self.hidden_name)].to(x_data_latent.device),
+        x_hidden_latents = x_data_latents.new_empty()
+        for source, x_data_latent in x_data_latents.items():
+            encoder = self.encoders[self.encoder_sources[source]]
+            _, x_hidden_latents[source] = self._run_mapper(
+                encoder,
+                (x_data_latent["data"], x_hidden_raw),
+                sub_graph=graph[(source, "to", self.hidden_name)].to(x_data_latent["data"].device),
                 batch_size=batch_size,
-                shard_shapes=(shard_shapes_input_data, shard_shapes_hidden),
-                model_comm_group=model_comm_group,
+                shard_shapes=(x_data_latent["shard_shapes"], shard_shapes_hidden),
+                model_comm_group=x_data_latent["model_comm_group"],
             )
 
         x_hidden_latent = self.merge_latents(x_hidden_latents)
+
+        x_data_latents = x_data_latents.select_content["data"]  # unwrap
 
         return x_data_latents, x_hidden_latent, shard_shapes_hidden
 
@@ -407,6 +410,9 @@ class AnemoiMultiModel(AnemoiModel):
         # if this is not wanted, don't normalise it in the task
         batch_size = 1
         ensemble_size = 1
+        from anemoi.training.data.refactor.structure import Dict
+
+        assert isinstance(x, Dict), type(x)
 
         x_data_latents, x_hidden_latent, shard_shapes_hidden = self.encode(
             x,

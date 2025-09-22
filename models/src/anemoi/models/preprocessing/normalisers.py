@@ -19,22 +19,6 @@ import torch
 LOGGER = logging.getLogger(__name__)
 
 
-def build_normaliser_moduledict(static_info):
-    # also possible: return static_info.map_expanded(build_normaliser)
-
-    res = static_info.new_empty()
-    for path, box in static_info.items():
-        res[path] = build_normaliser(**box)
-    return res.as_module_dict()
-
-
-def build_denormaliser_moduledict(sample_info):
-    res = sample_info.new_empty()
-    for path, box in sample_info.items():
-        res[path] = build_denormaliser(**box)
-    return res.as_module_dict()
-
-
 def build_normaliser(**kwargs):
     if kwargs.get("_target_") not in [
         "anemoi.models.preprocessing.normaliser.InputNormaliser",

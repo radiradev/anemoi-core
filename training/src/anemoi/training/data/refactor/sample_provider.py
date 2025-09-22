@@ -18,7 +18,6 @@ import einops
 import numpy as np
 import torch
 import yaml
-from hydra.utils import instantiate
 from omegaconf import DictConfig
 from rich.console import Console
 from rich.tree import Tree
@@ -127,15 +126,6 @@ class Context:
 
         self.sources = self.sources if sources is None else resolve_reference(sources)
         assert self.sources is not None, f"Sources cannot be None, got {self.sources}"
-
-        def processor_factory(config, name_to_index=None, statistics=None):
-            return instantiate(
-                config,
-                name_to_index_training_input=name_to_index,
-                statistics=statistics,
-            )
-
-        self.processor_factory = processor_factory
 
         assert isinstance(
             self.offset,
@@ -1260,7 +1250,8 @@ def test_two(training_context):
         output = target
         print(f"-------- Rollout {i} {step=} --------")
         print_columns(
-            input.unwrap("data").to_str(f"Input at step {i} : "), target.unwrap("data").to_str(f"Target at step {i} : "),
+            input.unwrap("data").to_str(f"Input at step {i} : "),
+            target.unwrap("data").to_str(f"Target at step {i} : "),
         )
         for k, v in input.items():
             v["_tag"] = f"🔵 from previous_input {v['_offset']}"
