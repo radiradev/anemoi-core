@@ -339,7 +339,8 @@ class AnemoiMultiModel(AnemoiModel):
 
     def merge_latents(self, latents: dict[str, torch.Tensor]) -> torch.Tensor:
         # TODO: implement different strategies: sum, average, concat, learnable, ...
-        return latents[list(latents.keys())[-1]]
+        last = list(latents.keys())[-1]
+        return latents[last]
 
     def decode(
         self,
