@@ -165,13 +165,10 @@ class AnemoiMultiModel(AnemoiModel):
         #     residual_connections=self.model_config.get("residual_connections", []),
         # )
 
-        # NODE_COORDS_NDIMS = 4  # cos_lat, sin_lat, cos_lon, sin_lon
-        # should be in the input ?
-        def get_num_channels(name_to_index, **kwargs):
-            return len(name_to_index)
-
-        self.num_input_channels = input_info.map(get_num_channels)
-        self.num_target_channels = target_info.map(get_num_channels)
+        self.num_input_channels = {k: v["number_of_features"] for k, v in self.sample_static_info["input"].items()}
+        self.num_target_channels = {k: v["number_of_features"] for k, v in self.sample_static_info["target"].items()}
+        input_dims_order = {k: ("batch", ) + v["dimensions_order"] for k, v in self.sample_static_info["input"].items()}
+        target_dims_order = {k: ("batch", ) + v["dimensions_order"] for k, v in self.sample_static_info["target"].items()}
 
         # TODO: Remove. TOY MODEL.
         # here we assume that the tree structure of the input and target match
@@ -210,6 +207,7 @@ class AnemoiMultiModel(AnemoiModel):
             self.model_config.model.emb_data,
             num_input_channels=self.num_input_channels,
             num_output_channels=num_embedded_channels,
+            dimensions_order=input_dims_order,
         )
         num_embedded_channels = {
             key: num_decoded_channels[self.decoder_sources[key]] for key in self.num_target_channels.keys()
@@ -218,6 +216,7 @@ class AnemoiMultiModel(AnemoiModel):
             self.model_config.model.emb_data,
             num_input_channels=num_embedded_channels,
             num_output_channels=self.num_target_channels,
+            dimensions_order=target_dims_order,
         )
 
         # Encoders: ??? -> hidden
@@ -320,7 +319,7 @@ class AnemoiMultiModel(AnemoiModel):
         batch_size: int,
         model_comm_group: Optional[ProcessGroup] = None,
     ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
-        x_data_latents = self.node_embedder(x_data_raw)
+        x_data_latents = self.node_embedder(x_data_raw, batch_size=batch_size)
 
         # TODO: Merge subgraph
         # graph, _ = merge_graph_sources(graph, self.encoder_sources)

@@ -24,12 +24,18 @@ class NodeEmbedder(nn.Module):
         config,
         num_input_channels: dict[str, int],
         num_output_channels: dict[str, int],
+        dimensions_order: dict[str, tuple[str, ...]],
         coord_dimension: int = 4,  # sin() cos() of lat and lon
     ):
         super().__init__()
         assert set(num_input_channels.keys()) == set(num_output_channels.keys())
         self.num_input_channels = num_input_channels
         self.num_output_channels = num_output_channels
+        self.dimensions_order = dimensions_order
+        for dims in self.dimensions_order.values():
+            assert "batch" in dims, "Expected 'batch' in dimensions_order"
+            assert "variables" in dims, "Expected 'variables' in dimensions_order"
+            assert "values" in dims, "Expected 'values' in dimensions_order"
 
         self.embedders = nn.ModuleDict(
             {
@@ -43,27 +49,23 @@ class NodeEmbedder(nn.Module):
             }
         )
 
-    def forward(self, x: dict[str, torch.Tensor], **kwargs) -> HeteroData:
+    def forward(self, x: dict[str, torch.Tensor], batch_size: int, **kwargs) -> dict[str, torch.Tensor]:
         out = x.new_empty()
         for key, box in x.items():
-            dimensions_order = ("1",) + box['dimensions_order']  # add batch dimension
             data = box["data"]  # shape: (1, num_channels, num_points)
-            assert "variables" in dimensions_order, "Expected 'variables' in dimensions_order"
-            assert "values" in dimensions_order, "Expected 'values' in dimensions_order"
+            vars_dim = self.dimensions_order[key].index("variables")
 
-            dims = tuple(str(d) if d in ["variables", "values"] else "1" for d in dimensions_order)
-
+            dims = tuple(str(d) if d in ["variables", "values"] else "1" for d in self.dimensions_order[key])
             sincos_latlons = _get_coords(box["latitudes"], box["longitudes"]) # shape: (4, num_points)
             sincos_latlons = einops.rearrange(sincos_latlons, f"variables values -> {' '.join(dims)}")
+            sincos_latlons = sincos_latlons.expand(batch_size, -1, -1)
 
-            assert data.shape[-1] == sincos_latlons.shape[-1], f"Shapes do not match: {data.shape} vs {sincos_latlons.shape}"
-            data = torch.cat([data, sincos_latlons], dim=1)
-            squash_vars = [d for d in dimensions_order if d != "variables"]
-            data = einops.rearrange(data, f"{' '.join(dimensions_order)} -> ({' '.join(squash_vars)}) variables")
+            data = torch.cat([data, sincos_latlons], dim=vars_dim)
 
-            embedder = self.embedders[key]
-            # assert embedder.weight.shape[1] == data.shape[1], f"Shapes do not match for {key}: {embedder.weight.shape} vs {data.shape}"
-            out[key] = embedder(data) # shape: (num_nodes, num_channels)
+            squash_vars = [d for d in self.dimensions_order[key] if d != "variables"]
+            data = einops.rearrange(data, f"{' '.join(self.dimensions_order[key])} -> ({' '.join(squash_vars)}) variables")
+
+            out[key] = self.embedders[key](data) # shape: (num_nodes, num_channels)
         return out
 
 
@@ -75,11 +77,17 @@ class NodeProjector(nn.Module):
         config,
         num_input_channels: dict[str, int],
         num_output_channels: dict[str, int],
+        dimensions_order: dict[str, tuple[str, ...]],
     ):
         super().__init__()
         assert set(num_input_channels.keys()) == set(num_output_channels.keys())
         self.num_input_channels = num_input_channels
         self.num_output_channels = num_output_channels
+        self.dimensions_order = dimensions_order
+        for dims in self.dimensions_order.values():
+            assert "batch" in dims, "Expected 'batch' in dimensions_order"
+            assert "variables" in dims, "Expected 'variables' in dimensions_order"
+            assert "values" in dims, "Expected 'values' in dimensions_order"
 
         self.projectors = nn.ModuleDict(
             {
@@ -108,7 +116,10 @@ class NodeProjector(nn.Module):
         """
         out = x.new_empty()
         for name, data in x.items():
+            squashed_vars = [d for d in self.dimensions_order[name] if d != "variables"]
             out[name] = einops.rearrange(
-                self.projectors[name](data), "(batch values) variables -> batch variables values", batch=batch_size
+                self.projectors[name](data),
+                f"({' '.join(squashed_vars)}) variables -> {' '.join(self.dimensions_order[name])}", 
+                batch=batch_size,
             )
         return out
