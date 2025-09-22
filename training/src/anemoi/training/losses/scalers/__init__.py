@@ -25,6 +25,7 @@ from .variable_tendency import StdevTendencyScaler
 from .variable_tendency import VarTendencyScaler
 
 __all__ = [
+    "ConstantLevelScaler",
     "ConstantTendencyScaler",
     "GeneralVariableLossScaler",
     "GraphNodeAttributeScaler",
