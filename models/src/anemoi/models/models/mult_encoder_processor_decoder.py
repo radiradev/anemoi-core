@@ -352,13 +352,13 @@ class AnemoiMultiModel(AnemoiModel):
         # sources = {v: k for k, v in self.decoder_sources.items()}
         # graph, node_slices = merge_graph_sources(graph, sources)
 
-        x_out = self.sample_static_info["target"].new_empty()
+        x_out = self.sample_static_info["target"].copy()
         for dec_source in self.sample_static_info["target"].keys():
             dec_name = self.decoder_sources[dec_source]
             shard_shapes_target_data = get_shard_shapes(x_target_latents[dec_source], 0, model_comm_group)
             # This may be passed when name in x_target_data
 
-            x_out[dec_source] = self._run_mapper(
+            x_decoded = self._run_mapper(
                 self.decoders[dec_name],
                 (x_hidden_latent, x_target_latents[dec_source]),
                 sub_graph=graph[(self.hidden_name, "to", dec_source)].to(x_hidden_latent.device),
@@ -367,7 +367,7 @@ class AnemoiMultiModel(AnemoiModel):
                 model_comm_group=model_comm_group,
             )
 
-        x_out = self.unemb_target_nodes(x_out, batch_size=batch_size)
+            x_out[dec_source]["data"] = self.unemb_target_nodes(x_decoded, key=dec_source, batch_size=batch_size)
 
         return x_out
 

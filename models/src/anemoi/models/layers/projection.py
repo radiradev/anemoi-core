@@ -49,6 +49,10 @@ class NodeEmbedder(nn.Module):
             }
         )
 
+    @property
+    def sources(self):
+        return list(self.num_input_channels.keys())
+
     def forward(self, x: dict[str, torch.Tensor], batch_size: int, **kwargs) -> dict[str, torch.Tensor]:
         out = x.new_empty()
         for key, box in x.items():
@@ -99,7 +103,19 @@ class NodeProjector(nn.Module):
             }
         )
 
-    def forward(self, x: dict[str, torch.Tensor], batch_size: int) -> dict[str, torch.Tensor]:
+    @property
+    def sources(self):
+        return list(self.num_input_channels.keys())
+
+    def _forward_source(self, x: torch.Tensor, batch_size: int, key: str) -> torch.Tensor:
+        squashed_vars = [d for d in self.dimensions_order[key] if d != "variables"]
+        return einops.rearrange(
+            self.projectors[key](x),
+            f"({' '.join(squashed_vars)}) variables -> {' '.join(self.dimensions_order[key])}", 
+            batch=batch_size,
+        )
+
+    def forward(self, x: dict[str, torch.Tensor] | torch.Tensor, batch_size: int, key: str | None = None) -> dict[str, torch.Tensor]:
         """Projects the tensor into the different datasets/report types.
 
         Arguments
@@ -112,12 +128,11 @@ class NodeProjector(nn.Module):
         dict[str, torch.Tensor]
             It returns a dict of each dataset/report type with tensors of shape (1, num_source_nodes, dim_source_nodes)
         """
+        assert isinstance(x, dict) or (isinstance(key, str) and key in self.sources), "Either x should be a dict or key should be a valid source."
+        if key is not None:
+            return self._forward_source(x, batch_size=batch_size, key=key)
+        
         out = x.new_empty()
         for name, data in x.items():
-            squashed_vars = [d for d in self.dimensions_order[name] if d != "variables"]
-            out[name] = einops.rearrange(
-                self.projectors[name](data),
-                f"({' '.join(squashed_vars)}) variables -> {' '.join(self.dimensions_order[name])}", 
-                batch=batch_size,
-            )
+            out[name] = self._forward_source(data, key=name, batch_size=batch_size)
         return out
