@@ -48,7 +48,6 @@ class BaseGraphPLModule(pl.LightningModule, ABC):
     ) -> None:
         super().__init__()
         self.sample_static_info = sample_static_info
-        self.batch_staticinfo = sample_static_info.add_batch_first_in_dimensions_order()
 
         self.normaliser = sample_static_info.map_expanded(build_normaliser).as_module_dict()
 
@@ -91,7 +90,7 @@ class BaseGraphPLModule(pl.LightningModule, ABC):
 
         self.loss = get_loss_function(
             config.model_dump(by_alias=True).training.training_loss,
-            static_info=self.batch_staticinfo["target"],
+            static_info=self.sample_static_info["target"],
         )
         # print_variable_scaling(self.loss, data_indices)
 
@@ -133,8 +132,21 @@ class BaseGraphPLModule(pl.LightningModule, ABC):
         self.reader_group_rank = 0
         print("✅ BaseGraphPLModule initialized")
 
-    def build_model(self, model_config, sample_static_info, metadata) -> torch.nn.Module:
-        return instantiate(model_config)
+    def build_model(self, model_config, **kwargs) -> torch.nn.Module:
+        if "_target_" not in model_config.model:
+            raise ValueError("model_config must contain a '_target_' key for instantiation")
+
+        # mimic the partial instantiate from hydra
+        def find_class_by_name(target: str):
+            components = target.split(".")
+            module_path = ".".join(components[:-1])
+            class_name = components[-1]
+            module = __import__(module_path, fromlist=[class_name])
+            return getattr(module, class_name)
+
+        cls = find_class_by_name(model_config.model._target_)
+
+        return cls(model_config=model_config, **kwargs)
 
     def log(self, *args, **kwargs):
         kwargs["logger"] = kwargs.get("logger", self.logger_enabled)
@@ -260,6 +272,7 @@ class BaseGraphPLModule(pl.LightningModule, ABC):
                 sync_dist=True,
             )
 
+        # TODO (latter): should return a dictionnary here, but the callbacks need to be adapted
         return loss, y_preds
 
     def configure_optimizers(self) -> tuple[list[torch.optim.Optimizer], list[dict]]:

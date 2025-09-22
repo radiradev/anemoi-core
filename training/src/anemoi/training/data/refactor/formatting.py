@@ -15,6 +15,7 @@ from rich.console import Console
 from rich.tree import Tree
 
 from anemoi.utils.dates import frequency_to_string
+
 # this file is quite long and has a lot of knowledge about the other types
 # it is not too bad because everything related to display is here
 
@@ -134,8 +135,7 @@ def format_key_value(k, v):
     elif isinstance(v, (list, tuple)):
         txt = format_shorten(k, str(v))
     elif isinstance(v, dict):
-        keys = ",".join(f"{k_}" for k_ in v.keys())
-        txt = format_shorten(k, "dict with keys " + keys)
+        txt = format_shorten(k, f"dict with {len(v)} keys " + ",".join(f"{k_}" for k_ in v.keys()))
     elif isinstance(v, np.ndarray):
         txt = format_array(k, v)
     try:

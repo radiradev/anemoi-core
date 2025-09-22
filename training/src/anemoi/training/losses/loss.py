@@ -39,53 +39,30 @@ def get_loss_function(
     **kwargs,
 ) -> DictLoss:
 
-    assert static_info is not None
+    generic_loss_config = OmegaConf.to_container(config, resolve=True)
 
-    generic_config = OmegaConf.to_container(config, resolve=True)
+    from anemoi.training.losses.rmse import RMSELoss
 
-    loss_config = static_info.new_empty()
+    # TODO: read from config
+
+    res = static_info.new_empty()
     for path, box in static_info.items():
-        loss_config[path] = dict(
-            config=generic_config,
+        box = box.copy()
+        # we add here the batch dimension
+        # because the loss knows it will always be there
+        dimensions_order = ("batch",) + box.pop("dimensions_order")
+
+        res[path] = RMSELoss(
+            config=generic_loss_config,
             name_to_index=box["name_to_index"],
             extra=box.get("extra", {}),
             number_of_features=box["number_of_features"],
-            dimensions_order=box["dimensions_order"],
+            dimensions_order=dimensions_order,
         )
-
-    print(loss_config.to_str("Loss config with additional info if needed"))
-
-    print(
-        "❌TODO: building simple loss function: Assumes target and output have the same structure and variables, rmse loss for everybody",
-    )
-    from anemoi.training.losses.rmse import RMSELoss
-
-    res = loss_config.new_empty()  # or res = Dict()
-    for path, box in loss_config.items():
-        res[path] = RMSELoss(**box)
     res = res.as_module_dict()
+
     print(res.to_str("Created Loss function in get_loss_function"))
     return res
-
-    assert False
-
-    loss_config = OmegaConf.to_container(config, resolve=True)
-    loss_dict = {}
-
-    for key, loss_config_per_output_group in loss_config.items():
-        if isinstance(loss_config_per_output_group, dict):
-            loss_function = _get_loss_function_per_output_group(
-                loss_config_per_output_group,
-                scalers=scalers,
-                data_indices=data_indices,
-                **kwargs,
-            )
-        else:
-            error_msg = f"Loss config for {key} must be a dict, not {type(loss_config_per_output_group)}"
-            raise TypeError(error_msg)
-
-        loss_dict[key] = loss_function
-    return DictLoss(loss_dict)
 
 
 def _get_loss_function_per_output_group(

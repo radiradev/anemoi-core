@@ -17,9 +17,9 @@ class ForecastingPLModule(BaseGraphPLModule):
     def get_target_from_batch(self, batch, **kwargs):
         return batch["target"]
 
-    def get_semantic_from_static_info(self, batch_staticinfo, target, **kwargs):
+    def get_semantic_from_static_info(self, static_info, target, **kwargs):
         # get semantic information from target (should use static info)
-        target_static_info = batch_staticinfo["target"]
+        target_static_info = static_info["target"]
         semantic = target_static_info.new_empty()
         for k, v in target_static_info.items():
             box = v.copy()
@@ -40,7 +40,9 @@ class ForecastingPLModule(BaseGraphPLModule):
         return semantic
 
     def _step(
-        self, batch: "NestedTensor", validation_mode: bool = False,
+        self,
+        batch: "NestedTensor",
+        validation_mode: bool = False,
     ) -> Generator[tuple[torch.Tensor | None, dict, list], None, None]:
         """Rollout step for the forecaster.
 
@@ -68,16 +70,11 @@ class ForecastingPLModule(BaseGraphPLModule):
         # ✅ here, batch = input + target
         # validation vs training, do we have validation batch or training batch?
         #
-        # we should create a sample_provider in AnemoiTrainer?
-        # or in this module then give it to the dataloader and dataset?
         print("️⚠️💬 Starting _step")
         static_info = self.model.sample_static_info
-        batch_staticinfo = self.batch_staticinfo
 
         # merge batch with static data
-        batch = batch_staticinfo + batch
-
-        assert batch
+        batch = static_info + batch
 
         print(batch.to_str("⚠️batch before normalistation"))
         for k, v in batch.items():
@@ -91,12 +88,13 @@ class ForecastingPLModule(BaseGraphPLModule):
         loss = torch.zeros(1, dtype=batch.first["data"].dtype, device=self.device, requires_grad=True)
         print(self.loss.to_str("⚠️loss function"))
 
+        # get input and target
         input = self.get_input_from_batch(batch)
         target = self.get_target_from_batch(batch)
         print(input.to_str("⚠️input data"))
         print(target.to_str("⚠️target data"))
 
-        semantic = self.get_semantic_from_static_info(batch_staticinfo, target)
+        semantic = self.get_semantic_from_static_info(static_info, target)
         print(semantic.to_str("⚠️semantic info from target"))
 
         # graph = self.graph_editor.update_graph(self.graph_data, input_latlons, target_latlons)
@@ -107,7 +105,18 @@ class ForecastingPLModule(BaseGraphPLModule):
         print(y_pred.to_str("⚠️y_pred before merging semantic info from target"))
 
         # compute loss
-        y_pred = semantic + y_pred
+
+        # y_pred = semantic + y_pred
+        new_y = semantic.new_empty()
+        for k, v in semantic.items():
+            box = v.copy()
+            for k_ in y_pred[k]:
+                if k_ in box:
+                    print("Warning: overwriting key", k_, "in semantic info")
+                box[k_] = y_pred[k][k_]
+            new_y[k] = box
+        y_pred = new_y
+
         print(y_pred.to_str("⚠️y_pred after merging semantic info from target"))
         loss = 0
         for k, module in self.loss.items():

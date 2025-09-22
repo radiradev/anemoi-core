@@ -13,9 +13,7 @@ import uuid
 import warnings
 from typing import Optional
 
-import einops
 import torch
-from boltons.iterutils import remap as _remap
 from hydra.utils import instantiate
 from torch import Tensor
 from torch import nn
@@ -113,33 +111,38 @@ class AnemoiMultiModel(AnemoiModel):
         print(f"✅ model : {self.__class__.__name__}")
         super().__init__()
         self.id = str(uuid.uuid4())
+
+        model_config = DotDict(model_config)
+
+        self.model_config = model_config
+        self.sample_static_info = sample_static_info
         self.metadata = metadata
 
         self.supporting_arrays = {}
-        model_config = DotDict(model_config)
+        self.build()
 
-        self.sample_static_info = sample_static_info
+    def build(self):
+        from anemoi.models.preprocessing.normalisers import build_normaliser_moduledict
 
-        from anemoi.models.preprocessing.normalisers import build_normaliser
-
-        self.normaliser = self.sample_static_info.new_empty()
-        for path, value in self.sample_static_info.items():
-            self.normaliser[path] = build_normaliser(**value)
-        # also possible:
-        #  self.normaliser = self.sample_static_info.map_expanded(build_normaliser)
+        self.normaliser = build_normaliser_moduledict(self.sample_static_info)
         print(self.normaliser)
 
         # TODO? re-add generic preprocessors if needed.
 
         input_info = self.sample_static_info["input"]
         target_info = self.sample_static_info["target"]
+        from anemoi.training.data.refactor.structure import Dict
 
-        self.num_channels = model_config.num_channels
+        print(type(input_info), input_info)
+        print(type(input_info["high_res"]), input_info["high_res"])
+        assert isinstance(input_info, Dict), type(input_info)
+
+        self.num_channels = self.model_config.num_channels
 
         self.latent_residual_connection = True
-        self.merge_latents_method = model_config.model.merge_latents
+        self.merge_latents_method = self.model_config.model.merge_latents
 
-        if model_config.get("residual_connections"):
+        if self.model_config.get("residual_connections"):
             warnings.warn("Residual connections not supported")
         # def _define_residual_connection_indices(
         #     input,
@@ -157,40 +160,34 @@ class AnemoiMultiModel(AnemoiModel):
         #     return residual_connection_indices
 
         # self.residual_connection_indices = _define_residual_connection_indices(
-        #     sample_static_info["input"],
-        #     sample_static_info["target"],
-        #     residual_connections=model_config.get("residual_connections", []),
+        #     self.sample_static_info["input"],
+        #     self.sample_static_info["target"],
+        #     residual_connections=self.model_config.get("residual_connections", []),
         # )
 
         # NODE_COORDS_NDIMS = 4  # cos_lat, sin_lat, cos_lon, sin_lon
         # should be in the input ?
-        def get_num_channels(static_info):
-            num_channels = static_info.new_empty()
-            for path, value in static_info.items():
-                name_to_index = value["name_to_index"]
-                warnings.warn("assuming only one offset per tensor")
-                num_channels[path] = len(name_to_index)
-            return num_channels
+        def get_num_channels(name_to_index, **kwargs):
+            return len(name_to_index)
 
-        self.num_input_channels = get_num_channels(input_info)
-        self.num_target_channels = get_num_channels(target_info)
-        # also possible:
-        #  self.num_input_channels = self.sample_static_info.map(lambda x: len(x['name_to_index']))
-        #  self.num_target_channels = self.sample_static_info.map(lambda x: len(x['name_to_index']))
+        self.num_input_channels = input_info.map(get_num_channels)
+        self.num_target_channels = target_info.map(get_num_channels)
 
         # TODO: Remove. TOY MODEL.
         # here we assume that the tree structure of the input and target match
         # if this is not the case, we need to do something more complicated
         # and define an actual downscaling/other model
+        num_input_channels_high_res = self.num_input_channels
         linear = target_info.new_empty()
         for path in target_info.keys():
-            linear[path] = nn.Linear(self.num_input_channels[path], self.num_target_channels[path])
+            linear[path] = nn.Linear(num_input_channels_high_res[path], self.num_target_channels[path])
+        # assert len(linear) == 1, "Currently only one input high_res is supported"
         linear = linear.as_module_dict()
         self.linear = linear
 
-        self.hidden_name: str = model_config.model.hidden_name
-        encoders, self.encoder_sources, num_encoded_channels = extract_sources(model_config.model.encoders)
-        decoders, self.decoder_sources, num_decoded_channels = extract_sources(model_config.model.decoders)
+        self.hidden_name: str = self.model_config.model.hidden_name
+        encoders, self.encoder_sources, num_encoded_channels = extract_sources(self.model_config.model.encoders)
+        decoders, self.decoder_sources, num_decoded_channels = extract_sources(self.model_config.model.decoders)
         # def build_embeder(number_of_features, **kwargs):
         #     return NodeEmbedder(
         #         num_input_channels=number_of_features,
@@ -210,7 +207,7 @@ class AnemoiMultiModel(AnemoiModel):
             key: num_encoded_channels[self.encoder_sources[key]] for key in self.num_input_channels.keys()
         }
         self.node_embedder = NodeEmbedder(
-            model_config.model.emb_data,
+            self.model_config.model.emb_data,
             num_input_channels=self.num_input_channels,
             num_output_channels=num_embedded_channels,
         )
@@ -218,7 +215,7 @@ class AnemoiMultiModel(AnemoiModel):
             key: num_decoded_channels[self.decoder_sources[key]] for key in self.num_target_channels.keys()
         }
         self.unemb_target_nodes = NodeProjector(
-            model_config.model.emb_data,
+            self.model_config.model.emb_data,
             num_input_channels=num_embedded_channels,
             num_output_channels=self.num_target_channels,
         )
@@ -237,7 +234,7 @@ class AnemoiMultiModel(AnemoiModel):
 
         # Processor hidden -> hidden
         self.processor = instantiate(
-            model_config.model.processor,
+            self.model_config.model.processor,
             _recursive_=False,
             num_channels=self.num_channels,
             edge_dim=EDGE_ATTR_NDIM,
@@ -326,11 +323,11 @@ class AnemoiMultiModel(AnemoiModel):
         x_data_latents = self.node_embedder(x_data_raw)
 
         # TODO: Merge subgraph
-        # graph, _ = merge_graph_sources(graph, self.encoder_sources)
+        # graph, _ = merge_graph_sources(graph, self.encoder_sources)
 
         # We should create the graph here
         # graph = create_graph(x, target)
-        
+
         x_hidden_latents = {}
         x_hidden_raw = self.get_node_coords(graph, self.hidden_name)
         shard_shapes_hidden = get_shard_shapes(x_hidden_raw, 0, model_comm_group)
@@ -365,8 +362,8 @@ class AnemoiMultiModel(AnemoiModel):
     ):
         x_hidden_latent, x_target_latents = x
 
-        #sources = {v: k for k, v in self.decoder_sources.items()}
-        #graph, node_slices = merge_graph_sources(graph, sources)
+        # sources = {v: k for k, v in self.decoder_sources.items()}
+        # graph, node_slices = merge_graph_sources(graph, sources)
 
         x_out = self.sample_static_info["target"].new_empty()
         for dec_source in self.sample_static_info["target"].keys():
@@ -412,28 +409,6 @@ class AnemoiMultiModel(AnemoiModel):
         #        assert number_dim(graph[name].x) == (n, 2)
         return torch.cat([torch.sin(graph[name].x), torch.cos(graph[name].x)], dim=-1)
 
-    def forward_toy(self, x):
-        print(x.to_str("x after"))
-        output = self.sample_static_info["target"].new_empty()
-        for path, value in self.sample_static_info["target"].items():
-            linear = self.linear[path]
-            data = x[path]["data"]
-            # value['_dimensions_order'] = ['variables', 'values']
-            try:
-                data = einops.rearrange(data, "batch variables values -> batch values variables")
-            except Exception as e:
-                e.add_note(f"when processing path {path} with data shape {data.shape}")
-                e.add_note("expected data shape (batch, time, ensemble, vars, grid)")
-                from anemoi.training.data.refactor.structure import Dict
-
-                e.add_note(f"value: {Dict(value=value)}")
-                raise
-            output[path] = linear(data)
-        print(output.to_str("output after linear"))
-        assert len(output), "ouput must not be empty"
-        print("❤️🆗----- End of Forward pass of AnemoiMultiModel -----")
-        return output
-
     def forward(
         self, x: dict[str, Tensor], graph: HeteroData, *, model_comm_group: Optional[ProcessGroup] = None, **kwargs
     ) -> dict[str, Tensor]:
@@ -450,7 +425,7 @@ class AnemoiMultiModel(AnemoiModel):
         #        x = self.sample_static_info["input"] + x
 
         # TODO: Remove. TOY FORWARD
-        return self.forward_toy(x)
+        # return self.forward_toy(x)
 
         batch_size = 1
         ensemble_size = 1
@@ -494,104 +469,10 @@ class AnemoiMultiModel(AnemoiModel):
             ensemble_size=ensemble_size,
             model_comm_group=model_comm_group,
         )
-        
+
         # x_out = self.residual_connection(x_out, x_data_skip)
         x_out = self.bound(x_out)
-
         return x_out
 
-    def _build_normaliser_moduledict(self):
-        """Build normalisers ModuleDict by extracting data from sample_static_info."""
-        assert False, "dead code"
-        from anemoi.models.preprocessing.normalisers import InputNormaliser
-
-        normaliser = nn.ModuleDict()
-
-        def extract_and_build(path, key, value):
-            if hasattr(value, "items") and "name_to_index" in value and "statistics" in value and "normaliser" in value:
-                name_to_index = value["name_to_index"]
-                statistics = value["statistics"]
-                normaliser_config = value["normaliser"]
-
-                module_key = "__".join(path + (key,)) if path else key
-                LOGGER.info(f"Building normaliser for {module_key}")
-                LOGGER.info(f"  normaliser_config: {normaliser_config}")
-                LOGGER.info(f"  name_to_index keys: {list(name_to_index.keys()) if name_to_index else 'None'}")
-                LOGGER.info(f"  statistics keys: {list(statistics.keys()) if statistics else 'None'}")
-
-                actual_config = normaliser_config.get("config", normaliser_config)
-
-                normaliser_module = InputNormaliser(
-                    config=actual_config, name_to_index=name_to_index, statistics=statistics
-                )
-
-                normaliser[module_key] = normaliser_module
-
-            return key, value
-
-        # Traverse the sample_static_info structure
-        _remap(self.sample_static_info, visit=extract_and_build)
-
-        return normaliser
-
-    # def get_batch_input_names(self, batch, prefix=""):
-    #     """Get all input names from a batch structure."""
-    #     names = []
-
-    #     for key, value in batch.items():
-    #         current_name = f"{prefix}__{key}" if prefix else key
-
-    #         if isinstance(value, dict):
-    #             names.extend(self.get_batch_input_names(value, current_name))
-    #         else:
-    #             names.append(current_name)
-
-    #     return names
-
     def apply_normalisers(self, batch):
-        """Apply normalisers to batch in-place."""
         return self.normaliser(batch)
-
-        # boilerplate code for recursive application of normalisers has been removed
-
-        def apply_to_nested_dict_inplace(data_dict, path=""):
-            """Recursively apply normalisers to nested dictionary structure in-place."""
-            for key, value in data_dict.items():
-                current_path = f"{path}__{key}" if path else key
-
-                if isinstance(value, dict):
-                    apply_to_nested_dict_inplace(value, current_path)
-                elif isinstance(value, torch.Tensor) and key == "data":
-                    # Check if there's a normaliser for the parent path (e.g., input__low_res for input__low_res__data)
-                    parent_path = path  # path is already the parent (e.g., "input__low_res")
-                    if parent_path in self.normaliser:
-                        LOGGER.debug(
-                            f"Normalizing {current_path} using normaliser {parent_path} - tensor shape: {value.shape}"
-                        )
-                        LOGGER.debug(
-                            f"  Before: min: {value.min().item():.4f}, max: {value.max().item():.4f}, mean: {value.mean().item():.4f}"
-                        )
-                        normaliser = self.normaliser[parent_path]
-                        LOGGER.debug(
-                            f"  Normaliser _norm_mul range: {normaliser._norm_mul.min().item():.6f} to {normaliser._norm_mul.max().item():.6f}"
-                        )
-                        LOGGER.debug(
-                            f"  Normaliser _norm_add range: {normaliser._norm_add.min().item():.6f} to {normaliser._norm_add.max().item():.6f}"
-                        )
-                        normalized_data = normaliser(value)
-                        LOGGER.debug(
-                            f"  After: min: {normalized_data.min().item():.4f}, max: {normalized_data.max().item():.4f}, mean: {normalized_data.mean().item():.4f}"
-                        )
-                        # Replace the tensor in-place
-                        data_dict[key] = normalized_data
-                    else:
-                        LOGGER.debug(
-                            f"Skipped {current_path} - tensor shape: {value.shape} (no normaliser for parent {parent_path})"
-                        )
-                elif isinstance(value, torch.Tensor):
-                    LOGGER.debug(
-                        f"Skipped {current_path} - tensor shape: {value.shape} (coordinates/metadata, not normalized)"
-                    )
-
-        apply_to_nested_dict_inplace(batch)
-        return batch

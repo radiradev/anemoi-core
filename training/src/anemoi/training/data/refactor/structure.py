@@ -68,7 +68,7 @@ class Dict(dict):
             raise KeyError("Empty path is not allowed")
         if isinstance(value, Dict):
             for p, v in value.items():
-                assert p, f"Empty sub-path is not allowed when setting {path} to a Dict"
+                assert p, f"Empty sub-path is not allowed when setting '{path}' to a Dict"
                 new_path = _join_paths(path, p)
                 self[new_path] = v
             return
@@ -81,7 +81,7 @@ class Dict(dict):
         prefix = path + SEPARATOR
         matching = {p[len(prefix) :]: v for p, v in self.items() if p.startswith(prefix)}
         if not matching:
-            raise KeyError(f"Path '{path}' not found in Dict with keys: {list(self.keys())}")
+            raise KeyError(f"Key '{path}' not found in Dict with keys: {list(self.keys())}")
         return self.__class__(matching)
 
     # def __getattr__(self, name):
@@ -94,7 +94,7 @@ class Dict(dict):
         res = Function()
         for path, v in self.items():
             if not callable(v):
-                raise ValueError(f"Unexpected leaf at {path}, got {type(v)}")
+                raise ValueError(f"Unexpected leaf for key '{path}', got {type(v)}")
             res[path] = v
         return res
 
@@ -102,7 +102,7 @@ class Dict(dict):
         res = AnemoiModuleDict()
         for path, v in self.items():
             if not isinstance(v, torch.nn.Module):
-                raise ValueError(f"Unexpected leaf at {path}, got {type(v)}")
+                raise ValueError(f"Unexpected leaf for key '{path}', got {type(v)}")
             res[path] = v
         return res
 
@@ -173,7 +173,7 @@ class Dict(dict):
                 new = func(leaf, *args_, **kwargs_)
                 res[path] = new
             except Exception as e:
-                e.add_note(f"When processing path {path}")
+                e.add_note(f"When processing key '{path}'")
                 raise e
         return res
 
@@ -186,7 +186,7 @@ class Dict(dict):
                 new = func(*args_, **leaf, **kwargs_)
                 res[path] = new
             except Exception as e:
-                e.add_note(f"When processing path {path}")
+                e.add_note(f"When processing key '{path}'")
                 raise e
         return res
 
@@ -273,12 +273,12 @@ class BaseAccessor:
         res = self.result_parent_class()
         for path, box in self.parent.items():
             if not isinstance(box, dict):
-                raise ValueError(f"Unexpected leaf at {path} for the first operand, got {type(box)}")
+                raise ValueError(f"Unexpected leaf for key '{path}' for the first operand, got {type(box)}")
 
             other_box = other.parent[path]
 
             if not isinstance(other_box, dict):
-                raise ValueError(f"Unexpected leaf at {path} for the second operand, got {type(other_box)}")
+                raise ValueError(f"Unexpected leaf for key '{path}' for the second operand, got {type(other_box)}")
 
             res[path] = _merge_dicts_allow_overwrite_none(box, other_box)
 
@@ -287,7 +287,7 @@ class BaseAccessor:
     def _apply_dict_method(self, method_name, *args, **kwargs):
         def function_finder(path, leaf):
             if not isinstance(leaf, dict):
-                raise ValueError(f"Expected dict at {path}, got {type(leaf)}")
+                raise ValueError(f"Expected dict for key '{path}', got {type(leaf)}")
             return getattr(leaf, method_name)
 
         return self._parallel_apply_on_leaves(function_finder, *args, **kwargs)
@@ -295,7 +295,7 @@ class BaseAccessor:
     def __call__(self, *args, **kwargs):
         def function_finder(path, leaf):
             if not callable(leaf):
-                raise ValueError(f"Expected callable at {path}, got {type(leaf)}")
+                raise ValueError(f"Expected callable for key '{path}', got {type(leaf)}")
             return leaf
 
         res = self.result_parent_class()
@@ -318,7 +318,7 @@ class BaseAccessor:
             try:
                 res = func(*args_, **kwargs_)
             except Exception as e:
-                e.add_note(f"While processing path '{path}', leaf keys={leaf.keys()}, {args_=}, {kwargs_=}")
+                e.add_note(f"While processing key '{path}', leaf keys={leaf.keys()}, {args_=}, {kwargs_=}")
                 raise e
             # stack in a list so that the caller decides how to handle it
             output.append((path, res))
