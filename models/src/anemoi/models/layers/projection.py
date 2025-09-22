@@ -46,16 +46,24 @@ class NodeEmbedder(nn.Module):
     def forward(self, x: dict[str, torch.Tensor], **kwargs) -> HeteroData:
         out = x.new_empty()
         for key, box in x.items():
+            dimensions_order = ("1",) + box['dimensions_order']  # add batch dimension
             data = box["data"]  # shape: (1, num_channels, num_points)
-            assert "variables" in box["dimensions_order"], "Expected 'variables' in dimensions_order"
-            assert "values" in box["dimensions_order"], "Expected 'values' in dimensions_order"
-            dims = tuple(str(d) if d in ["variables", "values"] else "1" for d in box["dimensions_order"])
+            assert "variables" in dimensions_order, "Expected 'variables' in dimensions_order"
+            assert "values" in dimensions_order, "Expected 'values' in dimensions_order"
+
+            dims = tuple(str(d) if d in ["variables", "values"] else "1" for d in dimensions_order)
+
             sincos_latlons = _get_coords(box["latitudes"], box["longitudes"]) # shape: (4, num_points)
             sincos_latlons = einops.rearrange(sincos_latlons, f"variables values -> {' '.join(dims)}")
+
+            assert data.shape[-1] == sincos_latlons.shape[-1], f"Shapes do not match: {data.shape} vs {sincos_latlons.shape}"
             data = torch.cat([data, sincos_latlons], dim=1)
-            squash_vars = [d for d in box["dimensions_order"] if d != "variables"]
-            data = einops.rearrange(data, f"{' '.join(box['dimensions_order'])} -> ({' '.join(squash_vars)}) variables")
-            out[key] = self.embedders[key](data) # shape: (num_nodes, num_channels)
+            squash_vars = [d for d in dimensions_order if d != "variables"]
+            data = einops.rearrange(data, f"{' '.join(dimensions_order)} -> ({' '.join(squash_vars)}) variables")
+
+            embedder = self.embedders[key]
+            # assert embedder.weight.shape[1] == data.shape[1], f"Shapes do not match for {key}: {embedder.weight.shape} vs {data.shape}"
+            out[key] = embedder(data) # shape: (num_nodes, num_channels)
         return out
 
 
