@@ -52,15 +52,13 @@ class NodeEmbedder(nn.Module):
     def forward(self, x: dict[str, torch.Tensor], batch_size: int, **kwargs) -> dict[str, torch.Tensor]:
         out = x.new_empty()
         for key, box in x.items():
-            data = box["data"]  # shape: (1, num_channels, num_points)
-            vars_dim = self.dimensions_order[key].index("variables")
-
+            # box["data"].shape: (1, num_channels, num_points)
             dims = tuple(str(d) if d in ["variables", "values"] else "1" for d in self.dimensions_order[key])
             sincos_latlons = _get_coords(box["latitudes"], box["longitudes"]) # shape: (4, num_points)
             sincos_latlons = einops.rearrange(sincos_latlons, f"variables values -> {' '.join(dims)}")
             sincos_latlons = sincos_latlons.expand(batch_size, -1, -1)
 
-            data = torch.cat([data, sincos_latlons], dim=vars_dim)
+            data = torch.cat([box["data"], sincos_latlons], dim=self.dimensions_order[key].index("variables"))
 
             squash_vars = [d for d in self.dimensions_order[key] if d != "variables"]
             data = einops.rearrange(data, f"{' '.join(self.dimensions_order[key])} -> ({' '.join(squash_vars)}) variables")
