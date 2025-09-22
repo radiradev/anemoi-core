@@ -195,8 +195,8 @@ class StepVariableLevelScalerSchema(BaseModel):
     target_: Literal["anemoi.training.losses.scalers.StepVariableLevelScaler"] = Field(..., alias="_target_")
     group: str = Field(example="pl")
     "Group of variables to scale."
-    steps: dict[int, VariableLevelScalerSchema] = {}
-    "Steps of VariableLevelScalers indexed by levels"
+    steps: dict[int, VariableLevelScalerSchema] = Field(default={})
+    "Steps of VariableLevelScalers indexed by levels."
 
 
 class GraphNodeAttributeScalerSchema(BaseModel):

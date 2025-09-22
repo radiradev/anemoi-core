@@ -10,15 +10,18 @@
 
 import logging
 from abc import abstractmethod
+from typing import TYPE_CHECKING
 from typing import Any
 
 import torch
 from hydra.utils import instantiate
 
 from anemoi.models.data_indices.collection import IndexCollection
-from anemoi.training.losses.scalers.base_scaler import BaseScaler
 from anemoi.training.losses.scalers.variable import BaseVariableLossScaler
 from anemoi.training.utils.variables_metadata import ExtractVariableGroupAndLevel
+
+if TYPE_CHECKING:
+    from anemoi.training.losses.scalers.base_scaler import BaseScaler
 
 LOGGER = logging.getLogger(__name__)
 
@@ -166,7 +169,7 @@ class ConstantLevelScaler(BaseVariableLevelScaler):
         self.constant = constant
         del kwargs
 
-    def get_level_scaling(self, variable_level: float) -> float:
+    def get_level_scaling(self, _variable_level: float) -> float:
         return self.constant
 
 
@@ -191,7 +194,7 @@ class NoVariableLevelScaler(ConstantLevelScaler):
 
 
 class StepVariableLevelScaler(BaseVariableLevelScaler):
-    """Step scaling"""
+    """Step scaling."""
 
     def __init__(
         self,
@@ -212,8 +215,7 @@ class StepVariableLevelScaler(BaseVariableLevelScaler):
         for step in self.steps:
             if level >= step and (level_step is None or step > level_step):
                 level_step = step
-        if level_step is None:
-            raise ValueError(f"No valid step for level {level}.")
+        assert level_step is not None, f"No valid step for level {level}."
         return level_step
 
     def get_level_scaling(self, variable_level: int) -> float:
@@ -224,7 +226,8 @@ class StepVariableLevelScaler(BaseVariableLevelScaler):
             metadata_extractor=self.variable_metadata_extractor,
             _recursive_=False,
         )
-        if not isinstance(scaler, BaseVariableLevelScaler):
-            raise ValueError(f"{step_config._target_} scaler should be a variable loss scaler")
-        scaling_values = scaler.get_level_scaling(variable_level)
-        return scaling_values
+        assert isinstance(
+            scaler,
+            BaseVariableLevelScaler,
+        ), f"{step_config._target_} scaler should be a variable loss scaler"
+        return scaler.get_level_scaling(variable_level)
