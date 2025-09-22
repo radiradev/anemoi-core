@@ -11,7 +11,7 @@ import torch
 import einops
 from hydra.utils import instantiate
 from torch import nn
-from torch_geometric.data import HeteroData
+
 
 def _get_coords(latitudes: torch.Tensor, longitudes: torch.Tensor) -> torch.Tensor:
     coords = torch.cat([latitudes, longitudes], dim=0).to(torch.float32)  # shape: (2, num_points)

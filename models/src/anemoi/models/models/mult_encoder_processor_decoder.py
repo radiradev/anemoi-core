@@ -170,18 +170,6 @@ class AnemoiMultiModel(AnemoiModel):
         input_dims_order = {k: ("batch", ) + v["dimensions_order"] for k, v in self.sample_static_info["input"].items()}
         target_dims_order = {k: ("batch", ) + v["dimensions_order"] for k, v in self.sample_static_info["target"].items()}
 
-        # TODO: Remove. TOY MODEL.
-        # here we assume that the tree structure of the input and target match
-        # if this is not the case, we need to do something more complicated
-        # and define an actual downscaling/other model
-        num_input_channels_high_res = self.num_input_channels
-        linear = target_info.new_empty()
-        for path in target_info.keys():
-            linear[path] = nn.Linear(num_input_channels_high_res[path], self.num_target_channels[path])
-        # assert len(linear) == 1, "Currently only one input high_res is supported"
-        linear = linear.as_module_dict()
-        self.linear = linear
-
         self.hidden_name: str = self.model_config.model.hidden_name
         encoders, self.encoder_sources, num_encoded_channels = extract_sources(self.model_config.model.encoders)
         decoders, self.decoder_sources, num_decoded_channels = extract_sources(self.model_config.model.decoders)
@@ -413,34 +401,8 @@ class AnemoiMultiModel(AnemoiModel):
     ) -> dict[str, Tensor]:
         # at this point, the input (x) has already been normalised
         # if this is not wanted, don't normalise it in the task
-        print("❤️💬----- Forward pass of AnemoiMultiModel -----")
-        print(self.sample_static_info.to_str("Sample Info"))
-        # print(x.to_str("x before merge"))
-
-        # check matching keys
-        assert set(x.keys()) == set(
-            self.sample_static_info["input"].keys()
-        ), f"Input keys {list(x.keys())} do not match sample_static_info keys {list(self.sample_static_info['input'].keys())}"
-        #        x = self.sample_static_info["input"] + x
-
-        # TODO: Remove. TOY FORWARD
-        # return self.forward_toy(x)
-
         batch_size = 1
         ensemble_size = 1
-
-        # def shape_function(data, **kwargs):
-        #     return data.shape
-
-        # shapes = x.box_to_any(shape_function)
-        # x = x.box_to_box(reshape_for_graph_with_get_node)
-
-        # cat all data
-        # cat on nodes_coords
-
-        # assert isinstance(x, torch.Tensor), type(x)
-        # assert x.shape == math.product(shapes)
-        output = self.sample_static_info["target"].new_empty()
 
         x_data_latents, x_hidden_latent, shard_shapes_hidden = self.encode(
             x,
