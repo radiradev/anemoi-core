@@ -30,6 +30,9 @@ from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
 from scipy.sparse import load_npz
 
+from anemoi.training.data.refactor.read_config import convert_data_config
+from anemoi.training.data.refactor.read_config import convert_sample_config
+from anemoi.training.data.refactor.sample_provider import sample_provider_factory
 from anemoi.training.diagnostics.callbacks import get_callbacks
 from anemoi.training.diagnostics.logger import get_mlflow_logger
 from anemoi.training.diagnostics.logger import get_tensorboard_logger
@@ -65,6 +68,35 @@ if "DEBUG" in os.environ:
 
     hydra.utils.instantiate = instanciate_wrapper
     instantiate = hydra.utils.instantiate
+
+
+class Sharder:
+    # TODO: move to the right file
+    def __init__(self, group, shard_number, **options):
+        self.group = group
+        self.shard_number = shard_number
+        self.options = options
+
+        # for now, slice is just a full slice
+        # we need to define the right slicing here
+        # using the group, shard_number, etc
+        self.slice = slice(None)
+
+    def shard_latitudes(self, latitudes):
+        return latitudes[self.slice]
+
+    def shard_longitudes(self, longitudes):
+        return longitudes[self.slice]
+
+    def shard_latitudes_longitudes(self, latitudes_longitudes):
+        return latitudes_longitudes[self.slice, :]
+
+    def shard_data(self, data, dimensions_order: list[str] | tuple[str] = None):
+        # somewhere in the dimensions order we want to shard the data
+        # we actually want to shard on the "values" dimension
+        assert "values" in dimensions_order, f"Expected 'values' in dimensions_order, got {dimensions_order}"
+        slices = tuple(self.slice if dim == "values" else slice(None) for dim in dimensions_order)
+        return data[slices]
 
 
 class AnemoiTrainer:
@@ -106,6 +138,8 @@ class AnemoiTrainer:
         self.my_config.run_id = self.run_id  #
         LOGGER.info("Run id: %s", self.my_config.run_id)
 
+        self.build_sample_providers(config)
+
         # Get the server2server lineage
         self._get_server2server_lineage()
 
@@ -118,12 +152,39 @@ class AnemoiTrainer:
         # Check for dry run, i.e. run id without data
         # self._log_information()
 
+    def build_sample_providers(self, config):
+        sample_dict = config.model.sample
+        data_dict = config.data.sources
+        if not data_dict.pop("final", None):
+            data_dict = convert_data_config(data_dict)
+        if not sample_dict.pop("final", None):
+            sample_dict = convert_sample_config(sample_dict)
+
+        training_context = dict(sources=data_dict, **config.dataloader.sampler.training)
+        validation_context = dict(sources=data_dict, **config.dataloader.sampler.validation)
+
+        # Create Sampler provider
+        self.training_sample_provider = sample_provider_factory(**training_context, sharder=self.sharder, **sample_dict)
+        self.validation_sample_provider = sample_provider_factory(
+            **validation_context,
+            sharder=self.sharder,
+            **sample_dict,
+        )
+        print("❌❌ TODO: ensure that validation name_to_index matches the training name_to_index ❌❌")
+
+    @cached_property
+    def sharder(self):
+        # move this in the right place, see worker_init ?
+        return Sharder(group="a", shard_number="i", more="things")
+
     @cached_property
     def datamodule(self) -> Any:
         """DataModule instance and DataSets."""
         datamodule = instantiate(
             convert_to_omegaconf(self.config).datamodule,
             convert_to_omegaconf(self.config),
+            self.training_sample_provider,
+            self.validation_sample_provider,
         )
         # self.config.data.num_features = len(datamodule.ds_train.data.variables)
         # LOGGER.info("Number of data variables: %s", str(len(datamodule.ds_train.data.variables)))
@@ -214,7 +275,7 @@ class AnemoiTrainer:
         # ), "GLU activation function is not supported in Transformer models, due to fixed dimensions. "
         # "Please use a different activation function."
 
-        sample_static_info = self.datamodule.training_sample_provider.static_info
+        sample_static_info = self.training_sample_provider.static_info
 
         kwargs = {
             "config": self.config,
