@@ -7,6 +7,7 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
+import uuid
 from typing import TYPE_CHECKING
 from typing import Optional
 
@@ -16,9 +17,19 @@ if TYPE_CHECKING:
     from torch.distributed.distributed_c10d import ProcessGroup
 
     from anemoi.training.data.refactor.structure import NestedTensor
+from anemoi.utils.config import DotDict
 
 
 class AnemoiModel(nn.Module):
+    def __init__(self, model_config, sample_static_info, metadata):
+        self.id = str(uuid.uuid4())
+
+        model_config = DotDict(model_config)
+
+        self.model_config = model_config
+        self.sample_static_info = sample_static_info
+        self.metadata = metadata
+
     def predict_step(
         self,
         batch: "NestedTensor",

@@ -9,7 +9,6 @@
 
 
 import logging
-import uuid
 import warnings
 from typing import Optional
 
@@ -104,25 +103,18 @@ class AnemoiMultiModel(AnemoiModel):
         graph_data : HeteroData
             Graph definition
         """
+        super().__init__(model_config=model_config, sample_static_info=sample_static_info, metadata=metadata)
         print(f"✅ model : {self.__class__.__name__}")
-        super().__init__()
-        self.id = str(uuid.uuid4())
 
-        model_config = DotDict(model_config)
-
-        self.model_config = model_config
-        self.sample_static_info = sample_static_info
-        self.metadata = metadata
-
-        self.supporting_arrays = {}
-        self.build()
-
-    def build(self):
         from anemoi.models.preprocessing.normalisers import build_normaliser
 
         self.normaliser = self.sample_static_info.map_expanded(build_normaliser).as_module_dict()
         print("Normaliser for full batch", self.normaliser)
 
+        self.supporting_arrays = {}
+        self.build()
+
+    def build(self):
         input_info = self.sample_static_info["input"]
         target_info = self.sample_static_info["target"]
 
