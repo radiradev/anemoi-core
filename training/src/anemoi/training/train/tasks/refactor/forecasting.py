@@ -23,19 +23,19 @@ class ForecastingPLModule(BaseGraphPLModule):
         semantic = target_static_info.new_empty()
         for k, v in target_static_info.items():
             box = v.copy()
-            if "data" in v:
-                v.pop("data")
+            if "data" in box:
+                box.pop("data")
             # allows to look for some information in the target
-            if "latitudes" not in v and "latitudes" in target[k]:
-                v["latitudes"] = target[k]["latitudes"]
-            if "longitudes" not in v and "longitudes" in target[k]:
-                v["longitudes"] = target[k]["longitudes"]
-            if "timedeltas" not in v and "timedeltas" in target[k]:
-                v["timedeltas"] = target[k]["timedeltas"]
+            if "latitudes" not in box and "latitudes" in target[k]:
+                box["latitudes"] = target[k]["latitudes"]
+            if "longitudes" not in box and "longitudes" in target[k]:
+                box["longitudes"] = target[k]["longitudes"]
+            if "timedeltas" not in box and "timedeltas" in target[k]:
+                box["timedeltas"] = target[k]["timedeltas"]
             if "reference_date" in target[k]:
-                v["reference_date"] = target[k]["reference_date"]
+                box["reference_date"] = target[k]["reference_date"]
             if "reference_date_str" in target[k]:
-                v["reference_date_str"] = target[k]["reference_date_str"]
+                box["reference_date_str"] = target[k]["reference_date_str"]
             semantic[k] = box
         return semantic
 

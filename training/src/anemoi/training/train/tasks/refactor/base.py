@@ -226,8 +226,8 @@ class BaseGraphPLModule(pl.LightningModule, ABC):
     ) -> torch.Tensor:
         del batch_idx  # unused
         loss, _, _ = self._step(batch)
-        self.log(f"train_{self.loss.name}_loss", loss, on_epoch=True, on_step=True, prog_bar=True, sync_dist=True)
-        self.log("rollout", float(self.rollout), on_step=True, rank_zero_only=True, sync_dist=False)
+        self.log(f"train_loss", loss, on_epoch=True, on_step=True, prog_bar=True, sync_dist=True)
+        #self.log("rollout", float(self.rollout), on_step=True, rank_zero_only=True, sync_dist=False)
         return loss
 
     def lr_scheduler_step(self, scheduler: CosineLRScheduler, metric: None = None) -> None:

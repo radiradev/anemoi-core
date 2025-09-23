@@ -3,6 +3,7 @@ from typing import Dict
 
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
+from omegaconf import ListConfig
 
 from anemoi.utils.config import DotDict
 
@@ -83,7 +84,7 @@ def convert_source(config, name: str) -> Dict:
     if isinstance(offset, str):
         return dict(offset=offset, container=container)
 
-    if isinstance(offset, list):  # TODO remove this 'if' and use classes
+    if isinstance(offset, list) or isinstance(offset, ListConfig):  # TODO remove this 'if' and use classes
         return dict(
             for_each=[
                 dict(offset=offset),

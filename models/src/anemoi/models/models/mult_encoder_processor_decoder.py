@@ -119,7 +119,6 @@ class AnemoiMultiModel(AnemoiModel):
         target_info = self.sample_static_info["target"]
 
         print(type(input_info), input_info)
-        print(type(input_info["high_res"]), input_info["high_res"])
         assert isinstance(input_info, Dict), type(input_info)
 
         self.num_channels = self.model_config.num_channels
