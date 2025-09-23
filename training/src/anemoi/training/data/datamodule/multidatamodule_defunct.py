@@ -155,28 +155,17 @@ class AnemoiMultiDatasetsDataModule(pl.LightningDataModule):
 
         grid_indices_dict = {}
 
-        # Check if we have dataset-specific grid_indices config
-        if hasattr(self.config.dataloader, "grid_indices_per_dataset"):
-            # Each dataset can have its own grid indices configuration
-            for dataset_name in self.dataset_names:
-                if dataset_name in self.config.dataloader.grid_indices_per_dataset:
-                    grid_config = self.config.dataloader.grid_indices_per_dataset[dataset_name]
-                else:
-                    # Fallback to default grid_indices config
-                    grid_config = self.config.dataloader.grid_indices
+        # Each dataset can have its own grid indices configuration
+        for dataset_name in self.dataset_names:
+            if dataset_name in self.config.dataloader.grid_indices_per_dataset:
+                grid_config = self.config.dataloader.grid_indices_per_dataset[dataset_name]
+            else:
+                # Fallback to default grid_indices config
+                grid_config = self.config.dataloader.grid_indices
 
-                grid_indices = instantiate(grid_config, reader_group_size=reader_group_size)
-                grid_indices.setup(self.graph_data[dataset_name])
-                grid_indices_dict[dataset_name] = grid_indices
-        else:
-            # Use same grid_indices config for all datasets (backward compatibility)
-            for dataset_name in self.dataset_names:
-                grid_indices = instantiate(
-                    self.config.dataloader.grid_indices,
-                    reader_group_size=reader_group_size,
-                )
-                grid_indices.setup(self.graph_data[dataset_name])
-                grid_indices_dict[dataset_name] = grid_indices
+            grid_indices = instantiate(grid_config, reader_group_size=reader_group_size)
+            grid_indices.setup(self.graph_data[dataset_name])
+            grid_indices_dict[dataset_name] = grid_indices
 
         return grid_indices_dict
 
@@ -232,19 +221,11 @@ class AnemoiMultiDatasetsDataModule(pl.LightningDataModule):
         # For validation, use the same dataset structure but with validation config
         datasets_config = {}
 
-        # Check if validation has multiple datasets defined
-        if hasattr(self.config.dataloader.validation, "datasets"):
-            # Multi-dataset validation
-            for name, dataset_config in self.config.dataloader.validation.datasets.items():
-                data_reader = open_dataset(dataset_config)
-                data_reader = self.add_trajectory_ids(data_reader)
-                datasets_config[name] = data_reader
-        else:
-            # Single validation dataset - replicate for all training dataset names
-            data_reader = open_dataset(self.config.dataloader.validation)
+        # Multi-dataset validation
+        for name, dataset_config in self.config.dataloader.validation.datasets.items():
+            data_reader = open_dataset(dataset_config)
             data_reader = self.add_trajectory_ids(data_reader)
-            for name in self.dataset_names:
-                datasets_config[name] = data_reader
+            datasets_config[name] = data_reader
 
         return MultiDataset(
             datasets_config=datasets_config,
@@ -260,19 +241,11 @@ class AnemoiMultiDatasetsDataModule(pl.LightningDataModule):
         """Create multi-dataset for testing."""
         datasets_config = {}
 
-        # Check if test has multiple datasets defined
-        if hasattr(self.config.dataloader.test, "datasets"):
-            # Multi-dataset test
-            for name, dataset_config in self.config.dataloader.test.datasets.items():
-                data_reader = open_dataset(dataset_config)
-                data_reader = self.add_trajectory_ids(data_reader)
-                datasets_config[name] = data_reader
-        else:
-            # Single test dataset - replicate for all training dataset names
-            data_reader = open_dataset(self.config.dataloader.test)
+        # Multi-dataset test
+        for name, dataset_config in self.config.dataloader.test.datasets.items():
+            data_reader = open_dataset(dataset_config)
             data_reader = self.add_trajectory_ids(data_reader)
-            for name in self.dataset_names:
-                datasets_config[name] = data_reader
+            datasets_config[name] = data_reader
 
         return MultiDataset(
             datasets_config=datasets_config,
