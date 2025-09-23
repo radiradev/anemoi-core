@@ -1,0 +1,104 @@
+defaults:
+  - data: downscaling
+  - dataloader: native_grid
+  - datamodule: multiple
+  - diagnostics: evaluation
+  - hardware: example
+  - graph: downscaling
+  - model: downscaling_graphtransformer
+  - training: default
+  - _self_
+
+config_validation: False
+
+### This file is for local experimentation.
+##  When you commit your changes, assign the new features and keywords
+##  to the correct defaults.
+# For example to change from default GPU count:
+# hardware:
+#   num_gpus_per_node: 1
+
+data:
+  sources:
+    fields:
+      # dataset: aifs-od-an-oper-0001-mars-o96-2016-2023-6h-v6
+      dataset: aifs-od-an-oper-0001-mars-o32-2020-2020-6h-v6-for-software-testing
+      # processors including imputers and normalizers are applied in order of definition
+      normaliser:
+        _target_: anemoi.models.preprocessing.normalizer.InputNormalizer
+        config: ${data.normaliser}
+
+    other_fields:
+      # dataset: cerra-rr-an-oper-0001-mars-5p5km-1984-2020-6h-v2-hmsi
+      dataset: cerra-rr-an-oper-0001-mars-5p5km-2020-2020-6h-v2-hmsi-thinned-for-software-testing
+      # processors including imputers and normalizers are applied in order of definition
+      normaliser:
+        _target_: anemoi.models.preprocessing.normalizer.InputNormalizer
+        config: ${data.normaliser}
+
+diagnostics:
+  log:
+    wandb:
+      entity: None
+    mlflow:
+      enabled: False
+      tracking_uri: None
+  plot:
+    callbacks: []
+hardware:
+  files:
+    graph: "debug.pt"
+  paths:
+    output: ${oc.env:HPCPERM}/aifs/refactor/
+  accelerator: auto
+  num_gpus_per_node: 1
+  num_nodes: 1
+  num_gpus_per_model: 1
+model:
+  num_channels: 128
+  model:
+    _target_: anemoi.models.models.AnemoiMultiModel
+
+  rollout:
+    steps: ["0h", "+6h", "+12h", "+18h", "+24h"]
+    input_steps: ["-12h", "-6h", "0h"]
+    target_steps: ["+6h", "12h"]
+
+  sample:
+    rollout: ${model.rollout}
+    dictionary:
+      fields:
+        dictionary:
+          a:
+            rollout: prognostics
+            container:
+              dimensions: ["values", "variables"]
+              variables: ["2t", "10u", "10v"]
+              data_group: "fields"
+          b:
+            rollout: diagnostics
+            container:
+              dimensions: ["values", "variables"]
+              variables: [q_100, q_300, q_1000]
+              data_group: "fields"
+          c:
+            rollout: forcings
+            container:
+              dimensions: ["values", "variables"]
+              variables:
+                [cos_latitude, sin_latitude, cos_longitude, sin_longitude]
+              data_group: "fields"
+
+dataloader:
+  limit_batches:
+    training: 2
+    validation: 2
+training:
+  model_task: anemoi.training.train.tasks.refactor.rollout_forecasting.ToyRolloutForecastingPLModule
+  max_epochs: 2
+  training_loss:
+    # loss classes to initialise
+    high_res:
+      _target_: anemoi.training.losses.MSELoss
+      scalers: []
+      ignore_nans: False
