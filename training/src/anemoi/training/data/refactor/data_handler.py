@@ -3,37 +3,8 @@ import datetime
 import numpy as np
 
 from anemoi.datasets import open_dataset
+from anemoi.training.data.refactor.structure import deep_freeze_dict
 from anemoi.utils.dates import frequency_to_timedelta
-
-
-class FrozenDict(dict):
-    def __setitem__(self, key, value):
-        raise TypeError("FrozenDict is immutable")
-
-    def __delitem__(self, key):
-        raise TypeError("FrozenDict is immutable")
-
-    def clear(self):
-        raise TypeError("FrozenDict is immutable")
-
-    def pop(self, key, default=None):
-        raise TypeError("FrozenDict is immutable")
-
-    def popitem(self):
-        raise TypeError("FrozenDict is immutable")
-
-    def setdefault(self, key, default=None):
-        raise TypeError("FrozenDict is immutable")
-
-    def update(self, *args, **kwargs):
-        raise TypeError("FrozenDict is immutable")
-
-
-def deep_freeze_dict(d):
-    # MappingProxyType is not used because it is not of type dict and this is confusing
-    if not isinstance(d, dict):
-        return d
-    return FrozenDict({k: deep_freeze_dict(v) for k, v in d.items()})
 
 
 class DataHandler:

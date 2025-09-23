@@ -14,8 +14,8 @@ from collections.abc import Sequence
 from typing import Union
 
 import torch
-from torch.utils.checkpoint import checkpoint
 from rich import print
+from torch.utils.checkpoint import checkpoint
 
 from anemoi.training.data.refactor.formatting import anemoi_dict_to_str
 from anemoi.training.data.refactor.path_keys import SEPARATOR
@@ -31,6 +31,39 @@ NestedTensor = Union[
 ]
 
 
+def deep_freeze_dict(d):
+    # MappingProxyType is not used because it is not of type dict and this is confusing
+    if not isinstance(d, dict):
+        return d
+    return FrozenDict({k: deep_freeze_dict(v) for k, v in d.items()})
+
+
+class FrozenDict(dict):
+    def __setitem__(self, key, value):
+        raise TypeError("FrozenDict is immutable, cannot set item '{key}'")
+
+    def __delitem__(self, key):
+        raise TypeError("FrozenDict is immutable, cannot delete item '{key}'")
+
+    def clear(self):
+        raise TypeError("FrozenDict is immutable")
+
+    def pop(self, key, default=None):
+        raise TypeError("FrozenDict is immutable, cannot pop item '{key}'")
+
+    def popitem(self):
+        raise TypeError("FrozenDict is immutable")
+
+    def setdefault(self, key, default=None):
+        raise TypeError("FrozenDict is immutable, cannot set default for item '{key}'")
+
+    def update(self, *args, **kwargs):
+        raise TypeError("FrozenDict is immutable, cannot update")
+
+    def __hash__(self):
+        return hash(frozenset(self.items()))
+
+
 class Dict(dict):
 
     def __init__(self, *args, **kwargs):
@@ -44,6 +77,18 @@ class Dict(dict):
 
     def copy(self):
         return self.__class__(self)
+
+    def freeze(self):
+        for k, v in self.items():
+            if v is None:
+                continue
+            # if hasattr(v, "freeze"):
+            #    v = v.freeze()
+            if not isinstance(v, dict):
+                raise ValueError(f"Unexpected leaf for key '{k}', got {type(v)} instead of dict")
+            v = deep_freeze_dict(v)
+            self[k] = v
+        # TODO: should also freeze the list of keys in self
 
     def __copy__(self):
         return self.__class__(self)
