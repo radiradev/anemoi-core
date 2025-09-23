@@ -6,9 +6,6 @@ from torch.utils.checkpoint import checkpoint
 
 from anemoi.training.train.tasks.refactor.base import BaseGraphPLModule
 
-if TYPE_CHECKING:
-    from anemoi.training.data.refactor.structure import NestedTensor
-
 
 class ForecastingPLModule(BaseGraphPLModule):
     def get_input_from_batch(self, batch, **kwargs):
@@ -40,50 +37,18 @@ class ForecastingPLModule(BaseGraphPLModule):
         return semantic
 
     def _step(
-        self,
-        batch: "NestedTensor",
-        validation_mode: bool = False,
+        self, batch, validation_mode: bool = False
     ) -> Generator[tuple[torch.Tensor | None, dict, list], None, None]:
-        """Rollout step for the forecaster.
-
-        Will run pre_processors on batch, but not post_processors on predictions.
-
-        Parameters
-        ----------
-        batch : torch.Tensor
-            Batch to use for rollout
-        rollout : Optional[int], optional
-            Number of times to rollout for, by default None
-            If None, will use self.rollout
-        training_mode : bool, optional
-            Whether in training mode and to calculate the loss, by default True
-            If False, loss will be None
-        validation_mode : bool, optional
-            Whether in validation mode, and to calculate validation metrics, by default False
-            If False, metrics will be empty
-
-        Yields
-        ------
-        Generator[tuple[Union[torch.Tensor, None], dict, list], None, None]
-            Loss value, metrics, and predictions (per step)
-        """
         # ✅ here, batch = input + target
         # validation vs training, do we have validation batch or training batch?
         #
         print("️⚠️💬 Starting _step")
-        static_info = self.model.sample_static_info
+        static_info = self.sample_static_info
 
         # merge batch with static data
         batch = static_info + batch
 
-        print(batch.to_str("⚠️batch before normalistation"))
-        for k, v in batch.items():
-            normaliser = self.normaliser[k]
-            assert isinstance(normaliser, torch.nn.Module), type(normaliser)
-            v["data"] = normaliser(v["data"])
-        # Could be done with:
-        # batch.each["data"] = self.normaliser.each(batch.each["data"])
-        print(batch.to_str("⚠️batch after normalistation"))
+        batch = self.apply_normaliser_to_batch(batch)
 
         loss = torch.zeros(1, dtype=batch.first["data"].dtype, device=self.device, requires_grad=True)
         print(self.loss.to_str("⚠️loss function"))

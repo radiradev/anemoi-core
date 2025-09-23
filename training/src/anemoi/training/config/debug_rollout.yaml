@@ -1,5 +1,5 @@
 defaults:
-  - data: downscaling
+  - data: rollout
   - dataloader: native_grid
   - datamodule: multiple
   - diagnostics: evaluation

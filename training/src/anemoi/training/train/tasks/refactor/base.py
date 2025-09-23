@@ -148,6 +148,19 @@ class BaseGraphPLModule(pl.LightningModule, ABC):
 
         return cls(model_config=model_config, **kwargs)
 
+    def apply_normaliser_to_batch(self, batch):
+        # apply in-place normalisation : the non-normalised data is lost
+
+        print(batch.to_str("⚠️batch before normalistation"))
+        for k, v in batch.items():
+            normaliser = self.normaliser[k]
+            assert isinstance(normaliser, torch.nn.Module), type(normaliser)
+            v["data"] = normaliser(v["data"])
+        print(batch.to_str("⚠️batch after normalistation"))
+        return batch
+        # This could be done with but using .each is not recommended for now:
+        # batch.each["data"] = self.normaliser.each(batch.each["data"])
+
     def log(self, *args, **kwargs):
         kwargs["logger"] = kwargs.get("logger", self.logger_enabled)
         return super().log(*args, **kwargs)
@@ -227,7 +240,7 @@ class BaseGraphPLModule(pl.LightningModule, ABC):
         del batch_idx  # unused
         loss, _, _ = self._step(batch)
         self.log(f"train_loss", loss, on_epoch=True, on_step=True, prog_bar=True, sync_dist=True)
-        #self.log("rollout", float(self.rollout), on_step=True, rank_zero_only=True, sync_dist=False)
+        # self.log("rollout", float(self.rollout), on_step=True, rank_zero_only=True, sync_dist=False)
         return loss
 
     def lr_scheduler_step(self, scheduler: CosineLRScheduler, metric: None = None) -> None:
