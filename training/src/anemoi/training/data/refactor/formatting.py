@@ -14,7 +14,7 @@ import torch
 from rich.console import Console
 from rich.tree import Tree
 
-from anemoi.utils.dates import frequency_to_string
+from anemoi.training.data.refactor.offsets import offset_to_string
 
 # this file is quite long and has a lot of knowledge about the other types
 # it is not too bad because everything related to display is here
@@ -61,7 +61,7 @@ def format_timedeltas(k, v):
     def _to_str(x):
         x = int(x)
         x = datetime.timedelta(seconds=x)
-        return frequency_to_string(x)
+        return offset_to_string(x)
 
     try:
         if isinstance(v, np.ndarray):
@@ -175,8 +175,14 @@ class AnemoiTree:
 
         tree = Tree(self.name)
 
+        max_length = 0
         for k, v in self.obj.items():
             k = decode_path_if_needed(k)
+            max_length = max(max_length, len(str(k)))
+
+        for k, v in self.obj.items():
+            k = decode_path_if_needed(k)
+            k = str(k).ljust(max_length)
             if hasattr(v, "tree") and callable(v.tree):  # when it is a Rollout
                 tree.add(v.tree(prefix=k))
                 continue
@@ -269,6 +275,12 @@ class OneLineBox(Box):
 
 class Value:
     def __init__(self, path, key, value):
+        if ".prognostics." in key:
+            key = "🔄  " + key
+        if ".diagnostics." in key:
+            key = "out " + key
+        if ".forcings." in key:
+            key = "in  " + key
         self.path = path
         self.key = key
         self.value = value

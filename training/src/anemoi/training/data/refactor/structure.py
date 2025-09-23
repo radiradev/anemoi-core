@@ -130,6 +130,12 @@ class Dict(dict):
             raise KeyError(f"Key '{path}' not found in Dict with keys: {list(self.keys())}")
         return self.__class__(matching)
 
+    def get(self, key: str, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
     # def __getattr__(self, name):
     #     try:
     #         return self[name]
@@ -260,6 +266,10 @@ class BaseAccessor:
     def copy(self):
         return self.parent.__class__(self._apply_dict_method("copy"))
 
+    def get(self, *args, **kwargs):
+        return self.map(lambda x: x.get(*args, **kwargs))
+        return self.parent.__class__(self._apply_dict_method("get"), *args, **kwargs)
+
     def pop(self, *args, **kwargs):
         return self.parent.__class__(self._apply_dict_method("pop", *args, **kwargs))
 
@@ -354,17 +364,26 @@ class BaseAccessor:
         return self.parent.map(func, *args, **kwargs)
 
     def _parallel_apply_on_leaves(self, func_finder, *args, **kwargs):
+        def resolve(x, path, log):
+            if not isinstance(x, Dict):
+                return x
+            try:
+                return x[path]
+            except KeyError as e:
+                e.add_note(f"While processing key '{path}'. Available keys in {log} are: {list(x.keys())}")
+                raise e
+
         output = []
         for path, leaf in self.parent.items():
             # when args or kwargs are Dict, extract the corresponding leaf
-            args_ = [a[path] if isinstance(a, Dict) else a for a in args]
-            kwargs_ = {k: v[path] if isinstance(v, Dict) else v for k, v in kwargs.items()}
+            args_ = [resolve(a, path, i) for i, a in enumerate(args)]
+            kwargs_ = {k: resolve(v, path, k) for k, v in kwargs.items()}
             # find the function/method to apply and apply it
             func = func_finder(path, leaf)
             try:
                 res = func(*args_, **kwargs_)
             except Exception as e:
-                e.add_note(f"While processing key '{path}', leaf keys={leaf.keys()}, {args_=}, {kwargs_=}")
+                e.add_note(f"While processing key '{path}', leaf={leaf}, {args_=}, {kwargs_=}")
                 raise e
             # stack in a list so that the caller decides how to handle it
             output.append((path, res))

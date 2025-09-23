@@ -23,47 +23,13 @@ from rich.console import Console
 from rich.tree import Tree
 
 from anemoi.training.data.refactor.data_handler import DataHandler
+from anemoi.training.data.refactor.offsets import normalise_offset
+from anemoi.training.data.refactor.offsets import offset_to_string
+from anemoi.training.data.refactor.offsets import offset_to_timedelta
+from anemoi.training.data.refactor.offsets import substract_offsets
+from anemoi.training.data.refactor.offsets import sum_offsets
 from anemoi.training.data.refactor.path_keys import check_dictionary_key
 from anemoi.training.data.refactor.structure import Dict
-
-
-def normalise_offset(x):
-    return offset_to_string(offset_to_timedelta(x))
-
-
-def offset_to_string(x):
-    from anemoi.utils.dates import frequency_to_string
-
-    assert isinstance(x, datetime.timedelta), type(x)
-    # if x > datetime.timedelta(0):
-    #    return "+" + frequency_to_string(x)
-    res = frequency_to_string(x)
-    if res[0] == "-":
-        res = "m" + res[1:]
-    return res
-
-
-def offset_to_timedelta(x):
-    from anemoi.utils.dates import frequency_to_timedelta
-
-    if isinstance(x, str) and x.startswith("m"):
-        x = "-" + x[1:]
-
-    return frequency_to_timedelta(x)
-
-
-def sum_offsets(a, b):
-    a = offset_to_timedelta(a)
-    b = offset_to_timedelta(b)
-    x = a + b
-    return offset_to_string(x)
-
-
-def substract_offsets(a, b):
-    a = offset_to_timedelta(a)
-    b = offset_to_timedelta(b)
-    x = a - b
-    return offset_to_string(x)
 
 
 def resolve_reference(config):
@@ -194,7 +160,7 @@ class SampleProvider:
         return self._get_item(None, item)
 
     def rollout_info(self):
-        return self._get_rollout_info()
+        return RolloutDict(self._get_rollout_info())
 
     def _get_static(self, request):
         raise NotImplementedError(f"Not implemented for {self.__class__.__name__}.")
@@ -503,7 +469,9 @@ class Rearranger:
 
         res = Dict()
         for (step_, role_, key_), action_ in found:
-            res[key_] = self.run_action(action_, (step_, role_, key_), **kwargs)
+            resolved = self.run_action(action_, (step_, role_, key_), **kwargs)
+            if resolved is not None:
+                res[key_] = resolved
         return res
 
     def run_action(self, action, element, **kwargs):
@@ -513,6 +481,52 @@ class Rearranger:
 # rearranger.expand_actions(action='database') -> create batch
 # rearranger.expand_actions(step='0h', role='input') -> create_input
 # rearranger.expand_actions(step='0h', role='target') -> create_target
+
+
+class RolloutDict(Dict):
+    def next_input(self, step, database=None, previous_input=None, previous_output=None):
+        role = "input"
+        # fill with None
+        database = database.each.copy() if database else Dict()
+        previous_input = previous_input.each.copy() if previous_input else Dict()
+        previous_output = previous_output.each.copy() if previous_output else Dict()
+        res = Dict()
+        for k, rollout in self.items():
+            database_ = database.get(k)
+            previous_input_ = previous_input.get(k)
+            previous_output_ = previous_output.get(k)
+            resolved = rollout(
+                role,
+                step,
+                database=database_,
+                previous_input=previous_input_,
+                previous_output=previous_output_,
+            )
+
+            res[k] = resolved
+        return res
+
+    def next_target(self, step, database=None, previous_input=None, previous_output=None):
+        role = "target"
+        # fill with None
+        database = database.each.copy() if database else Dict()
+        previous_input = previous_input.each.copy() if previous_input else Dict()
+        previous_output = previous_output.each.copy() if previous_output else Dict()
+        res = Dict()
+        for k, rollout in self.items():
+            database_ = database.get(k)
+            previous_input_ = previous_input.get(k)
+            previous_output_ = previous_output.get(k)
+            resolved = rollout(
+                role,
+                step,
+                database=database_,
+                previous_input=previous_input_,
+                previous_output=previous_output_,
+            )
+
+            res[k] = resolved
+        return res
 
 
 class Rollout(Rearranger):
@@ -535,7 +549,7 @@ class Rollout(Rearranger):
             key_ = sum_offsets(step, key)
             try:
                 return database[key_].copy()
-            except KeyError as e:
+            except (KeyError, TypeError) as e:
                 e.add_note(f"Requesting {key} for {role} at step {step} -> action {action}")
                 e.add_note(f"Tried to use {key_} ({step} + {key})")
                 raise e
@@ -547,7 +561,7 @@ class Rollout(Rearranger):
             key_in_previous_input = sum_offsets(key, delta)
             try:
                 return previous_input[key_in_previous_input].copy()
-            except KeyError as e:
+            except (KeyError, TypeError) as e:
                 e.add_note(f"Requesting {key} for {role} at step {step} -> action {action}")
                 e.add_note(f"Delta: {delta} (current_step={current_step} - previous_step={previous_step})")
                 e.add_note(f"Key {key_in_previous_input} not found in previous input {previous_input.keys()}")
@@ -560,13 +574,26 @@ class Rollout(Rearranger):
             key_in_previous_output = sum_offsets(key, delta)
             try:
                 return previous_output[key_in_previous_output].copy()
-            except KeyError as e:
+            except (KeyError, TypeError) as e:
                 e.add_note(f"Requesting {key} for {role} at step {step} -> action {action}")
                 e.add_note(f"Delta: {delta} (current_step={current_step} - previous_step={previous_step})")
                 e.add_note(f"Key {key_in_previous_output} not found in previous output {previous_output.keys()}")
                 raise e
 
-        raise ValueError(f"Unknown action {action} for {element}")
+        if action == "none":
+            return None
+
+        raise ValueError(f"Unknown action '{action}' for {element}")
+
+    def next(self, role, step, database=None, previous_input=None, previous_output=None):
+        res = Dict()
+        for k, action in self.items():
+            database_ = database.get(k) if database else None
+            previous_input_ = previous_input.get(k) if previous_input else None
+            previous_output_ = previous_output.get(k) if previous_output else None
+            resolved = self[k](database=database_, previous_input=previous_input_, previous_output=previous_output_)
+            res[k] = resolved
+        return res
 
     def __repr__(self):
         console = Console(record=True, width=120)
@@ -596,9 +623,12 @@ class ForcingRollout(Rollout):
     def __init__(self, steps, input_steps, target_steps):
         steps, input_steps, target_steps = self.normalise_and_set(steps, input_steps, target_steps)
 
-        domain = [(steps, "input", input_steps)]
+        domain = [(steps, "input", input_steps), (steps, "target", target_steps)]
+        # domain = [(steps, "input", input_steps)]
         # always take input from database for forcings
-        actions = [(("*", "*", "*"), "database")]
+        actions = []
+        actions.append((("*", "input", "*"), "database"))
+        actions.append((("*", "target", "*"), "none"))
 
         super().__init__(domain, actions)
 
@@ -607,10 +637,12 @@ class DiagnosticRollout(Rollout):
     def __init__(self, steps, input_steps, target_steps):
         steps, input_steps, target_steps = self.normalise_and_set(steps, input_steps, target_steps)
 
-        domain = [(steps, "target", target_steps)]
+        domain = [(steps, "input", input_steps), (steps, "target", target_steps)]
+        # domain = [(steps, "target", target_steps)]
         # always take target from database
-        actions = [(("*", "*", "*"), "database")]
-
+        actions = []
+        actions.append((("*", "input", "*"), "none"))
+        actions.append((("*", "target", "*"), "database"))
         super().__init__(domain, actions)
 
 
@@ -744,7 +776,6 @@ class TensorReshapeSampleProvider(ForwardSampleProvider):
         if "dimensions_order" in box:
             box["_initial_dimensions_order"] = self.initial_order
             box["dimensions_order"] = self.new_order
-
         if "shape" in box:
             raise NotImplementedError("TODO: implement shape update")
 
@@ -1161,13 +1192,25 @@ def test_two(training_context):
     cfg_2 = """dictionary:
                 state:
                    dictionary:
-                     fields:
+                     prognostics:
                        rollout: prognostics
-                       # rollout: forcings
-                       # rollout: diagnostics
                        container:
                            dimensions: ["values", "variables"]
                            variables: ["2t", "10u", "10v"]
+                           data_group: "era5"
+
+                     forcings:
+                       rollout: forcings
+                       container:
+                           dimensions: ["values", "variables"]
+                           variables: ["2t", "10v"]
+                           data_group: "era5"
+
+                     diagnostics:
+                       rollout: diagnostics
+                       container:
+                           dimensions: ["values", "variables"]
+                           variables: ["10v"]
                            data_group: "era5"
 
                   #observations:
@@ -1210,29 +1253,34 @@ def test_two(training_context):
 
     rollout = sp.rollout_info()
     print("Rollout info", rollout)
+    print(type(rollout.first))
 
     print("*******************")
     print("Rollout preparation")
     print("*******************")
+
+    def age(v):
+        return f"(age={v['_offset']})"
+
     for k, v in data.items():
-        v["_tag"] = f"🟢 from batch {v['_offset']}"
+        v["_tag"] = f"🟢 from batch {age(v)}"
     input = None
     output = None
     for i, step in enumerate(rollout_steps):
-        input = rollout.each("input", step=step, database=data, previous_input=input, previous_output=output)
-        target = rollout.each("target", step=step, database=data)
+        input = rollout.next_input(step=step, database=data, previous_input=input, previous_output=output)
+        target = rollout.next_target(step=step, database=data)
         # run model
         output = target
         print(f"-------- Rollout {i} {step=} --------")
         print_columns(
-            input.unwrap("_tag").to_str(f"Input at step {i} : "),
-            target.unwrap("_tag").to_str(f"Target at step {i} : "),
+            input.each["_tag"].to_str(f"Input at step {i} : "),
+            target.each["_tag"].to_str(f"Target at step {i} : "),
         )
 
         for k, v in input.items():
-            v["_tag"] = f"🔵 from previous_input {v['_offset']}"
+            v["_tag"] = f"🔵 prev_input {age(v)}"
         for k, v in output.items():
-            v["_tag"] = f"🟠 from previous_output {v['_offset']}"
+            v["_tag"] = f"🟠 prev_output {age(v)}"
 
     print()
     print("***************")
@@ -1244,8 +1292,8 @@ def test_two(training_context):
     input = None
     output = None
     for i, step in enumerate(rollout_steps):
-        input = rollout.each("input", step=step, database=data, previous_input=input, previous_output=output)
-        target = rollout.each("target", step=step, database=data)
+        input = rollout.next_input(step=step, database=data, previous_input=input, previous_output=output)
+        target = rollout.next_target(step=step, database=data)
         # run model
         output = target
         print(f"-------- Rollout {i} {step=} --------")
