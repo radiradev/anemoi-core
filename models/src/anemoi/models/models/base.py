@@ -22,6 +22,7 @@ from anemoi.utils.config import DotDict
 
 class AnemoiModel(nn.Module):
     def __init__(self, model_config, sample_static_info, metadata):
+        super().__init__()
         self.id = str(uuid.uuid4())
 
         model_config = DotDict(model_config)
