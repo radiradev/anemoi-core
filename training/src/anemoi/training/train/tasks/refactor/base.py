@@ -259,7 +259,7 @@ class BaseGraphPLModule(pl.LightningModule, ABC):
         with torch.no_grad():
             loss, metrics, y_preds = self._step(batch, validation_mode=True)
 
-        self.log(f"val_{self.loss.name}_loss", loss, on_epoch=True, on_step=True, prog_bar=True, sync_dist=True)
+        self.log(f"val_loss", loss, on_epoch=True, on_step=True, prog_bar=True, sync_dist=True)
 
         for mname, mvalue in metrics.items():
             self.log(

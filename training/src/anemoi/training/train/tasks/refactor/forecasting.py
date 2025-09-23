@@ -104,39 +104,31 @@ class ForecastingPLModule(BaseGraphPLModule):
         # y_pred = target.select_content(["data"])  # for development, don't keep this line
         print(y_pred.to_str("⚠️y_pred before merging semantic info from target"))
 
-        # compute loss
-
         # y_pred = semantic + y_pred
-        new_y = semantic.new_empty()
-        for k, v in semantic.items():
-            box = v.copy()
-            for k_ in y_pred[k]:
-                if k_ in box:
-                    print("Warning: overwriting key", k_, "in semantic info")
-                box[k_] = y_pred[k][k_]
-            new_y[k] = box
-        y_pred = new_y
+        #new_y = semantic.new_empty()
+        #for k, v in semantic.items():
+        #    box = v.copy()
+        #    if isinstance(y_pred[k], torch.Tensor):
+        #        box["data"] = y_pred[k]
+        #    else:
+        #        for k_ in y_pred[k]:
+        #            if k_ in box:
+        #                print("Warning: overwriting key", k_, "in semantic info")
+        #            box[k_] = y_pred[k][k_]
+        #    new_y[k] = box
+        #y_pred = new_y
 
         print(y_pred.to_str("⚠️y_pred after merging semantic info from target"))
-        loss = 0
-        for k, module in self.loss.items():
-            loss += module(pred=y_pred[k], target=target[k])
+        loss = 0.0
+        for key, target_data in target.items():
+            loss += checkpoint(self.loss[key], y_pred[key], target_data, use_reentrant=False)
+        # loss *= 1 / len(batch["target"]) # Do we want to average over the number of targets?? 
         print("computed loss:", loss)
-        assert False, "stop here"
-
-        # Iterate over all entries in batch["target"] and accumulate loss
-        for target_key, target_data in batch["target"].items():
-            loss += checkpoint(
-                self.loss,
-                y_pred[target_key].unsqueeze(0),  # add batch dimension, why do we not get this from the model?
-                target_data["data"].permute(0, 2, 1),
-                use_reentrant=False,
-            )  # weighting will probably not be correct here ...
-        loss *= 1 / len(batch["target"])  # Average loss over all targets
 
         metrics_next = {}
         if validation_mode:
-            metrics_next = self.calculate_val_metrics(y_pred, batch["target"], rollout_step=0)
+            print("Validation metrics SKIPPED !!!")
+            # metrics_next = self.calculate_val_metrics(y_pred, batch["target"], rollout_step=0)
 
         print(f"computed loss: {loss}, metrics: {metrics_next}, y_pred: {y_pred.to_str('y_pred')}")
         print("️⚠️💬 End of _step")

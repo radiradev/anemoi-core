@@ -289,34 +289,23 @@ class AnemoiMultiModel(AnemoiModel):
 
     def encode(
         self,
-        x_data_raw: dict[str, torch.Tensor],
+        x: dict[str, torch.Tensor],
         graph: HeteroData,
         batch_size: int,
         model_comm_group: Optional[ProcessGroup] = None,
     ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+        x_data_latents, x_hidden_raw = x
+
         # do we need to have the batch size in argument ?
-        assert batch_size == x_data_raw.first["data"].shape[0], (batch_size, x_data_raw.first["data"].shape)
-
-        x_data_latents = self.node_embedder(x_data_raw, batch_size=batch_size)
-
-        # TODO: Merge subgraph
-        # graph, _ = merge_graph_sources(graph, self.encoder_sources)
-
-        # We should create the graph here
-        # graph = create_graph(x, target)
-
-        x_data_latents = x_data_latents.wrap("data")
-
-        for source, x_data_latent in x_data_latents.items():
-            x_data_latent["shard_shapes"] = get_shard_shapes(x_data_latent["data"], 0, model_comm_group)
-            x_data_latent["model_comm_group"] = model_comm_group
-
-        x_hidden_raw = self.get_node_coords(graph, self.hidden_name)
         shard_shapes_hidden = get_shard_shapes(x_hidden_raw, 0, model_comm_group)
 
-        x_hidden_latents = x_data_latents.new_empty()
+        x_hidden_latents = {}
         for source, x_data_latent in x_data_latents.items():
+            if source == self.hidden_name:
+                continue
+
             encoder = self.encoders[self.encoder_sources[source]]
+
             _, x_hidden_latents[source] = self._run_mapper(
                 encoder,
                 (x_data_latent["data"], x_hidden_raw),
@@ -326,11 +315,9 @@ class AnemoiMultiModel(AnemoiModel):
                 model_comm_group=x_data_latent["model_comm_group"],
             )
 
-        x_hidden_latent = self.merge_latents(x_hidden_latents)
+        x_hidden_latents = self.merge_latents(x_hidden_latents)
 
-        x_data_latents = x_data_latents.select_content["data"]  # unwrap
-
-        return x_data_latents, x_hidden_latent, shard_shapes_hidden
+        return x_data_latents, x_hidden_latents, shard_shapes_hidden
 
     def merge_latents(self, latents: dict[str, torch.Tensor]) -> torch.Tensor:
         # TODO: implement different strategies: sum, average, concat, learnable, ...
@@ -351,22 +338,23 @@ class AnemoiMultiModel(AnemoiModel):
         # sources = {v: k for k, v in self.decoder_sources.items()}
         # graph, node_slices = merge_graph_sources(graph, sources)
 
-        x_out = self.sample_static_info["target"].copy()
-        for dec_source in self.sample_static_info["target"].keys():
-            dec_name = self.decoder_sources[dec_source]
-            shard_shapes_target_data = get_shard_shapes(x_target_latents[dec_source], 0, model_comm_group)
-            # This may be passed when name in x_target_data
+        x_out = self.sample_static_info["target"].new_empty()
+        for dec_source, x_data_latent in x_target_latents.items():
+            if dec_source not in self.sample_static_info["target"]:
+                continue
 
-            x_decoded = self._run_mapper(
+            dec_name = self.decoder_sources[dec_source]
+
+            x_out[dec_source] = self._run_mapper(
                 self.decoders[dec_name],
-                (x_hidden_latent, x_target_latents[dec_source]),
+                (x_hidden_latent, x_data_latent["data"]),
                 sub_graph=graph[(self.hidden_name, "to", dec_source)].to(x_hidden_latent.device),
                 batch_size=batch_size,
-                shard_shapes=(shard_shapes_hidden, shard_shapes_target_data),
-                model_comm_group=model_comm_group,
+                shard_shapes=(shard_shapes_hidden, x_data_latent["shard_shapes"]),
+                model_comm_group=x_data_latent["model_comm_group"],
             )
 
-            x_out[dec_source]["data"] = self.unemb_target_nodes(x_decoded, key=dec_source, batch_size=batch_size)
+        x_out = self.unemb_target_nodes(x_out, batch_size=batch_size)
 
         return x_out
 
@@ -390,6 +378,18 @@ class AnemoiMultiModel(AnemoiModel):
 
         return y
 
+    def _assemble_input(self, x_data_raw: dict[str, torch.Tensor], graph: HeteroData, batch_size: int, model_comm_group):
+        #assert batch_size == x_data_raw.first["data"].shape[0], (batch_size, x_data_raw.first["data"].shape)
+
+        x_data_latents = self.node_embedder(x_data_raw, batch_size=batch_size)
+
+        x_data_latents = x_data_latents.wrap("data")
+        for x_data_latent in x_data_latents.values():
+            x_data_latent["shard_shapes"] = get_shard_shapes(x_data_latent["data"], 0, model_comm_group)
+            x_data_latent["model_comm_group"] = model_comm_group
+
+        return x_data_latents
+
     def get_node_coords(self, graph: HeteroData, name: str) -> torch.Tensor:
         assert name in graph.node_types, f"{name} do not exist. Valid graph nodes: {graph.node_types}."
         #        assert number_dim(graph[name].x) == (n, 2)
@@ -406,8 +406,12 @@ class AnemoiMultiModel(AnemoiModel):
 
         assert isinstance(x, Dict), type(x)
 
+        x_data_latents = self._assemble_input(x, graph, batch_size=batch_size, model_comm_group=model_comm_group)
+        
+        x_hidden_raw = self.get_node_coords(graph, self.hidden_name)
+
         x_data_latents, x_hidden_latent, shard_shapes_hidden = self.encode(
-            x,
+            (x_data_latents, x_hidden_raw),
             graph,
             batch_size=batch_size,
             model_comm_group=model_comm_group,
@@ -433,9 +437,9 @@ class AnemoiMultiModel(AnemoiModel):
             model_comm_group=model_comm_group,
         )
 
-        # x_out = self.residual_connection(x_out, x_data_skip)
+        #x_out = self.residual_connection(x_out, x_data_skip)
         x_out = self.bound(x_out)
-        return x_out
+        return x_out.wrap("data")
 
     def apply_normalisers(self, batch):
         return self.normaliser(batch)
