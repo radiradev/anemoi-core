@@ -29,6 +29,7 @@ class AnemoiModel(nn.Module):
 
         self.model_config = model_config
         self.sample_static_info = sample_static_info
+        self.sample_static_info.freeze()
         self.metadata = metadata
 
     def predict_step(
