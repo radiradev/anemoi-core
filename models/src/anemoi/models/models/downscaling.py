@@ -12,11 +12,15 @@ import torch
 from anemoi.models.models import AnemoiMultiModel
 
 
-class AnemoiDownscalingModel(AnemoiMultiModel):
+class BaseAnemoiDownscalingModel(AnemoiMultiModel):
     name = "downscaling"
 
 
-class ToyAnemoiDownscalingModel(AnemoiMultiModel):
+class AnemoiDownscalingModel(BaseAnemoiDownscalingModel):
+    name = "downscaling"
+
+
+class ToyAnemoiDownscalingModel(BaseAnemoiDownscalingModel):
     name = "downscaling"
 
     def build(self):
