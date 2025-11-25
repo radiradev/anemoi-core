@@ -34,45 +34,27 @@ class GraphForecaster(BaseGraphModule):
     def __init__(
         self,
         *,
-        config: BaseSchema,
-        graph_data: HeteroData,
-        statistics: dict,
-        statistics_tendencies: dict,
-        data_indices: IndexCollection,
-        metadata: dict,
-        supporting_arrays: dict,
+        model: AnemoiModelInterface,
+        loss: BaseLoss,
+        metrics: dict[str, BaseLoss],
+        optimizer_callable: Callable[..., torch.optim.Optimizer],
+        lr_scheduler_callable: Callable[..., torch.optim.lr_scheduler._LRScheduler],
+        rollout: int = 1,
+        rollout_epoch_increment: int = 1,
+        rollout_max: int = 1,
     ) -> None:
-        """Initialize graph neural network forecaster.
-
-        Parameters
-        ----------
-        config : DictConfig
-            Job configuration
-        graph_data : HeteroData
-            Graph object
-        statistics : dict
-            Statistics of the training data
-        data_indices : IndexCollection
-            Indices of the training data,
-        metadata : dict
-            Provenance information
-        supporting_arrays : dict
-            Supporting NumPy arrays to store in the checkpoint
-
-        """
+        """Initialize graph neural network forecaster."""
         super().__init__(
-            config=config,
-            graph_data=graph_data,
-            statistics=statistics,
-            statistics_tendencies=statistics_tendencies,
-            data_indices=data_indices,
-            metadata=metadata,
-            supporting_arrays=supporting_arrays,
+            model=model,
+            loss=loss,
+            metrics=metrics,
+            optimizer_callable=optimizer_callable,
+            lr_scheduler_callable=lr_scheduler_callable,
         )
 
-        self.rollout = config.training.rollout.start
-        self.rollout_epoch_increment = config.training.rollout.epoch_increment
-        self.rollout_max = config.training.rollout.max
+        self.rollout = rollout
+        self.rollout_epoch_increment = rollout_epoch_increment
+        self.rollout_max = rollout_max
 
         LOGGER.debug("Rollout window length: %d", self.rollout)
         LOGGER.debug("Rollout increase every : %d epochs", self.rollout_epoch_increment)
