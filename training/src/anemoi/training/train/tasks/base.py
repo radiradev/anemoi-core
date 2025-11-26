@@ -77,7 +77,7 @@ class BaseGraphModule(pl.LightningModule, ABC):
         self.optimizer_callable = optimizer_callable
         self.lr_scheduler_callable = lr_scheduler_callable
 
-        self.data_indices = self.model.data_indices
+        self.data_indices = self.model.model.data_indices
         self.save_hyperparameters()
 
         # Sharding/distributed training attributes

@@ -37,6 +37,7 @@ class AnemoiModelInterface(torch.nn.Module):
         self.multi_step = multi_step
         self.id = str(uuid.uuid4())
         self.forward = self.model.forward
+        self.data_indices = self.model.data_indices
 
     def predict_step(
         self, batch: torch.Tensor, model_comm_group: Optional[ProcessGroup] = None, gather_out: bool = True, **kwargs
