@@ -68,18 +68,16 @@ class BaseGraphModule(pl.LightningModule, ABC):
         """Initialize graph neural network forecaster."""
         super().__init__()
 
-        self.model_interface = AnemoiModelInterface(
-            model=model,
-            pre_processors=pre_processors,
-            post_processors=post_processors,
-            multi_step=multi_step,
-        )
+        self.model = model
+        self.pre_processors = pre_processors
+        self.post_processors = post_processors
+        self.multi_step = multi_step
         self.loss = loss
         self.metrics = torch.nn.ModuleDict(metrics)
         self.optimizer_callable = optimizer_callable
         self.lr_scheduler_callable = lr_scheduler_callable
 
-        self.data_indices = self.model_interface.model.data_indices
+        self.data_indices = self.model.data_indices
         self.save_hyperparameters()
 
         # Sharding/distributed training attributes
@@ -90,7 +88,7 @@ class BaseGraphModule(pl.LightningModule, ABC):
         self.keep_batch_sharded = False  # This will be set by the strategy
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.model_interface(
+        return self.model(
             x,
             model_comm_group=self.model_comm_group,
             grid_shard_shapes=self.grid_shard_shapes,
@@ -349,7 +347,7 @@ class BaseGraphModule(pl.LightningModule, ABC):
         torch.Tensor
             Normalized batch
         """
-        return self.model_interface.pre_processors(batch)
+        return self.pre_processors(batch)
 
     def _prepare_loss_scalers(self) -> None:
         """Prepare scalers for training and validation before every step."""

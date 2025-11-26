@@ -39,6 +39,9 @@ class GraphForecaster(BaseGraphModule):
         metrics: dict[str, BaseLoss],
         optimizer_callable: Callable[..., torch.optim.Optimizer],
         lr_scheduler_callable: Callable[..., torch.optim.lr_scheduler._LRScheduler],
+        pre_processors: Processors,
+        post_processors: Processors,
+        multi_step: int,
         rollout: int = 1,
         rollout_epoch_increment: int = 1,
         rollout_max: int = 1,
@@ -50,6 +53,9 @@ class GraphForecaster(BaseGraphModule):
             metrics=metrics,
             optimizer_callable=optimizer_callable,
             lr_scheduler_callable=lr_scheduler_callable,
+            pre_processors=pre_processors,
+            post_processors=post_processors,
+            multi_step=multi_step,
         )
 
         self.rollout = rollout

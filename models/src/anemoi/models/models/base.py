@@ -11,6 +11,7 @@
 import logging
 from abc import abstractmethod
 from typing import Optional
+from typing import Callable
 
 import torch
 from hydra.utils import instantiate
