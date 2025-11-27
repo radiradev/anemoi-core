@@ -46,6 +46,7 @@ dependencies = [
   "hydra-core>=1.3",
   "torch>=2.3",
   "torch-geometric>=2.3",
+  "fiddle",
 ]
 
 optional-dependencies.all = [ "anemoi-models[migrations]" ]

@@ -51,248 +51,41 @@ LOGGER = logging.getLogger(__name__)
 
 
 class BaseGraphModule(pl.LightningModule, ABC):
-    """Abstract base class for Anemoi GNN forecasters using PyTorch Lightning.
-
-    This class encapsulates the shared functionality for distributed training,
-    scaling, and evaluation of graph-based neural network models across multiple GPUs and nodes.
-    It provides hooks for defining losses, metrics, optimizers, and distributed sharding strategies.
-
-    Key Features
-    ------------
-    - Supports model and data parallelism through model and reader process groups.
-    - Handles graph data via `torch_geometric.data.HeteroData` format.
-    - Supports sharded input batches and reconstruction via `allgather`.
-    - Integrates modular loss and metric functions with support for variable scaling.
-    - Enables deferred creation of variable scalers post-model instantiation.
-    - Fully compatible with PyTorch Lightning training and validation loops.
-
-    Subclass Responsibilities
-    -------------------------
-    Child classes must implement the `_step` method, which defines the forward and loss computation
-    for training and validation steps.
-
-    Parameters
-    ----------
-    config : BaseSchema
-        Configuration object defining all parameters.
-    graph_data : HeteroData
-        Graph-structured input data containing node and edge features.
-    statistics : dict
-        Dictionary of training statistics (mean, std, etc.) used for normalization.
-    statistics_tendencies : dict
-        Statistics related to tendencies (if used).
-    data_indices : IndexCollection
-        Maps feature names to index ranges used for training and loss functions.
-    metadata : dict
-        Dictionary with metadata such as dataset provenance and variable descriptions.
-    supporting_arrays : dict
-        Numpy arrays (e.g., topography, masks) needed during inference and stored in checkpoints.
-
-    Attributes
-    ----------
-    model : AnemoiModelInterface
-        Wrapper for the underlying GNN model and its pre/post-processing logic.
-    loss : BaseLoss
-        Training loss function, optionally supporting variable scaling and sharding.
-    metrics : dict[str, BaseLoss | Callable]
-        Dictionary of validation metrics (often loss-style) computed during evaluation.
-    scalers : dict
-        Variable-wise scaling functions (e.g., standardization).
-    val_metric_ranges : dict
-        Mapping of variable groups for which to calculate validation metrics.
-    output_mask : nn.Module
-        Masking module that filters outputs during inference.
-    multi_step : bool
-        Flag to enable autoregressive rollouts (used in multi-step forecasting).
-    keep_batch_sharded : bool
-        Whether to keep input batches split across GPUs instead of gathering them.
-
-    Distributed Training
-    --------------------
-    The module can be configured to work in multi-node, multi-GPU environments with support for:
-    - Custom communication groups for model and reader parallelism
-    - Sharded input and output tensors
-    - Support for `ZeroRedundancyOptimizer` and learning rate warmup
-
-    Notes
-    -----
-    - This class should not be used directly. Subclass it and override `_step`.
-
-    See Also
-    --------
-    - `AnemoiModelInterface`
-    - `BaseLoss`
-    - `IndexCollection`
-    - `CosineLRScheduler`
-    - `create_scalers`, `grad_scaler`
-
-    """
+    """Abstract base class for Anemoi GNN forecasters using PyTorch Lightning."""
 
     def __init__(
         self,
         *,
-        config: BaseSchema,
-        graph_data: HeteroData,
-        statistics: dict,
-        statistics_tendencies: dict,
-        data_indices: IndexCollection,
-        metadata: dict,
-        supporting_arrays: dict,
+        model: AnemoiModelInterface,
+        loss: BaseLoss,
+        metrics: dict[str, BaseLoss],
+        optimizer_callable: Callable[..., torch.optim.Optimizer],
+        lr_scheduler_callable: Callable[..., torch.optim.lr_scheduler._LRScheduler],
+        pre_processors: Processors,
+        post_processors: Processors,
+        multi_step: int,
     ) -> None:
-        """Initialize graph neural network forecaster.
-
-        Parameters
-        ----------
-        config : DictConfig
-            Job configuration
-        graph_data : HeteroData
-            Graph object
-        statistics : dict
-            Statistics of the training data
-        data_indices : IndexCollection
-            Indices of the training data,
-        metadata : dict
-            Provenance information
-        supporting_arrays : dict
-            Supporting NumPy arrays to store in the checkpoint
-
-        """
+        """Initialize graph neural network forecaster."""
         super().__init__()
 
-        graph_data = graph_data.to(self.device)
+        self.model = model
+        self.pre_processors = pre_processors
+        self.post_processors = post_processors
+        self.multi_step = multi_step
+        self.loss = loss
+        self.metrics = torch.nn.ModuleDict(metrics)
+        self.optimizer_callable = optimizer_callable
+        self.lr_scheduler_callable = lr_scheduler_callable
 
-        self.output_mask = instantiate(config.model_dump(by_alias=True).model.output_mask, graph_data=graph_data)
-
-        self.model = AnemoiModelInterface(
-            statistics=statistics,
-            statistics_tendencies=statistics_tendencies,
-            data_indices=data_indices,
-            metadata=metadata,
-            supporting_arrays=supporting_arrays | self.output_mask.supporting_arrays,
-            graph_data=graph_data,
-            config=convert_to_omegaconf(config),
-        )
-        self.config = config
-        self.data_indices = data_indices
-
+        self.data_indices = self.model.model.data_indices
         self.save_hyperparameters()
 
-        self.latlons_data = graph_data[config.graph.data].x
-        self.statistics_tendencies = statistics_tendencies
-
-        self.logger_enabled = config.diagnostics.log.wandb.enabled or config.diagnostics.log.mlflow.enabled
-
-        metadata_extractor = ExtractVariableGroupAndLevel(
-            variable_groups=config.model_dump(by_alias=True).training.variable_groups,
-            metadata_variables=metadata["dataset"].get("variables_metadata"),
-        )
-
-        # Instantiate all scalers with the training configuration
-        self.scalers, self.updating_scalars = create_scalers(
-            config.model_dump(by_alias=True).training.scalers,
-            data_indices=data_indices,
-            graph_data=graph_data,
-            statistics=statistics,
-            statistics_tendencies=statistics_tendencies,
-            metadata_extractor=metadata_extractor,
-            output_mask=self.output_mask,
-        )
-
-        self.val_metric_ranges = get_metric_ranges(
-            config,
-            data_indices,
-            metadata_extractor=metadata_extractor,
-        )
-
-        self.loss = get_loss_function(
-            config.model_dump(by_alias=True).training.training_loss,
-            scalers=self.scalers,
-            data_indices=self.data_indices,
-        )
-        self._scaling_values_log = print_variable_scaling(
-            self.loss,
-            data_indices,
-        )
-
-        self.metrics = torch.nn.ModuleDict(
-            {
-                metric_name: get_loss_function(val_metric_config, scalers=self.scalers, data_indices=self.data_indices)
-                for metric_name, val_metric_config in config.model_dump(
-                    by_alias=True,
-                ).training.validation_metrics.items()
-            },
-        )
-
-        if config.training.loss_gradient_scaling:
-            self.loss.register_full_backward_hook(grad_scaler, prepend=False)
-
-        self.is_first_step = True
-        self.multi_step = config.training.multistep_input
-        self.lr = (
-            config.hardware.num_nodes
-            * config.hardware.num_gpus_per_node
-            * config.training.lr.rate
-            / config.hardware.num_gpus_per_model
-        )
-        self.lr_iterations = config.training.lr.iterations
-        self.lr_warmup = config.training.lr.warmup
-        self.lr_min = config.training.lr.min
-        self.optimizer_settings = config.training.optimizer
-
+        # Sharding/distributed training attributes
         self.model_comm_group = None
         self.reader_groups = None
-
-        reader_group_size = self.config.dataloader.read_group_size
-        self.grid_indices = instantiate(
-            self.config.model_dump(by_alias=True).dataloader.grid_indices,
-            reader_group_size=reader_group_size,
-        )
-        self.grid_indices.setup(graph_data)
-        self.grid_dim = -2
-
-        # check sharding support
-        self.keep_batch_sharded = self.config.model.keep_batch_sharded
-        read_group_supports_sharding = reader_group_size == self.config.hardware.num_gpus_per_model
-        assert read_group_supports_sharding or not self.keep_batch_sharded, (
-            f"Reader group size {reader_group_size} does not match the number of GPUs per model "
-            f"{self.config.hardware.num_gpus_per_model}, but `model.keep_batch_sharded=True` was set. ",
-            "Please set `model.keep_batch_sharded=False` or set `dataloader.read_group_size` ="
-            "`hardware.num_gpus_per_model`.",
-        )
-
-        # set flag if loss and metrics support sharding
-        self.loss_supports_sharding = getattr(self.loss, "supports_sharding", False)
-        self.metrics_support_sharding = all(
-            getattr(metric, "supports_sharding", False) for metric in self.metrics.values()
-        )
-
-        if not self.loss_supports_sharding and self.keep_batch_sharded:
-            LOGGER.warning(
-                "Loss function %s does not support sharding. "
-                "This may lead to increased memory usage and slower training.",
-                self.loss.name,
-            )
-        if not self.metrics_support_sharding and self.keep_batch_sharded:
-            LOGGER.warning(
-                "Validation metrics %s do not support sharding. "
-                "This may lead to increased memory usage and slower training.",
-                ", ".join(self.metrics.keys()),
-            )
-
-        LOGGER.debug("Multistep: %d", self.multi_step)
-
-        # lazy init model and reader group info, will be set by the DDPGroupStrategy:
-        self.model_comm_group_id = 0
-        self.model_comm_group_rank = 0
-        self.model_comm_num_groups = 1
-        self.model_comm_group_size = 1
-
-        self.reader_group_id = 0
-        self.reader_group_rank = 0
-        self.reader_group_size = 1
-
         self.grid_shard_shapes = None
         self.grid_shard_slice = None
+        self.keep_batch_sharded = False  # This will be set by the strategy
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(
@@ -554,7 +347,7 @@ class BaseGraphModule(pl.LightningModule, ABC):
         torch.Tensor
             Normalized batch
         """
-        return self.model.pre_processors(batch)
+        return self.pre_processors(batch)
 
     def _prepare_loss_scalers(self) -> None:
         """Prepare scalers for training and validation before every step."""
@@ -731,30 +524,11 @@ class BaseGraphModule(pl.LightningModule, ABC):
         return val_loss, y_preds
 
     def configure_optimizers(self) -> tuple[list[torch.optim.Optimizer], list[dict[str, Any]]]:
-        """Create optimizer and LR scheduler based on Hydra config."""
-        optimizer = self._create_optimizer_from_config(self.config.training.optimizer)
-        scheduler = self._create_scheduler(optimizer)
-        return [optimizer], [scheduler]
-
-    def _create_optimizer_from_config(self, opt_cfg: Any) -> torch.optim.Optimizer:
-        """Instantiate optimizer directly via Hydra config (_target_ style)."""
+        """Create optimizer and LR scheduler."""
         params = filter(lambda p: p.requires_grad, self.parameters())
-
-        # Convert schema to dict if needed
-        if hasattr(opt_cfg, "model_dump"):
-            opt_cfg = opt_cfg.model_dump(by_alias=True)
-
-        return instantiate(opt_cfg, params=params, lr=self.lr)
-
-    def _create_scheduler(self, optimizer: torch.optim.Optimizer) -> dict[str, Any]:
-        """Helper to create the cosine LR scheduler."""
-        scheduler = CosineLRScheduler(
-            optimizer,
-            lr_min=self.lr_min,
-            t_initial=self.lr_iterations,
-            warmup_t=self.lr_warmup,
-        )
-        return {"scheduler": scheduler, "interval": "step"}
+        optimizer = self.optimizer_callable(params=params)
+        scheduler = self.lr_scheduler_callable(optimizer=optimizer)
+        return [optimizer], [scheduler]
 
     def setup(self, stage: str) -> None:
         """Lightning hook that is called after model is initialized but before training starts."""

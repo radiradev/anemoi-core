@@ -9,13 +9,15 @@
 
 
 import logging
+from typing import Callable
 from typing import Optional
 
 import einops
 import torch
-from hydra.utils import instantiate
 from torch import Tensor
+from torch import nn
 from torch.distributed.distributed_c10d import ProcessGroup
+from torch_geometric.data import HeteroData
 
 from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.shapes import get_or_apply_shard_shapes
@@ -29,13 +31,36 @@ LOGGER = logging.getLogger(__name__)
 class AnemoiModelEncProcDec(BaseGraphModel):
     """Message passing graph neural network."""
 
+    def __init__(
+        self,
+        *,
+        encoder: Callable[..., nn.Module],
+        processor: Callable[..., nn.Module],
+        decoder: Callable[..., nn.Module],
+        residual: Callable[..., nn.Module],
+        boundings: Callable[..., nn.Module],
+        model_config: DotDict,
+        data_indices: dict,
+        statistics: dict,
+        graph_data: HeteroData,
+    ) -> None:
+        self.encoder_callable = encoder
+        self.processor_callable = processor
+        self.decoder_callable = decoder
+        super().__init__(
+            residual=residual,
+            boundings=boundings,
+            model_config=model_config,
+            data_indices=data_indices,
+            statistics=statistics,
+            graph_data=graph_data,
+        )
+
     def _build_networks(self, model_config: DotDict) -> None:
         """Builds the model components."""
 
         # Encoder data -> hidden
-        self.encoder = instantiate(
-            model_config.model.encoder,
-            _recursive_=False,  # Avoids instantiation of layer_kernels here
+        self.encoder = self.encoder_callable(
             in_channels_src=self.input_dim,
             in_channels_dst=self.node_attributes.attr_ndims[self._graph_name_hidden],
             hidden_dim=self.num_channels,
@@ -45,9 +70,7 @@ class AnemoiModelEncProcDec(BaseGraphModel):
         )
 
         # Processor hidden -> hidden
-        self.processor = instantiate(
-            model_config.model.processor,
-            _recursive_=False,  # Avoids instantiation of layer_kernels here
+        self.processor = self.processor_callable(
             num_channels=self.num_channels,
             sub_graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_hidden)],
             src_grid_size=self.node_attributes.num_nodes[self._graph_name_hidden],
@@ -55,9 +78,7 @@ class AnemoiModelEncProcDec(BaseGraphModel):
         )
 
         # Decoder hidden -> data
-        self.decoder = instantiate(
-            model_config.model.decoder,
-            _recursive_=False,  # Avoids instantiation of layer_kernels here
+        self.decoder = self.decoder_callable(
             in_channels_src=self.num_channels,
             in_channels_dst=self.input_dim,
             hidden_dim=self.num_channels,

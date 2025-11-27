@@ -11,6 +11,7 @@
 import logging
 from abc import abstractmethod
 from typing import Optional
+from typing import Callable
 
 import torch
 from hydra.utils import instantiate
@@ -36,6 +37,8 @@ class BaseGraphModel(nn.Module):
     def __init__(
         self,
         *,
+        residual: Callable[..., nn.Module],
+        boundings: Callable[..., nn.Module],
         model_config: DotDict,
         data_indices: dict,
         statistics: dict,
@@ -72,10 +75,10 @@ class BaseGraphModel(nn.Module):
         self._build_networks(model_config)
 
         # build residual connection
-        self.residual = instantiate(model_config.model.residual, graph=graph_data)
+        self.residual = residual(graph=graph_data)
 
         # build boundings
-        self.boundings = build_boundings(model_config, self.data_indices, self.statistics)
+        self.boundings = boundings(config=model_config, data_indices=self.data_indices, statistics=self.statistics)
 
     def _calculate_shapes_and_indices(self, data_indices: dict) -> None:
         self.num_input_channels = len(data_indices.model.input)
