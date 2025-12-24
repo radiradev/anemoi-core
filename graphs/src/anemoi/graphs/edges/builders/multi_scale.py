@@ -59,16 +59,18 @@ class MultiScaleEdges(BaseEdgeBuilder):
         target_name: str,
         x_hops: int,
         scale_resolutions: int | list[int] | None = None,
-        **kwargs,
+        source_mask_attr_name: str | None = None,
+        target_mask_attr_name: str | None = None,
+        attributes: list | None = None,
     ):
-        super().__init__(source_name, target_name)
+        super().__init__(source_name, target_name, source_mask_attr_name, target_mask_attr_name, attributes=attributes)
         assert source_name == target_name, f"{self.__class__.__name__} requires source and target nodes to be the same."
         assert isinstance(x_hops, int), "Number of x_hops must be an integer"
         assert x_hops > 0, "Number of x_hops must be positive"
         self.x_hops = x_hops
         if isinstance(scale_resolutions, int):
             assert scale_resolutions >= 0, "The scale_resolutions argument only supports non-negative integers."
-            scale_resolutions = list(range(1, scale_resolutions + 1))
+            scale_resolutions = list(range(0, scale_resolutions + 1))
         assert not isinstance(scale_resolutions, str), "The scale_resolutions argument is not valid."
         assert (
             scale_resolutions is None or min(scale_resolutions) >= 0

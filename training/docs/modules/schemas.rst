@@ -41,11 +41,11 @@ files,
    :no-undoc-members:
    :show-inheritance:
 
-********
- System
-********
+**********
+ Hardware
+**********
 
-.. automodule:: anemoi.training.schemas.system
+.. automodule:: anemoi.training.schemas.hardware
    :members:
    :no-undoc-members:
    :show-inheritance:

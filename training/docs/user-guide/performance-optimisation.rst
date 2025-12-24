@@ -150,9 +150,8 @@ model over multiple GPUs.
 
 .. code::
 
-   system:
-      hardware:
-         num_gpus_per_model: 2
+   hardware:
+      num_gpus_per_model: 2
 
 This will reduce memory usage by sharding the input batch and model
 channels across GPUs.
@@ -213,8 +212,8 @@ their recommended settings
    pin_memory: True
 
    #dataloaders read in parallel.
-   #Only impactful if system.hardware.num_gpus_per_model > 1
-   read_group_size: ${system.hardware.num_gpus_per_model}
+   #Only impactful if hardware.num_gpus_per_model > 1
+   read_group_size: ${hardware.num_gpus_per_model}
 
 .. note::
 

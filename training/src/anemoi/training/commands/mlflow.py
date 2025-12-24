@@ -255,6 +255,7 @@ class MlFlow(Command):
                 run_id,
                 config,
                 expand_keys=config.diagnostics.log.mlflow.expand_hyperparams,
+                log_hyperparams=True,
                 clean_params=False,
             )
 

@@ -411,7 +411,12 @@ class BaseGraphModule(pl.LightningModule, ABC):
         torch.Tensor
             Computed loss
         """
-        return self.loss(y_pred, y, grid_shard_slice=grid_shard_slice, group=self.model_comm_group, kwargs=_kwargs)
+        return self.loss(
+            y_pred,
+            y,
+            grid_shard_slice=grid_shard_slice,
+            group=self.model_comm_group,
+        )
 
     def _compute_metrics(
         self,
@@ -462,8 +467,8 @@ class BaseGraphModule(pl.LightningModule, ABC):
 
         Returns
         -------
-        tuple[torch.Tensor | None, dict[str, torch.Tensor], torch.Tensor]
-            Loss, metrics dictionary (if validation_mode), and full predictions
+        tuple[torch.Tensor | None, dict[str, torch.Tensor]]
+            Loss and metrics dictionary (if validation_mode)
         """
         # Prepare tensors for loss/metrics computation
         y_pred_full, y_full, grid_shard_slice = self._prepare_tensors_for_loss(
@@ -477,12 +482,7 @@ class BaseGraphModule(pl.LightningModule, ABC):
         # Compute metrics if in validation mode
         metrics_next = {}
         if validation_mode:
-            metrics_next = self._compute_metrics(
-                y_pred_full,
-                y_full,
-                grid_shard_slice=grid_shard_slice,
-                **kwargs,
-            )
+            metrics_next = self._compute_metrics(y_pred_full, y_full, grid_shard_slice=grid_shard_slice, **kwargs)
 
         return loss, metrics_next, y_pred_full
 
@@ -630,15 +630,7 @@ class BaseGraphModule(pl.LightningModule, ABC):
         for metric_name, metric in self.metrics.items():
             if not isinstance(metric, BaseLoss):
                 # If not a loss, we cannot feature scale, so call normally
-                metrics[f"{metric_name}_metric{suffix}"] = metric(
-                    y_pred_postprocessed,
-                    y_postprocessed,
-                    grid_shard_slice=grid_shard_slice,
-                    model_comm_group=self.model_comm_group,
-                    model_comm_group_size=self.model_comm_group_size,
-                    grid_dim=self.grid_dim,
-                    grid_shard_shapes=self.grid_shard_shapes,
-                )
+                metrics[f"{metric_name}_metric{suffix}"] = metric(y_pred_postprocessed, y_postprocessed)
                 continue
 
             for mkey, indices in self.val_metric_ranges.items():
@@ -656,9 +648,6 @@ class BaseGraphModule(pl.LightningModule, ABC):
                     scaler_indices=[..., indices],
                     grid_shard_slice=grid_shard_slice,
                     group=self.model_comm_group,
-                    model_comm_group_size=self.model_comm_group_size,
-                    grid_dim=self.grid_dim,
-                    grid_shard_shapes=self.grid_shard_shapes,
                 )
 
         return metrics
@@ -667,7 +656,6 @@ class BaseGraphModule(pl.LightningModule, ABC):
         del batch_idx
 
         train_loss, *_ = self._step(batch)
-        train_loss = train_loss.sum()
         self.log(
             "train_" + self.loss.name + "_loss",
             train_loss,
@@ -695,8 +683,7 @@ class BaseGraphModule(pl.LightningModule, ABC):
         del batch_idx
 
         with torch.no_grad():
-            val_loss_scales, metrics, *args = self._step(batch, validation_mode=True)
-        val_loss = val_loss_scales.sum()
+            val_loss, metrics, *args = self._step(batch, validation_mode=True)
 
         self.log(
             "val_" + self.loss.name + "_loss",
@@ -709,34 +696,17 @@ class BaseGraphModule(pl.LightningModule, ABC):
             sync_dist=True,
         )
 
-        if val_loss_scales.numel() > 1:
-            for scale in range(val_loss_scales.numel()):
-                self.log(
-                    "val_" + self.loss.name + "_loss" + "_scale_" + str(scale),
-                    val_loss_scales[scale],
-                    on_epoch=True,
-                    on_step=True,
-                    prog_bar=False,
-                    logger=self.logger_enabled,
-                    batch_size=batch.shape[0],
-                    sync_dist=True,
-                )
-
         for mname, mvalue in metrics.items():
-            for scale in range(mvalue.numel()):
-
-                log_val = mvalue[scale] if mvalue.numel() > 1 else mvalue
-
-                self.log(
-                    "val_" + mname + "_scale_" + str(scale),
-                    log_val,
-                    on_epoch=True,
-                    on_step=False,
-                    prog_bar=False,
-                    logger=self.logger_enabled,
-                    batch_size=batch.shape[0],
-                    sync_dist=True,
-                )
+            self.log(
+                "val_" + mname,
+                mvalue,
+                on_epoch=True,
+                on_step=False,
+                prog_bar=False,
+                logger=self.logger_enabled,
+                batch_size=batch.shape[0],
+                sync_dist=True,
+            )
 
         return val_loss, *args
 

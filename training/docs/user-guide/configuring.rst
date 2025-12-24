@@ -22,7 +22,7 @@ settings at the top as follows:
    - data: zarr
    - dataloader: native_grid
    - diagnostics: evaluation
-   - system: example
+   - hardware: example
    - graph: multi_scale
    - model: gnn
    - training: default
@@ -32,15 +32,14 @@ These are group configs for each section. The options after the defaults
 are then used to override the configs, by assigning new features and
 keywords.
 
-You can also find these defaults in other configs, like the ``system``,
-which implements:
+You can also find these defaults in other configs, like the
+``hardware``, which implements:
 
 .. code:: yaml
 
    defaults:
-   - hardware: example
-   - input: example
-   - output: example
+   - paths: example
+   - files: example
 
 *****************************
  YAML-based config overrides
@@ -71,9 +70,8 @@ You can also change the GPU count to whatever you have available:
 
 .. code:: yaml
 
-   system:
-      hardware:
-         num_gpus_per_node: 1
+   hardware:
+       num_gpus_per_node: 1
 
 This matches the interface of the underlying defaults in Anemoi
 training.
@@ -103,7 +101,7 @@ match the dataset you provide.
    - data: zarr
    - dataloader: native_grid
    - diagnostics: evaluation
-   - system: example
+   - hardware: example
    - graph: multi_scale
    - model: transformer # Change from default group
    - training: default
@@ -113,12 +111,13 @@ match the dataset you provide.
    data:
       resolution: n320
 
-   system:
-      hardware:
-         num_gpus_per_node: 1
-      output:
-         root: /home/username/anemoi/training/output
-      input:
+   hardware:
+      num_gpus_per_node: 1
+      paths:
+         output: /home/username/anemoi/training/output
+         data: /home/username/anemoi/datasets
+         graph: /home/username/anemoi/training/graphs
+      files:
          dataset: datset-n320-2019-2021-6h.zarr
          graph: first_graph_n320.pt
 
@@ -222,7 +221,7 @@ correctly indented (in this case the `diagnostics.log` field):
    - data: zarr
    - dataloader: native_grid
    - diagnostics: evaluation
-   - system: example
+   - hardware: example
    - graph: multi_scale
    - model: transformer # Change from default group
    - training: default
@@ -274,7 +273,7 @@ typos that might still need to be fixed manually:
    - data: zarr
    - dataloader: native_grid
    - diagnostics: evaluation
-   - system: example
+   - hardware: example
    - graph: multi_scale
    - model: transformer # Change from default group
    - training: default
@@ -335,7 +334,7 @@ let's say we have a config with a union of schemas like the following:
    - data: zarr
    - dataloader: native_grid
    - diagnostics: evaluation
-   - system: example
+   - hardware: example
    - graph: multi_scale
    - model: transformer # Change from default group
    - training: default

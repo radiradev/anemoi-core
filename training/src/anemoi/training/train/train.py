@@ -277,15 +277,11 @@ class AnemoiTrainer(ABC):
 
     def _get_warm_start_checkpoint(self) -> Path | None:
         """Returns the warm start checkpoint path if specified."""
-        raw_path = self.config.system.input.warm_start
-        if not raw_path:
-            return None
+        warm_start_path = self.config.system.input.warm_start
 
-        warm_start_path = Path(raw_path)
-
-        if not warm_start_path.is_file():
+        if warm_start_path:
             msg = f"Warm start checkpoint not found: {warm_start_path}"
-            raise FileNotFoundError(msg)
+            assert Path.is_file(warm_start_path), msg
         return warm_start_path
 
     def _get_checkpoint_directory(self, fork_id: str) -> Path:
@@ -440,7 +436,7 @@ class AnemoiTrainer(ABC):
         if self.config.diagnostics.log.mlflow.enabled:
             # Check if the run ID is dry - e.g. without a checkpoint
             self.dry_run = (
-                self.mlflow_logger._parent_dry_run and not Path(self.config.system.output.checkpoints.root).is_dir()
+                self.mlflow_logger._parent_dry_run and not Path(self.config.system.output.checkpoints).is_dir()
             )
             self.start_from_checkpoint = (
                 False if (self.dry_run and not bool(self.config.training.fork_run_id)) else self.start_from_checkpoint

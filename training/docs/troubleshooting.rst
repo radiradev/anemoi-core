@@ -29,9 +29,8 @@ adjustments:
        training: 100
        validation: 100
 
-   system:
-      hardware:
-      num_gpus_per_node: 1
+   hardware:
+     num_gpus_per_node: 1
 
 These settings limit the data processed and use a single GPU, helping
 isolate issues related to data or parallelization.
@@ -195,9 +194,8 @@ training complexities:
 
 .. code:: yaml
 
-   system:
-      hardware:
-      num_gpus_per_node: 1
+   hardware:
+     num_gpus_per_node: 1
 
 The code is still distributed, but at least it removes the multi-GPU
 aspect and you can use debug statements.

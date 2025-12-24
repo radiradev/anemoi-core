@@ -149,46 +149,22 @@ For detailed information and examples, see
 ******************
 
 Field truncation is a pre-processing step applied during autoregressive
-rollout. It smooths the skipped connection data which helps maintain
-stability during rollout and can be used for multi-scale loss
-computation.
+rollout. It smooths the input data which helps maintain stability during
+rollout.
 
-**********
- Overview
-**********
+The truncation process relies on pre-computed transformation matrices
+which can be specified in the configuration:
 
-Truncation matrices are sparse transformation matrices that filter
-high-frequency components from the input data. This process serves two
-main purposes:
+.. code:: yaml
 
-#. **Stability Enhancement**: Smoothing the skipped connection data
-   helps maintain numerical stability during long autoregressive
-   rollouts by reducing noise amplification.
+   path:
+      truncation: /path/to/truncation/matrix
+   files:
+      truncation: truncation_matrix.pt
+      truncation_inv: truncation_matrix_inv.pt
 
-#. **Multi-scale Loss Computation**: For ensemble training, truncation
-   matrices can be used to compute losses at different scales.
-
-**************
- Matrix Types
-**************
-
-The truncation system supports several types of transformation matrices:
-
-**Truncation Matrix (``truncation``)**
-   The forward transformation matrix that applies the truncation filter
-   to the skipped connection.
-
-**Inverse Truncation Matrix (``truncation_inv``)**
-   The inverse transformation matrix.
-
-**Loss Matrices Path (``loss_matrices_path``)**
-   Path to the directory containing smoothing matrices for multi-scale
-   loss computation. The list of matrix filenames is configured directly
-   in the ``training_loss`` section as ``loss_matrices``. Works only for
-   ensemble training. Each matrix corresponds to a different scale for
-   loss evaluation. These need to be ordered so that the first matrix
-   corresponds to the largest scales. The following matrices then
-   include smaller and smaller scales.
+Once set, the truncation matrices are used automatically during the
+rollout.
 
 .. note::
 

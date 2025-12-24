@@ -45,7 +45,6 @@ from anemoi.training.diagnostics.plots import plot_loss
 from anemoi.training.diagnostics.plots import plot_power_spectrum
 from anemoi.training.diagnostics.plots import plot_predicted_multilevel_flat_sample
 from anemoi.training.losses.base import BaseLoss
-from anemoi.training.losses.utils import reduce_to_last_dim
 from anemoi.training.schemas.base_schema import BaseSchema
 from anemoi.training.train.tasks import GraphInterpolator
 
@@ -446,7 +445,7 @@ class LongRolloutPlots(BasePlotCallback):
         }
         if self.latlons is None:
             self.latlons = pl_module.model.model._graph_data[pl_module.model.model._graph_name_data].x.detach()
-            self.latlons = np.rad2deg(self.latlons.cpu().numpy())
+            self.latlons = self.latlons.cpu().numpy()
 
         assert batch.shape[1] >= self.max_rollout + pl_module.multi_step, (
             "Batch length not sufficient for requested validation rollout length! "
@@ -926,7 +925,8 @@ class PlotLoss(BasePerBatchPlotCallback):
                 ...,
                 pl_module.data_indices.data.output.full,
             ]
-            loss = reduce_to_last_dim(self.loss(y_hat, y_true, squash=False).detach().cpu().numpy())
+            loss = self.loss(y_hat, y_true, squash=False).detach().cpu().numpy()
+
             sort_by_parameter_group, colors, xticks, legend_patches = self.sort_and_color_by_parameter_group
             loss = loss[argsort_indices]
             fig = plot_loss(loss[sort_by_parameter_group], colors, xticks, legend_patches)
@@ -981,7 +981,7 @@ class BasePlotAdditionalMetrics(BasePerBatchPlotCallback):
 
         if self.latlons is None:
             self.latlons = pl_module.model.model._graph_data[pl_module.model.model._graph_name_data].x.detach()
-            self.latlons = np.rad2deg(self.latlons.cpu().numpy())
+            self.latlons = self.latlons.cpu().numpy()
 
         input_tensor = (
             batch[
