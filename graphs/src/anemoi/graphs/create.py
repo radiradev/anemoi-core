@@ -132,7 +132,7 @@ class GraphBuilder:
                 f"Graph not saved because {save_path} already exists. If this occurred during a multi-process or multi-GPU run, another process likely saved it first. If you intended to recreate it, rerun with overwrite=True."
             )
 
-    def create(self, save_path: Path | None = None, overwrite: bool = False) -> HeteroData:
+    def __call__(self, save_path: Path | None = None, overwrite: bool = False) -> HeteroData:
         """Create the graph and save it to the output path.
 
         Parameters
@@ -159,84 +159,84 @@ class GraphBuilder:
 
         return graph
 
+    @classmethod
+    def from_config(cls, config: str | Path | DotDict | DictConfig) -> "GraphBuilder":
+        """Create a GraphBuilder from a configuration file.
 
-class GraphCreator(GraphBuilder):
-    """Create a graph from a configuration file."""
+        Parameters
+        ----------
+        config : str | Path | DotDict | DictConfig
+            Configuration file path or configuration object.
 
-    def __init__(self, config: str | Path | DotDict | DictConfig):
+        Returns
+        -------
+        GraphBuilder
+            An instance of GraphBuilder created from the configuration.
+        """
+        # normalize config to DotDict
         if isinstance(config, Path) or isinstance(config, str):
             config = DotDict.from_file(config)
         elif isinstance(config, DictConfig):
-            self.config = DotDict(config)
+            config = DotDict(config)
         else:
-            self.config = config
+            raise TypeError("config must be a str, Path, DotDict, or DictConfig")
 
-        nodes = _parse_nodes(config)
-        edges = _parse_edges(config)
-        post_processors = _parse_post_processors(config)
+        # create node builders
+        node_builders: list[BaseNodeBuilder] = []
+        nodes_cfg = config.get("nodes")
+        if nodes_cfg:
+            for node_name, node_cfg in nodes_cfg.items():
+                node_builder_cfg = node_cfg.node_builder
+                attributes_cfg = node_cfg.get("attributes")
 
-        super().__init__(
-            nodes=nodes,
-            edges=edges,
+                attributes = []
+                if attributes_cfg:
+                    for attr_name, attr_cfg in attributes_cfg.items():
+                        attributes.append(instantiate(attr_cfg, name=attr_name))
+
+                node = instantiate(node_builder_cfg, name=node_name, attributes=attributes)
+                node_builders.append(node)
+
+        # create edge builders
+        edge_builders: list[BaseEdgeBuilder] = []
+        edges_cfg = config.get("edges")
+        if edges_cfg:
+            for edge_cfg in edges_cfg:
+                source_name = edge_cfg.source_name
+                target_name = edge_cfg.target_name
+                source_mask_attr_name = edge_cfg.get("source_mask_attr_name")
+                target_mask_attr_name = edge_cfg.get("target_mask_attr_name")
+                attributes_cfg = edge_cfg.get("attributes")
+
+                attributes = []
+                if attributes_cfg:
+                    for attr_name, attr_cfg in attributes_cfg.items():
+                        attributes.append(instantiate(attr_cfg, name=attr_name))
+
+                # Each edge can have multiple edge builders
+                edge_builders_list = []
+                for builder_cfg in edge_cfg.edge_builders:
+                    edge_builder = instantiate(
+                        builder_cfg,
+                        source_name=source_name,
+                        target_name=target_name,
+                        source_mask_attr_name=source_mask_attr_name,
+                        target_mask_attr_name=target_mask_attr_name,
+                        attributes=attributes,  # Pass attributes to each builder
+                    )
+                    edge_builders_list.append(edge_builder)
+                edge_builders.extend(edge_builders_list)
+                
+        # create post processors
+        post_processors: list[PostProcessor] = []
+        post_processors_cfg = config.get("post_processors")
+        if post_processors_cfg:
+            for pp_cfg in post_processors_cfg:
+                post_processor = instantiate(pp_cfg)
+                post_processors.append(post_processor)
+
+        return cls(
+            nodes=node_builders,
+            edges=edge_builders,
             post_processors=post_processors,
         )
-
-
-def _parse_nodes(cfg: DotDict) -> list[BaseNodeBuilder]:
-    _nodes = []
-    nodes_cfg = cfg.get("nodes")
-    if nodes_cfg:
-        for node_name, node_cfg in nodes_cfg.items():
-            node_builder_cfg = node_cfg.node_builder
-            attributes_cfg = node_cfg.get("attributes")
-
-            attributes = []
-            if attributes_cfg:
-                for attr_name, attr_cfg in attributes_cfg.items():
-                    attributes.append(instantiate(attr_cfg, name=attr_name))
-
-            node = instantiate(node_builder_cfg, name=node_name, attributes=attributes)
-            _nodes.append(node)
-    return _nodes
-
-
-def _parse_edges(cfg: DotDict) -> list[BaseEdgeBuilder]:
-    _edges = []
-    edges_cfg = cfg.get("edges")
-    if edges_cfg:
-        for edge_cfg in edges_cfg:
-            source_name = edge_cfg.source_name
-            target_name = edge_cfg.target_name
-            source_mask_attr_name = edge_cfg.get("source_mask_attr_name")
-            target_mask_attr_name = edge_cfg.get("target_mask_attr_name")
-            attributes_cfg = edge_cfg.get("attributes")
-
-            attributes = []
-            if attributes_cfg:
-                for attr_name, attr_cfg in attributes_cfg.items():
-                    attributes.append(instantiate(attr_cfg, name=attr_name))
-
-            # Each edge can have multiple edge builders
-            edge_builders_list = []
-            for builder_cfg in edge_cfg.edge_builders:
-                edge_builder = instantiate(
-                    builder_cfg,
-                    source_name=source_name,
-                    target_name=target_name,
-                    source_mask_attr_name=source_mask_attr_name,
-                    target_mask_attr_name=target_mask_attr_name,
-                    attributes=attributes,  # Pass attributes to each builder
-                )
-                edge_builders_list.append(edge_builder)
-            _edges.extend(edge_builders_list)
-    return _edges
-
-
-def _parse_post_processors(cfg: DotDict) -> list[PostProcessor]:
-    _post_processors = []
-    post_processors_cfg = cfg.get("post_processors")
-    if post_processors_cfg:
-        for pp_cfg in post_processors_cfg:
-            post_processor = instantiate(pp_cfg)
-            _post_processors.append(post_processor)
-    return _post_processors
