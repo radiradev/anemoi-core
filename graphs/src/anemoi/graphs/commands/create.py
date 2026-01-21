@@ -55,7 +55,7 @@ class Create(Command):
             return
 
         graph_creator = GraphCreator(config_path=args.config)
-        graph_creator.create(save_path=args.save_path, overwrite=args.overwrite)
+        graph_creator(save_path=args.save_path, overwrite=args.overwrite)
 
         if args.description:
             if args.save_path.exists():
