@@ -258,6 +258,7 @@ class ImplementedLossesUsingBaseLossSchema(StrEnum):
     logfft2d = "anemoi.training.losses.spectral.LogFFT2Distance"
     spectral_crps = "anemoi.training.losses.spectral.SpectralCRPSLoss"
     spectral_l2 = "anemoi.training.losses.spectral.SpectralL2Loss"
+    spectral_amse = "anemoi.training.losses.spectral.SpectralAMSELoss"
 
 
 class BaseLossSchema(BaseModel):
@@ -366,7 +367,7 @@ class SpectralProjectionConfigSchema(BaseModel):
 class SpectralLossSchema(BaseLossSchema):
     """Spectral loss class."""
 
-    transform: Literal["fft2d", "dct2d", "sht"] = Field(..., example="fft2d")
+    transform: Literal["fft2d", "dct2d", "reduced_sht", "octahedral_sht"] = Field(..., example="fft2d")
     """Type of spectral transform to use."""
     subgrid: tuple[int, int | None] | str | None = None
     """Optional slice or string to select a subgrid before the transform."""
