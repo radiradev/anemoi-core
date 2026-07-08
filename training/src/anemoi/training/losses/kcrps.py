@@ -147,6 +147,11 @@ class AlmostFairKernelCRPS(BaseLoss):
         """
         ens_size = preds.shape[-1]
 
+        if ens_size == 1:
+            # Deterministic degenerate case: the ensemble-spread term vanishes and
+            # the kernel CRPS reduces to the absolute error of the single member.
+            return torch.abs(preds.squeeze(dim=-1) - targets)
+
         epsilon = (1.0 - alpha) / ens_size
 
         var = torch.abs(preds.unsqueeze(dim=-1) - preds.unsqueeze(dim=-2))
@@ -159,8 +164,6 @@ class AlmostFairKernelCRPS(BaseLoss):
 
         mem_err = err_r * ~diag
         mem_err_transpose = mem_err.transpose(-1, -2)
-
-        assert ens_size > 1, "Ensemble size must be greater than 1."
 
         coef = 1.0 / (2.0 * ens_size * (ens_size - 1))
         return coef * torch.sum(mem_err + mem_err_transpose - (1 - epsilon) * var, dim=(-1, -2))
