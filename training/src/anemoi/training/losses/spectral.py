@@ -261,6 +261,10 @@ class SpectralAMSELoss(SpectralLoss):
         group = group if is_sharded else None
 
         with torch.amp.autocast(device_type=pred.device.type, enabled=False):
+            # spectral ops (sparse projection, FFT, PSD) need full precision; under
+            # 16-mixed the inputs arrive as half and sparse.mm rejects mixed dtypes
+            pred = pred.float()
+            target = target.float()
             # transform to spectral domain: [B, T, E, grid, vars] -> [B, T, E, L, M, vars]
             # don't flatten to modes here since we need to calculate PSD and coherence per-L
             pred_spec = self._to_spectral(pred)
