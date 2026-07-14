@@ -263,8 +263,8 @@ class SpectralAMSELoss(SpectralLoss):
         with torch.amp.autocast(device_type=pred.device.type, enabled=False):
             # transform to spectral domain: [B, T, E, grid, vars] -> [B, T, E, L, M, vars]
             # don't flatten to modes here since we need to calculate PSD and coherence per-L
-            pred_spec = self.transform.forward(pred)
-            target_spec = self.transform.forward(target)
+            pred_spec = self._to_spectral(pred)
+            target_spec = self._to_spectral(target)
 
             # per-L PSD: [B, T, E, L, vars]
             psd_pred = self.transform.power_spectral_density(pred_spec)
