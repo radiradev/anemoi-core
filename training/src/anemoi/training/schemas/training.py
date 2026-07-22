@@ -442,6 +442,8 @@ class BaseDDPStrategySchema(BaseModel):
     "Number of GPUs per model."
     read_group_size: PositiveInt = Field(example=1)
     "Number of GPUs per reader group. Defaults to number of GPUs."
+    timeout: dict | None = Field(default=None, example={"_target_": "datetime.timedelta", "minutes": 120})
+    "Optional process-group timeout, instantiated and forwarded to the Lightning DDP strategy."
 
 
 class DDPEnsGroupStrategyStrategySchema(BaseDDPStrategySchema):
