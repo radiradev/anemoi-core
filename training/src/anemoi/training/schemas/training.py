@@ -652,6 +652,8 @@ class BaseDDPStrategySchema(BaseModel):
     "Number of GPUs per reader group. Defaults to number of GPUs."
     use_local_synchronization: bool = Field(default=True, example=True)
     "Use synchronization local to the group when creating process groups."
+    timeout: dict | None = Field(default=None, example={"_target_": "datetime.timedelta", "minutes": 120})
+    "Optional process-group timeout, instantiated and forwarded to the Lightning DDP strategy."
 
 
 class DDPEnsGroupStrategyStrategySchema(BaseDDPStrategySchema):
