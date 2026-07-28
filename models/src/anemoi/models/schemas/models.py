@@ -256,10 +256,6 @@ class EncodersSchema(BaseModel):
 
     datasets: list[str] = Field(..., example=["dataset1", "dataset2"])
     "List of datasets for which the encoder is applicable."
-    trainable_size: NonNegativeInt = Field(example=8)
-    "Size of trainable parameters vector. Default to 8."
-    sub_graph_edge_attributes: list[str] = Field(default_factory=list)
-    "Edge attributes to consider in the model component features."
     mapper: Union[
         GNNEncoderSchema,
         GraphTransformerEncoderSchema,
@@ -276,10 +272,6 @@ class DecodersSchema(BaseModel):
 
     datasets: list[str] = Field(..., example=["dataset1", "dataset2"])
     "List of datasets for which the decoder is applicable."
-    trainable_size: NonNegativeInt = Field(example=8)
-    "Size of trainable parameters vector. Default to 8."
-    sub_graph_edge_attributes: list[str] = Field(default_factory=list)
-    "List of edge attributes for the sub-graph."
     input_target_features: list[
         Literal["coordinates", "forcings", "prognostics", "trainable_parameters", "encoded_data"]
     ] = Field(default_factory=lambda: ["encoded_data"])

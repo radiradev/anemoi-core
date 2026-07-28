@@ -76,11 +76,11 @@ processor:
 encoders:
   0:
     datasets: [ "data" ]
-    trainable_size: ${model.trainable_parameters.data2hidden}
-    sub_graph_edge_attributes: ${model.attributes.edges}
     mapper:
       _target_: anemoi.models.layers.mapper.GraphTransformerForwardMapper
       num_channels: ${model.num_channels}
+      trainable_size: ${model.trainable_parameters.data2hidden}
+      sub_graph_edge_attributes: ${model.attributes.edges}
       num_chunks: 4
       mlp_hidden_ratio: 4 # GraphTransformer/Transformer only; use 4 (mlp) or ~2.67 (glu/swiglu/geglu/reglu)
       mlp_implementation: mlp
@@ -99,11 +99,12 @@ latent_aggregator:
 decoders:
   0:
     datasets: [ "data" ]
-    trainable_size: ${model.trainable_parameters.data2hidden}
-    sub_graph_edge_attributes: ${model.attributes.edges}
+    input_target_features: [ "encoded_data" ] # options: coordinates, forcings, prognostics, trainable_parameters, encoder_outputs
     mapper:
       _target_: anemoi.models.layers.mapper.GraphTransformerBackwardMapper
       num_channels: ${model.num_channels}
+      trainable_size: ${model.trainable_parameters.data2hidden}
+      sub_graph_edge_attributes: ${model.attributes.edges}
       num_chunks: 4
       mlp_hidden_ratio: 4 # GraphTransformer/Transformer only; use 4 (mlp) or ~2.67 (glu/swiglu/geglu/reglu)
       mlp_implementation: mlp

@@ -49,10 +49,10 @@ class AnemoiModelEncProcDec(BaseGraphModel):
             # Create graph providers
             self.encoder_graph_provider[dataset_name] = create_graph_provider(
                 graph=self._graph_data[(dataset_name, "to", self._graph_name_hidden)],
-                edge_attributes=encoder_config.get("sub_graph_edge_attributes"),
+                edge_attributes=encoder_config.mapper.get("sub_graph_edge_attributes"),
                 src_size=self.node_attributes.num_nodes[dataset_name],
                 dst_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-                trainable_size=encoder_config.get("trainable_size", 0),
+                trainable_size=encoder_config.mapper.get("trainable_size", 0),
             )
 
         self.encoder = torch.nn.ModuleDict()
@@ -109,10 +109,10 @@ class AnemoiModelEncProcDec(BaseGraphModel):
             decoder_config = model_config.model.decoders[self.dataset2decoder[dataset_name]]
             self.decoder_graph_provider[dataset_name] = create_graph_provider(
                 graph=self._graph_data[(self._graph_name_hidden, "to", dataset_name)],
-                edge_attributes=decoder_config.get("sub_graph_edge_attributes"),
+                edge_attributes=decoder_config.mapper.get("sub_graph_edge_attributes"),
                 src_size=self.node_attributes.num_nodes[self._graph_name_hidden],
                 dst_size=self.node_attributes.num_nodes[dataset_name],
-                trainable_size=decoder_config.get("trainable_size", 0),
+                trainable_size=decoder_config.mapper.get("trainable_size", 0),
             )
 
         self.decoder = torch.nn.ModuleDict()

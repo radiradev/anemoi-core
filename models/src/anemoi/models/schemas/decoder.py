@@ -26,6 +26,10 @@ class GNNDecoderSchema(GNNModelComponent):
     "GNN decoder object from anemoi.models.layers.mapper."
     num_channels: NonNegativeInt = Field(example=512)
     "Hidden dimension of the GNN decoder. Default to 512."
+    trainable_size: NonNegativeInt = Field(default=0, example=8)
+    "Size of trainable parameters vector. Default to 0."
+    sub_graph_edge_attributes: list[str] = Field(default_factory=list)
+    "Edge attributes to consider in the model component features."
 
 
 class GraphTransformerDecoderSchema(TransformerModelComponent):
@@ -33,6 +37,10 @@ class GraphTransformerDecoderSchema(TransformerModelComponent):
     "Graph Transformer Decoder object from anemoi.models.layers.mapper."
     num_channels: NonNegativeInt = Field(example=512)
     "Hidden dimension of the Graph Transformer decoder. Default to 512."
+    trainable_size: NonNegativeInt = Field(default=0, example=8)
+    "Size of trainable parameters vector. Default to 0."
+    sub_graph_edge_attributes: list[str] = Field(default_factory=list)
+    "Edge attributes to consider in the model component features."
     qk_norm: bool = Field(example=False)
     "Normalize the query and key vectors. Default to False."
     initialise_data_extractor_zero: bool = Field(example=False)
