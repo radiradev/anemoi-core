@@ -19,7 +19,7 @@ from hydra.utils import instantiate
 from torch import nn
 
 from anemoi.models.data_indices.tensor import InputTensorIndex
-from anemoi.models.data_indices import IndexCollection
+from anemoi.models.data_indices.collection import IndexCollection
 from anemoi.models.layers.activations import leaky_hardtanh
 
 
@@ -389,7 +389,7 @@ def build_boundings(
     bounding_modules = nn.ModuleDict()
     for dataset_name in data_indices.keys():
         bounding_modules[dataset_name] = _build_dataset_boundings(
-            boundings_config[dataset_name], data_indices=data_indices[dataset_name], statistics=statistics[dataset_name]
+            boundings_config.get(dataset_name, []), data_indices=data_indices[dataset_name], statistics=statistics[dataset_name]
         )
 
     return bounding_modules

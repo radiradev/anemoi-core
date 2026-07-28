@@ -34,7 +34,7 @@ from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
 
-valid_target_decoder_features = ["coordinates", "forcings", "prognostics", "trainable_parameters", "encoded_data"]
+VALID_TARGET_FEATURES = ["coordinates", "forcings", "prognostics", "trainable_parameters", "encoded_data"]
 
 
 class BaseGraphModel(nn.Module):
@@ -102,7 +102,7 @@ class BaseGraphModel(nn.Module):
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
         # Multi-dataset: create ModuleDict with ModuleList per dataset
         self.boundings = build_boundings(
-            get_multiple_datasets_config(model_config.model.get("bounding", {"datasets": defaultdict(list)})),
+            get_multiple_datasets_config(model_config.model.get("bounding", [])),
             data_indices=self.data_indices,
             statistics=self.statistics,
         )
@@ -128,7 +128,7 @@ class BaseGraphModel(nn.Module):
                 self.dataset2decoder[d] = decoder_name
 
             decoder_target_features = decoder_config.input_target_features
-            invalid = set(decoder_target_features) - VALID_TARGET_FEATURES
+            invalid = set(decoder_target_features) - set(VALID_TARGET_FEATURES)
             assert not invalid, (
                 f"Decoder '{decoder_name}' has invalid input_target_features: {invalid}. "
                 f"Valid options: {sorted(VALID_TARGET_FEATURES)}"

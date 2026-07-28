@@ -188,7 +188,7 @@ def build_output_masks(output_mask_configs, graph_data: HeteroData) -> dict[str,
     output_masks = defaultdict(lambda: NoOutputMask())
     for dataset_name, output_mask_config in output_mask_configs.items():
         if output_mask_config is not None:
-            assert dataset_name in graph_data, f"Dataset '{dataset_name}' not found in graph_data."
+            assert dataset_name in graph_data.node_types, f"Dataset '{dataset_name}' not found in graph_data."
             output_masks[dataset_name] = instantiate(output_mask_config, nodes=graph_data[dataset_name])
 
     return output_masks
