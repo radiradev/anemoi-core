@@ -170,7 +170,7 @@ class NoOutputMask(BaseMask):
         return x
 
 
-def build_output_masks(output_mask_configs, graph_data: HeteroData) -> dict[str, BaseMask]:
+def build_output_masks(output_mask_configs: dict, graph_data: HeteroData) -> dict[str, BaseMask]:
     """Build output masks for each dataset.
 
     Parameters
