@@ -15,4 +15,4 @@ from typing import TypeVar
 # across the codebase, improving type safety and code readability.
 # The dataset-specific configurations are represented as a dictionary where keys are the dataset names
 T = TypeVar("T")
-DatasetDict: TypeAlias = dict[Literal["datasets"], dict[str, T]]
+DatasetDict: TypeAlias = dict[Literal["datasets"], dict[str, T]] | T
