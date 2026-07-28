@@ -43,10 +43,9 @@ from anemoi.training.losses.scalers.base_scaler import BaseScaler
 from anemoi.training.losses.utils import check_loss_tree_variable_units
 from anemoi.training.losses.utils import print_variable_scaling
 from anemoi.training.utils.enums import TensorDim
+from anemoi.training.utils.masks import build_output_masks
 from anemoi.training.utils.variables_metadata import ExtractVariableGroupAndLevel
 from anemoi.training.utils.variables_metadata import extract_variables_metadata_from_checkpoint
-from anemoi.training.utils.masks import build_output_masks
-from anemoi.models.utils.config import get_multiple_datasets_config
 
 _chunking_fix_migration = importlib.import_module("anemoi.models.migrations.scripts.1762857428_chunking_fix").migrate
 _trainable_edge_perm_fix_migration = importlib.import_module(

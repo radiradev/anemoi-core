@@ -10,12 +10,12 @@
 
 from abc import abstractmethod
 from collections import defaultdict
-from hydra.utils import instantiate
 
 import numpy as np
 import torch
-from torch_geometric.data.storage import NodeStorage
+from hydra.utils import instantiate
 from torch_geometric.data import HeteroData
+from torch_geometric.data.storage import NodeStorage
 
 from anemoi.models.data_indices.collection import IndexCollection
 

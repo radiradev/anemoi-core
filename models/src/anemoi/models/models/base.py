@@ -10,7 +10,6 @@
 
 import logging
 from abc import abstractmethod
-from collections import defaultdict
 from typing import Optional
 
 import torch
@@ -22,7 +21,6 @@ from torch import nn
 from torch.distributed.distributed_c10d import ProcessGroup
 from torch_geometric.data import HeteroData
 
-from anemoi.models.utils.config import get_multiple_datasets_config
 from anemoi.models.distributed.graph import gather_tensor
 from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.shapes import DatasetShardSizes
@@ -30,6 +28,7 @@ from anemoi.models.distributed.shapes import get_shard_sizes
 from anemoi.models.layers.bounding import build_boundings
 from anemoi.models.layers.graph import NamedNodesAttributes
 from anemoi.models.utils.config import broadcast_config_keys
+from anemoi.models.utils.config import get_multiple_datasets_config
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
@@ -95,7 +94,7 @@ class BaseGraphModel(nn.Module):
         # build residual connection
         self._build_residual(
             get_multiple_datasets_config(model_config.model.residual),
-            sparse_projector_config=model_config.model.get("sparse_projector", {})
+            sparse_projector_config=model_config.model.get("sparse_projector", {}),
         )
 
         # build boundings
