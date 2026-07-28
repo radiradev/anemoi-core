@@ -10,6 +10,7 @@
 
 import logging
 from abc import abstractmethod
+from collections import defaultdict
 from typing import Optional
 
 import torch
@@ -21,8 +22,7 @@ from torch import nn
 from torch.distributed.distributed_c10d import ProcessGroup
 from torch_geometric.data import HeteroData
 
-from anemoi.graphs.projection_helpers import DEFAULT_DATASET_NAME
-from anemoi.graphs.projection_helpers import uses_fused_dataset_graph
+from anemoi.models.utils.config import get_multiple_datasets_config
 from anemoi.models.distributed.graph import gather_tensor
 from anemoi.models.distributed.graph import shard_tensor
 from anemoi.models.distributed.shapes import DatasetShardSizes
@@ -83,7 +83,7 @@ class BaseGraphModel(nn.Module):
         )
         self.node_attributes = NamedNodesAttributes(trainable_parameters, self._build_named_node_attributes_graph())
 
-        self._build_dataset_routing(model_config)
+        self._build_dataset_routing(model_config.model.encoders, model_config.model.decoders)
 
         self._calculate_shapes_and_indices(data_indices)
         self._assert_matching_indices(data_indices)
@@ -93,28 +93,34 @@ class BaseGraphModel(nn.Module):
         self._build_networks(model_config)
 
         # build residual connection
-        self._build_residual(model_config.model.residual, model_config.model.get("sparse_projector", {}))
+        self._build_residual(
+            get_multiple_datasets_config(model_config.model.residual),
+            sparse_projector_config=model_config.model.get("sparse_projector", {})
+        )
 
         # build boundings
         # Instantiation of model output bounding functions (e.g., to ensure outputs like TP are positive definite)
         # Multi-dataset: create ModuleDict with ModuleList per dataset
-        self.boundings = build_boundings(model_config, self.data_indices, self.statistics)
+        self.boundings = build_boundings(
+            get_multiple_datasets_config(model_config.model.get("bounding", {"datasets": defaultdict(list)})),
+            data_indices=self.data_indices,
+            statistics=self.statistics,
+        )
 
-    def _build_dataset_routing(self, model_config: DotDict) -> None:
+    def _build_dataset_routing(self, encoders_config: DotDict, decoders_config: DotDict) -> None:
         """Builds the dataset routing for encoders and decoders."""
         self.dataset2encoder: dict[str, str] = {}
         self.encoder2datasets: dict[str, list[str]] = {}
-        for encoder_name, encoder_config in model_config.model.encoders.items():
+        for encoder_name, encoder_config in encoders_config.items():
             datasets_to_encode = encoder_config["datasets"]
             self.encoder2datasets[encoder_name] = datasets_to_encode
-            assert len(datasets_to_encode) == 1, "Each encoder must be associated with exactly one dataset for now."
             for d in datasets_to_encode:
                 self.dataset2encoder[d] = encoder_name
 
         self.dataset2decoder: dict[str, str] = {}
         self.decoder2datasets: dict[str, list[str]] = {}
         self.decoders_target_input: dict[str, list[str]] = {}
-        for decoder_name, decoder_config in model_config.model.decoders.items():
+        for decoder_name, decoder_config in decoders_config.items():
             datasets_to_decode = decoder_config["datasets"]
             self.decoder2datasets[decoder_name] = datasets_to_decode
             assert len(datasets_to_decode) == 1, "Each decoder must be associated with exactly one dataset for now."
@@ -122,7 +128,11 @@ class BaseGraphModel(nn.Module):
                 self.dataset2decoder[d] = decoder_name
 
             decoder_target_features = decoder_config.input_target_features
-            assert all([f in valid_target_decoder_features for f in decoder_target_features])
+            invalid = set(decoder_target_features) - VALID_TARGET_FEATURES
+            assert not invalid, (
+                f"Decoder '{decoder_name}' has invalid input_target_features: {invalid}. "
+                f"Valid options: {sorted(VALID_TARGET_FEATURES)}"
+            )
             self.decoders_target_input[decoder_name] = decoder_config.input_target_features
 
         self.input_datasets = list(self.dataset2encoder.keys())
@@ -296,16 +306,15 @@ class BaseGraphModel(nn.Module):
     def _assemble_output(self, x_out, x_skip, batch_size, ensemble_size, dtype):
         pass
 
-    def _build_residual(self, residual_config: DotDict, sparse_projector_config: DotDict) -> None:
+    def _build_residual(self, residual_configs: dict[str, DotDict], sparse_projector_config: DotDict) -> None:
         self.residual = torch.nn.ModuleDict()
-        fused = uses_fused_dataset_graph(self._graph_data, self.dataset_names)
         sparse_projector_num_chunks = sparse_projector_config.get("num_chunks", 1)
-        for dataset_name in self.dataset_names:
-            data_node_name = dataset_name if fused else DEFAULT_DATASET_NAME
+        for dataset_name, residual_config in residual_configs.items():
+            assert residual_config is not None, f"Residual config for dataset '{dataset_name}' is None."
             self.residual[dataset_name] = instantiate(
                 residual_config,
                 graph=self._graph_data,
-                data_node_name=data_node_name,
+                data_node_name=dataset_name,
                 statistics=self.statistics[dataset_name],
                 data_indices=self.data_indices[dataset_name],
                 dataset_name=dataset_name,

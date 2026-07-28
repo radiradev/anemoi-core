@@ -329,10 +329,7 @@ class BaseModelSchema(PydanticBaseModel):
     "Model encoders schemas."
     decoders: dict[str, DecodersSchema]
     "Model decoders schemas."
-    residual: DatasetDict[ResidualConnectionSchema] = Field(
-        ...,
-        discriminator="target_",
-    )
+    residual: DatasetDict[ResidualConnectionSchema]
     "Residual connection schema."
     compile: Optional[list[dict[str, Any]]] = Field(None)
     "Modules to be compiled"
