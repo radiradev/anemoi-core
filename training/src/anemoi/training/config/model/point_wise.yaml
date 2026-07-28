@@ -45,7 +45,7 @@ encoders:
 decoders:
   0:
     datasets: [ "cerra" ]
-    input_target_features: [ "encoded_data" ] 
+    input_target_features: [ "encoded_data" ]
     mapper:
       _target_: anemoi.models.layers.mapper.PointWiseBackwardMapper
       trainable_size: ${model.trainable_parameters.hidden2data}

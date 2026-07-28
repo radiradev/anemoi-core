@@ -43,7 +43,7 @@ processor:
   layer_kernels: ${model.layer_kernels}
 
 encoders:
-  0: 
+  0:
     datasets: [ "data" ]
     mapper:
       _target_: anemoi.models.layers.mapper.GraphTransformerForwardMapper

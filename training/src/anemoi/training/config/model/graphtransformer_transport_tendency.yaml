@@ -150,6 +150,6 @@ compile:
   - module: anemoi.models.layers.normalization.ConditionalLayerNorm
 
 # Bounding configuration
-bounding: 
+bounding:
   datasets:
     data: []
