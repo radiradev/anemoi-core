@@ -125,8 +125,13 @@ decoders:
 
 
 residual:
-  _target_: anemoi.models.layers.residual.SkipConnection # options: SkipConnection, TruncatedConnection
-  step: -1 # use the latest step as skip connection
+  datasets:
+    era5:
+      _target_: anemoi.models.layers.residual.SkipConnection # options: SkipConnection, TruncatedConnection
+      step: -1 # use the latest step as skip connection
+    cerra:
+      _target_: anemoi.models.layers.residual.SkipConnection
+      step: -1
 
 output_mask:
   datasets:

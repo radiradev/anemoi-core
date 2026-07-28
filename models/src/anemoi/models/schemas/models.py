@@ -27,6 +27,7 @@ from pydantic import PositiveFloat
 from pydantic import PositiveInt
 from pydantic import model_validator
 
+from anemoi.models.schemas.schema_utils import DatasetDict
 from anemoi.models.transport.settings import EdmSettings
 from anemoi.models.transport.settings import NoiseConditioningSettings
 from anemoi.models.transport.settings import StochasticInterpolantSettings
@@ -305,9 +306,9 @@ class BaseModelSchema(PydanticBaseModel):
     "Model schema."
     trainable_parameters: TrainableParameters = Field(default_factory=TrainableParameters)
     "Learnable node and edge parameters."
-    bounding: list[Bounding]
+    bounding: DatasetDict[list[Bounding]]
     "List of bounding configuration applied in order to the specified variables."
-    output_mask: OutputMaskSchemas  # !TODO CHECK!
+    output_mask: DatasetDict[OutputMaskSchemas]  # !TODO CHECK!
     "Output mask"
     latent_skip: bool = True
     "Add skip connection in latent space before/after processor."
@@ -328,7 +329,7 @@ class BaseModelSchema(PydanticBaseModel):
     "Model encoders schemas."
     decoders: dict[str, DecodersSchema]
     "Model decoders schemas."
-    residual: ResidualConnectionSchema = Field(
+    residual: DatasetDict[ResidualConnectionSchema] = Field(
         ...,
         discriminator="target_",
     )
