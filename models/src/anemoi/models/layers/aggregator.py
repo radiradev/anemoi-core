@@ -95,7 +95,7 @@ class MeanAggregator(BaseLatentAggregator):
 
 
 class ConcatAggregator(BaseLatentAggregator):
-    """Concatenate latent representations and project back to the original channel dimension."""
+    """Concatenate latent representations."""
 
     def __init__(self, num_channels: dict[str, int]) -> None:
         super().__init__(num_channels)
