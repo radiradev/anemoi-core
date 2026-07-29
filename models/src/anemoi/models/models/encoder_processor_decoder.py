@@ -145,6 +145,17 @@ class AnemoiModelEncProcDec(BaseGraphModel):
         model_comm_group: ProcessGroup | None = None,
         dataset_name: str | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, ShardSizes]:
+        """Assemble the encoder source features and the residual skip for a single dataset.
+
+        Flattens the raw input over ``(batch, ensemble, grid)`` and ``(time, vars)``, concatenates
+        the per-node attributes on the feature dimension, and computes the residual skip tensor.
+
+        Returns
+        -------
+        tuple[Tensor, Tensor, ShardSizes]
+            ``(x_data_latent, x_skip, grid_shard_sizes)`` where ``x_data_latent`` is the encoder
+            source input, and ``x_skip`` is the residual to add to the decoder output.
+        """
         assert dataset_name is not None, "dataset_name must be provided when using multiple datasets."
         node_attributes_data = self.node_attributes(dataset_name, batch_size=batch_size)
         grid_shard_sizes = grid_shard_sizes[dataset_name] if grid_shard_sizes is not None else None
@@ -179,6 +190,17 @@ class AnemoiModelEncProcDec(BaseGraphModel):
         model_comm_group: ProcessGroup | None = None,
         dataset_name: str | None = None,
     ) -> tuple[Tensor, ShardSizes]:
+        """Assemble the decoder destination features for a single dataset.
+
+        Concatenates the feature blocks listed in ``decoders_target_input`` for this dataset's
+        decoder into the per-node vector fed to the decoder as ``x_dst``.
+
+        Returns
+        -------
+        tuple[Tensor, ShardSizes]
+            ``(x_target_latent, grid_shard_sizes)`` where ``x_target_latent`` has width
+            ``target_dim[dataset_name]``.
+        """
         assert dataset_name is not None, "dataset_name must be provided when using multiple datasets."
 
         grid_shard_sizes = grid_shard_sizes[dataset_name] if grid_shard_sizes is not None else None
@@ -227,6 +249,12 @@ class AnemoiModelEncProcDec(BaseGraphModel):
         dtype: torch.dtype,
         dataset_name: str,
     ):
+        """Reshape decoder output, add the prognostic residual and apply output boundings.
+
+        Rearranges the flat decoder output back to ``(batch, time, ensemble, grid, vars)``, adds
+        ``x_skip`` on the prognostic channels, and applies the per-dataset ``boundings`` in
+        config order.
+        """
         x_out = (
             einops.rearrange(
                 x_out,

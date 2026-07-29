@@ -138,6 +138,7 @@ class BaseGraphModel(nn.Module):
         self.target_datasets = list(self.dataset2decoder.keys())
 
     def _calculate_shapes_and_indices(self, data_indices: dict) -> None:
+        """Compute per-dataset input/output channel counts, dimensions and internal data indices."""
         # Multi-dataset: create dictionaries for each property
         self.num_input_channels = {}
         self.num_output_channels = {}
@@ -192,6 +193,7 @@ class BaseGraphModel(nn.Module):
             ), f"Hidden nodes name '{hidden_name}' not found in graph data node types {self._graph_data.node_types}"
 
     def _calculate_input_dim(self, dataset_name: str) -> int:
+        """Calculate the encoder input dimension for a given dataset."""
         return self.n_step_input * self.num_input_channels[dataset_name] + self.node_attributes.attr_ndims[dataset_name]
 
     def _calculate_input_dim_latent(self) -> int:
@@ -200,6 +202,12 @@ class BaseGraphModel(nn.Module):
         return self.node_attributes.attr_ndims[nodes_name]
 
     def _calculate_target_dim(self, dataset_name: str) -> int:
+        """Calculate the decoder target input dimension for a given dataset.
+
+        Decoder target features are per-node vectors attached to the destination nodes of the
+        hidden-to-data decoder. The returned width is the sum
+        of the feature blocks listed in ``decoders_target_input`` for this dataset's decoder.
+        """
         num_features = 0
         if dataset_name not in self.dataset2decoder:
             LOGGER.warning(
@@ -226,6 +234,7 @@ class BaseGraphModel(nn.Module):
         return num_features
 
     def _calculate_output_dim(self, dataset_name: str) -> int:
+        """Calculate the decoder output dimension for a given dataset."""
         return self.n_step_output * self.num_output_channels[dataset_name]
 
     def _assert_matching_indices(self, data_indices: dict) -> None:
@@ -306,6 +315,7 @@ class BaseGraphModel(nn.Module):
         pass
 
     def _build_residual(self, residual_configs: dict[str, DotDict], sparse_projector_config: DotDict) -> None:
+        """Instantiate the per-dataset residual connection modules."""
         self.residual = torch.nn.ModuleDict()
         sparse_projector_num_chunks = sparse_projector_config.get("num_chunks", 1)
         for dataset_name, residual_config in residual_configs.items():
