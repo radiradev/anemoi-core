@@ -99,7 +99,7 @@ latent_aggregator:
 decoders:
   0:
     datasets: [ "data" ]
-    input_target_features: [ "encoded_data" ] # options: coordinates, forcings, prognostics, trainable_parameters, encoder_data
+    input_target_features: [ "encoded_data" ] # options: coordinates, forcings, prognostics, trainable_parameters, encoded_data
     mapper:
       _target_: anemoi.models.layers.mapper.GraphTransformerBackwardMapper
       num_channels: ${model.num_channels}
