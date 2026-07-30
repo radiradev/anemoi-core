@@ -56,11 +56,7 @@ def test_base_model_schema_accepts_pointwise_mapper_configuration():
             },
         },
         trainable_parameters={"data": 0, "hidden": 0},
-        residual={
-            "datasets": {
-                "data": {"_target_": "anemoi.models.layers.residual.SkipConnection", "step": -1}
-            }
-        },
+        residual={"datasets": {"data": {"_target_": "anemoi.models.layers.residual.SkipConnection", "step": -1}}},
         output_mask={
             "datasets": {
                 "data": {
@@ -125,7 +121,7 @@ def test_base_model_schema_accepts_sparse_projector_configuration():
                     "cpu_offload": False,
                     "gradient_checkpointing": True,
                     "layer_kernels": {},
-                }
+                },
             },
         },
         trainable_parameters={"data": 0, "hidden": 0},
