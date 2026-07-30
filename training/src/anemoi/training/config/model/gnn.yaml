@@ -20,6 +20,7 @@ layer_kernels:
 
 processor:
   _target_: anemoi.models.layers.processor.GNNProcessor
+  num_channels: ${model.num_channels}
   trainable_size: ${model.trainable_parameters.hidden2hidden}
   sub_graph_edge_attributes: ${model.attributes.edges}
   num_layers: 16
