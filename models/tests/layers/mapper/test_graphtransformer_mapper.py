@@ -38,7 +38,7 @@ class ConcreteGraphTransformerBaseMapper(GraphTransformerBaseMapper):
 
 @dataclass
 class MapperConfig:
-    in_channels_src: int = 3
+    in_channels_src: int = 5
     in_channels_dst: int = 3
     num_channels: int = 256
     num_chunks: int = 2
@@ -291,13 +291,13 @@ class TestGraphTransformerBackwardMapper(TestGraphTransformerBaseMapper):
         x = pair_tensor
 
         x_src, x_dst = mapper.pre_process(x)
-        assert x_src.shape == torch.Size([self.NUM_SRC_NODES, mapper_init.in_channels_src]), (
+        assert x_src.shape == torch.Size([self.NUM_SRC_NODES, mapper_init.num_channels]), (
             f"x_src.shape ({x_src.shape}) != torch.Size"
-            f"([self.NUM_SRC_NODES, in_channels_src]) ({torch.Size([self.NUM_SRC_NODES, mapper_init.in_channels_src])})"
+            f"([self.NUM_SRC_NODES, num_channels]) ({torch.Size([self.NUM_SRC_NODES, mapper_init.num_channels])})"
         )
         assert x_dst.shape == torch.Size([self.NUM_DST_NODES, mapper_init.num_channels]), (
             f"x_dst.shape ({x_dst.shape}) != torch.Size"
-            f"([self.NUM_DST_NODES, hidden_dim]) ({torch.Size([self.NUM_DST_NODES, mapper_init.num_channels])})"
+            f"([self.NUM_DST_NODES, num_channels]) ({torch.Size([self.NUM_DST_NODES, mapper_init.num_channels])})"
         )
 
     def test_post_process(self, mapper, mapper_init):
@@ -321,8 +321,8 @@ class TestGraphTransformerBackwardMapper(TestGraphTransformerBaseMapper):
         # Different size for x_dst, as the Backward mapper changes the channels in shape in pre-processor
         device = next(mapper.parameters()).device
         x = (
-            torch.rand(self.NUM_SRC_NODES, mapper_init.num_channels, device=device),
-            torch.rand(self.NUM_DST_NODES, mapper_init.in_channels_src, device=device),
+            torch.rand(self.NUM_SRC_NODES, mapper_init.in_channels_src, device=device),
+            torch.rand(self.NUM_DST_NODES, mapper_init.in_channels_dst, device=device),
         )
 
         edge_attr, edge_index, _ = graph_provider.get_edges(batch_size=batch_size)
@@ -358,8 +358,8 @@ class TestGraphTransformerBackwardMapper(TestGraphTransformerBaseMapper):
 
         device = next(mapper.parameters()).device
         x = (
-            torch.rand(self.NUM_SRC_NODES, mapper_init.num_channels, device=device),
-            torch.rand(self.NUM_DST_NODES, mapper_init.in_channels_src, device=device),
+            torch.rand(self.NUM_SRC_NODES, mapper_init.in_channels_src, device=device),
+            torch.rand(self.NUM_DST_NODES, mapper_init.in_channels_dst, device=device),
         )
 
         edge_attr, edge_index, _ = graph_provider.get_edges(batch_size=batch_size)
@@ -378,8 +378,8 @@ class TestGraphTransformerBackwardMapper(TestGraphTransformerBaseMapper):
 
         device = next(mapper.parameters()).device
         x = (
-            torch.rand(self.NUM_SRC_NODES, mapper_init.num_channels, device=device),
-            torch.rand(self.NUM_DST_NODES, mapper_init.in_channels_src, device=device),
+            torch.rand(self.NUM_SRC_NODES, mapper_init.in_channels_src, device=device),
+            torch.rand(self.NUM_DST_NODES, mapper_init.in_channels_dst, device=device),
         )
 
         edge_attr, edge_index, _ = graph_provider.get_edges(batch_size=batch_size)
