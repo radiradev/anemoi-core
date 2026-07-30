@@ -81,9 +81,12 @@ class BaseGraphModel(nn.Module):
         )
         self.node_attributes = NamedNodesAttributes(trainable_parameters, self._build_named_node_attributes_graph())
 
-        self._build_dataset_routing(model_config.model.encoders, model_config.model.decoders)
+        self._build_encoder_routing(model_config.model.encoders)
+        self._build_decoder_routing(model_config.model.decoders)
 
         self._calculate_shapes_and_indices(data_indices)
+
+        self._assert_decoding_forcings()
         self._assert_matching_indices(data_indices)
         self._assert_hidden_nodes_name(self._graph_name_hidden)
 
@@ -105,8 +108,8 @@ class BaseGraphModel(nn.Module):
             statistics=self.statistics,
         )
 
-    def _build_dataset_routing(self, encoders_config: DotDict, decoders_config: DotDict) -> None:
-        """Builds the dataset routing for encoders and decoders."""
+    def _build_encoder_routing(self, encoders_config: DotDict) -> None:
+        """Builds the dataset routing for encoders."""
         self.dataset2encoder: dict[str, str] = {}
         self.encoder2datasets: dict[str, list[str]] = {}
         for encoder_name, encoder_config in encoders_config.items():
@@ -115,6 +118,10 @@ class BaseGraphModel(nn.Module):
             for d in datasets_to_encode:
                 self.dataset2encoder[d] = encoder_name
 
+        self.input_datasets = list(self.dataset2encoder.keys())
+
+    def _build_decoder_routing(self, decoders_config: DotDict) -> None:
+        """Builds the dataset routing for decoders."""
         self.dataset2decoder: dict[str, str] = {}
         self.decoder2datasets: dict[str, list[str]] = {}
         self.decoders_target_input: dict[str, list[str]] = {}
@@ -125,16 +132,17 @@ class BaseGraphModel(nn.Module):
             for d in datasets_to_decode:
                 self.dataset2decoder[d] = decoder_name
 
-            decoder_target_features = decoder_config.input_target_features
+            self.decoders_target_input[decoder_name] = decoder_config.input_target_features
+
+        self.target_datasets = list(self.dataset2decoder.keys())
+
+    def _assert_decoding_forcings(self) -> None:
+        for decoder_name, decoder_target_features in self.decoders_target_input.items():
             invalid = set(decoder_target_features) - set(VALID_TARGET_FEATURES)
             assert not invalid, (
                 f"Decoder '{decoder_name}' has invalid input_target_features: {invalid}. "
                 f"Valid options: {sorted(VALID_TARGET_FEATURES)}"
             )
-            self.decoders_target_input[decoder_name] = decoder_config.input_target_features
-
-        self.input_datasets = list(self.dataset2encoder.keys())
-        self.target_datasets = list(self.dataset2decoder.keys())
 
     def _calculate_shapes_and_indices(self, data_indices: dict) -> None:
         """Compute per-dataset input/output channel counts, dimensions and internal data indices."""
