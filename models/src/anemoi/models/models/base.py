@@ -86,7 +86,7 @@ class BaseGraphModel(nn.Module):
 
         self._calculate_shapes_and_indices(data_indices)
 
-        self._assert_decoding_forcings()
+        self._assert_model_routing()
         self._assert_matching_indices(data_indices)
         self._assert_hidden_nodes_name(self._graph_name_hidden)
 
@@ -136,14 +136,25 @@ class BaseGraphModel(nn.Module):
 
         self.target_datasets = list(self.dataset2decoder.keys())
 
-    def _assert_decoding_forcings(self) -> None:
+    def _assert_model_routing(self) -> None:
+        """Asserts that the model routing is valid."""
+        not_input_datasets = set(self.input_datasets) - set(self.input_dim.keys())
+        assert all(d in self.input_datasets for d in self.dataset2encoder.keys()), (
+            f"Datasets {not_input_datasets} are in input_datasets but not in data_indices provided to the model. "
+        )
+        
+        not_target_datasets = set(self.target_datasets) - set(self.output_dim.keys())
+        assert all(d in self.target_datasets for d in self.dataset2decoder.keys()), (
+            f"Datasets {not_target_datasets} are in target_datasets but not in data_indices provided to the model. "
+        )
+
         for decoder_name, decoder_target_features in self.decoders_target_input.items():
             invalid = set(decoder_target_features) - set(VALID_TARGET_FEATURES)
             assert not invalid, (
                 f"Decoder '{decoder_name}' has invalid input_target_features: {invalid}. "
                 f"Valid options: {sorted(VALID_TARGET_FEATURES)}"
             )
-
+                
     def _calculate_shapes_and_indices(self, data_indices: dict) -> None:
         """Compute per-dataset input/output channel counts, dimensions and internal data indices."""
         # Multi-dataset: create dictionaries for each property
