@@ -42,6 +42,9 @@ encoders:
       gradient_checkpointing: True
       layer_kernels: ${model.layer_kernels}
 
+latent_aggregator:
+  _target_: anemoi.models.layers.aggregator.SumAggregator
+
 decoders:
   0:
     datasets: [ "cerra" ]

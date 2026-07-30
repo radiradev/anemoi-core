@@ -63,6 +63,10 @@ encoders:
       layer_kernels: ${model.layer_kernels}
       shard_strategy: "edges"
 
+
+latent_aggregator:
+  _target_: anemoi.models.layers.aggregator.SumAggregator
+
 decoders:
   0:
     datasets: [ "data" ]

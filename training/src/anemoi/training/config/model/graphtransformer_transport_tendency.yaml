@@ -76,6 +76,8 @@ encoders:
       shard_strategy: "edges"
       graph_attention_backend: "triton"  # Options: "triton", "pyg"
 
+latent_aggregator:
+  _target_: anemoi.models.layers.aggregator.SumAggregator
 
 decoders:
   0:
