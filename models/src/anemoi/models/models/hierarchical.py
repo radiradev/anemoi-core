@@ -33,9 +33,6 @@ class AnemoiModelEncProcDecHierarchical(AnemoiModelEncProcDec):
     def _build_networks(self, model_config):
         """Builds the model components."""
         # note that this is called by the super class init
-        # self.hidden_dims is the dimentionality of features at each depth
-        self.hidden_dims = {hidden: self.num_channels * (2**i) for i, hidden in enumerate(self._graph_name_hidden)}
-        self.num_hidden = len(self._graph_name_hidden)
 
         # Encoder data -> hidden
         self.encoder_graph_provider = nn.ModuleDict()
@@ -54,9 +51,14 @@ class AnemoiModelEncProcDecHierarchical(AnemoiModelEncProcDec):
                 _recursive_=False,  # Avoids instantiation of layer_kernels here
                 in_channels_src=self.input_dim[dataset_name],
                 in_channels_dst=self.input_dim_latent,
-                hidden_dim=self.hidden_dims[self._graph_name_hidden[0]],
                 edge_dim=self.encoder_graph_provider[dataset_name].edge_dim,
             )
+
+        # self.hidden_dims is the dimentionality of features at each depth
+        self.hidden_dims = {
+            hidden: self.latent_aggregator.hidden_dim * (2**i) for i, hidden in enumerate(self._graph_name_hidden)
+        }
+        self.num_hidden = len(self._graph_name_hidden)
 
         # Level processors
         self.level_process = model_config.model.enable_hierarchical_level_processing
@@ -286,7 +288,7 @@ class AnemoiModelEncProcDecHierarchical(AnemoiModelEncProcDec):
             dataset_latents[dataset_name] = x_latent
 
         # Combine all dataset latents in the innermost layer
-        x_latent = sum(dataset_latents.values())
+        x_latent = self.latent_aggregator(dataset_latents)
 
         ## Downscale
         x_encoded_latents_dict = {}
