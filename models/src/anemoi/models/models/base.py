@@ -91,7 +91,7 @@ class BaseGraphModel(nn.Module):
         self._assert_hidden_nodes_name(self._graph_name_hidden)
 
         # build networks
-        self._build_networks(model_config)
+        self._build_networks(model_config.model)
 
         # build residual connection
         self._build_residual(
