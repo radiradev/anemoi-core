@@ -11,10 +11,13 @@ defaults:
 
 model:
   model:
-    _target_: anemoi.models.models.AnemoiModelHierarchicalAutoEncoder
+    _target_: anemoi.models.models.AnemoiModelEncProcDecHierarchical
     hidden_nodes_name: ["hidden_1", "hidden_2"]
   processor:
     _target_: anemoi.models.layers.processor.NoOpProcessor
+  decoders:
+    0: 
+      input_target_features: [ "coordinates" ]
   enable_hierarchical_level_processing: False
   keep_batch_sharded: True
 
