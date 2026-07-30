@@ -51,6 +51,9 @@ class BaseBounding(nn.Module, ABC):
             A dictionary mapping the variable names to their corresponding indices in the statistics dictionary
         """
         super().__init__()
+        for var in variables:
+            if var not in name_to_index:
+                raise KeyError(f"{self.__class__.__name__}: variable '{var}' is not present in the name_to_index mapping.")
 
         self.name_to_index = name_to_index
         self.variables = variables
