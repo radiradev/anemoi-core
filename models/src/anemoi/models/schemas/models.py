@@ -408,12 +408,22 @@ class TransportModelSchema(BaseModelSchema):
     @model_validator(mode="after")
     def validate_no_bounding_for_transport(self) -> "TransportModelSchema":
         if self.bounding:
-            msg = (
-                "Transport models do not support bounding layers. "
-                f"Found {len(self.bounding)} bounding configuration(s). "
-                "Please remove all bounding configurations for transport models."
-            )
-            raise ValueError(msg)
+            if "datasets" in self.bounding:
+                for dataset_name, bounding_list in self.bounding["datasets"].items():
+                    if (bounding_list is not None) and len(bounding_list) > 0:
+                        msg = (
+                            "Transport models do not support bounding layers. "
+                            f"Found {len(bounding_list)} bounding configuration(s) for dataset '{dataset_name}'. "
+                            f"Please remove all bounding configurations for transport models."
+                        )
+                        raise ValueError(msg)
+            elif len(self.bounding) > 0:
+                msg = (
+                    "Transport models do not support bounding layers. "
+                    f"Found {len(self.bounding)} bounding configuration(s). "
+                    f"Please remove all bounding configurations for transport models."
+                )
+                raise ValueError(msg)
         return self
 
 
