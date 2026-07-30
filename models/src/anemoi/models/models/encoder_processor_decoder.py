@@ -44,7 +44,7 @@ class AnemoiModelEncProcDec(BaseGraphModel):
                 )
                 continue
 
-            encoder_config = model_config.model.encoders[self.dataset2encoder[dataset_name]]
+            encoder_config = model_config.encoders[self.dataset2encoder[dataset_name]]
 
             # Create graph providers
             self.encoder_graph_provider[dataset_name] = create_graph_provider(
@@ -56,7 +56,7 @@ class AnemoiModelEncProcDec(BaseGraphModel):
             )
 
         self.encoder = torch.nn.ModuleDict()
-        for encoder_name, encoder_config in model_config.model.encoders.items():
+        for encoder_name, encoder_config in model_config.encoders.items():
             encoder_in_channels_src = [self.input_dim[d] for d in self.encoder2datasets[encoder_name]]
             assert all(ch == encoder_in_channels_src[0] for ch in encoder_in_channels_src), (
                 f"All datasets for encoder {encoder_name} must have the same input dimension, "
@@ -73,21 +73,21 @@ class AnemoiModelEncProcDec(BaseGraphModel):
 
         # Latent aggregator: combines encoder outputs before the processor
         self.latent_aggregator = instantiate(
-            model_config.model.latent_aggregator,
+            model_config.latent_aggregator,
             num_channels={encoder_name: encoder.hidden_dim for encoder_name, encoder in self.encoder.items()},
         )
 
         # Processor hidden -> hidden
         self.processor_graph_provider = create_graph_provider(
             graph=self._graph_data[(self._graph_name_hidden, "to", self._graph_name_hidden)],
-            edge_attributes=model_config.model.processor.get("sub_graph_edge_attributes"),
+            edge_attributes=model_config.processor.get("sub_graph_edge_attributes"),
             src_size=self.node_attributes.num_nodes[self._graph_name_hidden],
             dst_size=self.node_attributes.num_nodes[self._graph_name_hidden],
-            trainable_size=model_config.model.processor.get("trainable_size", 0),
+            trainable_size=model_config.processor.get("trainable_size", 0),
         )
 
         self.processor = instantiate(
-            model_config.model.processor,
+            model_config.processor,
             _recursive_=False,  # Avoids instantiation of layer_kernels here
             edge_dim=self.processor_graph_provider.edge_dim,
         )
@@ -106,7 +106,7 @@ class AnemoiModelEncProcDec(BaseGraphModel):
                 )
                 continue
 
-            decoder_config = model_config.model.decoders[self.dataset2decoder[dataset_name]]
+            decoder_config = model_config.decoders[self.dataset2decoder[dataset_name]]
             self.decoder_graph_provider[dataset_name] = create_graph_provider(
                 graph=self._graph_data[(self._graph_name_hidden, "to", dataset_name)],
                 edge_attributes=decoder_config.mapper.get("sub_graph_edge_attributes"),
@@ -116,7 +116,7 @@ class AnemoiModelEncProcDec(BaseGraphModel):
             )
 
         self.decoder = torch.nn.ModuleDict()
-        for decoder_name, decoder_config in model_config.model.decoders.items():
+        for decoder_name, decoder_config in model_config.decoders.items():
             decoder_in_channels_dst = [self.target_dim[d] for d in self.decoder2datasets[decoder_name]]
             assert all(ch == decoder_in_channels_dst[0] for ch in decoder_in_channels_dst), (
                 f"All datasets for decoder {decoder_name} must have the same target dimension, "
