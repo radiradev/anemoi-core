@@ -288,8 +288,6 @@ class DecodersSchema(BaseModel):
 
 
 class BaseModelSchema(PydanticBaseModel):
-    num_channels: NonNegativeInt = Field(example=512)
-    "Feature tensor size in the hidden space."
     keep_batch_sharded: bool = Field(default=True)
     "Keep the input batch and the output of the model sharded"
     sparse_projector: SparseProjectorSchema = Field(default_factory=SparseProjectorSchema)
