@@ -122,6 +122,30 @@ class AnemoiModelEncProcDecHierarchical(AnemoiModelEncProcDec):
             edge_dim=self.processor_graph_provider.edge_dim,
         )
 
+        # Upscale
+        self.upscale = nn.ModuleDict()
+        self.upscale_graph_providers = nn.ModuleDict()
+        for i in range(0, self.num_hidden - 1):
+            src_nodes_name = self._graph_name_hidden[i]
+            dst_nodes_name = self._graph_name_hidden[i + 1]
+
+            self.upscale_graph_providers[src_nodes_name] = create_graph_provider(
+                graph=self._graph_data[(src_nodes_name, "to", dst_nodes_name)],
+                edge_attributes=model_config.upscale_mapper.get("sub_graph_edge_attributes"),
+                src_size=self.node_attributes.num_nodes[src_nodes_name],
+                dst_size=self.node_attributes.num_nodes[dst_nodes_name],
+                trainable_size=model_config.upscale_mapper.get("trainable_size", 0),
+            )
+
+            self.upscale[src_nodes_name] = instantiate(
+                model_config.upscale_mapper,
+                _recursive_=False,  # Avoids instantiation of layer_kernels here
+                in_channels_src=self.hidden_dims[src_nodes_name],
+                in_channels_dst=self.node_attributes.attr_ndims[dst_nodes_name],
+                hidden_dim=self.hidden_dims[dst_nodes_name],
+                edge_dim=self.upscale_graph_providers[src_nodes_name].edge_dim,
+            )
+
         # Downscale
         self.downscale = nn.ModuleDict()
         self.downscale_graph_providers = nn.ModuleDict()
@@ -141,34 +165,10 @@ class AnemoiModelEncProcDecHierarchical(AnemoiModelEncProcDec):
                 model_config.downscale_mapper,
                 _recursive_=False,  # Avoids instantiation of layer_kernels here
                 in_channels_src=self.hidden_dims[src_nodes_name],
-                in_channels_dst=self.node_attributes.attr_ndims[dst_nodes_name],
-                hidden_dim=self.hidden_dims[dst_nodes_name],
-                edge_dim=self.downscale_graph_providers[src_nodes_name].edge_dim,
-            )
-
-        # Upscale
-        self.upscale = nn.ModuleDict()
-        self.upscale_graph_providers = nn.ModuleDict()
-        for i in range(1, self.num_hidden):
-            src_nodes_name = self._graph_name_hidden[i]
-            dst_nodes_name = self._graph_name_hidden[i - 1]
-
-            self.upscale_graph_providers[src_nodes_name] = create_graph_provider(
-                graph=self._graph_data[(src_nodes_name, "to", dst_nodes_name)],
-                edge_attributes=model_config.upscale_mapper.get("sub_graph_edge_attributes"),
-                src_size=self.node_attributes.num_nodes[src_nodes_name],
-                dst_size=self.node_attributes.num_nodes[dst_nodes_name],
-                trainable_size=model_config.upscale_mapper.get("trainable_size", 0),
-            )
-
-            self.upscale[src_nodes_name] = instantiate(
-                model_config.upscale_mapper,
-                _recursive_=False,  # Avoids instantiation of layer_kernels here
-                in_channels_src=self.hidden_dims[src_nodes_name],
                 in_channels_dst=self.hidden_dims[dst_nodes_name],
                 hidden_dim=self.hidden_dims[src_nodes_name],
                 out_channels_dst=self.hidden_dims[dst_nodes_name],
-                edge_dim=self.upscale_graph_providers[src_nodes_name].edge_dim,
+                edge_dim=self.downscale_graph_providers[src_nodes_name].edge_dim,
             )
 
         # Decoder hidden -> data
@@ -290,7 +290,7 @@ class AnemoiModelEncProcDecHierarchical(AnemoiModelEncProcDec):
         # Combine all dataset latents in the innermost layer
         x_latent = self.latent_aggregator(dataset_latents)
 
-        ## Downscale
+        ## Upscale
         x_encoded_latents_dict = {}
         for i in range(0, self.num_hidden - 1):
             src_hidden_name = self._graph_name_hidden[i]
@@ -323,29 +323,29 @@ class AnemoiModelEncProcDecHierarchical(AnemoiModelEncProcDec):
             # store latents for skip connections
             x_skip_dict[src_hidden_name] = x_latent
 
-            # Compute edges for downscale mapper
+            # Compute edges for upscale mapper
             (
-                downscale_edge_attr,
-                downscale_edge_index,
-                ds_edge_shard_sizes,
-            ) = self.downscale_graph_providers[src_hidden_name].get_edges(
+                upscale_edge_attr,
+                upscale_edge_index,
+                us_edge_shard_sizes,
+            ) = self.upscale_graph_providers[src_hidden_name].get_edges(
                 batch_size=batch_size,
                 model_comm_group=model_comm_group,
             )
 
-            ds_shard_info = BipartiteGraphShardInfo(
+            us_shard_info = BipartiteGraphShardInfo(
                 src_nodes=shard_sizes_hidden_dict[src_hidden_name],
                 dst_nodes=shard_sizes_hidden_dict[dst_hidden_name],
-                edges=ds_edge_shard_sizes,
+                edges=us_edge_shard_sizes,
             )
 
             # Encode to next hidden level
-            x_encoded_latents_dict[src_hidden_name], x_latent = self.downscale[src_hidden_name](
+            x_encoded_latents_dict[src_hidden_name], x_latent = self.upscale[src_hidden_name](
                 (x_latent, x_hidden_latents[dst_hidden_name]),
                 batch_size=batch_size,
-                shard_info=ds_shard_info,
-                edge_attr=downscale_edge_attr,
-                edge_index=downscale_edge_index,
+                shard_info=us_shard_info,
+                edge_attr=upscale_edge_attr,
+                edge_index=upscale_edge_index,
                 model_comm_group=model_comm_group,
                 keep_x_dst_sharded=True,  # always keep x_latent sharded for the processor
             )
@@ -377,34 +377,34 @@ class AnemoiModelEncProcDecHierarchical(AnemoiModelEncProcDec):
             x_latent_proc = x_latent_proc + x_latent
         x_latent = x_latent_proc
 
-        ## Upscale
+        ## Downscale
         for i in range(self.num_hidden - 1, 0, -1):
             src_hidden_name = self._graph_name_hidden[i]
             dst_hidden_name = self._graph_name_hidden[i - 1]
 
             # Compute edges for upscale mapper
             (
-                upscale_edge_attr,
-                upscale_edge_index,
-                us_edge_shard_sizes,
-            ) = self.upscale_graph_providers[src_hidden_name].get_edges(
+                downscale_edge_attr,
+                downscale_edge_index,
+                ds_edge_shard_sizes,
+            ) = self.downscale_graph_providers[src_hidden_name].get_edges(
                 batch_size=batch_size,
                 model_comm_group=model_comm_group,
             )
 
-            us_shard_info = BipartiteGraphShardInfo(
+            ds_shard_info = BipartiteGraphShardInfo(
                 src_nodes=shard_sizes_hidden_dict[src_hidden_name],
                 dst_nodes=shard_sizes_hidden_dict[dst_hidden_name],
-                edges=us_edge_shard_sizes,
+                edges=ds_edge_shard_sizes,
             )
 
             # Decode to next level
-            x_latent = self.upscale[src_hidden_name](
+            x_latent = self.downscale[src_hidden_name](
                 (x_latent, x_encoded_latents_dict[dst_hidden_name]),
                 batch_size=batch_size,
-                shard_info=us_shard_info,
-                edge_attr=upscale_edge_attr,
-                edge_index=upscale_edge_index,
+                shard_info=ds_shard_info,
+                edge_attr=downscale_edge_attr,
+                edge_index=downscale_edge_index,
                 model_comm_group=model_comm_group,
                 keep_x_dst_sharded=True,
             )
