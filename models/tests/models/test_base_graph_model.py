@@ -18,7 +18,7 @@ from anemoi.models.models.base import BaseGraphModel
 
 class DummyGraphModel(BaseGraphModel):
     def _build_networks(self, model_config) -> None:
-        self.seen_hidden_name = model_config.model.model.hidden_nodes_name
+        self.seen_hidden_name = model_config.model.hidden_nodes_name
 
     def _assemble_input(self, x, batch_size, grid_shard_sizes=None, model_comm_group=None):
         return x
