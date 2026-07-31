@@ -18,6 +18,10 @@ model:
   decoders:
     0:
       input_target_features: [ "coordinates" ]
+
+  upscale_mapper: ${model.encoders.0.mapper}
+  downscale_mapper: ${model.decoders.0.mapper}
+
   enable_hierarchical_level_processing: False
   keep_batch_sharded: True
 

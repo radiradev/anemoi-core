@@ -68,10 +68,6 @@ class DefinedModels(str, Enum):
         "anemoi.models.models.transport_encoder_processor_decoder.AnemoiTransportTendModelEncProcDec"
     )
     ANEMOI_TRANSPORT_TEND_MODEL_ENC_PROC_DEC_SHORT = "anemoi.models.models.AnemoiTransportTendModelEncProcDec"
-    ANEMOI_MODEL_AUTOENCODER = "anemoi.models.models.autoencoder.AnemoiModelAutoEncoder"
-    ANEMOI_MODEL_AUTOENCODER_SHORT = "anemoi.models.models.AnemoiModelAutoEncoder"
-    ANEMOI_MODEL_HIER_AUTOENCODER = "anemoi.models.models.autoencoder.AnemoiModelHierarchicalAutoEncoder"
-    ANEMOI_MODEL_HIER_AUTOENCODER_SHORT = "anemoi.models.models.AnemoiModelHierarchicalAutoEncoder"
 
 
 class Model(BaseModel):
@@ -435,6 +431,26 @@ class HierarchicalModelSchema(BaseModelSchema):
     "Toggle to do message passing at every downscaling and upscaling step"
     level_process_num_layers: NonNegativeInt = Field(default=1)
     "Number of message passing steps at each level"
+    upscale_mapper: Union[
+        GNNEncoderSchema,
+        GraphTransformerEncoderSchema,
+        TransformerEncoderSchema,
+        PointWiseForwardMapperSchema,
+    ] = Field(
+        ...,
+        discriminator="target_",
+    )
+    "Mapper used to upscale from a lower level to a higher level in the hierarchy."
+    downscale_mapper: Union[
+        GNNDecoderSchema,
+        GraphTransformerDecoderSchema,
+        TransformerDecoderSchema,
+        PointWiseBackwardMapperSchema,
+    ] = Field(
+        ...,
+        discriminator="target_",
+    )
+    "Mapper used to downscale from a higher level to a lower level in the hierarchy."
 
 
 ModelSchema = Union[

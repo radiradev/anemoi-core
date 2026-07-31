@@ -131,14 +131,14 @@ class AnemoiModelEncProcDecHierarchical(AnemoiModelEncProcDec):
 
             self.downscale_graph_providers[src_nodes_name] = create_graph_provider(
                 graph=self._graph_data[(src_nodes_name, "to", dst_nodes_name)],
-                edge_attributes=model_config.encoder.get("sub_graph_edge_attributes"),
+                edge_attributes=model_config.downscale_mapper.get("sub_graph_edge_attributes"),
                 src_size=self.node_attributes.num_nodes[src_nodes_name],
                 dst_size=self.node_attributes.num_nodes[dst_nodes_name],
-                trainable_size=model_config.encoder.get("trainable_size", 0),
+                trainable_size=model_config.downscale_mapper.get("trainable_size", 0),
             )
 
             self.downscale[src_nodes_name] = instantiate(
-                model_config.encoder,
+                model_config.downscale_mapper,
                 _recursive_=False,  # Avoids instantiation of layer_kernels here
                 in_channels_src=self.hidden_dims[src_nodes_name],
                 in_channels_dst=self.node_attributes.attr_ndims[dst_nodes_name],
@@ -155,14 +155,14 @@ class AnemoiModelEncProcDecHierarchical(AnemoiModelEncProcDec):
 
             self.upscale_graph_providers[src_nodes_name] = create_graph_provider(
                 graph=self._graph_data[(src_nodes_name, "to", dst_nodes_name)],
-                edge_attributes=model_config.decoder.get("sub_graph_edge_attributes"),
+                edge_attributes=model_config.upscale_mapper.get("sub_graph_edge_attributes"),
                 src_size=self.node_attributes.num_nodes[src_nodes_name],
                 dst_size=self.node_attributes.num_nodes[dst_nodes_name],
-                trainable_size=model_config.decoder.get("trainable_size", 0),
+                trainable_size=model_config.upscale_mapper.get("trainable_size", 0),
             )
 
             self.upscale[src_nodes_name] = instantiate(
-                model_config.decoder,
+                model_config.upscale_mapper,
                 _recursive_=False,  # Avoids instantiation of layer_kernels here
                 in_channels_src=self.hidden_dims[src_nodes_name],
                 in_channels_dst=self.hidden_dims[dst_nodes_name],
