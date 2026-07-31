@@ -27,6 +27,7 @@ from pydantic import PositiveFloat
 from pydantic import PositiveInt
 from pydantic import model_validator
 
+from anemoi.models.models.target_features import VALID_TARGET_FEATURES
 from anemoi.models.schemas.schema_utils import DatasetDict
 from anemoi.models.transport.settings import EdmSettings
 from anemoi.models.transport.settings import NoiseConditioningSettings
@@ -252,6 +253,8 @@ class EncodersSchema(BaseModel):
 
     datasets: list[str] = Field(..., example=["dataset1", "dataset2"])
     "List of datasets for which the encoder is applicable."
+    dataset_fusing_strategy: Literal["not_supported"] = Field(default="not_supported")
+    "Dataset fusing strategy. Default to 'not_supported'."
     mapper: Union[
         GNNEncoderSchema,
         GraphTransformerEncoderSchema,
@@ -268,9 +271,9 @@ class DecodersSchema(BaseModel):
 
     datasets: list[str] = Field(..., example=["dataset1", "dataset2"])
     "List of datasets for which the decoder is applicable."
-    input_target_features: list[
-        Literal["coordinates", "forcings", "prognostics", "trainable_parameters", "encoded_data"]
-    ] = Field(default_factory=lambda: ["encoded_data"])
+    input_target_features: list[Literal[tuple(sorted(VALID_TARGET_FEATURES))]] = Field(
+        default_factory=lambda: ["encoded_data"]
+    )
     "Whether to use the encoded latents from the encoder."
     mapper: Union[
         GNNDecoderSchema,

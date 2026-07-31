@@ -205,40 +205,16 @@ class AnemoiModelEncProcDec(BaseGraphModel):
 
         grid_shard_sizes = grid_shard_sizes[dataset_name] if grid_shard_sizes is not None else None
 
-        x_targets = []
-        for target_feature in self.decoders_target_input[self.dataset2decoder[dataset_name]]:
-            if target_feature == "coordinates":
-                coords = getattr(self.node_attributes, f"latlons_{dataset_name}")  # (num_points, coords_dim)
-                new_target = einops.repeat(coords, "e f -> (repeat e) f", repeat=batch_size)
-            elif target_feature == "forcings":
-                # TODO: this should point to future forcings
-                new_target = x_input_data[self._internal_input_idx[dataset_name]]
-            elif target_feature == "prognostics":
-                new_target = x_input_data[self._internal_input_idx[dataset_name]]
-            elif target_feature == "trainable_parameters":
-                node_trainable_params = self.node_attributes.trainable_tensors[
-                    dataset_name
-                ].trainable  # (num_points, ?)
-                new_target = einops.repeat(node_trainable_params, "e f -> (repeat e) f", repeat=batch_size)
-            elif target_feature == "encoded_data":
-                if x_encoded_data is None:
-                    raise ValueError(
-                        f'"encoded_data" can be used only if dataset {dataset_name} is encoded. '
-                        f"Please update the decoder.{self.dataset2decoder[dataset_name]}.input_target_features configuration."
-                    )
-                new_target = x_encoded_data
-            else:
-                raise ValueError("")
+        x_target_latent = self.decoders_target_input[self.dataset2decoder[dataset_name]].tensor(
+            x_input_data,
+            x_encoded_data,
+            batch_size=batch_size,
+            grid_shard_sizes=grid_shard_sizes,
+            model_comm_group=model_comm_group,
+            dataset_name=dataset_name,
+        )
 
-            if grid_shard_sizes is not None:
-                new_target = shard_tensor(new_target, 0, grid_shard_sizes, model_comm_group)
-
-            x_targets.append(new_target)
-
-        if len(x_targets) == 1:
-            return x_targets[0], grid_shard_sizes
-
-        return torch.cat(x_targets, dim=-1), grid_shard_sizes
+        return x_target_latent, grid_shard_sizes
 
     def _assemble_output(
         self,

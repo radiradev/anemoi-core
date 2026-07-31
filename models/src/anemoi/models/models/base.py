@@ -27,13 +27,13 @@ from anemoi.models.distributed.shapes import DatasetShardSizes
 from anemoi.models.distributed.shapes import get_shard_sizes
 from anemoi.models.layers.bounding import build_boundings
 from anemoi.models.layers.graph import NamedNodesAttributes
+from anemoi.models.models.target_features import DecodingTargetFeature
+from anemoi.models.models.target_features import create_decoding_target_features
 from anemoi.models.utils.config import broadcast_config_keys
 from anemoi.models.utils.config import get_multiple_datasets_config
 from anemoi.utils.config import DotDict
 
 LOGGER = logging.getLogger(__name__)
-
-VALID_TARGET_FEATURES = ["coordinates", "forcings", "prognostics", "trainable_parameters", "encoded_data"]
 
 
 class BaseGraphModel(nn.Module):
@@ -112,11 +112,13 @@ class BaseGraphModel(nn.Module):
         """Builds the dataset routing for encoders."""
         self.dataset2encoder: dict[str, str] = {}
         self.encoder2datasets: dict[str, list[str]] = {}
+        self.encoder_fusing_strategy: dict[str, str] = {}
         for encoder_name, encoder_config in encoders_config.items():
             datasets_to_encode = encoder_config["datasets"]
             self.encoder2datasets[encoder_name] = datasets_to_encode
             for d in datasets_to_encode:
                 self.dataset2encoder[d] = encoder_name
+            self.encoder_fusing_strategy[encoder_name] = encoder_config.dataset_fusing_strategy
 
         self.input_datasets = list(self.dataset2encoder.keys())
 
@@ -124,7 +126,7 @@ class BaseGraphModel(nn.Module):
         """Builds the dataset routing for decoders."""
         self.dataset2decoder: dict[str, str] = {}
         self.decoder2datasets: dict[str, list[str]] = {}
-        self.decoders_target_input: dict[str, list[str]] = {}
+        self.decoders_target_input: dict[str, DecodingTargetFeature] = {}
         for decoder_name, decoder_config in decoders_config.items():
             datasets_to_decode = decoder_config["datasets"]
             self.decoder2datasets[decoder_name] = datasets_to_decode
@@ -132,7 +134,9 @@ class BaseGraphModel(nn.Module):
             for d in datasets_to_decode:
                 self.dataset2decoder[d] = decoder_name
 
-            self.decoders_target_input[decoder_name] = decoder_config.input_target_features
+            self.decoders_target_input[decoder_name] = create_decoding_target_features(
+                decoder_config.input_target_features, datasets_to_decode, self
+            )
 
         self.target_datasets = list(self.dataset2decoder.keys())
 
@@ -148,12 +152,13 @@ class BaseGraphModel(nn.Module):
             d in self.target_datasets for d in self.dataset2decoder.keys()
         ), f"Datasets {not_target_datasets} are in target_datasets but not in data_indices provided to the model. "
 
-        for decoder_name, decoder_target_features in self.decoders_target_input.items():
-            invalid = set(decoder_target_features) - set(VALID_TARGET_FEATURES)
-            assert not invalid, (
-                f"Decoder '{decoder_name}' has invalid input_target_features: {invalid}. "
-                f"Valid options: {sorted(VALID_TARGET_FEATURES)}"
-            )
+        for encoder_name, fusing_strategy in self.encoder_fusing_strategy.items():
+            if fusing_strategy not in ("not_supported"):
+                raise ValueError(f"Encoder '{encoder_name}' has unsupported fusing strategy '{fusing_strategy}'.")
+
+        # Validated here. The target dimension may depend on the shapes computed in _calculate_shapes_and_indices
+        for target_features in self.decoders_target_input.values():
+            target_features.validate()
 
     def _calculate_shapes_and_indices(self, data_indices: dict) -> None:
         """Compute per-dataset input/output channel counts, dimensions and internal data indices."""
@@ -165,7 +170,7 @@ class BaseGraphModel(nn.Module):
         self.num_input_channels_decoding_forcings = {}
         self._internal_input_idx = {}
         self._internal_output_idx = {}
-        self._decoding_forcing_input_idx = {}
+        self._forcing_input_idx = {}
         self.input_dim = {}
         self.input_dim_latent = self._calculate_input_dim_latent()
         self.target_dim = {}
@@ -174,16 +179,11 @@ class BaseGraphModel(nn.Module):
         for dataset_name, dataset_indices in data_indices.items():
             self._internal_input_idx[dataset_name] = dataset_indices.model.input.prognostic
             self._internal_output_idx[dataset_name] = dataset_indices.model.output.prognostic
-            self._decoding_forcing_input_idx[dataset_name] = [
-                dataset_indices.name_to_index[name] for name in dataset_indices.model._forcing
-            ]
+            self._forcing_input_idx[dataset_name] = dataset_indices.model.input.forcing
 
             self.num_input_channels[dataset_name] = len(dataset_indices.model.input)
             self.num_input_channels_forcings[dataset_name] = len(dataset_indices.model.input.forcing)
             self.num_input_channels_prognostic[dataset_name] = len(dataset_indices.model.input.prognostic)
-            self.num_input_channels_decoding_forcings[dataset_name] = len(
-                self._decoding_forcing_input_idx[dataset_name]
-            )
             self.num_output_channels[dataset_name] = len(dataset_indices.model.output)
 
             self.input_dim[dataset_name] = self._calculate_input_dim(dataset_name)
@@ -226,30 +226,14 @@ class BaseGraphModel(nn.Module):
         hidden-to-data decoder. The returned width is the sum
         of the feature blocks listed in ``decoders_target_input`` for this dataset's decoder.
         """
-        num_features = 0
         if dataset_name not in self.dataset2decoder:
             LOGGER.warning(
-                f"Dataset '{dataset_name}' does not have a decoder associated with it. "
-                f"Target dimension will be calculated as 0.",
+                "Dataset '%s' does not have a decoder associated with it. Target dimension will be calculated as 0.",
+                dataset_name,
             )
-            return num_features
+            return 0
 
-        for target_feature in self.decoders_target_input[self.dataset2decoder[dataset_name]]:
-            if target_feature == "coordinates":
-                num_features += 4
-            elif target_feature == "forcings":
-                num_features += self.n_step_output * self.num_input_channels_forcings[dataset_name]
-            elif target_feature == "prognostics":
-                num_features += self.n_step_input * self.num_input_channels_prognostic[dataset_name]
-            elif target_feature == "trainable_parameters":
-                num_features += self.node_attributes.num_trainable_parameters[dataset_name]
-            elif target_feature == "encoded_data":
-                # TODO: Get this from self.encoder[self.dataset2decoder[dataset_name]].???
-                num_features += self._calculate_input_dim(dataset_name)
-            else:
-                raise ValueError(f"The key {target_feature} is not valid.")
-
-        return num_features
+        return self.decoders_target_input[self.dataset2decoder[dataset_name]].dim
 
     def _calculate_output_dim(self, dataset_name: str) -> int:
         """Calculate the decoder output dimension for a given dataset."""
