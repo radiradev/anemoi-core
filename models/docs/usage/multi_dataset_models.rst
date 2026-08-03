@@ -80,8 +80,8 @@ choose stable, descriptive names.
    group share the same mapper weights.
 
 ``dataset_fusing_strategy``
-   How multiple datasets within a single group are combined if passed during the 
-   same forward pass. Currently only ``"not_supported"`` is available; it is a 
+   How multiple datasets within a single group are combined if passed during the
+   same forward pass. Currently only ``"not_supported"`` is available; it is a
    placeholder for future fusing strategies.
 
 ``num_channels``
@@ -141,7 +141,7 @@ Valid features:
 
 ``encoded_data`` *(default)*
    The encoder-updated data tensor for the dataset (the encoded latent
-   on the data nodes). Requires the dataset to have an encoder. It can 
+   on the data nodes). Requires the dataset to have an encoder. It can
    be that the encoder doesn't update the data nodes, in which case the
    feature is simply the input data.
 
